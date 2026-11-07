@@ -39,6 +39,7 @@ dhcp = "heracles_plugins.dhcp:plugin"
 nextcloud = "heracles_plugins.nextcloud:plugin"
 pureftpd = "heracles_plugins.pureftpd:plugin"
 quota = "heracles_plugins.quota:plugin"
+freeradius = "heracles_plugins.freeradius:plugin"
 
 [dependency-groups]
 dev = [
