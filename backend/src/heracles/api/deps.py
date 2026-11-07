@@ -63,6 +63,7 @@ class CurrentUser:
     session: Session
     directory_id: str
     directory: DirectoryClient
+    client_ip: str = ""
 
     @property
     def dn(self) -> str:
@@ -92,7 +93,7 @@ def current_user(request: Request, state: StateDep) -> CurrentUser:
     directory = state.directories.get(session.directory_id)
     if directory is None:
         raise ApiError(401, "unauthenticated", "Unknown directory")
-    return CurrentUser(session, session.directory_id, directory)
+    return CurrentUser(session, session.directory_id, directory, client_ip(request, state))
 
 
 CurrentUserDep = Annotated[CurrentUser, Depends(current_user)]

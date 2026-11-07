@@ -161,6 +161,18 @@ def set_default_password_hasher(hasher: PasswordHasher | None) -> None:
     _default_hasher = hasher
 
 
+#: ``checker(new_password) -> problems`` (password policy), run during validation.
+type PasswordChecker = Callable[[str], list[str]]
+
+_default_checker: PasswordChecker | None = None
+
+
+def set_default_password_checker(checker: PasswordChecker | None) -> None:
+    """Install the process-wide password policy check used by password attributes."""
+    global _default_checker
+    _default_checker = checker
+
+
 class PasswordAttr(_StrAttr):
     """Write-only password.
 
@@ -202,7 +214,10 @@ class PasswordAttr(_StrAttr):
             return []  # unchanged; "required" is enforced by the service on creation
         if value == "":
             return [_("This field is required.")] if self.required else []
-        return self._check_text(value)
+        problems = self._check_text(value)
+        if not problems and _default_checker is not None:
+            problems = list(_default_checker(value))
+        return problems
 
 
 # ---------------------------------------------------------------------------

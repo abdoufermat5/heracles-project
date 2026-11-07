@@ -22,6 +22,8 @@ from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient
 from heracles.objects import ObjectService, TypeInfo, TypeRegistry
 from heracles.objects.model import Tab
+from heracles.objects.policy import CompositeEvents, ObjectEvents
+from heracles.objects.registry import EventsContext
 
 _ACL_CACHE_KEY = "acl.resolved"
 
@@ -133,7 +135,20 @@ class Domain:
         """Object service for one type, enforcing the user's ACLs."""
         info = self.registry.get(type_name)
         policy = TypeAclPolicy(self.evaluator(user), info)
-        return ObjectService(user.directory, self.registry, policy=policy), policy
+        events = self.events(user)
+        return ObjectService(user.directory, self.registry, policy=policy, events=events), policy
+
+    def events(self, user: CurrentUser) -> ObjectEvents:
+        """Object event hooks contributed by the plugins, for one request."""
+        hooks = [
+            factory(
+                EventsContext(
+                    user.directory, user.dn, user.client_ip, self.registry.settings.get(name)
+                )
+            )
+            for name, factory in self.registry.events_factories
+        ]
+        return CompositeEvents(hooks)
 
 
 def _cached_resolution(session: Session) -> ResolvedAcl | None:
