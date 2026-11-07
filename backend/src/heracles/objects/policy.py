@@ -1,0 +1,90 @@
+"""Extension points: access policy and object lifecycle events."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Protocol
+
+from heracles.ldap.client import Modification
+from heracles.objects.state import ObjectState
+
+TAB_ATTR = "*"
+"""Pseudo attribute name used for tab-level checks (activation/deactivation)."""
+
+
+class AccessPolicy(Protocol):
+    """Authorisation hook; the ACL engine implements it."""
+
+    def can_read(self, dn: str, tab: str, attr: str) -> bool: ...
+
+    def can_write(self, dn: str, tab: str, attr: str) -> bool: ...
+
+    def can_create(self, type_name: str, base: str) -> bool: ...
+
+    def can_delete(self, dn: str, type_name: str) -> bool: ...
+
+
+class AllowAll:
+    """Default policy."""
+
+    def can_read(self, dn: str, tab: str, attr: str) -> bool:
+        return True
+
+    def can_write(self, dn: str, tab: str, attr: str) -> bool:
+        return True
+
+    def can_create(self, type_name: str, base: str) -> bool:
+        return True
+
+    def can_delete(self, dn: str, type_name: str) -> bool:
+        return True
+
+
+@dataclass(frozen=True, slots=True)
+class EventContext:
+    """What a hook receives."""
+
+    type_name: str
+    dn: str
+    before: ObjectState | None = None
+    after: ObjectState | None = None
+    changes: Sequence[Modification] = ()
+
+
+class ObjectEvents(Protocol):
+    """Lifecycle hooks. ``pre_*`` may raise to veto the operation."""
+
+    def pre_create(self, ctx: EventContext) -> None: ...
+
+    def post_create(self, ctx: EventContext) -> None: ...
+
+    def pre_modify(self, ctx: EventContext) -> None: ...
+
+    def post_modify(self, ctx: EventContext) -> None: ...
+
+    def pre_delete(self, ctx: EventContext) -> None: ...
+
+    def post_delete(self, ctx: EventContext) -> None: ...
+
+
+class NullEvents:
+    """No-op events; subclass and override what is needed."""
+
+    def pre_create(self, ctx: EventContext) -> None:
+        pass
+
+    def post_create(self, ctx: EventContext) -> None:
+        pass
+
+    def pre_modify(self, ctx: EventContext) -> None:
+        pass
+
+    def post_modify(self, ctx: EventContext) -> None:
+        pass
+
+    def pre_delete(self, ctx: EventContext) -> None:
+        pass
+
+    def post_delete(self, ctx: EventContext) -> None:
+        pass
