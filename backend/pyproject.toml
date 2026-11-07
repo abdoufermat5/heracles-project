@@ -29,6 +29,7 @@ heracles = "heracles.cli.main:main"
 posix = "heracles_plugins.posix:plugin"
 ssh = "heracles_plugins.ssh:plugin"
 sudo = "heracles_plugins.sudo:plugin"
+dhcp = "heracles_plugins.dhcp:plugin"
 
 [dependency-groups]
 dev = [
