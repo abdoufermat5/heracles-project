@@ -249,3 +249,36 @@ def test_posix_plugin_through_api(app_client: TestClient) -> None:
     assert posix_values["uidNumber"] == 1101
     assert posix_values["homeDirectory"] == "/home/asmith"
     assert "rwcdm" in r.json()["acl"]["posix"]["object"]
+
+
+def test_ssh_keys_follow_account_lock(app_client: TestClient) -> None:
+    key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEN4afpmpx6UcN3RZPI3PaZEelen0CCXeFfX96TNN8Fw me@host"
+    a = api(app_client, "admin")
+    r = a.patch(
+        f"/objects/user/{q(ASMITH)}",
+        {
+            "tabs": {
+                "posix": {"active": True, "values": {}},
+                "ssh": {"active": True, "values": {"sshPublicKey": [key]}},
+            }
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    def keys() -> list[str]:
+        got = a.get(f"/objects/user/{q(ASMITH)}")
+        assert got.status_code == 200, got.text
+        return got.json()["tabs"]["ssh"]["values"]["sshPublicKey"]
+
+    assert keys() == [key]
+    r = a.post(f"/users/{q(ASMITH)}/lock")
+    assert r.status_code == 200, r.text
+    assert r.json()["locked"] is True
+    assert keys() == [f"disabled-{key}"]
+    page = a.get("/objects/user", base=PARIS, scope="one").json()
+    assert {i["dn"]: i["locked"] for i in page["items"]}[ASMITH] is True
+    assert a.post(f"/users/{q(ASMITH)}/lock").status_code == 200
+    assert keys() == [f"disabled-{key}"]
+    r = a.post(f"/users/{q(ASMITH)}/unlock")
+    assert r.json()["locked"] is False
+    assert keys() == [key]
