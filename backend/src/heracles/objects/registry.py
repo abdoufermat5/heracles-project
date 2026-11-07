@@ -219,28 +219,45 @@ class TypeRegistry:
     # -- plugins -----------------------------------------------------------
 
     def register_plugin(self, plugin: Plugin, available_classes: set[str]) -> PluginStatus:
-        """Register ``plugin`` iff its required objectClasses are all available."""
-        missing = plugin.missing_object_classes(available_classes)
-        status = PluginStatus(plugin.name, plugin.version, not missing, missing)
-        self.plugins.append(status)
-        if missing:
-            return status
-        for type_cls in plugin.types:
-            needed = type_cls.required_object_classes or type_cls.tabs[0].object_classes
-            if any(c.lower() not in available_classes for c in needed):
-                continue  # this type's schema is not loaded in the directory
-            info = self.register_type(type_cls)
-            # optional tabs whose objectClasses are unknown to the schema are dropped
-            info.tabs = [t for t in info.tabs if _tab_available(t, available_classes)]
-        for att in plugin.tabs:
-            if _tab_available(att.tab, available_classes):
-                self.attach_tab(att.type_name, att.tab)
-        self.account_lock_hooks.extend(plugin.account_lock_hooks)
-        self.public_router_factories.extend((plugin.name, f) for f in plugin.public_routers)
-        self.api_router_factories.extend((plugin.name, f) for f in plugin.api_routers)
-        if plugin.settings is not None:
-            self.settings.setdefault(plugin.name, plugin.settings)
-        return status
+        """Register one ``plugin`` iff its required objectClasses are all available."""
+        return self.register_plugins([plugin], available_classes)[0]
+
+    def register_plugins(
+        self, plugins: Sequence[Plugin], available_classes: set[str]
+    ) -> list[PluginStatus]:
+        """Register several plugins in two passes, independently of their order.
+
+        Pass 1 registers the types of every enabled plugin, pass 2 attaches tabs and
+        collects hooks/routers/settings, so a plugin may extend a type provided by
+        another plugin. A tab whose target type is not registered is skipped.
+        """
+        statuses: list[PluginStatus] = []
+        enabled: list[Plugin] = []
+        for plugin in plugins:
+            missing = plugin.missing_object_classes(available_classes)
+            status = PluginStatus(plugin.name, plugin.version, not missing, missing)
+            self.plugins.append(status)
+            statuses.append(status)
+            if not missing:
+                enabled.append(plugin)
+        for plugin in enabled:
+            for type_cls in plugin.types:
+                needed = type_cls.required_object_classes or type_cls.tabs[0].object_classes
+                if any(c.lower() not in available_classes for c in needed):
+                    continue  # this type's schema is not loaded in the directory
+                info = self.register_type(type_cls)
+                # optional tabs whose objectClasses are unknown to the schema are dropped
+                info.tabs = [t for t in info.tabs if _tab_available(t, available_classes)]
+        for plugin in enabled:
+            for att in plugin.tabs:
+                if att.type_name in self._types and _tab_available(att.tab, available_classes):
+                    self.attach_tab(att.type_name, att.tab)
+            self.account_lock_hooks.extend(plugin.account_lock_hooks)
+            self.public_router_factories.extend((plugin.name, f) for f in plugin.public_routers)
+            self.api_router_factories.extend((plugin.name, f) for f in plugin.api_routers)
+            if plugin.settings is not None:
+                self.settings.setdefault(plugin.name, plugin.settings)
+        return statuses
 
     def load_plugins(
         self,
@@ -252,9 +269,8 @@ class TypeRegistry:
         points: Iterable[EntryPointLike] = (
             found if found is not None else entry_points(group=PLUGIN_GROUP)
         )
-        statuses: list[PluginStatus] = []
+        plugins: list[Plugin] = []
         for point in points:
             loaded = point.load()
-            plugin = cast("Plugin", loaded() if callable(loaded) else loaded)
-            statuses.append(self.register_plugin(plugin, available))
-        return statuses
+            plugins.append(cast("Plugin", loaded() if callable(loaded) else loaded))
+        return self.register_plugins(plugins, available)

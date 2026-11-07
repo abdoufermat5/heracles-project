@@ -56,13 +56,15 @@ def samba_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
         yield client
 
 
-def test_demo_still_starts_without_samba_schema() -> None:
+def test_demo_offers_samba() -> None:
     with TestClient(build_demo_app()) as client:
         a = Api(client).login("admin")
         names = {t["name"] for t in a.get("/types").json()}
-        assert "samba_domain" not in names
+        assert "samba_domain" in names
         tabs = [t["name"] for t in a.get("/types/user").json()["tabs"]]
-        assert "samba" not in tabs
+        assert "samba" in tabs
+        workstation_tabs = [t["name"] for t in a.get("/types/workstation").json()["tabs"]]
+        assert "samba" in workstation_tabs
 
 
 def test_domain_and_user_flow(samba_client: TestClient) -> None:
