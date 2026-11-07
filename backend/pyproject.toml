@@ -59,6 +59,14 @@ certificates = "heracles_plugins.certificates:plugin"
 gpg = "heracles_plugins.gpg:plugin"
 physical_key = "heracles_plugins.physical_key:plugin"
 ejbca = "heracles_plugins.ejbca:plugin"
+dovecot = "heracles_plugins.dovecot:plugin"
+cyrus = "heracles_plugins.cyrus:plugin"
+postfix = "heracles_plugins.postfix:plugin"
+sieve = "heracles_plugins.sieve:plugin"
+spamassassin = "heracles_plugins.spamassassin:plugin"
+zimbra = "heracles_plugins.zimbra:plugin"
+sogo = "heracles_plugins.sogo:plugin"
+mailinblack = "heracles_plugins.mailinblack:plugin"
 
 [dependency-groups]
 dev = [
