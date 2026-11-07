@@ -39,6 +39,7 @@ dhcp = "heracles_plugins.dhcp:plugin"
 ipam = "heracles_plugins.ipam:plugin"
 netgroups = "heracles_plugins.netgroups:plugin"
 autofs5 = "heracles_plugins.autofs5:plugin"
+weblink = "heracles_plugins.weblink:plugin"
 
 [dependency-groups]
 dev = [
