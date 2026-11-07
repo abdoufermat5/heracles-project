@@ -27,6 +27,7 @@ heracles = "heracles.cli.main:main"
 
 [project.entry-points."heracles.plugins"]
 dns = "heracles_plugins.dns:plugin"
+mail = "heracles_plugins.mail:plugin"
 posix = "heracles_plugins.posix:plugin"
 ssh = "heracles_plugins.ssh:plugin"
 sudo = "heracles_plugins.sudo:plugin"
