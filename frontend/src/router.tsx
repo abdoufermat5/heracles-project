@@ -78,7 +78,8 @@ const recoveryRoute = createRoute({
 const recoveryConfirmRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/recovery/confirm',
-  validateSearch: (s: Record<string, unknown>): { token?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { login?: string; token?: string } => ({
+    login: typeof s.login === 'string' ? s.login : undefined,
     token: typeof s.token === 'string' ? s.token : undefined,
   }),
   component: RecoveryConfirmPage,

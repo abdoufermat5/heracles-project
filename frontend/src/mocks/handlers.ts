@@ -109,16 +109,16 @@ export const handlers: HttpHandler[] = [
 
   http.post(`${B}/auth/recovery`, async ({ request }) => {
     if (!csrfOk(request)) return err(403, 'forbidden', 'Invalid CSRF token')
-    return new HttpResponse(null, { status: 204 })
+    return new HttpResponse(null, { status: 202 })
   }),
 
   http.post(`${B}/auth/recovery/confirm`, async ({ request }) => {
     if (!csrfOk(request)) return err(403, 'forbidden', 'Invalid CSRF token')
-    const body = (await request.json()) as { token: string; password: string }
-    if (!db.recoveryTokens.has(body.token)) return err(404, 'not_found', 'Invalid or expired link')
+    const body = (await request.json()) as { login: string; token: string; password: string }
+    if (!db.recoveryTokens.has(body.token)) return err(422, 'validation', 'Invalid or expired link')
     if (body.password.length < 8)
       return err(422, 'validation', 'Password too short', { fields: { password: 'At least 8 characters' } })
-    return new HttpResponse(null, { status: 204 })
+    return HttpResponse.json({ status: 'ok' })
   }),
 
   http.get(`${B}/types`, guarded(() => HttpResponse.json(typeSummaries))),

@@ -75,12 +75,14 @@ export interface Me {
  * "API contract gaps".
  */
 export interface RecoveryRequest {
-  directory: string
-  username: string
+  email: string
+  directory?: string
 }
 export interface RecoveryConfirm {
+  login: string
   token: string
   password: string
+  directory?: string
 }
 
 // ── Metadata ──────────────────────────────────────────────────────────────

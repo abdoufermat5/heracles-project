@@ -228,13 +228,13 @@ export function RecoveryRequestPage() {
   const dirs = useDirectories()
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const schema = z.object({ username: z.string().min(1, t('validation.required')) })
-  const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { username: '' } })
+  const schema = z.object({ email: z.string().email(t('validation.email')) })
+  const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { email: '' } })
 
   const onSubmit = form.handleSubmit(async (v) => {
     setError(null)
     try {
-      await api.requestRecovery({ directory: dirs.data?.[0]?.id ?? 'main', username: v.username })
+      await api.requestRecovery({ directory: dirs.data?.[0]?.id ?? 'main', email: v.email })
       setDone(true)
     } catch (e) {
       setError(isApiError(e) ? e.message : t('common.error'))
@@ -255,8 +255,8 @@ export function RecoveryRequestPage() {
       ) : (
         <form onSubmit={(e) => void onSubmit(e)} className="space-y-4" noValidate>
           <FormError message={error} />
-          <Field id="username" label={t('auth.username')} error={form.formState.errors.username?.message}>
-            <Input id="username" autoFocus {...form.register('username')} />
+          <Field id="email" label={t('auth.emailLabel')} error={form.formState.errors.email?.message}>
+            <Input id="email" type="email" autoComplete="email" autoFocus {...form.register('email')} />
           </Field>
           <Submit pending={form.formState.isSubmitting}>{t('auth.sendLink')}</Submit>
           <p className="text-center text-sm">
@@ -289,7 +289,7 @@ export function RecoveryConfirmPage() {
   const onSubmit = form.handleSubmit(async (v) => {
     setError(null)
     try {
-      await api.confirmRecovery({ token: search.token ?? '', password: v.password })
+      await api.confirmRecovery({ login: search.login ?? '', token: search.token ?? '', password: v.password })
       await navigate({ to: '/login' })
     } catch (e) {
       setError(isApiError(e) ? e.message : t('common.error'))

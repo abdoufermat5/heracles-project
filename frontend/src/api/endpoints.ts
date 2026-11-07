@@ -38,7 +38,7 @@ export const api = {
   requestRecovery: (body: RecoveryRequest) =>
     request<undefined>('/auth/recovery', { method: 'POST', body, silent401: true }),
   confirmRecovery: (body: RecoveryConfirm) =>
-    request<undefined>('/auth/recovery/confirm', { method: 'POST', body, silent401: true }),
+    request<{ status: 'ok' }>('/auth/recovery/confirm', { method: 'POST', body, silent401: true }),
 
   // metadata
   types: () => request<TypeSummary[]>('/types'),
