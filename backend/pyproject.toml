@@ -38,6 +38,7 @@ ppolicy = "heracles_plugins.ppolicy:plugin"
 dhcp = "heracles_plugins.dhcp:plugin"
 dovecot = "heracles_plugins.dovecot:plugin"
 cyrus = "heracles_plugins.cyrus:plugin"
+postfix = "heracles_plugins.postfix:plugin"
 
 [dependency-groups]
 dev = [
