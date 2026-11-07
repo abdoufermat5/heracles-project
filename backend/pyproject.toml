@@ -32,6 +32,7 @@ ssh = "heracles_plugins.ssh:plugin"
 sudo = "heracles_plugins.sudo:plugin"
 systems = "heracles_plugins.systems:plugin"
 user_reminder = "heracles_plugins.user_reminder:plugin"
+personal = "heracles_plugins.personal:plugin"
 
 [dependency-groups]
 dev = [
