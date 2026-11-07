@@ -27,6 +27,7 @@ heracles = "heracles.cli.main:main"
 
 [project.entry-points."heracles.plugins"]
 posix = "heracles_plugins.posix:plugin"
+sudo = "heracles_plugins.sudo:plugin"
 
 [dependency-groups]
 dev = [

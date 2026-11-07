@@ -110,6 +110,31 @@ def build_demo_directory() -> MemoryDirectory:
         },
     )
 
+    # --- sudo roles ------------------------------------------------------
+    sudoers = f"ou=sudoers,{BASE}"
+    d.add(sudoers, {"objectClass": [b"organizationalUnit"], "ou": [b"sudoers"]})
+    d.add(
+        f"cn=defaults,{sudoers}",
+        {
+            "objectClass": [b"sudoRole"],
+            "cn": [b"defaults"],
+            "description": [b"Global sudo options"],
+            "sudoOption": [b"env_reset", b"requiretty", b"!authenticate"],
+        },
+    )
+    d.add(
+        f"cn=admin-all,{sudoers}",
+        {
+            "objectClass": [b"sudoRole"],
+            "cn": [b"admin-all"],
+            "description": [b"Administrators may run anything"],
+            "sudoUser": [b"%admins"],
+            "sudoHost": [b"ALL"],
+            "sudoCommand": [b"ALL"],
+            "sudoRunAsUser": [b"ALL"],
+        },
+    )
+
     # --- ACL roles -------------------------------------------------------
     acl_roles = f"ou=aclroles,{BASE}"
     d.add(acl_roles, {"objectClass": [b"organizationalUnit"], "ou": [b"aclroles"]})
