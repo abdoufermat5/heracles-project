@@ -11,7 +11,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': { target: 'http://localhost:8000', changeOrigin: true },
+      '/api': { target: process.env.HERACLES_API_URL ?? 'http://localhost:8420', changeOrigin: true },
     },
   },
   build: {

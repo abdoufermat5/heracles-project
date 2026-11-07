@@ -27,7 +27,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     serve.add_argument("--demo", action="store_true", help="use the in-memory demo directory")
     serve.add_argument("--static", help="built frontend directory to serve (demo mode)")
     serve.add_argument("--host", default="127.0.0.1")
-    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--port", type=int, default=8420)
     serve.set_defaults(func=_serve)
 
     args = parser.parse_args(argv)
