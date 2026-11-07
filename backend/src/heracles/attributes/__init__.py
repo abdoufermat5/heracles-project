@@ -1,0 +1,1 @@
+"""Heracles: attributes package."""
