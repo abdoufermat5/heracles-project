@@ -26,6 +26,7 @@ ldap = ["python-ldap>=3.4.4"]  # needs libldap2-dev + libsasl2-dev
 heracles = "heracles.cli.main:main"
 
 [project.entry-points."heracles.plugins"]
+mail = "heracles_plugins.mail:plugin"
 posix = "heracles_plugins.posix:plugin"
 ssh = "heracles_plugins.ssh:plugin"
 sudo = "heracles_plugins.sudo:plugin"
