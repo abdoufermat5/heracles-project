@@ -1,7 +1,7 @@
 # Compatibility schema (not distributed)
 
 Heracles manages directories that already carry the "compatibility schema"
-described in `docs/specs/01-legacy-schema.md`. Those schema files belong to
+expected by Heracles. Those schema files belong to
 the existing installation and are **not distributed** with Heracles.
 
 To run the integration tests against objects that use those classes, the

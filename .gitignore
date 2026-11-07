@@ -21,3 +21,4 @@ deploy/ldap/compat-schema/*
 .claude/settings.local.json
 frontend/*.tsbuildinfo
 .hypothesis/
+docs/

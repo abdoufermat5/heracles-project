@@ -6,7 +6,6 @@ sudo, mail, DNS, DHCP, systems inventory, password policies…).
 
 * **Backend**: Python 3.12+, FastAPI, python-ldap — `backend/`
 * **Frontend**: React 19, TypeScript, Vite, shadcn/ui, Tailwind CSS v4 — `frontend/`
-* **Specifications**: `docs/specs/`
 
 Status: early development.
 
@@ -18,5 +17,4 @@ cd backend && uv sync && uv run pytest
 cd frontend && pnpm install && pnpm dev
 ```
 
-Heracles works on directories that provide the compatibility schema described
-in `docs/specs/01-legacy-schema.md`.
+Heracles works on directories that provide its compatibility LDAP schema.

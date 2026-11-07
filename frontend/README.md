@@ -4,7 +4,7 @@ Single-page web console for Heracles. React 19, TypeScript (strict), Vite,
 Tailwind CSS v4, shadcn/ui (Radix primitives), TanStack Query / Router / Table,
 react-hook-form + zod, react-i18next (en, fr), MSW for the mocked API.
 
-The contract with the backend is `docs/specs/04-api-v2.md`; the types live in
+The contract with the backend is the API v2; the types live in
 `src/api/types.ts` and must be kept in sync with it.
 
 ## Commands
