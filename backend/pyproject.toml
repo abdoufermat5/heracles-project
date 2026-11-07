@@ -39,6 +39,7 @@ dhcp = "heracles_plugins.dhcp:plugin"
 kerberos = "heracles_plugins.kerberos:plugin"
 certificates = "heracles_plugins.certificates:plugin"
 gpg = "heracles_plugins.gpg:plugin"
+physical_key = "heracles_plugins.physical_key:plugin"
 
 [dependency-groups]
 dev = [
