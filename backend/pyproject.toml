@@ -37,6 +37,7 @@ personal = "heracles_plugins.personal:plugin"
 ppolicy = "heracles_plugins.ppolicy:plugin"
 dhcp = "heracles_plugins.dhcp:plugin"
 ipam = "heracles_plugins.ipam:plugin"
+netgroups = "heracles_plugins.netgroups:plugin"
 
 [dependency-groups]
 dev = [
