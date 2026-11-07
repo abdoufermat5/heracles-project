@@ -7,8 +7,9 @@ import binascii
 import hashlib
 import re
 from dataclasses import dataclass
+from typing import Any, cast
 
-from heracles.attributes import ListAttr, TextAttr
+from heracles.attributes import DisplayAttr, ListAttr, StringAttr
 from heracles.i18n import _
 from heracles.ldap.client import Entry, Modification
 from heracles.objects import Plugin, Section, Tab, TabAttachment
@@ -16,13 +17,15 @@ from heracles.objects.hooks import TabContext
 
 DISABLED_PREFIX = "disabled-"
 
+# Options may contain quoted strings (with spaces, escaped quotes) and commas.
+_OPTIONS = r'(?:[^\s"]|"(?:[^"\\]|\\.)*")+'
 _KEY_RE = re.compile(
-    r"^(?P<options>[-\w=\",.]+\s+)?"
+    rf"(?P<options>{_OPTIONS}\s+)?"
     r"(?P<disabled>disabled-)?"
     r"(?P<type>ssh-(?:dss|rsa|ed25519)|ecdsa-sha2-nistp\d{3}|ecdsa-sk|ed25519-sk|"
     r"sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com)"
-    r"\s+(?P<blob>[A-Za-z0-9+/.=]+)"
-    r"(?:\s+(?P<comment>\S.*?))?\s*$"
+    r"\s+(?P<blob>[A-Za-z0-9+/]+=*)"
+    r"(?:\s+(?P<comment>\S.*?))?"
 )
 
 _TYPE_LABELS = {
@@ -57,7 +60,7 @@ def md5_fingerprint(blob: bytes) -> str:
 
 def parse_key(line: str) -> PublicKey | None:
     """Parse one ``authorized_keys`` style line, or ``None`` if invalid."""
-    match = _KEY_RE.match(line.strip())
+    match = _KEY_RE.fullmatch(line.strip())
     if match is None:
         return None
     try:
@@ -77,29 +80,80 @@ def parse_key(line: str) -> PublicKey | None:
 
 def disable_key(line: str) -> str:
     """Insert the ``disabled-`` marker before the key type (idempotent)."""
-    match = _KEY_RE.match(line.strip())
+    text = line.strip()
+    match = _KEY_RE.fullmatch(text)
     if match is None or match["disabled"]:
         return line
     start = match.start("type")
-    return line[:start] + DISABLED_PREFIX + line[start:]
+    return text[:start] + DISABLED_PREFIX + text[start:]
 
 
 def enable_key(line: str) -> str:
     """Remove the ``disabled-`` marker (idempotent)."""
-    match = _KEY_RE.match(line.strip())
+    text = line.strip()
+    match = _KEY_RE.fullmatch(text)
     if match is None or not match["disabled"]:
         return line
     start = match.start("disabled")
-    return line[:start] + line[start + len(DISABLED_PREFIX) :]
+    return text[:start] + text[start + len(DISABLED_PREFIX) :]
 
 
-class SshPublicKeyAttr(TextAttr):
+class SshPublicKeyAttr(StringAttr):
     """One OpenSSH public key line."""
 
     def _validate(self, value: str) -> list[str]:
         if parse_key(value) is None:
             return [_("Unknown public key format.")]
         return []
+
+
+class SshPublicKeyListAttr(ListAttr[str]):
+    """List of public keys; errors name the offending (1-based) position.
+
+    Like every ``ListAttr`` the error is reported on the field itself
+    (``ssh.sshPublicKey``), not on an item key.
+    """
+
+    def _validate(self, value: list[str]) -> list[str]:
+        errors: list[str] = []
+        if self.min_length is not None and len(value) < self.min_length:
+            errors.append(_("At least {n} values are required.").format(n=self.min_length))
+        if self.max_length is not None and len(value) > self.max_length:
+            errors.append(_("At most {n} values are allowed.").format(n=self.max_length))
+        seen: dict[str, int] = {}
+        for index, line in enumerate(value, start=1):
+            key = parse_key(line)
+            if key is None:
+                errors.append(_("Key {n}: unknown public key format.").format(n=index))
+                continue
+            if key.fingerprint in seen:
+                errors.append(
+                    _("Key {n}: same fingerprint as key {m} ({fp}).").format(
+                        n=index, m=seen[key.fingerprint], fp=key.fingerprint
+                    )
+                )
+                continue
+            seen[key.fingerprint] = index
+        return errors
+
+
+def summarize(values: dict[str, Any]) -> str | None:
+    """Read-only summary: type, fingerprint and comment of every key."""
+    raw = values.get("sshPublicKey")
+    if not isinstance(raw, list):
+        return None
+    lines: list[str] = []
+    for line in cast("list[object]", raw):
+        key = parse_key(line) if isinstance(line, str) else None
+        if key is None:
+            continue
+        parts = [key.label, key.fingerprint]
+        if key.comment:
+            parts.append(key.comment)
+        if key.disabled:
+            parts.append(_("(disabled)"))
+        lines.append(" ".join(parts))
+    return "\n".join(lines) or None
 
 
 class SshTab(Tab):
@@ -114,29 +168,17 @@ class SshTab(Tab):
 
     keys = Section(
         _("OpenSSH public keys"),
-        ListAttr(
+        SshPublicKeyListAttr(
             "sshPublicKey",
             _("Public keys"),
             SshPublicKeyAttr("key", _("Public key")),
         ),
+        DisplayAttr("keySummary", _("Keys"), compute=summarize),
     )
 
     @classmethod
-    def prepare(cls, ctx: TabContext) -> None:
-        raw = ctx.values.get("sshPublicKey")
-        if not isinstance(raw, list):
-            return
-        seen: dict[str, int] = {}
-        for index, value in enumerate(raw):  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
-            key = parse_key(value) if isinstance(value, str) else None
-            if key is None:
-                continue
-            if key.fingerprint in seen:
-                ctx.error(
-                    f"sshPublicKey.{index}",
-                    _("Several keys have the fingerprint {fp}.").format(fp=key.fingerprint),
-                )
-            seen[key.fingerprint] = index
+    def on_load(cls, ctx: TabContext) -> None:
+        ctx.values["keySummary"] = summarize(ctx.values)
 
 
 def lock_keys(entry: Entry, locked: bool) -> list[Modification]:
@@ -164,6 +206,7 @@ def plugin() -> Plugin:
 __all__ = [
     "PublicKey",
     "SshPublicKeyAttr",
+    "SshPublicKeyListAttr",
     "SshTab",
     "disable_key",
     "enable_key",
@@ -171,4 +214,5 @@ __all__ = [
     "md5_fingerprint",
     "parse_key",
     "plugin",
+    "summarize",
 ]
