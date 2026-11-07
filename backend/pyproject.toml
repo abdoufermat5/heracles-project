@@ -36,6 +36,7 @@ user_reminder = "heracles_plugins.user_reminder:plugin"
 personal = "heracles_plugins.personal:plugin"
 ppolicy = "heracles_plugins.ppolicy:plugin"
 dhcp = "heracles_plugins.dhcp:plugin"
+kerberos = "heracles_plugins.kerberos:plugin"
 
 [dependency-groups]
 dev = [
