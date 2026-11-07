@@ -267,10 +267,17 @@ def test_pwd_policy_checker_not_in_schema(
     assert "pwdPolicy" in classes
     assert "pwdPolicyChecker" not in classes
 
-    # Setting pwdCheckModule when pwdPolicyChecker is not available yields a validation error
-    with pytest.raises(ObjectValidationError) as exc:
-        new_policy(service, "invalid-checker", {"pwdCheckModule": "check_module.so"})
-    assert "main.pwdCheckModule" in exc.value.fields
+    # Without pwdPolicyChecker in the schema the checker tab is not offered at all
+    assert service.registry.get("ppolicy").tab("checker") is None
+    with pytest.raises(ObjectValidationError):
+        service.create(
+            "ppolicy",
+            BASE,
+            {
+                "main": {"values": {"cn": "invalid-checker"}},
+                "checker": {"active": True, "values": {"pwdCheckModule": "check_module.so"}},
+            },
+        )
 
 
 def test_pwd_policy_checker_in_schema(directory: MemoryDirectory) -> None:
@@ -283,12 +290,30 @@ def test_pwd_policy_checker_in_schema(directory: MemoryDirectory) -> None:
     registry.register_plugin(ppolicy.plugin(), {c.lower() for c in schema})
     service = ObjectService(directory, registry)
 
-    dn = new_policy(service, "with-checker", {"pwdCheckModule": "check_module.so"})
+    dn = service.create(
+        "ppolicy",
+        BASE,
+        {
+            "main": {"values": {"cn": "with-checker"}},
+            "checker": {"active": True, "values": {"pwdCheckModule": "check_module.so"}},
+        },
+    )
     entry = directory.get(dn)
     assert entry is not None
     classes = entry.texts("objectClass")
     assert "pwdPolicyChecker" in classes
     assert entry.text("pwdCheckModule") == "check_module.so"
+    state = service.load("ppolicy", dn)
+    assert state.tabs["checker"].active
+    # a policy without the checker class loads with the tab inactive
+    plain = service.create("ppolicy", BASE, {"main": {"values": {"cn": "plain"}}})
+    assert not service.load("ppolicy", plain).tabs["checker"].active
+    # deactivating removes the class and the module
+    service.update("ppolicy", dn, {"checker": {"active": False}})
+    entry = directory.get(dn)
+    assert entry is not None
+    assert "pwdPolicyChecker" not in entry.texts("objectClass")
+    assert not entry.get("pwdCheckModule")
 
 
 # ------------------------------------------------------------- user tab on user
@@ -410,12 +435,10 @@ sn: User
 # ------------------------------------------------------------- default policy hint
 
 
-def test_default_policy_dn_setting_hint() -> None:
-    attr = PwdPolicySubentryAttr()
-    # Default settings: no default policy DN
-    ppolicy.plugin(PpolicySettings(default_policy_dn=None))
-    assert "empty = directory default policy" in attr.description
-
-    # Configured default policy DN
-    ppolicy.plugin(PpolicySettings(default_policy_dn="cn=default,ou=ppolicies,dc=test"))
-    assert "cn=default,ou=ppolicies,dc=test" in attr.description
+def test_plugin_settings_are_registered() -> None:
+    settings = PpolicySettings(default_policy_dn="cn=default,ou=ppolicies,dc=test")
+    registry = TypeRegistry()
+    register_builtin_types(registry)
+    registry.register_plugin(ppolicy.plugin(settings), {"pwdpolicy", "device"})
+    assert registry.settings["ppolicy"] is settings
+    assert "default policy" in PwdPolicySubentryAttr().description

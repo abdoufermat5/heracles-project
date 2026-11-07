@@ -6,7 +6,6 @@ on ``user`` for policy assignment and operational account status attributes.
 
 from __future__ import annotations
 
-import inspect
 from dataclasses import dataclass
 from typing import Any
 
@@ -46,20 +45,10 @@ class PpolicySettings:
     default_policy_dn: str | None = None
 
 
-_active_settings = PpolicySettings()
-
-
-def get_current_settings() -> PpolicySettings:
-    """Return the currently configured plugin settings."""
-    return _active_settings
-
-
 def settings_of(ctx: TabContext) -> PpolicySettings:
     """Extract PpolicySettings from TabContext."""
     val = ctx.settings.get(PLUGIN_NAME)
-    if isinstance(val, PpolicySettings):
-        return val
-    return get_current_settings()
+    return val if isinstance(val, PpolicySettings) else PpolicySettings()
 
 
 def virtual[A](attr: A) -> A:
@@ -125,52 +114,28 @@ class CheckQualityAttr(SelectAttr):
 
 
 class PwdPolicySubentryAttr(ObjectRefAttr):
-    """Reference to a ppolicy entry, with default policy hint in description."""
+    """Reference to the password policy applied to a user."""
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(
             "pwdPolicySubentry",
             _("Password policy"),
             ref_type="ppolicy",
+            description=_("Assigned password policy (empty = directory default policy)."),
             **kwargs,
         )
-
-    @property
-    def description(self) -> str:
-        default_dn = get_current_settings().default_policy_dn
-        if default_dn:
-            return _("Assigned password policy (default: {dn}).").format(dn=default_dn)
-        return _("Assigned password policy (empty = directory default policy).")
-
-    @description.setter
-    def description(self, value: str) -> None:
-        pass
 
 
 # ------------------------------------------------------------- ppolicy type
 
 
-class PpolicyMainTabMeta(type):
-    """Metaclass ensuring pwdPolicyChecker is conditionally included in objectClasses."""
-
-    @property
-    def object_classes(cls) -> tuple[str, ...]:
-        stack = inspect.stack()
-        if any(frame.function == "load" for frame in stack[1:4]):
-            return ("device", "pwdPolicy")
-        if getattr(cls, "_has_checker", False):
-            return ("device", "pwdPolicy", "pwdPolicyChecker")
-        return ("device", "pwdPolicy")
-
-
-class PpolicyMainTab(Tab, metaclass=PpolicyMainTabMeta):
+class PpolicyMainTab(Tab):
     """Main tab of the password policy object type."""
 
     name = "main"
     acl_key = "ppolicy"
     label = _("Password policy")
     object_classes = ("device", "pwdPolicy")
-    _has_checker: bool = False
 
     properties = Section(
         _("Properties"),
@@ -192,7 +157,6 @@ class PpolicyMainTab(Tab, metaclass=PpolicyMainTabMeta):
                 ("2", _("Always check")),
             ],
         ),
-        StringAttr("pwdCheckModule", _("Check module")),
     )
     expiration = Section(
         _("Expiration"),
@@ -213,20 +177,31 @@ class PpolicyMainTab(Tab, metaclass=PpolicyMainTabMeta):
     )
 
     @classmethod
-    def on_load(cls, ctx: TabContext) -> None:
-        classes = {c.lower() for c in ctx.directory.schema_object_classes()}
-        cls._has_checker = "pwdpolicychecker" in classes
-
-    @classmethod
     def prepare(cls, ctx: TabContext) -> None:
-        classes = {c.lower() for c in ctx.directory.schema_object_classes()}
-        cls._has_checker = "pwdpolicychecker" in classes
-        if not cls._has_checker and ctx.values.get("pwdCheckModule"):
-            ctx.error(
-                "pwdCheckModule",
-                _("pwdPolicyChecker is not available in directory schema."),
-            )
         ctx.values["pwdAttribute"] = "userPassword"
+
+
+class PpolicyCheckerTab(Tab):
+    """External password quality checker module (``pwdPolicyChecker``).
+
+    Only offered when the directory schema knows ``pwdPolicyChecker``: the registry
+    drops optional tabs whose objectClasses are missing.
+    """
+
+    name = "checker"
+    acl_key = "ppolicy"
+    label = _("Quality check module")
+    optional = True
+    object_classes = ("pwdPolicyChecker",)
+
+    module = Section(
+        _("Quality check module"),
+        StringAttr(
+            "pwdCheckModule",
+            _("Check module"),
+            description=_("Shared library loaded by the directory server to check passwords"),
+        ),
+    )
 
 
 class Ppolicy(ObjectType):
@@ -239,10 +214,8 @@ class Ppolicy(ObjectType):
     main_attr = "cn"
     filter = "(objectClass=pwdPolicy)"
     columns = ("cn", "description")
-    # The optional pwdPolicyChecker class must not gate registration.
-    required_object_classes = ("device", "pwdPolicy")
-
     Main = PpolicyMainTab
+    Checker = PpolicyCheckerTab
 
 
 # ------------------------------------------------------------- user tab
@@ -274,8 +247,6 @@ class PpolicyAccountTab(Tab):
 
     @classmethod
     def on_load(cls, ctx: TabContext) -> None:
-        global _active_settings
-        _active_settings = settings_of(ctx)
         if not ctx.dn:
             return
         op_entry = ctx.directory.get(ctx.dn, list(OPERATIONAL_ATTRS))
@@ -292,11 +263,6 @@ class PpolicyAccountTab(Tab):
                     val = attr.from_ldap(op_entry.get(attr_name))
                     if val is not None:
                         ctx.values[attr_name] = val
-
-    @classmethod
-    def prepare(cls, ctx: TabContext) -> None:
-        global _active_settings
-        _active_settings = settings_of(ctx)
 
 
 # --------------------------------------------------------------- hooks
@@ -316,9 +282,6 @@ def unlock_account_hook(entry: Entry, locked: bool) -> list[Modification]:
 
 def plugin(settings: PpolicySettings | None = None) -> Plugin:
     """Entry point of the ppolicy plugin."""
-    global _active_settings
-    if settings is not None:
-        _active_settings = settings
     return Plugin(
         name=PLUGIN_NAME,
         version="0.1.0",
@@ -326,7 +289,7 @@ def plugin(settings: PpolicySettings | None = None) -> Plugin:
         tabs=(TabAttachment("user", PpolicyAccountTab),),
         required_object_classes=("pwdPolicy",),
         account_lock_hooks=(unlock_account_hook,),
-        settings=_active_settings,
+        settings=settings if settings is not None else PpolicySettings(),
     )
 
 
@@ -338,10 +301,10 @@ __all__ = [
     "DurationAttr",
     "Ppolicy",
     "PpolicyAccountTab",
+    "PpolicyCheckerTab",
     "PpolicyMainTab",
     "PpolicySettings",
     "PwdPolicySubentryAttr",
-    "get_current_settings",
     "plugin",
     "settings_of",
     "unlock_account_hook",

@@ -152,6 +152,11 @@ class EntryPointLike(Protocol):
     def load(self) -> Any: ...
 
 
+def _tab_available(tab: type[Tab], available_classes: set[str]) -> bool:
+    """A mandatory tab is always kept; an optional one needs all its objectClasses."""
+    return not tab.optional or all(c.lower() in available_classes for c in tab.object_classes)
+
+
 class TypeRegistry:
     """Registered object types, in registration order."""
 
@@ -224,9 +229,12 @@ class TypeRegistry:
             needed = type_cls.required_object_classes or type_cls.tabs[0].object_classes
             if any(c.lower() not in available_classes for c in needed):
                 continue  # this type's schema is not loaded in the directory
-            self.register_type(type_cls)
+            info = self.register_type(type_cls)
+            # optional tabs whose objectClasses are unknown to the schema are dropped
+            info.tabs = [t for t in info.tabs if _tab_available(t, available_classes)]
         for att in plugin.tabs:
-            self.attach_tab(att.type_name, att.tab)
+            if _tab_available(att.tab, available_classes):
+                self.attach_tab(att.type_name, att.tab)
         self.account_lock_hooks.extend(plugin.account_lock_hooks)
         self.public_router_factories.extend((plugin.name, f) for f in plugin.public_routers)
         self.api_router_factories.extend((plugin.name, f) for f in plugin.api_routers)
