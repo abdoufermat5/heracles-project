@@ -67,6 +67,11 @@ spamassassin = "heracles_plugins.spamassassin:plugin"
 zimbra = "heracles_plugins.zimbra:plugin"
 sogo = "heracles_plugins.sogo:plugin"
 mailinblack = "heracles_plugins.mailinblack:plugin"
+nextcloud = "heracles_plugins.nextcloud:plugin"
+pureftpd = "heracles_plugins.pureftpd:plugin"
+quota = "heracles_plugins.quota:plugin"
+freeradius = "heracles_plugins.freeradius:plugin"
+macro = "heracles_plugins.macro:plugin"
 
 [dependency-groups]
 dev = [
