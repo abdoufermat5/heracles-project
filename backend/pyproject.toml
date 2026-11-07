@@ -9,6 +9,7 @@ dependencies = [
   "pydantic>=2.9",
   "pydantic-settings>=2.6",
   "structlog>=24.4",
+  "pyyaml>=6.0.3",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +28,7 @@ dev = [
   "httpx>=0.27",
   "pyright>=1.1.390",
   "ruff>=0.8",
+  "types-pyyaml>=6.0.12.20261103",
 ]
 
 [build-system]
@@ -55,3 +57,4 @@ pythonVersion = "3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["integration: needs a real LDAP server (set HERACLES_TEST_LDAP_URI)"]
