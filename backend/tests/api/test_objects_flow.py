@@ -235,3 +235,17 @@ def test_dashboard_counts(app_client: TestClient) -> None:
     assert cards["user"] == 7
     assert cards["group"] == 2
     assert cards["role"] == 1
+
+
+def test_posix_plugin_through_api(app_client: TestClient) -> None:
+    a = api(app_client, "admin")
+    names = {t["name"] for t in a.get("/types").json()}
+    assert "posix_group" in names
+    tabs = {t["name"]: t for t in a.get("/types/user").json()["tabs"]}
+    assert tabs["posix"]["optional"] is True
+    r = a.patch(f"/objects/user/{q(ASMITH)}", {"tabs": {"posix": {"active": True, "values": {}}}})
+    assert r.status_code == 200, r.text
+    posix_values = r.json()["tabs"]["posix"]["values"]
+    assert posix_values["uidNumber"] == 1101
+    assert posix_values["homeDirectory"] == "/home/asmith"
+    assert "rwcdm" in r.json()["acl"]["posix"]["object"]

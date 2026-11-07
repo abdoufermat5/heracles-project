@@ -35,6 +35,7 @@ from heracles.objects.errors import (
     ObjectValidationError,
     PermissionDeniedError,
 )
+from heracles.objects.hooks import TabContext
 from heracles.objects.model import Tab
 from heracles.objects.policy import (
     TAB_ATTR,
@@ -145,6 +146,10 @@ class ObjectService:
             if active:
                 state.values = self._read_values(info, tab, entry)
             tabs[tab.name] = state
+        base = department_of(entry.dn, info.type.rdn)
+        for tab in info.tabs:
+            if tabs[tab.name].active:
+                tab.on_load(self._ctx(info, tab, entry.dn, base, tabs, None, (), creating=False))
         raw = {k: list(v) for k, v in entry.attrs.items()}
         return ObjectState.build(entry.dn, type_name, tabs, raw, entry.texts("objectClass"))
 
@@ -273,6 +278,7 @@ class ObjectService:
         dept = self._department_attr(info)
         if dept is not None:
             new[dept[0].name].values[dept[1].name] = base
+        self._prepare(info, None, base, new, None, touched, errors, creating=True)
         self._compute(info, new)
         self._validate(info, new, None, errors, creating=True)
 
@@ -316,8 +322,69 @@ class ObjectService:
             self.directory.add(dn, attrs)
         except AlreadyExistsError:
             raise ObjectConflictError(f"{dn} already exists") from None
+        for tab in info.tabs:
+            if new[tab.name].active:
+                tab.after_save(self._ctx(info, tab, dn, base, new, None, touched, creating=True))
         self.events.post_create(ctx)
         return dn
+
+    def _ctx(
+        self,
+        info: TypeInfo,
+        tab: type[Tab],
+        dn: str | None,
+        base: str,
+        tabs: Mapping[str, TabState],
+        original: Mapping[str, TabState] | None,
+        touched: Sequence[tuple[str, str]],
+        *,
+        creating: bool,
+        errors: dict[str, str] | None = None,
+    ) -> TabContext:
+        was_active = original is not None and original[tab.name].active
+        return TabContext(
+            directory=self.directory,
+            registry=self.registry,
+            info=info,
+            tab_name=tab.name,
+            dn=dn,
+            base=base,
+            creating=creating,
+            activating=creating or not was_active,
+            values=tabs[tab.name].values,
+            tabs=tabs,
+            original=original,
+            touched=touched,
+            errors=errors if errors is not None else {},
+        )
+
+    def _prepare(
+        self,
+        info: TypeInfo,
+        dn: str | None,
+        base: str,
+        tabs: dict[str, TabState],
+        original: Mapping[str, TabState] | None,
+        touched: Sequence[tuple[str, str]],
+        errors: dict[str, str],
+        *,
+        creating: bool,
+    ) -> None:
+        for tab in info.tabs:
+            if tabs[tab.name].active:
+                tab.prepare(
+                    self._ctx(
+                        info,
+                        tab,
+                        dn,
+                        base,
+                        tabs,
+                        original,
+                        touched,
+                        creating=creating,
+                        errors=errors,
+                    )
+                )
 
     @staticmethod
     def _defaults(tab: type[Tab]) -> dict[str, Any]:
@@ -331,6 +398,8 @@ class ObjectService:
         state = self.load(type_name, dn)
         errors: dict[str, str] = {}
         new, touched = self._apply(info, state.tabs, tabs_json, errors, creating=False)
+        current_base = department_of(dn, info.type.rdn)
+        self._prepare(info, dn, current_base, new, state.original, touched, errors, creating=False)
         self._compute(info, new)
         self._validate(info, new, state, errors, creating=False)
 
@@ -375,6 +444,18 @@ class ObjectService:
                 new_dn = self.directory.rename(dn, new_rdn, superior)
             except AlreadyExistsError:
                 raise ObjectConflictError(f"{new_rdn} already exists") from None
+        final_base = department_of(new_dn, info.type.rdn)
+        for tab in info.tabs:
+            was_active = state.original[tab.name].active
+            ctx = self._ctx(
+                info, tab, new_dn, final_base, new, state.original, touched, creating=False
+            )
+            if new[tab.name].active:
+                ctx.activating = not was_active
+                tab.after_save(ctx)
+            elif was_active:
+                ctx.values = state.original[tab.name].values
+                tab.on_deactivate(ctx)
         result = self.load(type_name, new_dn)
         self.events.post_modify(EventContext(type_name, new_dn, state, result, mods))
         return result
@@ -383,16 +464,22 @@ class ObjectService:
 
     def delete(self, type_name: str, dn: str) -> None:
         """Delete an object."""
-        self.registry.get(type_name)
+        info = self.registry.get(type_name)
         state = self.load(type_name, dn)
         if not self.policy.can_delete(dn, type_name):
             raise PermissionDeniedError(f"cannot delete {dn}")
         ctx = EventContext(type_name, dn, state, None)
         self.events.pre_delete(ctx)
+        base = department_of(dn, info.type.rdn)
+        active_tabs = [t for t in info.tabs if state.tabs[t.name].active]
+        for tab in active_tabs:
+            tab.before_delete(self._ctx(info, tab, dn, base, state.tabs, None, (), creating=False))
         try:
             self.directory.delete(dn)
         except NoSuchObjectError:
             raise ObjectNotFoundError(dn) from None
+        for tab in active_tabs:
+            tab.after_delete(self._ctx(info, tab, dn, base, state.tabs, None, (), creating=False))
         self.events.post_delete(ctx)
 
     # --------------------------------------------------------------- helpers

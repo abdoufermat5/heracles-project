@@ -122,4 +122,4 @@ def build_demo_app(static_dir: str | os.PathLike[str] | None = None) -> FastAPI:
         static_dir=Path(static_dir) if static_dir else None,
     )
     settings.session.cookie_secure = False
-    return create_full_app(settings, {"main": demo.build_demo_directory()}, load_plugins=False)
+    return create_full_app(settings, {"main": demo.build_demo_directory()})

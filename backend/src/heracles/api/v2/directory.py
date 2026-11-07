@@ -103,17 +103,21 @@ def _set_account_lock(
     evaluator = domain.evaluator(user)
     if not evaluator.can_write_attr(dn, info.acl_object(info.main_tab), USER_LOCK_ACL):
         raise forbidden("You cannot lock or unlock this account")
-    entry = user.directory.get(dn, ["userPassword", "objectClass"])
+    entry = user.directory.get(dn)
     if entry is None or not entry.has_object_class("inetOrgPerson"):
         raise not_found("User not found")
     stored = entry.text("userPassword") or ""
     new = lock(stored) if locked else unlock(stored)
+    changes: list[Modification] = []
     if new != stored:
         if new:
-            change = Modification("replace", "userPassword", [new.encode()])
+            changes.append(Modification("replace", "userPassword", [new.encode()]))
         else:
-            change = Modification("delete", "userPassword")
-        user.directory.modify(dn, [change])
+            changes.append(Modification("delete", "userPassword"))
+    for hook in domain.registry.account_lock_hooks:
+        changes.extend(hook(entry, locked))
+    if changes:
+        user.directory.modify(dn, changes)
     return {"dn": dn, "locked": is_locked(new)}
 
 

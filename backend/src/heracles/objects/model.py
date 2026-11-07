@@ -18,9 +18,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from heracles.attributes import JSON, AnyAttribute
+
+if TYPE_CHECKING:
+    from heracles.objects.hooks import TabContext
 
 
 class Section:
@@ -93,6 +96,32 @@ class Tab:
     @classmethod
     def compute(cls, values: dict[str, Any]) -> None:
         """Hook to derive values from others (mutates ``values``). Default: nothing."""
+
+    # Directory-aware hooks (see heracles.objects.hooks.TabContext). Default: nothing.
+
+    @classmethod
+    def on_load(cls, ctx: TabContext) -> None:
+        """Fill virtual attributes after the entry was read."""
+
+    @classmethod
+    def prepare(cls, ctx: TabContext) -> None:
+        """Adjust values before compute/validation (may report ``ctx.error``)."""
+
+    @classmethod
+    def after_save(cls, ctx: TabContext) -> None:
+        """Side effects on other entries once the object was written."""
+
+    @classmethod
+    def on_deactivate(cls, ctx: TabContext) -> None:
+        """Side effects once the tab was removed from the object."""
+
+    @classmethod
+    def before_delete(cls, ctx: TabContext) -> None:
+        """Called before the object is deleted (tab active)."""
+
+    @classmethod
+    def after_delete(cls, ctx: TabContext) -> None:
+        """Called after the object was deleted (tab was active)."""
 
     @classmethod
     def describe(cls) -> dict[str, JSON]:

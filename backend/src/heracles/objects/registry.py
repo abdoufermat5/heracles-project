@@ -8,7 +8,7 @@ from importlib.metadata import entry_points
 from typing import Any, Protocol, cast
 
 from heracles.attributes import JSON, AnyAttribute
-from heracles.ldap.client import DirectoryClient
+from heracles.ldap.client import DirectoryClient, Entry, Modification
 from heracles.objects.errors import UnknownTypeError
 from heracles.objects.model import ObjectType, Tab
 
@@ -80,6 +80,10 @@ class TypeInfo:
         }
 
 
+#: ``hook(entry, locked) -> modifications`` run on account lock (True) / unlock (False).
+type AccountLockHook = Callable[[Entry, bool], list[Modification]]
+
+
 @dataclass(frozen=True, slots=True)
 class TabAttachment:
     """Attach ``tab`` to the existing type called ``type_name``."""
@@ -97,6 +101,10 @@ class Plugin:
     types: Sequence[type[ObjectType]] = ()
     tabs: Sequence[TabAttachment] = ()
     required_object_classes: Sequence[str] = ()
+    #: Extra modifications applied when a user account is locked/unlocked.
+    account_lock_hooks: Sequence[AccountLockHook] = ()
+    #: Default settings, registered as ``registry.settings[name]`` unless already set.
+    settings: Any = None
     config: Any = None
     """Optional configuration section description (opaque here)."""
 
@@ -127,6 +135,10 @@ class TypeRegistry:
     """Registered object types, in registration order."""
 
     def __init__(self) -> None:
+        #: Plugin settings (plugin name → settings object), visible to tab hooks.
+        self.settings: dict[str, Any] = {}
+        #: Account lock hooks of enabled plugins.
+        self.account_lock_hooks: list[AccountLockHook] = []
         self._types: dict[str, TypeInfo] = {}
         self.plugins: list[PluginStatus] = []
 
@@ -183,6 +195,9 @@ class TypeRegistry:
             self.register_type(type_cls)
         for att in plugin.tabs:
             self.attach_tab(att.type_name, att.tab)
+        self.account_lock_hooks.extend(plugin.account_lock_hooks)
+        if plugin.settings is not None:
+            self.settings.setdefault(plugin.name, plugin.settings)
         return status
 
     def load_plugins(
