@@ -9,7 +9,7 @@ from heracles_plugins.dhcp.attributes import (
     MacAddressAttr,
     virtual,
 )
-from heracles_plugins.dhcp.router import router
+from heracles_plugins.dhcp.router import build_router
 from heracles_plugins.dhcp.tree import build_dhcp_tree
 from heracles_plugins.dhcp.types import (
     ALL_TYPES,
@@ -46,6 +46,7 @@ def plugin() -> Plugin:
         name=PLUGIN_NAME,
         version="0.1.0",
         types=ALL_TYPES,
+        api_routers=(build_router,),
         required_object_classes=("dhcpService",),
     )
 
@@ -71,10 +72,10 @@ __all__ = [
     "HwAddressAttr",
     "MacAddressAttr",
     "build_dhcp_tree",
+    "build_router",
     "find_dhcp_class",
     "normalize_dhcp_options",
     "plugin",
-    "router",
     "validate_ipv4",
     "validate_mac",
     "validate_range",

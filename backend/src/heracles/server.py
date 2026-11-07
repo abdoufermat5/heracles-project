@@ -72,12 +72,16 @@ def create_full_app(
         factory(PluginRouterContext(directories, registry.settings.get(name)))
         for name, factory in registry.public_router_factories
     ]
+    plugin_api = [
+        factory(PluginRouterContext(directories, registry.settings.get(name)))
+        for name, factory in registry.api_router_factories
+    ]
     app = create_app(
         settings,
         directories,
         is_admin=is_admin,
         logout_hooks=[release_locks],
-        extra_routers=[object_routes.router, directory_routes.router],
+        extra_routers=[object_routes.router, directory_routes.router, *plugin_api],
         public_routers=public,
     )
     install_domain(app, domain)

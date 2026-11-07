@@ -223,3 +223,16 @@ def test_always_active_attached_tab_lifecycle() -> None:
     # a user created without the tab still has it active (with defaults)
     dn2 = service.create("user", BASE, {"main": {"values": {**main, "uid": "other"}}})
     assert service.load("user", dn2).tabs["flag"].active
+
+
+def test_register_plugin_collects_api_routers() -> None:
+    def factory(_ctx: object) -> object:
+        return object()
+
+    reg = TypeRegistry()
+    register_builtin_types(reg)
+    reg.register_plugin(Plugin("p", "1.0", api_routers=(factory,)), set())
+    reg.register_plugin(
+        Plugin("off", "1.0", api_routers=(factory,), required_object_classes=("nope",)), set()
+    )
+    assert reg.api_router_factories == [("p", factory)]

@@ -93,6 +93,10 @@ class PluginRouterContext:
 #: session/CSRF protected API (for unauthenticated flows such as e-mailed links).
 type PublicRouterFactory = Callable[[PluginRouterContext], Any]
 
+#: ``factory(ctx) -> fastapi.APIRouter`` mounted under ``/api/v2``: it requires a session
+#: and CSRF protection like the built-in routes (use ``CurrentUserDep`` for the user).
+type ApiRouterFactory = Callable[[PluginRouterContext], Any]
+
 #: ``hook(entry, locked) -> modifications`` run on account lock (True) / unlock (False).
 type AccountLockHook = Callable[[Entry, bool], list[Modification]]
 
@@ -118,6 +122,8 @@ class Plugin:
     account_lock_hooks: Sequence[AccountLockHook] = ()
     #: Public (unauthenticated) routers, see :data:`PublicRouterFactory`.
     public_routers: Sequence[PublicRouterFactory] = ()
+    #: Authenticated routers mounted under ``/api/v2``, see :data:`ApiRouterFactory`.
+    api_routers: Sequence[ApiRouterFactory] = ()
     #: Default settings, registered as ``registry.settings[name]`` unless already set.
     settings: Any = None
     config: Any = None
@@ -156,6 +162,8 @@ class TypeRegistry:
         self.account_lock_hooks: list[AccountLockHook] = []
         #: ``(plugin name, factory)`` of enabled plugins' public routers.
         self.public_router_factories: list[tuple[str, PublicRouterFactory]] = []
+        #: ``(plugin name, factory)`` of enabled plugins' authenticated API routers.
+        self.api_router_factories: list[tuple[str, ApiRouterFactory]] = []
         self._types: dict[str, TypeInfo] = {}
         self.plugins: list[PluginStatus] = []
 
@@ -221,6 +229,7 @@ class TypeRegistry:
             self.attach_tab(att.type_name, att.tab)
         self.account_lock_hooks.extend(plugin.account_lock_hooks)
         self.public_router_factories.extend((plugin.name, f) for f in plugin.public_routers)
+        self.api_router_factories.extend((plugin.name, f) for f in plugin.api_routers)
         if plugin.settings is not None:
             self.settings.setdefault(plugin.name, plugin.settings)
         return status

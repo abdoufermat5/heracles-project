@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from heracles.ldap import dn as dnlib
@@ -13,8 +14,15 @@ from heracles_plugins.dhcp.validation import (
 )
 
 
-def build_dhcp_tree(directory: DirectoryClient, root_dn: str) -> list[dict[str, Any]]:
+def build_dhcp_tree(
+    directory: DirectoryClient,
+    root_dn: str,
+    can_read: Callable[[str, str], bool] | None = None,
+) -> list[dict[str, Any]]:
     """Build a nested tree of DHCP sections rooted at ``root_dn``.
+
+    ``can_read(dn, type_name)`` filters the sections: an unreadable section is left
+    out together with everything below it (an unreadable root gives an empty tree).
 
     Returns ``[{dn, type, label, allowed_children: [...], children: [...]}]``
     or an empty list if ``root_dn`` does not exist or is not a DHCP section.
@@ -41,6 +49,8 @@ def build_dhcp_tree(directory: DirectoryClient, root_dn: str) -> list[dict[str, 
         if oc is None:
             continue
         type_name = TYPE_BY_CLASS[oc.lower()]
+        if can_read is not None and not can_read(entry.dn, type_name):
+            continue
         allowed_classes = ALLOWED_CHILDREN_BY_CLASS.get(oc, frozenset())
         allowed_children = sorted(TYPE_BY_CLASS[c.lower()] for c in allowed_classes)
         node: dict[str, Any] = {

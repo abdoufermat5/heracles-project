@@ -671,3 +671,19 @@ def test_tree_builder(service: ObjectService, directory: MemoryDirectory) -> Non
 
     # Non-existent DN
     assert dhcp.build_dhcp_tree(directory, f"cn=nope,{PARIS}") == []
+
+
+def test_tree_builder_filters_unreadable_sections(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    cfg_dn = create_section(service, "dhcp_configuration", PARIS, {"cn": "acl-cfg"})
+    open_dn = create_section(service, "dhcp_shared_network", cfg_dn, {"cn": "open"})
+    secret_dn = create_section(service, "dhcp_group", cfg_dn, {"cn": "secret"})
+    create_section(service, "dhcp_host", secret_dn, {"cn": "below-secret"})
+
+    def can_read(dn: str, _type: str) -> bool:
+        return not dn.startswith(("cn=secret", "cn=below-secret"))
+
+    tree = dhcp.build_dhcp_tree(directory, cfg_dn, can_read)
+    assert [c["dn"] for c in tree[0]["children"]] == [open_dn]
+    assert dhcp.build_dhcp_tree(directory, secret_dn, can_read) == []

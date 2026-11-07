@@ -9,10 +9,8 @@ from urllib.parse import quote
 import pytest
 from fastapi.testclient import TestClient
 
-import heracles_plugins.dhcp as dhcp
-from heracles.api.settings import ApiSettings
-from heracles.demo import BASE, build_demo_directory
-from heracles.server import create_full_app
+from heracles.demo import BASE
+from heracles.server import build_demo_app
 
 PARIS = f"ou=paris,{BASE}"
 
@@ -53,17 +51,9 @@ class Api:
 
 @pytest.fixture
 def app_client() -> Iterator[TestClient]:
-    directory = build_demo_directory()
-    directory.set_schema_object_classes([*directory.schema_object_classes(), "dhcpservice"])
-    settings = ApiSettings(
-        admin_dns=[],
-        directory_labels={"main": "Demo directory"},
-        enable_docs=True,
-    )
-    settings.session.cookie_secure = False
-    app = create_full_app(settings, {"main": directory})
-    app.include_router(dhcp.router, prefix="/api/v2")
-    with TestClient(app) as client:
+    # the demo directory schema already contains the DHCP classes and the plugin
+    # router is mounted by create_full_app under /api/v2
+    with TestClient(build_demo_app()) as client:
         yield client
 
 
@@ -316,3 +306,18 @@ def test_dhcp_tree_endpoint(app_client: TestClient) -> None:
     # Non-existent DN
     r_not_found = a.get("/dhcp/tree", dn=f"cn=missing,{PARIS}")
     assert r_not_found.status_code == 404
+
+
+def test_dhcp_tree_hidden_without_read_access(app_client: TestClient) -> None:
+    admin = api(app_client, "admin")
+    r_cfg = admin.post(
+        "/objects/dhcp_configuration",
+        {"base": PARIS, "tabs": {"main": {"values": {"cn": "acl-dhcp"}}}},
+    )
+    cfg_dn = r_cfg.json()["dn"]
+    assert admin.get("/dhcp/tree", dn=cfg_dn).status_code == 200
+
+    # a user with only self-service rights cannot read the section: same answer as missing
+    with TestClient(app_client.app) as other_client:
+        user = Api(other_client).login("asmith")
+        assert user.get("/dhcp/tree", dn=cfg_dn).status_code == 404
