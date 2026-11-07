@@ -43,6 +43,7 @@ sieve = "heracles_plugins.sieve:plugin"
 spamassassin = "heracles_plugins.spamassassin:plugin"
 zimbra = "heracles_plugins.zimbra:plugin"
 sogo = "heracles_plugins.sogo:plugin"
+mailinblack = "heracles_plugins.mailinblack:plugin"
 
 [dependency-groups]
 dev = [
