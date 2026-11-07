@@ -20,7 +20,7 @@ def svc(directory: MemoryDirectory) -> SnapshotService:
 
 def test_create_format(svc: SnapshotService, directory: MemoryDirectory) -> None:
     snap = svc.create(SUB, object_type="department", source="API", description="before cleanup")
-    assert snap.dn == f"gosaSnapshotTimestamp=1700000000-123456,{BASE}"
+    assert snap.dn == f"gosaSnapshotTimestamp=1700000000-012345600,{BASE}"
     entry = directory.get(snap.dn)
     assert entry is not None
     assert entry.text("objectClass") == "gosaSnapshotObject"
@@ -46,8 +46,8 @@ def test_timestamp_collision_retries(svc: SnapshotService) -> None:
     b = svc.create(ALICE)
     c = svc.create(ALICE)
     assert len({a.dn, b.dn, c.dn}) == 3
-    assert a.timestamp == "1700000000-123456"
-    assert b.timestamp == "1700000000-123457"
+    assert a.timestamp == "1700000000-012345600"
+    assert b.timestamp == "1700000000-012345700"
 
 
 def test_list_for_dn_newest_first(svc: SnapshotService) -> None:

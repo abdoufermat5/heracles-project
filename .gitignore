@@ -19,3 +19,5 @@ htmlcov/
 deploy/ldap/compat-schema/*
 !deploy/ldap/compat-schema/README.md
 .claude/settings.local.json
+frontend/*.tsbuildinfo
+.hypothesis/

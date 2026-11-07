@@ -1,16 +1,13 @@
-"""Compatibility-schema identifiers used by the ACL package.
-
-These are data identifiers that will live in ``heracles.schema.legacy``.
-"""
+"""Directory identifiers used by the ACL engine (re-exported from the schema module)."""
 
 from __future__ import annotations
 
-OC_ACL = "gosaAcl"  # TODO: import from heracles.schema.legacy once merged
-ATTR_ACL_ENTRY = "gosaAclEntry"  # TODO: import from heracles.schema.legacy once merged
-OC_ACL_ROLE = "gosaRole"  # TODO: import from heracles.schema.legacy once merged
-ATTR_ACL_TEMPLATE = "gosaAclTemplate"  # TODO: import from heracles.schema.legacy once merged
+from heracles.schema.legacy import ATTR, OC, STD_OC
 
-# Standard schema names (not legacy specific).
-OC_GROUP_OF_NAMES = "groupOfNames"
-OC_POSIX_GROUP = "posixGroup"
-OC_ROLE = "organizationalRole"
+OC_ACL = OC.ACL_ASSIGNMENT
+ATTR_ACL_ENTRY = ATTR.ACL_ENTRY
+OC_ACL_ROLE = OC.ACL_ROLE
+ATTR_ACL_TEMPLATE = ATTR.ACL_TEMPLATE
+OC_GROUP_OF_NAMES = STD_OC.GROUP_OF_NAMES
+OC_POSIX_GROUP = STD_OC.POSIX_GROUP
+OC_ROLE = STD_OC.ORGANIZATIONAL_ROLE

@@ -79,6 +79,21 @@ def is_descendant(dn: str, ancestor: str, *, include_self: bool = True) -> bool:
     return d.endswith("," + a)
 
 
+def _clean_fragment(fragment: str) -> str:
+    """Trim whitespace and separating commas, keeping escaped trailing characters."""
+    text = fragment.lstrip().lstrip(",").lstrip()
+    while text and text[-1] in (" ", ","):
+        body = text[:-1]
+        # A character preceded by an odd number of backslashes is escaped: keep it.
+        if (len(body) - len(body.rstrip("\\"))) % 2 == 1:
+            break
+        text = body
+    return text
+
+
 def join(*parts: str) -> str:
-    """Join DN fragments, ignoring empty ones and trailing commas."""
-    return ",".join(p.strip().strip(",") for p in parts if p and p.strip().strip(","))
+    """Join DN fragments, ignoring empty ones and separating commas.
+
+    Escaped trailing characters (``\\ `` or ``\\,``) are preserved.
+    """
+    return ",".join(c for c in (_clean_fragment(p) for p in parts if p) if c)

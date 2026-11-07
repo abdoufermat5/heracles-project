@@ -52,16 +52,41 @@ class Snapshot:
     @property
     def created_at(self) -> datetime | None:
         """Creation time derived from the timestamp RDN value."""
-        seconds, _, micros = self.timestamp.partition("-")
+        parsed = _parse_timestamp(self.timestamp)
+        if parsed is None:
+            return None
         try:
-            return datetime.fromtimestamp(int(seconds) + int(micros or 0) / 1_000_000, UTC)
-        except (ValueError, OverflowError, OSError):
+            return datetime.fromtimestamp(parsed[0] + parsed[1] / 1_000_000, UTC)
+        except (OverflowError, OSError):
             return None
 
 
 def _timestamp(now: float, bump: int) -> str:
+    """Timestamp RDN value in the historical format ``<sec>-0<8 fraction digits>``.
+
+    The fraction is the decimal part of the second written with 8 digits and its
+    leading ``0.`` kept without the dot (e.g. ``1700000000-012345600``).
+    """
     total_us = int(now * 1_000_000) + bump
-    return f"{total_us // 1_000_000}-{total_us % 1_000_000:06d}"
+    return f"{total_us // 1_000_000}-0{total_us % 1_000_000:06d}00"
+
+
+def _parse_timestamp(timestamp: str) -> tuple[int, int] | None:
+    """Return ``(seconds, microseconds)`` from a timestamp RDN value.
+
+    Accepts the historical ``<sec>-0<8 digits>`` format and a plain
+    ``<sec>-<6 digits microseconds>`` format.
+    """
+    seconds, _, frac = timestamp.partition("-")
+    if not seconds.isdigit() or (frac and not frac.isdigit()):
+        return None
+    if len(frac) == 9 and frac.startswith("0"):
+        micros = int(frac[1:7])
+    elif frac:
+        micros = int(frac[:6].ljust(6, "0")) if len(frac) > 6 else int(frac)
+    else:
+        micros = 0
+    return int(seconds), micros
 
 
 class SnapshotService:
@@ -240,8 +265,4 @@ class SnapshotService:
 
 
 def _sort_key(timestamp: str) -> tuple[int, int]:
-    seconds, _, micros = timestamp.partition("-")
-    try:
-        return int(seconds), int(micros or 0)
-    except ValueError:
-        return 0, 0
+    return _parse_timestamp(timestamp) or (0, 0)

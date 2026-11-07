@@ -1,10 +1,9 @@
-"""Legacy directory identifiers needed by the object layer.
-
-# TODO: import from heracles.schema.legacy once merged
-"""
+"""Compatibility identifiers used by the object layer (re-exported from the schema module)."""
 
 from __future__ import annotations
 
-DEPARTMENT_MARKER = "gosaDepartment"
-ACL_ROLE_CLASS = "gosaRole"
-ACL_ASSIGNMENT_CLASS = "gosaAcl"
+from heracles.schema.legacy import OC
+
+DEPARTMENT_MARKER = OC.DEPARTMENT
+ACL_ROLE_CLASS = OC.ACL_ROLE
+ACL_ASSIGNMENT_CLASS = OC.ACL_ASSIGNMENT

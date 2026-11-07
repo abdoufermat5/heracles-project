@@ -1,17 +1,16 @@
-# ruff: noqa: S105
-"""Legacy directory identifiers needed by the auth package.
-
-TODO: import from heracles.schema.legacy once merged.
-"""
+"""Token entry identifiers used by authentication (re-exported from the schema module)."""
+# ruff: noqa: S105  # attribute names, not secrets
 
 from __future__ import annotations
 
 from typing import Final
 
-TOKEN_OBJECT_CLASS: Final = "fdTokenEntry"
+from heracles.schema.legacy import ATTR, OC
+
+TOKEN_OBJECT_CLASS: Final = OC.TOKEN
 TOKEN_ATTR_CN: Final = "cn"
-TOKEN_ATTR_USER_DN: Final = "fdTokenUserDN"
-TOKEN_ATTR_TYPE: Final = "fdTokenType"
-TOKEN_ATTR_VALUE: Final = "fdToken"
-TOKEN_ATTR_TIMESTAMP: Final = "fdTokenTimestamp"
+TOKEN_ATTR_USER_DN: Final = ATTR.TOKEN_USER_DN
+TOKEN_ATTR_TYPE: Final = ATTR.TOKEN_TYPE
+TOKEN_ATTR_VALUE: Final = ATTR.TOKEN
+TOKEN_ATTR_TIMESTAMP: Final = ATTR.TOKEN_TIMESTAMP
 TOKEN_TYPE_RECOVERY: Final = "recovery"
