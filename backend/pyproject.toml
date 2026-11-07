@@ -49,6 +49,11 @@ mixedgroups = "heracles_plugins.mixedgroups:plugin"
 dsa = "heracles_plugins.dsa:plugin"
 invitations = "heracles_plugins.invitations:plugin"
 public_forms = "heracles_plugins.public_forms:plugin"
+ipam = "heracles_plugins.ipam:plugin"
+netgroups = "heracles_plugins.netgroups:plugin"
+autofs5 = "heracles_plugins.autofs5:plugin"
+weblink = "heracles_plugins.weblink:plugin"
+ipmi = "heracles_plugins.ipmi:plugin"
 
 [dependency-groups]
 dev = [
