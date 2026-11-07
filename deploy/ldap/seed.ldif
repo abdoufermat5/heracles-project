@@ -1,0 +1,70 @@
+dn: dc=heracles,dc=test
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: heracles
+o: Heracles test directory
+
+dn: ou=people,dc=heracles,dc=test
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=groups,dc=heracles,dc=test
+objectClass: organizationalUnit
+ou: groups
+
+dn: ou=dsa,dc=heracles,dc=test
+objectClass: organizationalUnit
+ou: dsa
+
+dn: cn=heracles-service,ou=dsa,dc=heracles,dc=test
+objectClass: organizationalRole
+objectClass: simpleSecurityObject
+cn: heracles-service
+description: Heracles service account
+userPassword: service-secret
+
+dn: uid=alice,ou=people,dc=heracles,dc=test
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: alice
+cn: Alice Martin
+sn: Martin
+givenName: Alice
+mail: alice@heracles.test
+userPassword: alice-secret
+
+dn: uid=bob,ou=people,dc=heracles,dc=test
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: bob
+cn: Bob Durand
+sn: Durand
+givenName: Bob
+mail: bob@heracles.test
+userPassword: bob-secret
+
+dn: uid=carol,ou=people,dc=heracles,dc=test
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+uid: carol
+cn: Carol Petit
+sn: Petit
+givenName: Carol
+mail: carol@heracles.test
+userPassword: carol-secret
+
+dn: cn=admins,ou=groups,dc=heracles,dc=test
+objectClass: groupOfNames
+cn: admins
+member: uid=alice,ou=people,dc=heracles,dc=test
+
+dn: cn=staff,ou=groups,dc=heracles,dc=test
+objectClass: groupOfNames
+cn: staff
+member: uid=alice,ou=people,dc=heracles,dc=test
+member: uid=bob,ou=people,dc=heracles,dc=test
+member: uid=carol,ou=people,dc=heracles,dc=test

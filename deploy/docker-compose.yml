@@ -1,0 +1,39 @@
+# Development / integration-test LDAP server.
+#
+# Image choice: bitnami/openldap:2.6 is a widely used, well-documented
+# OpenLDAP 2.6 image that loads *.ldif files from /ldifs at first start and
+# runs unprivileged on port 1389. It is used for tests only.
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#   export HERACLES_TEST_LDAP_URI=ldap://localhost:1389
+#   uv run --extra ldap pytest -m integration
+#
+# Optional: copy the compatibility schema files of an existing installation
+# into deploy/ldap/compat-schema/ (see its README) before the first start.
+
+services:
+  ldap:
+    image: bitnami/openldap:2.6
+    ports:
+      - "1389:1389"
+    environment:
+      LDAP_ROOT: dc=heracles,dc=test
+      LDAP_ADMIN_USERNAME: admin
+      LDAP_ADMIN_PASSWORD: admin
+      LDAP_CUSTOM_LDIF_DIR: /ldifs
+      LDAP_CUSTOM_SCHEMA_DIR: /schemas
+      # Base tree is created by the image; the seed adds the rest.
+      LDAP_SKIP_DEFAULT_TREE: "yes"
+      LDAP_EXTRA_SCHEMAS: cosine,inetorgperson,nis
+    volumes:
+      - ./ldap/seed.ldif:/ldifs/seed.ldif:ro
+      - ./ldap/compat-schema:/schemas:ro
+      - ldap-data:/bitnami/openldap
+    healthcheck:
+      test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost:1389 -b dc=heracles,dc=test -D cn=admin,dc=heracles,dc=test -w admin -s base dn"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  ldap-data:
