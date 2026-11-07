@@ -38,6 +38,7 @@ ppolicy = "heracles_plugins.ppolicy:plugin"
 dhcp = "heracles_plugins.dhcp:plugin"
 nextcloud = "heracles_plugins.nextcloud:plugin"
 pureftpd = "heracles_plugins.pureftpd:plugin"
+quota = "heracles_plugins.quota:plugin"
 
 [dependency-groups]
 dev = [
