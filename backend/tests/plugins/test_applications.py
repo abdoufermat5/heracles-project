@@ -84,7 +84,7 @@ def new_role(service: ObjectService, allowed: list[str], occupants: list[str]) -
 
 
 def test_flags_roundtrip() -> None:
-    assert encode_flags({"flag_group": True, "flag_menu": True, "flag_desktop": False}) == "GM"
+    assert encode_flags({"flag_group": True, "flag_menu": True, "flag_desktop": False}) == "[GM]"
     assert decode_flags("gm") == {
         "flag_group": True,
         "flag_overwrite": False,
@@ -117,7 +117,7 @@ def test_application_flags_are_stored_and_loaded(
     )
     assert dn == f"cn=terminal,ou=apps,{BASE}"
     entry = directory.get(dn) or pytest.fail()
-    assert entry.text("fdApplicationFlags") == "ML"
+    assert entry.text("fdApplicationFlags") == "[ML]"
     assert entry.first("fdApplicationImage") == PNG
     values = service.load("application", dn).tabs["main"].values
     assert values["flag_menu"] is True and values["flag_group"] is False
@@ -165,3 +165,9 @@ def test_plugin_registers_without_the_role_class() -> None:
     registry.register_plugin(apps.plugin(), classes)
     role = registry.get("role")
     assert role.tab("applications") is None
+
+
+def test_flags_brackets_and_unknown_letters() -> None:
+    assert decode_flags("[GD]")["flag_desktop"] is True
+    assert encode_flags({"flag_group": True}, previous="[GXZ]") == "[GXZ]"
+    assert encode_flags({}) == "[]"

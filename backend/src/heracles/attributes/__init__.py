@@ -32,6 +32,7 @@ from heracles.attributes.kinds import (
     TextAttr,
     UrlAttr,
     parse_generalized_time,
+    set_default_password_checker,
     set_default_password_hasher,
 )
 
@@ -66,5 +67,6 @@ __all__ = [
     "ValidationError",
     "is_empty",
     "parse_generalized_time",
+    "set_default_password_checker",
     "set_default_password_hasher",
 ]

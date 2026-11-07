@@ -31,14 +31,20 @@ _IMAGE = ImageAttr("image", "Image")
 
 
 def decode_flags(text: str | None) -> dict[str, bool]:
-    """Flag letters (``"GDM"``) to ``{"flag_group": True, ...}``."""
-    letters = set((text or "").upper())
+    """Stored flags (``"[GDM]"``, brackets optional) to ``{"flag_group": True, ...}``."""
+    letters = set((text or "").strip().strip("[]").upper())
     return {name: letter in letters for name, letter in FLAG_LETTERS}
 
 
-def encode_flags(flags: dict[str, Any]) -> str:
-    """``{"flag_group": True, ...}`` to flag letters."""
-    return "".join(letter for name, letter in FLAG_LETTERS if flags.get(name))
+def encode_flags(flags: dict[str, Any], previous: str | None = None) -> str:
+    """``{"flag_group": True, ...}`` to the stored form ``[GDM]``.
+
+    Letters of ``previous`` that are not known flags are preserved.
+    """
+    known = {letter for _name, letter in FLAG_LETTERS}
+    kept = [c for c in (previous or "").strip().strip("[]") if c.upper() not in known]
+    letters = "".join(letter for name, letter in FLAG_LETTERS if flags.get(name))
+    return f"[{letters}{''.join(kept)}]"
 
 
 def application_json(entry: Entry) -> dict[str, Any] | None:

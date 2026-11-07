@@ -121,7 +121,10 @@ class Application(ObjectType):
         def prepare(cls, ctx: TabContext) -> None:
             if ctx.creating:
                 ensure_container(ctx.directory, dnlib.join(Application.rdn, ctx.base))
-            ctx.values[FLAGS_ATTR] = encode_flags(ctx.values) or None
+            previous = ctx.original_values().get(FLAGS_ATTR)
+            ctx.values[FLAGS_ATTR] = encode_flags(
+                ctx.values, previous if isinstance(previous, str) else None
+            )
 
 
 class WebApplication(ObjectType):

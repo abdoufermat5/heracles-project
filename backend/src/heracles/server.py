@@ -30,7 +30,7 @@ from heracles.api.domain import Domain, install_domain
 from heracles.api.settings import ApiSettings
 from heracles.api.v2 import directory as directory_routes
 from heracles.api.v2 import objects as object_routes
-from heracles.attributes import set_default_password_hasher
+from heracles.attributes import set_default_password_checker, set_default_password_hasher
 from heracles.auth.sessions import Session
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient
@@ -92,6 +92,7 @@ def create_full_app(
         return policy.hash_new(plaintext)
 
     set_default_password_hasher(hash_password)
+    set_default_password_checker(policy.problems)
     return app
 
 

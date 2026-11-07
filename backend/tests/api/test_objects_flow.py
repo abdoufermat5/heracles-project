@@ -369,3 +369,17 @@ def test_changes_are_audited(app_client: TestClient) -> None:
     assert found
     assert found[-1].text("fdAuditAuthorDN") == f"uid=admin,ou=people,{BASE}"
     assert "sn" in " ".join(found[-1].texts("fdAuditAttributes"))
+
+
+def test_password_policy_violation_is_a_validation_error(app_client: TestClient) -> None:
+    a = api(app_client, "admin")
+    r = a.patch(
+        f"/objects/user/{q(ASMITH)}", {"tabs": {"main": {"values": {"userPassword": "abc"}}}}
+    )
+    assert r.status_code == 422, r.text
+    assert "main.userPassword" in r.json()["error"]["fields"]
+    r = a.patch(
+        f"/objects/user/{q(ASMITH)}",
+        {"tabs": {"main": {"values": {"userPassword": "long-enough-secret"}}}},
+    )
+    assert r.status_code == 200, r.text
