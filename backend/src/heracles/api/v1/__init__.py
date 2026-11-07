@@ -1,7 +1,7 @@
 """API v1 (compatibility REST API) — router skeleton.
 
 Sessions are identified by the ``X-Session-Token`` header instead of a cookie,
-so v1 is exempt from CSRF protection (spec 03).
+so v1 is exempt from CSRF protection.
 
 TODO: the remaining v1 resources (objects, types, ...) once the object layer
 is merged. Only ``/login`` and ``/logout`` exist for now. Second-factor

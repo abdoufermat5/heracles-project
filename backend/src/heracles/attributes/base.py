@@ -156,7 +156,7 @@ class Attribute[T](ABC):
         return {}
 
     def describe(self) -> dict[str, JSON]:
-        """Return the ``AttributeDescriptor`` JSON of spec 04."""
+        """Return the ``AttributeDescriptor`` JSON exposed by the API."""
         out: dict[str, JSON] = {
             "name": self.name,
             "label": self.label,

@@ -46,7 +46,7 @@ def test_full_login_me_logout(env: Env) -> None:
     assert env.client.get("/api/v2/auth/me").status_code == 401
 
 
-def test_me_requires_login_with_spec_error_format(env: Env) -> None:
+def test_me_requires_login_with_api_error_format(env: Env) -> None:
     r = env.client.get("/api/v2/auth/me")
     assert r.status_code == 401
     assert r.json() == {"error": {"code": "unauthenticated", "message": "Authentication required"}}

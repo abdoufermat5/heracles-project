@@ -6,8 +6,8 @@ implementations are provided by the ``ldap`` package:
 * ``heracles.ldap.pyldap.PyLdapDirectory`` — real server (python-ldap);
 * ``heracles.ldap.memory.MemoryDirectory`` — in-memory fake for tests.
 
-This file is a shared contract: change it only in coordination with every
-stream (see docs/specs/00-architecture.md).
+This file is a shared contract used by every package: change its signatures
+only together with all their callers.
 """
 
 from __future__ import annotations

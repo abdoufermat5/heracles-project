@@ -22,7 +22,7 @@ are proxied to `http://localhost:8000`.
 
 ### Mock backend
 
-`src/mocks/` implements every endpoint of spec 04 over an in-memory dataset
+`src/mocks/` implements every API v2 endpoint over an in-memory dataset
 (about 200 users, groups, roles, departments, DNS zones; `posix` is an optional
 tab on `user`). Demo logins (any non-empty password except `wrong`):
 

@@ -1,4 +1,4 @@
-"""Snapshots of directory subtrees (format: ``docs/specs/01-legacy-schema.md``).
+"""Snapshots of directory subtrees (compatibility entry format below).
 
 A snapshot entry lives at ``<timestamp attribute>=<ts>,<snapshot base>`` and
 holds a zlib-compressed LDIF of the object and its whole subtree plus the md5

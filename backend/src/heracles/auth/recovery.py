@@ -1,4 +1,4 @@
-"""Password recovery (spec 03): token storage, request and confirmation flows.
+"""Password recovery: token storage, request and confirmation flows.
 
 Tokens are random, stored hashed, valid for a limited time and single use.
 The LDAP-backed store (token entries) will be added once the schema constants

@@ -1,4 +1,4 @@
-"""Object API v2: types metadata, listing, CRUD, locks, snapshots (docs/specs/04-api-v2.md)."""
+"""Object API v2: types metadata, listing, CRUD, locks, snapshots."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ router = APIRouter(tags=["objects"])
 
 @contextmanager  # pyright: ignore[reportDeprecated]
 def object_errors() -> Iterator[None]:
-    """Translate object-layer errors into spec 04 API errors."""
+    """Translate object-layer errors into API errors."""
     try:
         yield
     except UnknownTypeError as exc:

@@ -1,4 +1,4 @@
-"""Concrete password methods (spec 03)."""
+"""Concrete password methods."""
 
 from __future__ import annotations
 

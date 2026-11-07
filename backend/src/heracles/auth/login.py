@@ -1,4 +1,4 @@
-"""First-factor login methods: LDAP bind and trusted HTTP header (spec 03)."""
+"""First-factor login methods: LDAP bind and trusted HTTP header."""
 
 from __future__ import annotations
 

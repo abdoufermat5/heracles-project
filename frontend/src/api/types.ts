@@ -1,6 +1,6 @@
 /**
- * Hand-written types for the API v2 contract (docs/specs/04-api-v2.md).
- * Keep this file in sync with the spec; it is the single source of truth for
+ * Hand-written types for the API v2 contract.
+ * Keep this file in sync with the backend routes; it is the single source of truth for
  * the frontend.
  */
 
@@ -70,10 +70,7 @@ export interface Me {
   base: string
 }
 
-/**
- * NOT in spec 04 yet: password recovery. Proposed endpoints, see README
- * "API contract gaps".
- */
+/** Password recovery request and confirmation bodies. */
 export interface RecoveryRequest {
   email: string
   directory?: string

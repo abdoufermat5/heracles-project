@@ -1,4 +1,4 @@
-"""Double-submit CSRF protection (spec 03).
+"""Double-submit CSRF protection.
 
 The token is handed out by ``GET /api/v2/auth/csrf`` and mirrored in the
 ``heracles_csrf`` cookie. Mutating requests must repeat it in ``X-CSRF-Token``.

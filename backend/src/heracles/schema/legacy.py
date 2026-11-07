@@ -3,7 +3,7 @@
 """Directory data-compatibility identifiers.
 
 Heracles operates on directories that already contain the "compatibility
-schema" (see ``docs/specs/01-legacy-schema.md``). The objectClass and attribute
+schema". The objectClass and attribute
 names below are fixed *data identifiers*: they are stored in existing
 directories and must never change, and they are never shown in the UI or the
 v2 API. This module is the ONLY place in the code base allowed to spell them;

@@ -1,4 +1,4 @@
-"""API v2 (SPA contract, docs/specs/04-api-v2.md).
+"""API v2: the JSON contract between the SPA and the backend.
 
 :func:`build_router` assembles a fresh router per application; every route
 inherits the CSRF dependency.

@@ -166,7 +166,7 @@ function CompositeField({ p }: { p: FieldInputProps }) {
   )
 }
 
-/** Renders the right control for an attribute `kind` (spec 04). */
+/** Renders the right control for an attribute `kind`. */
 export function FieldInput(p: FieldInputProps) {
   const a = p.descriptor
   if (a.kind === 'hidden') return null

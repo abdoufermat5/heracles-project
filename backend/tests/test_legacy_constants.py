@@ -1,7 +1,7 @@
 from heracles.schema import legacy
 
 
-def test_constants_match_spec() -> None:
+def test_constants_match_expected_identifiers() -> None:
     assert legacy.APP_OU == "ou=fusiondirectory"
     assert legacy.OC.LOCK == "fdLockEntry"
     assert legacy.ATTR.SNAPSHOT_DATA == "gosaSnapshotData"

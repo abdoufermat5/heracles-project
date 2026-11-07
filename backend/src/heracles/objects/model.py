@@ -121,7 +121,8 @@ class ObjectType:
     label_plural: ClassVar[str] = ""
     icon: ClassVar[str] = "file"
     category: ClassVar[str] = "directory"
-    #: ACL category of the type (defaults to ``name``); see docs/specs/02-acl.md.
+    #: ACL category of the type (defaults to ``name``); ACL object keys are
+    #: ``<acl_category>/<tab acl_key>`` and must match existing directory data.
     acl_category: ClassVar[str] = ""
     filter: ClassVar[str] = "(objectClass=*)"
     main_attr: ClassVar[str] = ""

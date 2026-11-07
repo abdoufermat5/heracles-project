@@ -1,4 +1,4 @@
-"""Account lock helpers (spec 01, "User account lock").
+"""Account lock helpers.
 
 A locked account has ``!`` right after the ``{SCHEME}`` prefix. An account
 without any password is locked with the sentinel :data:`EMPTY_LOCK`.

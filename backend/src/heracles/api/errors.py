@@ -1,4 +1,4 @@
-"""Error model and handlers producing the spec-04 JSON error format."""
+"""Error model and handlers producing the API JSON error format."""
 
 from __future__ import annotations
 

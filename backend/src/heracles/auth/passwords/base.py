@@ -23,7 +23,7 @@ class PasswordMethod(Protocol):
 
     @property
     def id(self) -> str:
-        """Stable method identifier (see spec 03)."""
+        """Stable method identifier."""
         ...
 
     @property

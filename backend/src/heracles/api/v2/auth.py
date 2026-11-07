@@ -1,4 +1,4 @@
-"""Authentication endpoints of API v2 (spec 04, "Auth")."""
+"""Authentication endpoints of API v2."""
 
 from __future__ import annotations
 

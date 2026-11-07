@@ -1,4 +1,4 @@
-"""Server-side sessions (spec 03)."""
+"""Server-side sessions."""
 
 from __future__ import annotations
 

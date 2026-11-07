@@ -1,4 +1,4 @@
-"""Edit locks stored in the directory (format: ``docs/specs/01-legacy-schema.md``).
+"""Edit locks stored in the directory (compatibility entry format below).
 
 * entry DN: ``cn=<md5hex(object dn)>,<locks container>``;
 * user DN stored plain, object DN stored base64 (searchable by equality);
