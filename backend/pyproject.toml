@@ -36,6 +36,12 @@ user_reminder = "heracles_plugins.user_reminder:plugin"
 personal = "heracles_plugins.personal:plugin"
 ppolicy = "heracles_plugins.ppolicy:plugin"
 dhcp = "heracles_plugins.dhcp:plugin"
+audit = "heracles_plugins.audit:plugin"
+archive = "heracles_plugins.archive:plugin"
+lifecycle = "heracles_plugins.lifecycle:plugin"
+notifications = "heracles_plugins.notifications:plugin"
+extractor = "heracles_plugins.extractor:plugin"
+automatic_groups = "heracles_plugins.automatic_groups:plugin"
 
 [dependency-groups]
 dev = [

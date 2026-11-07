@@ -19,18 +19,15 @@ Integration notes for the framework owners:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from heracles.attributes import (
     BooleanAttr,
-    DateTimeAttr,
     DepartmentAttr,
     EmailAttr,
     IntAttr,
     ListAttr,
     ObjectRefAttr,
-    SelectAttr,
     StringAttr,
     TextAttr,
 )
@@ -40,6 +37,7 @@ from heracles.ldap import dn as dnlib
 from heracles.objects import ObjectType, Plugin, Section, Tab
 from heracles.objects.hooks import TabContext
 from heracles.objects.registry import PluginRouterContext
+from heracles_plugins._tasks import NAME_RE, TaskObjectType, TaskTab
 from heracles_plugins.user_reminder.prolong import (
     ProlongError,
     build_prolong_router,
@@ -51,8 +49,7 @@ if TYPE_CHECKING:
 
 from heracles_plugins.user_reminder.runner import (
     SCHEDULES,
-    STATUS_ACTIVATED,
-    STATUS_DEACTIVATED,
+    TASK_FILTER,
     TEMPLATE_FIELDS,
     ReminderRecord,
     RunReport,
@@ -64,7 +61,6 @@ from heracles_plugins.user_reminder.runner import (
 )
 
 PLUGIN_NAME = "user_reminder"
-NAME_RE = r"[^\s,=+<>#;\"\\][^,=+<>#;\"\\]*"
 
 
 @dataclass(slots=True)
@@ -75,66 +71,21 @@ class UserReminderSettings:
     prolongation_days: int = 30
 
 
-class ReminderTask(ObjectType):
+class ReminderTask(TaskObjectType):
     """A task reminding users that their account is about to expire."""
 
     name = "reminder_task"
-    acl_category = "tasks"
     label = _("Reminder task")
     label_plural = _("Reminder tasks")
     icon = "bell"
-    category = "workflow"
-    filter = "(&(objectClass=fdTasks)(objectClass=fdTasksReminder))"
-    main_attr = "cn"
-    name_attr = "cn"
-    rdn = "ou=tasks"
-    columns = ("cn", "fdTasksStatus", "fdTasksNextExec")
-    search_attrs = ("cn", "description")
+    filter = TASK_FILTER
 
-    class Main(Tab):
+    class Main(TaskTab):
         name = "main"
         acl_key = "reminderTask"
         label = _("Reminder")
         object_classes = ("fdTasks", "fdTasksReminder")
 
-        properties = Section(
-            _("Properties"),
-            DepartmentAttr("base", _("Department")),
-            StringAttr("cn", _("Name"), required=True, pattern=NAME_RE),
-            TextAttr("description", _("Description")),
-            SelectAttr(
-                "fdTasksStatus",
-                _("Status"),
-                options=[
-                    (STATUS_ACTIVATED, _("Activated")),
-                    (STATUS_DEACTIVATED, _("Deactivated")),
-                ],
-                default=STATUS_ACTIVATED,
-            ),
-        )
-        schedule = Section(
-            _("Schedule"),
-            DateTimeAttr("fdTasksCreationDate", _("Creation date"), readonly=True),
-            DateTimeAttr(
-                "fdTasksScheduleDate",
-                _("Scheduled date"),
-                description=_("First execution; leave empty to run at the next scheduler pass"),
-            ),
-            DateTimeAttr("fdTasksLastExec", _("Last execution"), readonly=True),
-            DateTimeAttr("fdTasksNextExec", _("Next execution")),
-            BooleanAttr("fdTasksRepeatable", _("Repeatable"), default=False),
-            SelectAttr(
-                "fdTasksRepeatableSchedule",
-                _("Repeat"),
-                options=[
-                    ("hourly", _("Hourly")),
-                    ("daily", _("Daily")),
-                    ("weekly", _("Weekly")),
-                    ("monthly", _("Monthly")),
-                    ("yearly", _("Yearly")),
-                ],
-            ),
-        )
         reminder = Section(
             _("Reminder"),
             IntAttr(
@@ -191,17 +142,8 @@ class ReminderTask(ObjectType):
 
         @classmethod
         def prepare(cls, ctx: TabContext) -> None:
-            values = ctx.values
-            values["fdTasksReminderPosix"] = True
-            if not values.get("fdTasksStatus"):
-                values["fdTasksStatus"] = STATUS_ACTIVATED
-            if values.get("fdTasksRepeatable") and not values.get("fdTasksRepeatableSchedule"):
-                ctx.error("fdTasksRepeatableSchedule", _("Required for a repeatable task."))
-            if ctx.creating:
-                ensure_container(ctx.directory, dnlib.join(ReminderTask.rdn, ctx.base))
-                values["fdTasksCreationDate"] = datetime.now(UTC).replace(microsecond=0)
-                if not values.get("fdTasksNextExec") and values.get("fdTasksScheduleDate"):
-                    values["fdTasksNextExec"] = values["fdTasksScheduleDate"]
+            ctx.values["fdTasksReminderPosix"] = True
+            super().prepare(ctx)
 
 
 class MailTemplate(ObjectType):

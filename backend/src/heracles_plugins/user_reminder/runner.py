@@ -13,13 +13,11 @@ deactivated) so a second call right after sends nothing.
 
 from __future__ import annotations
 
-import calendar
 import hashlib
 import secrets
 import time
-from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
 
@@ -27,28 +25,37 @@ import structlog
 
 from heracles.auth.mail import Mailer
 from heracles.core.containers import ensure_container
-from heracles.core.generalized_time import format_generalized_time, parse_generalized_time
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import (
     DirectoryClient,
-    DirectoryError,
     Entry,
-    Modification,
     NoSuchObjectError,
 )
 from heracles.ldap.filter import escape_filter_value
 from heracles.schema import legacy
+from heracles_plugins._tasks import (
+    EPOCH,
+    SCHEDULES,
+    STATUS_ACTIVATED,
+    STATUS_DEACTIVATED,
+    TASKS_RDN,
+    TaskReport,
+    bool_of,
+    expand_members,
+    expiration_of,
+    int_of,
+    next_execution,
+    render_template,
+    run_tasks,
+    task_filter,
+    utc,
+)
 
 log = structlog.get_logger(__name__)
 
-TASKS_RDN = "ou=tasks"
-TASK_FILTER = "(&(objectClass=fdTasks)(objectClass=fdTasksReminder))"
+TASK_FILTER = task_filter("fdTasksReminder")
 TOKEN_TYPE_REMINDER = "reminder"  # noqa: S105
 REMINDER_TOKENS_RDN = f"ou=reminder,{legacy.RDN.TOKENS}"
-STATUS_ACTIVATED = "Activated"
-STATUS_DEACTIVATED = "Deactivated"
-SCHEDULES = ("hourly", "daily", "weekly", "monthly", "yearly")
-EPOCH = date(1970, 1, 1)
 
 TEMPLATE_FIELDS = (
     "uid",
@@ -60,18 +67,6 @@ TEMPLATE_FIELDS = (
     "days_left",
     "prolongation_url",
 )
-
-_USER_ATTRS = [
-    "objectClass",
-    "uid",
-    "cn",
-    "givenName",
-    "sn",
-    "mail",
-    "shadowExpire",
-    "member",
-    "roleOccupant",
-]
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,135 +80,19 @@ class ReminderRecord:
 
 
 @dataclass(slots=True)
-class RunReport:
+class RunReport(TaskReport):
     """What a run did."""
 
-    tasks_examined: int = 0
-    tasks_run: int = 0
     reminders: list[ReminderRecord] = field(default_factory=lambda: [])
     mails_sent: int = 0
     tokens_created: int = 0
-    errors: list[str] = field(default_factory=lambda: [])
 
 
 # ------------------------------------------------------------------ helpers
 
 
-class _SafeDict(dict[str, str]):
-    """Unknown placeholders are kept as they are."""
-
-    def __missing__(self, key: str) -> str:
-        return "{" + key + "}"
-
-
-def render_template(template: str, values: dict[str, str]) -> str:
-    """Fill ``{placeholders}``; unknown ones stay, malformed templates are kept verbatim."""
-    mapping = _SafeDict({k: str(v) for k, v in values.items()})
-    try:
-        return template.format_map(mapping)
-    except (ValueError, KeyError, IndexError, AttributeError, TypeError):
-        return template
-
-
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
-
-
-def _utc(value: datetime) -> datetime:
-    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
-
-
-def _add_months(value: datetime, months: int) -> datetime:
-    index = value.month - 1 + months
-    year = value.year + index // 12
-    month = index % 12 + 1
-    day = min(value.day, calendar.monthrange(year, month)[1])
-    return value.replace(year=year, month=month, day=day)
-
-
-def next_execution(now: datetime, schedule: str | None) -> datetime | None:
-    """Next run after ``now`` for a repeat schedule; ``None`` for an unknown schedule."""
-    base = _utc(now)
-    match (schedule or "").strip().lower():
-        case "hourly":
-            return base + timedelta(hours=1)
-        case "daily":
-            return base + timedelta(days=1)
-        case "weekly":
-            return base + timedelta(weeks=1)
-        case "monthly":
-            return _add_months(base, 1)
-        case "yearly":
-            return _add_months(base, 12)
-        case _:
-            return None
-
-
-def _bool(entry: Entry, attr: str) -> bool | None:
-    text = entry.text(attr)
-    if text is None:
-        return None
-    return text.strip().upper() == "TRUE"
-
-
-def _int(entry: Entry, attr: str) -> int | None:
-    text = entry.text(attr)
-    try:
-        return int(text.strip()) if text is not None else None
-    except ValueError:
-        return None
-
-
-def _time(entry: Entry, attr: str) -> datetime | None:
-    text = entry.text(attr)
-    if not text:
-        return None
-    try:
-        return parse_generalized_time(text)
-    except ValueError:
-        return None
-
-
-def expiration_of(entry: Entry) -> date | None:
-    """Expiration date of an account (``shadowExpire``), or ``None``."""
-    days = _int(entry, "shadowExpire")
-    if days is None or days <= 0:
-        return None
-    return EPOCH + timedelta(days=days)
-
-
-# ---------------------------------------------------------------- members
-
-
-def expand_members(directory: DirectoryClient, dns: Iterable[str]) -> list[Entry]:
-    """Resolve DNs of users, groups (``member``) and roles (``roleOccupant``) to user entries.
-
-    Nested groups are followed; every user appears once.
-    """
-    users: dict[str, Entry] = {}
-    seen: set[str] = set()
-    pending = list(dns)
-    while pending:
-        dn = pending.pop(0)
-        key = dnlib.normalize(dn)
-        if key in seen:
-            continue
-        seen.add(key)
-        try:
-            entry = directory.get(dn, _USER_ATTRS)
-        except DirectoryError:
-            continue
-        if entry is None:
-            continue
-        if entry.has_object_class("organizationalRole"):
-            pending.extend(entry.texts("roleOccupant"))
-        elif entry.has_object_class("groupOfNames") or entry.has_object_class(
-            legacy.OC.OBJECT_GROUP
-        ):
-            pending.extend(entry.texts("member"))
-        else:
-            users[key] = entry
-    return list(users.values())
 
 
 # ------------------------------------------------------------------ tokens
@@ -247,7 +126,7 @@ def create_prolongation_token(
         pass
     token = secrets.token_urlsafe(32)
     hashed = hash_token(token)
-    expires = int(_utc(now).timestamp()) + valid_days * 86400
+    expires = int(utc(now).timestamp()) + valid_days * 86400
     directory.add(
         f"cn={hashed},{container}",
         {
@@ -265,21 +144,8 @@ def create_prolongation_token(
 # ------------------------------------------------------------------ runner
 
 
-def _tasks(directory: DirectoryClient) -> list[Entry]:
-    try:
-        return list(directory.search(dnlib.join(TASKS_RDN, directory.base_dn), TASK_FILTER))
-    except NoSuchObjectError:
-        return []
-
-
-def _is_due(task: Entry, now: datetime) -> bool:
-    status = (task.text("fdTasksStatus") or "").strip().lower()
-    if status != STATUS_ACTIVATED.lower():
-        return False
-    if _bool(task, "fdTasksReminderPosix") is False:
-        return False
-    next_exec = _time(task, "fdTasksNextExec")
-    return next_exec is None or next_exec <= now
+def _accepts(task: Entry) -> bool:
+    return bool_of(task, "fdTasksReminderPosix") is not False
 
 
 def _template_of(directory: DirectoryClient, task: Entry) -> tuple[str, str] | None:
@@ -295,30 +161,6 @@ def _template_of(directory: DirectoryClient, task: Entry) -> tuple[str, str] | N
     )
 
 
-def _reschedule(directory: DirectoryClient, task: Entry, now: datetime) -> str | None:
-    """Update last/next execution; returns an error message for a bad schedule."""
-    repeatable = _bool(task, "fdTasksRepeatable") is True
-    changes = [
-        Modification("replace", "fdTasksLastExec", [format_generalized_time(now).encode()]),
-    ]
-    error: str | None = None
-    following = next_execution(now, task.text("fdTasksRepeatableSchedule")) if repeatable else None
-    if repeatable and following is None:
-        error = f"{task.dn}: unknown repeat schedule, task deactivated"
-    if following is not None:
-        changes.append(
-            Modification(
-                "replace", "fdTasksNextExec", [format_generalized_time(following).encode()]
-            )
-        )
-    else:
-        if task.get("fdTasksNextExec"):
-            changes.append(Modification("delete", "fdTasksNextExec"))
-        changes.append(Modification("replace", "fdTasksStatus", [STATUS_DEACTIVATED.encode()]))
-    directory.modify(task.dn, changes)
-    return error
-
-
 def _process_task(
     directory: DirectoryClient,
     mailer: Mailer,
@@ -332,12 +174,12 @@ def _process_task(
         report.errors.append(f"{task.dn}: mail template not found")
         return False
     subject_tpl, body_tpl = template
-    first = _int(task, "fdTasksReminderFirstCall")
-    second = _int(task, "fdTasksReminderSecondCall")
+    first = int_of(task, "fdTasksReminderFirstCall")
+    second = int_of(task, "fdTasksReminderSecondCall")
     calls = {c for c in (first, second) if c is not None}
-    prolong = _bool(task, "fdTasksReminderAccountProlongation") is True
+    prolong = bool_of(task, "fdTasksReminderAccountProlongation") is True
     valid_days = max(second if second is not None else (first or 0), 1)
-    today = _utc(now).date()
+    today = utc(now).date()
     copies = {
         e.text("mail"): e
         for e in expand_members(directory, task.texts("fdTasksReminderRecipientsMembers"))
@@ -398,26 +240,41 @@ def run_reminders(
     it is accepted for symmetry with the other entry points and for future options.
     """
     del settings
-    now = _utc(now)
     report = RunReport()
-    for task in _tasks(directory):
-        report.tasks_examined += 1
-        if not _is_due(task, now):
-            continue
-        try:
-            done = _process_task(directory, mailer, task, now, base_url, report)
-            if not done:
-                continue
-            error = _reschedule(directory, task, now)
-        except DirectoryError as exc:
-            report.errors.append(f"{task.dn}: {type(exc).__name__}")
-            log.warning("reminder_task_failed", task=task.dn, error=type(exc).__name__)
-            continue
-        if error:
-            report.errors.append(error)
-        report.tasks_run += 1
+    run_tasks(
+        directory,
+        TASK_FILTER,
+        now,
+        lambda task: _process_task(directory, mailer, task, utc(now), base_url, report),
+        report,
+        accept=_accepts,
+    )
     return report
 
 
 def utcnow() -> datetime:
     return datetime.fromtimestamp(time.time(), UTC)
+
+
+__all__ = [
+    "EPOCH",
+    "REMINDER_TOKENS_RDN",
+    "SCHEDULES",
+    "STATUS_ACTIVATED",
+    "STATUS_DEACTIVATED",
+    "TASKS_RDN",
+    "TASK_FILTER",
+    "TEMPLATE_FIELDS",
+    "TOKEN_TYPE_REMINDER",
+    "ReminderRecord",
+    "RunReport",
+    "create_prolongation_token",
+    "expand_members",
+    "expiration_of",
+    "hash_token",
+    "next_execution",
+    "reminder_tokens_container",
+    "render_template",
+    "run_reminders",
+    "utcnow",
+]
