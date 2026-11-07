@@ -282,3 +282,58 @@ def test_ssh_keys_follow_account_lock(app_client: TestClient) -> None:
     r = a.post(f"/users/{q(ASMITH)}/unlock")
     assert r.json()["locked"] is False
     assert keys() == [key]
+
+
+def test_sudo_type_listed_in_access_category(app_client: TestClient) -> None:
+    a = api(app_client, "admin")
+    types = {t["name"]: t for t in a.get("/types").json()}
+    assert types["sudo"]["category"] == "access"
+    tabs = {t["name"]: t for t in a.get("/types/sudo").json()["tabs"]}
+    assert set(tabs) == {"main", "options"}
+
+
+def test_sudo_role_crud_as_admin(app_client: TestClient) -> None:
+    a = api(app_client, "admin")
+    r = a.post(
+        "/objects/sudo",
+        {
+            "base": BASE,
+            "tabs": {
+                "main": {
+                    "values": {
+                        "cn": "ops-restart",
+                        "sudoUser": ["%admins"],
+                        "sudoCommand": ["/usr/bin/systemctl restart *"],
+                    }
+                },
+                "options": {"values": {"sudoOption": ["!authenticate"]}},
+            },
+        },
+    )
+    assert r.status_code == 201, r.text
+    dn = r.json()["dn"]
+    assert dn == f"cn=ops-restart,ou=sudoers,{BASE}"
+    main = a.get(f"/objects/sudo/{q(dn)}").json()["tabs"]["main"]["values"]
+    assert main["sudoHost"] == ["ALL"]
+    assert main["is_default"] is False
+
+    r = a.patch(f"/objects/sudo/{q(dn)}", {"tabs": {"main": {"values": {"sudoOrder": 5}}}})
+    assert r.status_code == 200, r.text
+    assert r.json()["tabs"]["main"]["values"]["sudoOrder"] == 5
+
+    bad = a.patch(
+        f"/objects/sudo/{q(dn)}", {"tabs": {"options": {"values": {"sudoOption": ["bogus"]}}}}
+    )
+    assert bad.status_code == 422, bad.text
+
+    assert a.delete(f"/objects/sudo/{q(dn)}").status_code == 204
+    assert a.get(f"/objects/sudo/{q(dn)}").status_code == 404
+
+
+def test_sudo_role_forbidden_for_helpdesk(app_client: TestClient) -> None:
+    h = api(app_client, "helpdesk")
+    r = h.post(
+        "/objects/sudo",
+        {"base": BASE, "tabs": {"main": {"values": {"cn": "nope", "sudoCommand": ["ALL"]}}}},
+    )
+    assert r.status_code == 403, r.text
