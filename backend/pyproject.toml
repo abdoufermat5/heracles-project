@@ -41,6 +41,7 @@ cyrus = "heracles_plugins.cyrus:plugin"
 postfix = "heracles_plugins.postfix:plugin"
 sieve = "heracles_plugins.sieve:plugin"
 spamassassin = "heracles_plugins.spamassassin:plugin"
+zimbra = "heracles_plugins.zimbra:plugin"
 
 [dependency-groups]
 dev = [
