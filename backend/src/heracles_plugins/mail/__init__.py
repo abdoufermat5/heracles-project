@@ -156,10 +156,18 @@ def check_mail_uniqueness(
     *,
     mail_attr: str = "mail",
     alt_attr: str | None = "gosaMailAlternateAddress",
+    mail_source: Mapping[str, Any] | None = None,
+    mail_error_key: str | None = None,
 ) -> None:
-    """Verify that primary mail and alternate addresses are unique across the directory."""
+    """Verify that primary mail and alternate addresses are unique across the directory.
+
+    The primary address is read from ``mail_source`` (default: the tab's own values)
+    and its errors are reported under ``mail_error_key`` (default: this tab's
+    ``mail_attr``), so a tab can check an address owned by another tab.
+    """
     primary_mail: str | None = None
-    raw_mail = ctx.values.get(mail_attr)
+    raw_mail = (mail_source if mail_source is not None else ctx.values).get(mail_attr)
+    mail_key = mail_error_key or f"{ctx.tab_name}.{mail_attr}"
     if isinstance(raw_mail, str) and raw_mail.strip():
         primary_mail = raw_mail.strip()
 
@@ -232,8 +240,8 @@ def check_mail_uniqueness(
         taken = entry_mails | entry_alts
 
         if primary_mail and primary_mail.lower() in taken:
-            ctx.error(
-                mail_attr,
+            ctx.errors.setdefault(
+                mail_key,
                 _("Email address '{mail}' is already in use.").format(mail=primary_mail),
             )
         if alt_attr:
@@ -257,9 +265,11 @@ class UserMailTab(Tab):
     optional = True
     object_classes = ("gosaMailAccount",)
 
+    # The primary address (``mail``) belongs to the user's main tab: this tab only
+    # reads and validates it, so a save never carries two modifications of ``mail``
+    # and deactivating this tab never deletes it.
     account = Section(
         _("Account"),
-        EmailAttr("mail", _("Email"), required=True),
         StringAttr("gosaMailServer", _("Mail server")),
         IntAttr("gosaMailQuota", _("Quota (MB)"), min=0),
         ListAttr(
@@ -299,11 +309,13 @@ class UserMailTab(Tab):
 
     @classmethod
     def prepare(cls, ctx: TabContext) -> None:
-        # Default domain helper
-        if ctx.activating and not ctx.values.get("mail"):
+        main = ctx.main_values()
+        main_mail_key = f"{ctx.info.main_tab.name}.mail"
+
+        # Default address from the template when the tab is activated without one
+        if ctx.activating and not main.get("mail"):
             settings = settings_of(ctx)
             if settings.mail_template:
-                main = ctx.main_values()
                 uid = fold_ascii(str(main.get("uid") or ""))
                 given = fold_ascii(str(main.get("givenName") or ""))
                 sn = fold_ascii(str(main.get("sn") or ""))
@@ -315,18 +327,13 @@ class UserMailTab(Tab):
                         sn=sn,
                     ).strip()
                     if generated:
-                        ctx.values["mail"] = generated
+                        main["mail"] = generated
                 except (KeyError, ValueError, IndexError):
                     pass
 
-        # Sync mail attribute between main and mail tab
-        mail_val = ctx.values.get("mail")
-        main_tab = ctx.tabs.get(ctx.info.main_tab.name)
-        if main_tab is not None and "mail" in main_tab.values:
-            if mail_val and not main_tab.values.get("mail"):
-                main_tab.values["mail"] = mail_val
-            elif not mail_val and main_tab.values.get("mail"):
-                ctx.values["mail"] = main_tab.values["mail"]
+        # A mail account needs a primary address (owned by the main tab)
+        if not str(main.get("mail") or "").strip():
+            ctx.errors.setdefault(main_mail_key, _("This field is required."))
 
         # Parse delivery mode if explicitly touched
         if ctx.was_touched("gosaMailDeliveryMode"):
@@ -359,8 +366,8 @@ class UserMailTab(Tab):
                     _("Vacation stop date must be on or after start date."),
                 )
 
-        # Uniqueness check
-        check_mail_uniqueness(ctx)
+        # Uniqueness check (primary address read from the main tab)
+        check_mail_uniqueness(ctx, mail_source=main, mail_error_key=main_mail_key)
 
 
 class GroupMailTab(Tab):

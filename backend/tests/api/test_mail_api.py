@@ -112,8 +112,9 @@ def test_user_type_descriptor_has_mail_tab(app_client: TestClient) -> None:
     mail_tab = tabs["mail"]
     assert mail_tab["optional"] is True
     attrs = {a_desc["name"] for sec in mail_tab["sections"] for a_desc in sec["attributes"]}
+    # the primary address belongs to the main tab, not to the mail tab
+    assert "mail" not in attrs
     assert {
-        "mail",
         "gosaMailServer",
         "gosaMailQuota",
         "gosaMailAlternateAddress",
@@ -134,10 +135,10 @@ def test_patch_user_mail_account(app_client: TestClient) -> None:
     # Activate mail tab on jdoe
     patch_body = {
         "tabs": {
+            "main": {"values": {"mail": "jdoe@heracles.test"}},
             "mail": {
                 "active": True,
                 "values": {
-                    "mail": "jdoe@heracles.test",
                     "gosaMailServer": "mail.heracles.test",
                     "gosaMailQuota": 512,
                     "gosaMailAlternateAddress": ["john.doe@heracles.test"],
@@ -148,7 +149,7 @@ def test_patch_user_mail_account(app_client: TestClient) -> None:
                     "gosaVacationStop": "2026-11-20",
                     "gosaVacationMessage": "Away on business",
                 },
-            }
+            },
         }
     }
     r = a.patch(f"/objects/user/{q(user_dn)}", patch_body)
@@ -156,7 +157,7 @@ def test_patch_user_mail_account(app_client: TestClient) -> None:
     state = r.json()
     mail_tab = state["tabs"]["mail"]
     assert mail_tab["active"] is True
-    assert mail_tab["values"]["mail"] == "jdoe@heracles.test"
+    assert state["tabs"]["main"]["values"]["mail"] == "jdoe@heracles.test"
     assert mail_tab["values"]["gosaMailServer"] == "mail.heracles.test"
     assert mail_tab["values"]["gosaMailQuota"] == 512
     assert mail_tab["values"]["flag_localonly"] is True
@@ -180,16 +181,16 @@ def test_patch_user_mail_turn_off_vacation(app_client: TestClient) -> None:
         f"/objects/user/{q(user_dn)}",
         {
             "tabs": {
+                "main": {"values": {"mail": "jdoe@heracles.test"}},
                 "mail": {
                     "active": True,
                     "values": {
-                        "mail": "jdoe@heracles.test",
                         "flag_vacation": True,
                         "gosaVacationStart": "2026-11-10",
                         "gosaVacationStop": "2026-11-20",
                         "gosaVacationMessage": "Away",
                     },
-                }
+                },
             }
         },
     )
@@ -225,13 +226,13 @@ def test_patch_user_mail_uniqueness_validation(app_client: TestClient) -> None:
         f"/objects/user/{q(user1_dn)}",
         {
             "tabs": {
+                "main": {"values": {"mail": "primary@heracles.test"}},
                 "mail": {
                     "active": True,
                     "values": {
-                        "mail": "primary@heracles.test",
                         "gosaMailAlternateAddress": ["alias1@heracles.test"],
                     },
-                }
+                },
             }
         },
     )
@@ -241,36 +242,28 @@ def test_patch_user_mail_uniqueness_validation(app_client: TestClient) -> None:
         f"/objects/user/{q(user2_dn)}",
         {
             "tabs": {
-                "mail": {
-                    "active": True,
-                    "values": {
-                        "mail": "primary@heracles.test",
-                    },
-                }
+                "main": {"values": {"mail": "primary@heracles.test"}},
+                "mail": {"active": True},
             }
         },
     )
     assert r1.status_code == 422
     err1 = r1.json()["error"]
     assert err1["code"] == "validation"
-    assert "mail.mail" in err1["fields"]
+    assert "main.mail" in err1["fields"]
 
     # Attempt to use alias1 as mail on user2
     r2 = a.patch(
         f"/objects/user/{q(user2_dn)}",
         {
             "tabs": {
-                "mail": {
-                    "active": True,
-                    "values": {
-                        "mail": "alias1@heracles.test",
-                    },
-                }
+                "main": {"values": {"mail": "alias1@heracles.test"}},
+                "mail": {"active": True},
             }
         },
     )
     assert r2.status_code == 422
-    assert "mail.mail" in r2.json()["error"]["fields"]
+    assert "main.mail" in r2.json()["error"]["fields"]
 
 
 def test_alias_distribution_crud_api(app_client: TestClient) -> None:

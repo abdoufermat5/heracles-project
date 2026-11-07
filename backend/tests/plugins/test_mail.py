@@ -70,11 +70,14 @@ def new_user(
     mail_values: dict[str, Any] | None = None,
     mail_active: bool = True,
 ) -> str:
-    tabs: dict[str, Any] = {
-        "main": {"values": {"uid": uid, "givenName": "Jérôme", "sn": "Doe"}},
-    }
+    # ``mail`` belongs to the main tab; the mail tab only reads it
+    tab_values = dict(mail_values or {})
+    main_values: dict[str, Any] = {"uid": uid, "givenName": "Jérôme", "sn": "Doe"}
+    if "mail" in tab_values:
+        main_values["mail"] = tab_values.pop("mail")
+    tabs: dict[str, Any] = {"main": {"values": main_values}}
     if mail_active:
-        tabs["mail"] = {"active": True, "values": mail_values or {}}
+        tabs["mail"] = {"active": True, "values": tab_values}
     return service.create("user", BASE, tabs)
 
 
@@ -296,7 +299,7 @@ def test_user_mail_tab_creation_and_load(
     state = service.load("user", dn)
     mail_state = state.tabs["mail"]
     assert mail_state.active
-    assert mail_state.values["mail"] == "alice@example.com"
+    assert state.tabs["main"].values["mail"] == "alice@example.com"
     assert mail_state.values["flag_vacation"] is True
     assert mail_state.values["flag_localonly"] is True
     assert mail_state.values["flag_ownmailbox"] is False
@@ -430,7 +433,7 @@ def test_default_domain_helper_template_ascii_folded(service: ObjectService) -> 
         },
     )
     state = service.load("user", dn)
-    assert state.tabs["mail"].values["mail"] == "elodie.muller@example.org"
+    assert state.tabs["main"].values["mail"] == "elodie.muller@example.org"
 
 
 def test_default_domain_helper_does_not_override_existing(service: ObjectService) -> None:
@@ -439,7 +442,7 @@ def test_default_domain_helper_does_not_override_existing(service: ObjectService
     )
     dn = new_user(service, uid="bob", mail_values={"mail": "custom@other.com"})
     state = service.load("user", dn)
-    assert state.tabs["mail"].values["mail"] == "custom@other.com"
+    assert state.tabs["main"].values["mail"] == "custom@other.com"
 
 
 # ------------------------------------------------------------- uniqueness
@@ -458,7 +461,7 @@ def test_uniqueness_user_vs_user(service: ObjectService) -> None:
     # Conflict on primary mail
     with pytest.raises(ObjectValidationError) as exc:
         new_user(service, uid="u2", mail_values={"mail": "u1@example.com"})
-    assert "mail.mail" in exc.value.fields
+    assert "main.mail" in exc.value.fields
 
     # Conflict on alternate address matching existing primary mail
     with pytest.raises(ObjectValidationError) as exc:
@@ -475,7 +478,7 @@ def test_uniqueness_user_vs_user(service: ObjectService) -> None:
     # Conflict on primary mail matching existing alternate address
     with pytest.raises(ObjectValidationError) as exc:
         new_user(service, uid="u4", mail_values={"mail": "u1-alt@example.com"})
-    assert "mail.mail" in exc.value.fields
+    assert "main.mail" in exc.value.fields
 
     # Conflict on alternate address matching existing alternate address
     with pytest.raises(ObjectValidationError) as exc:
@@ -544,7 +547,7 @@ def test_uniqueness_user_vs_group(service: ObjectService) -> None:
     # User cannot take group's alternate address
     with pytest.raises(ObjectValidationError) as exc:
         new_user(service, uid="u_conflict", mail_values={"mail": "group2-alias@example.com"})
-    assert "mail.mail" in exc.value.fields
+    assert "main.mail" in exc.value.fields
 
 
 def test_uniqueness_self_update_allowed(service: ObjectService) -> None:
@@ -561,13 +564,13 @@ def test_uniqueness_self_update_allowed(service: ObjectService) -> None:
         "user",
         dn,
         {
+            "main": {"values": {"mail": "self@example.com"}},
             "mail": {
                 "values": {
-                    "mail": "self@example.com",
                     "gosaMailServer": "imap.updated.org",
                     "gosaMailAlternateAddress": ["self-alt@example.com"],
                 }
-            }
+            },
         },
     )
     state = service.load("user", dn)
@@ -741,4 +744,79 @@ def test_alias_uniqueness_across_types(service: ObjectService) -> None:
     # User cannot use distribution alias mail
     with pytest.raises(ObjectValidationError) as exc:
         new_user(service, uid="distuser", mail_values={"mail": "dist1@example.com"})
-    assert "mail.mail" in exc.value.fields
+    assert "main.mail" in exc.value.fields
+
+
+# ------------------------------------------- ``mail`` is owned by the main tab
+
+
+def test_mail_tab_does_not_declare_mail(service: ObjectService) -> None:
+    info = service.registry.get("user")
+    tab = info.tab("mail")
+    assert tab is not None
+    assert tab.attribute("mail") is None
+    main_attr = info.main_tab.attribute("mail")
+    assert main_attr is not None
+
+
+def test_single_modification_of_mail_per_save(
+    service: ObjectService, directory: MemoryDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dn = new_user(service, uid="single", mail_active=False)
+    calls: list[list[Modification]] = []
+    original = directory.modify
+
+    def spy(target: str, mods: Any) -> None:
+        calls.append(list(mods))
+        original(target, mods)
+
+    monkeypatch.setattr(directory, "modify", spy)
+    service.update(
+        "user",
+        dn,
+        {
+            "main": {"values": {"mail": "single@example.com"}},
+            "mail": {"active": True, "values": {"gosaMailServer": "imap"}},
+        },
+    )
+    assert len(calls) == 1
+    assert [m.attr for m in calls[0]].count("mail") == 1
+    entry = directory.get(dn)
+    assert entry is not None
+    assert entry.text("mail") == "single@example.com"
+    assert entry.has_object_class("gosaMailAccount")
+
+
+def test_mail_required_while_mail_tab_active(service: ObjectService) -> None:
+    with pytest.raises(ObjectValidationError) as exc:
+        new_user(service, uid="nomail", mail_values={})
+    assert "main.mail" in exc.value.fields
+
+
+def test_deactivating_mail_tab_keeps_mail(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    dn = new_user(
+        service,
+        uid="keeper",
+        mail_values={"mail": "keeper@example.com", "gosaMailServer": "imap"},
+    )
+    service.update("user", dn, {"mail": {"active": False}})
+    entry = directory.get(dn)
+    assert entry is not None
+    assert not entry.has_object_class("gosaMailAccount")
+    assert entry.text("mail") == "keeper@example.com"
+    assert entry.get("gosaMailServer") == []
+    state = service.load("user", dn)
+    assert not state.tabs["mail"].active
+    assert state.tabs["main"].values["mail"] == "keeper@example.com"
+
+
+def test_uniqueness_checked_on_main_mail_when_mail_tab_unchanged(
+    service: ObjectService,
+) -> None:
+    new_user(service, uid="first", mail_values={"mail": "dup@example.com"})
+    dn = new_user(service, uid="second", mail_values={"mail": "second@example.com"})
+    with pytest.raises(ObjectValidationError) as exc:
+        service.update("user", dn, {"main": {"values": {"mail": "dup@example.com"}}})
+    assert "main.mail" in exc.value.fields
