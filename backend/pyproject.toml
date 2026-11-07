@@ -36,6 +36,8 @@ user_reminder = "heracles_plugins.user_reminder:plugin"
 personal = "heracles_plugins.personal:plugin"
 ppolicy = "heracles_plugins.ppolicy:plugin"
 dhcp = "heracles_plugins.dhcp:plugin"
+# loaded after "systems" and "posix" (entry points load alphabetically): it extends their types
+systems_samba = "heracles_plugins.samba:plugin"
 
 [dependency-groups]
 dev = [
