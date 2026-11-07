@@ -33,6 +33,7 @@ from heracles.attributes import (
 from heracles.i18n import _
 from heracles.objects import ObjectType, Plugin, Section, Tab, TabAttachment
 from heracles.objects.hooks import TabContext
+from heracles.objects.registry import EventsContext
 from heracles_plugins._tasks import TaskObjectType, TaskTab
 from heracles_plugins.audit.events import (
     AUDIT_RDN,
@@ -188,6 +189,15 @@ def plugin() -> Plugin:
         tabs=(TabAttachment("user", AuditSecurityTab),),
         required_object_classes=(EVENT_CLASS,),
         settings=AuditSettings(),
+        object_events=(_audit_events,),
+    )
+
+
+def _audit_events(ctx: EventsContext) -> AuditEvents:
+    """Record every change made through the object service."""
+    settings = ctx.settings if isinstance(ctx.settings, AuditSettings) else AuditSettings()
+    return AuditEvents(
+        ctx.directory, author_dn=ctx.user_dn, author_ip=ctx.client_ip, settings=settings
     )
 
 

@@ -88,3 +88,34 @@ class NullEvents:
 
     def post_delete(self, ctx: EventContext) -> None:
         pass
+
+
+class CompositeEvents:
+    """Calls several :class:`ObjectEvents` in order (a ``pre_*`` veto stops the chain)."""
+
+    def __init__(self, events: Sequence[ObjectEvents]) -> None:
+        self.events = list(events)
+
+    def pre_create(self, ctx: EventContext) -> None:
+        for e in self.events:
+            e.pre_create(ctx)
+
+    def post_create(self, ctx: EventContext) -> None:
+        for e in self.events:
+            e.post_create(ctx)
+
+    def pre_modify(self, ctx: EventContext) -> None:
+        for e in self.events:
+            e.pre_modify(ctx)
+
+    def post_modify(self, ctx: EventContext) -> None:
+        for e in self.events:
+            e.post_modify(ctx)
+
+    def pre_delete(self, ctx: EventContext) -> None:
+        for e in self.events:
+            e.pre_delete(ctx)
+
+    def post_delete(self, ctx: EventContext) -> None:
+        for e in self.events:
+            e.post_delete(ctx)

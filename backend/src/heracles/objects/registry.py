@@ -11,6 +11,7 @@ from heracles.attributes import JSON, AnyAttribute
 from heracles.ldap.client import DirectoryClient, Entry, Modification
 from heracles.objects.errors import UnknownTypeError
 from heracles.objects.model import ObjectType, Tab
+from heracles.objects.policy import ObjectEvents
 
 PLUGIN_GROUP = "heracles.plugins"
 
@@ -89,6 +90,21 @@ class PluginRouterContext:
     settings: Any
 
 
+@dataclass(frozen=True, slots=True)
+class EventsContext:
+    """What a plugin's object-events factory receives (one per request)."""
+
+    directory: DirectoryClient
+    #: DN of the acting user.
+    user_dn: str
+    client_ip: str
+    #: The plugin's settings object.
+    settings: Any
+
+
+#: ``factory(ctx) -> ObjectEvents`` building per-request hooks (audit, archive, ...).
+type ObjectEventsFactory = Callable[[EventsContext], ObjectEvents]
+
 #: ``factory(ctx) -> fastapi.APIRouter`` mounted at the application root, outside the
 #: session/CSRF protected API (for unauthenticated flows such as e-mailed links).
 type PublicRouterFactory = Callable[[PluginRouterContext], Any]
@@ -120,6 +136,8 @@ class Plugin:
     required_object_classes: Sequence[str] = ()
     #: Extra modifications applied when a user account is locked/unlocked.
     account_lock_hooks: Sequence[AccountLockHook] = ()
+    #: Per-request object event hooks, see :data:`ObjectEventsFactory`.
+    object_events: Sequence[ObjectEventsFactory] = ()
     #: Public (unauthenticated) routers, see :data:`PublicRouterFactory`.
     public_routers: Sequence[PublicRouterFactory] = ()
     #: Authenticated routers mounted under ``/api/v2``, see :data:`ApiRouterFactory`.
@@ -165,6 +183,8 @@ class TypeRegistry:
         self.settings: dict[str, Any] = {}
         #: Account lock hooks of enabled plugins.
         self.account_lock_hooks: list[AccountLockHook] = []
+        #: ``(plugin name, factory)`` of enabled plugins' object event hooks.
+        self.events_factories: list[tuple[str, ObjectEventsFactory]] = []
         #: ``(plugin name, factory)`` of enabled plugins' public routers.
         self.public_router_factories: list[tuple[str, PublicRouterFactory]] = []
         #: ``(plugin name, factory)`` of enabled plugins' authenticated API routers.
@@ -253,6 +273,7 @@ class TypeRegistry:
                 if att.type_name in self._types and _tab_available(att.tab, available_classes):
                     self.attach_tab(att.type_name, att.tab)
             self.account_lock_hooks.extend(plugin.account_lock_hooks)
+            self.events_factories.extend((plugin.name, f) for f in plugin.object_events)
             self.public_router_factories.extend((plugin.name, f) for f in plugin.public_routers)
             self.api_router_factories.extend((plugin.name, f) for f in plugin.api_routers)
             if plugin.settings is not None:

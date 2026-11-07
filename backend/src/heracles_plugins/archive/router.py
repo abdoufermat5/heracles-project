@@ -33,9 +33,20 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             service.load(type_name, dn)
             if not policy.can_delete(dn, type_name):
                 raise PermissionDeniedError(f"cannot archive {dn}")
+        info = domain.registry.get(type_name)
+
+        def can_read(attr: str) -> bool:
+            tab = next((t for t in info.tabs if t.attribute(attr) is not None), info.main_tab)
+            return policy.can_read(dn, tab.name, attr)
+
         try:
             archive_dn = archive(
-                user.directory, dn, type_name, settings=rules, now=datetime.now(UTC)
+                user.directory,
+                dn,
+                type_name,
+                settings=rules,
+                now=datetime.now(UTC),
+                can_read=can_read,
             )
         except NoSuchObjectError:
             raise not_found(f"Object not found: {dn}") from None

@@ -20,6 +20,8 @@ from heracles.attributes import DateTimeAttr, DepartmentAttr, ListAttr, StringAt
 from heracles.i18n import _
 from heracles.objects import ObjectType, Plugin, Section, Tab
 from heracles.objects.hooks import TabContext
+from heracles.objects.policy import NullEvents, ObjectEvents
+from heracles.objects.registry import EventsContext
 from heracles_plugins._tasks import TaskObjectType, TaskTab
 from heracles_plugins.archive.router import build_router
 from heracles_plugins.archive.runner import (
@@ -115,7 +117,16 @@ def plugin() -> Plugin:
         required_object_classes=(ARCHIVE_CLASS,),
         settings=ArchiveSettings(),
         api_routers=(build_router,),
+        object_events=(_archive_events,),
     )
+
+
+def _archive_events(ctx: EventsContext) -> ObjectEvents:
+    """Archive before deletion when ``archive_on_delete`` is enabled."""
+    settings = ctx.settings if isinstance(ctx.settings, ArchiveSettings) else ArchiveSettings()
+    if not settings.archive_on_delete:
+        return NullEvents()
+    return ArchiveBeforeDelete(ctx.directory, settings)
 
 
 __all__ = [

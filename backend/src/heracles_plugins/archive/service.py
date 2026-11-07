@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -71,6 +71,8 @@ class ArchiveSettings:
     retention_days: int = 1825
     #: Archive rules by object type name.
     rules: dict[str, ArchiveRule] = field(default_factory=default_rules)
+    #: Archive automatically every deleted object whose type has a rule.
+    archive_on_delete: bool = False
 
 
 def archive_container(directory: DirectoryClient) -> str:
@@ -95,6 +97,7 @@ def archive(
     *,
     settings: ArchiveSettings | None = None,
     now: datetime | None = None,
+    can_read: Callable[[str], bool] | None = None,
 ) -> str:
     """Archive the object ``dn`` of type ``type_name``; returns the DN of the archive entry.
 
@@ -102,8 +105,12 @@ def archive(
     fields separately (to find it back with :func:`find_archives`), the date, the type and
     the original DN. The archived object itself is left untouched.
 
+    ``can_read(attribute)`` restricts the copied fields to what the caller may read; the
+    unique fields must be readable.
+
     Raises :class:`ArchiveError` when the type has no rule or the object has no value for a
-    unique field, and ``NoSuchObjectError`` when ``dn`` does not exist.
+    unique field (or the caller cannot read it), and ``NoSuchObjectError`` when ``dn`` does
+    not exist.
     """
     settings = settings or ArchiveSettings()
     rule = settings.rules.get(type_name)
@@ -112,6 +119,8 @@ def archive(
     entry = directory.get(dn)
     if entry is None:
         raise NoSuchObjectError(dn)
+    if can_read is not None and not all(can_read(f) for f in rule.unique_fields):
+        raise ArchiveError("you cannot read the unique fields of this object")
     unique = _pairs(entry, rule.unique_fields)
     missing = [f for f in rule.unique_fields if not entry.get(f)]
     if missing or not unique:
@@ -124,7 +133,10 @@ def archive(
         "fdArchivedOriginDn": [dn.encode()],
         "fdArchivedUniqueField": [u.encode() for u in unique],
     }
-    kept = _pairs(entry, tuple(dict.fromkeys([*rule.fields, *rule.unique_fields])))
+    fields = [*rule.fields, *rule.unique_fields]
+    if can_read is not None:
+        fields = [f for f in fields if can_read(f)]
+    kept = _pairs(entry, tuple(dict.fromkeys(fields)))
     attrs["fdArchivedField"] = [k.encode() for k in kept]
     key = _SAFE.sub("_", "_".join(u.partition("=")[2] for u in unique)).strip("_") or "object"
     stem = f"{type_name}_{key}_{moment.strftime('%Y%m%d%H%M%S')}"

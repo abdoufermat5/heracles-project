@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from heracles.api.state import AppState
 from heracles.demo import BASE
 from heracles.server import build_demo_app
 
@@ -348,3 +350,22 @@ def test_demo_loads_plugins_and_public_routes(app_client: TestClient) -> None:
     # public route: no session, no CSRF token, wrong token -> 400 (not 401/403)
     r = app_client.post("/api/v2/reminder/prolong", json={"login": "jdoe", "token": "nope"})
     assert r.status_code == 400, r.text
+
+
+def test_changes_are_audited(app_client: TestClient) -> None:
+    a = api(app_client, "admin")
+    r = a.patch(f"/objects/user/{q(ASMITH)}", {"tabs": {"main": {"values": {"sn": "Audited"}}}})
+    assert r.status_code == 200, r.text
+    events = a.get("/objects/audit_event", base=BASE, scope="sub", limit=500).json()["items"]
+    assert events, "no audit event recorded"
+    app = cast("FastAPI", app_client.app)
+    state = cast("AppState", app.state.heracles)
+    directory = state.directories["main"]
+    found = [
+        e
+        for e in directory.search(BASE, "(objectClass=fdAuditEvent)")
+        if (e.text("fdAuditObject") or "").lower() == ASMITH.lower()
+    ]
+    assert found
+    assert found[-1].text("fdAuditAuthorDN") == f"uid=admin,ou=people,{BASE}"
+    assert "sn" in " ".join(found[-1].texts("fdAuditAttributes"))

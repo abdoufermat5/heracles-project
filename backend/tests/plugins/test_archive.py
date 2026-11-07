@@ -196,3 +196,12 @@ def test_archive_task_crud(directory: MemoryDirectory) -> None:
     assert dn == f"cn=purge,{TASKS}"
     entry = directory.get(dn)
     assert entry is not None and entry.has_object_class("fdArchiveTasks")
+
+
+def test_archive_respects_read_acl(directory: MemoryDirectory) -> None:
+    dn = archive.archive(directory, JDOE, "user", now=NOW, can_read=lambda a: a != "mail")
+    fields = attrs_of(directory, dn)["fdArchivedField"]
+    assert not any(f.startswith("mail=") for f in fields)
+    assert "sn=Doe" in fields
+    with pytest.raises(archive.ArchiveError):
+        archive.archive(directory, JDOE, "user", now=NOW, can_read=lambda a: a != "uid")
