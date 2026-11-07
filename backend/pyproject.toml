@@ -31,6 +31,7 @@ posix = "heracles_plugins.posix:plugin"
 ssh = "heracles_plugins.ssh:plugin"
 sudo = "heracles_plugins.sudo:plugin"
 systems = "heracles_plugins.systems:plugin"
+user_reminder = "heracles_plugins.user_reminder:plugin"
 
 [dependency-groups]
 dev = [
