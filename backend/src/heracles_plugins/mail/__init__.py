@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import unicodedata
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
-from typing import Any, cast, overload
+from typing import Any, cast
 
 from heracles.attributes import (
     Attribute,
@@ -498,64 +498,16 @@ class MailAliasRedirection(ObjectType):
 # ------------------------------------------------------------------ plugin
 
 
-class ConditionalTypes(Sequence[type[ObjectType]]):
-    """Sequence of alias types conditionally available when their objectClasses exist."""
-
-    def __init__(self, alias_types: Sequence[type[ObjectType]]) -> None:
-        self._alias_types = tuple(alias_types)
-        self.available: set[str] | None = None
-
-    def _current(self) -> tuple[type[ObjectType], ...]:
-        if self.available is not None and not {
-            "mailaliasredirection",
-            "mailaliasdistribution",
-        }.issubset(self.available):
-            return ()
-        return self._alias_types
-
-    def __len__(self) -> int:
-        return len(self._current())
-
-    def __iter__(self) -> Iterator[type[ObjectType]]:
-        return iter(self._current())
-
-    @overload
-    def __getitem__(self, index: int) -> type[ObjectType]: ...
-
-    @overload
-    def __getitem__(self, index: slice) -> Sequence[type[ObjectType]]: ...
-
-    def __getitem__(self, index: int | slice) -> type[ObjectType] | Sequence[type[ObjectType]]:
-        return self._current()[index]
-
-
-class MailPlugin(Plugin):
-    """Heracles Mail plugin with conditional alias type registration."""
-
-    __slots__ = ("_cond_types",)
-
-    def __init__(
-        self,
-        name: str,
-        version: str,
-        cond_types: ConditionalTypes,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(name, version, types=cond_types, **kwargs)
-        object.__setattr__(self, "_cond_types", cond_types)
-
-    def missing_object_classes(self, available: set[str]) -> list[str]:
-        self._cond_types.available = available
-        return super().missing_object_classes(available)
-
-
 def plugin() -> Plugin:
-    """Entry point of the Mail plugin."""
-    cond_types = ConditionalTypes((MailAliasDistribution, MailAliasRedirection))
-    return MailPlugin(
+    """Entry point of the Mail plugin.
+
+    The alias types are listed unconditionally: the registry registers each type only
+    when the objectClasses of its main tab exist in the directory schema.
+    """
+    return Plugin(
         name=PLUGIN_NAME,
         version="0.1.0",
-        cond_types=cond_types,
+        types=(MailAliasDistribution, MailAliasRedirection),
         tabs=(
             TabAttachment("user", UserMailTab),
             TabAttachment("group", GroupMailTab),
@@ -565,27 +517,15 @@ def plugin() -> Plugin:
     )
 
 
-def alias_plugin() -> Plugin:
-    """Alternative entry point registering alias types as a standalone plugin."""
-    return Plugin(
-        name="mail_alias",
-        version="0.1.0",
-        types=(MailAliasDistribution, MailAliasRedirection),
-        required_object_classes=("mailAliasRedirection", "mailAliasDistribution"),
-    )
-
-
 __all__ = [
     "CN_RE",
     "PLUGIN_NAME",
     "GroupMailTab",
     "MailAliasDistribution",
     "MailAliasRedirection",
-    "MailPlugin",
     "MailSettings",
     "UnixTimestampDateAttr",
     "UserMailTab",
-    "alias_plugin",
     "check_mail_uniqueness",
     "fold_ascii",
     "format_delivery_mode",

@@ -247,15 +247,22 @@ def test_plugin_conditional_types(directory: MemoryDirectory) -> None:
     assert not st3.enabled
     assert "gosaMailAccount" in st3.missing_object_classes
 
-    # 4. Standalone alias_plugin entry point
+    # 4. Each alias type depends only on its own objectClass
     reg4 = TypeRegistry()
     register_builtin_types(reg4)
-    st4 = reg4.register_plugin(
-        mail.alias_plugin(),
-        {"mailaliasdistribution", "mailaliasredirection"},
-    )
-    assert st4.enabled
-    assert reg4.get("mail_alias_distribution").name == "mail_alias_distribution"
+    reg4.register_plugin(mail.plugin(), {"gosamailaccount", "mailaliasredirection"})
+    assert reg4.get("mail_alias_redirection").name == "mail_alias_redirection"
+    with pytest.raises(UnknownTypeError):
+        reg4.get("mail_alias_distribution")
+
+
+def test_plugin_is_a_plain_plugin_listing_all_types() -> None:
+    from heracles.objects import Plugin
+
+    plug = mail.plugin()
+    assert type(plug) is Plugin
+    assert [t.name for t in plug.types] == ["mail_alias_distribution", "mail_alias_redirection"]
+    assert not hasattr(mail, "alias_plugin")
 
 
 # -------------------------------------------------------- user mail tab
