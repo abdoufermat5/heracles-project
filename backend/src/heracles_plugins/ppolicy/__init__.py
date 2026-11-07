@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from heracles.attributes import (
-    JSON,
     BooleanAttr,
     DateTimeAttr,
     DepartmentAttr,
@@ -249,22 +248,15 @@ class Ppolicy(ObjectType):
 # ------------------------------------------------------------- user tab
 
 
-class PpolicyUserTabMeta(type):
-    """Metaclass allowing the non-optional operational tab to attach to user."""
-
-    @property
-    def optional(cls) -> bool:
-        stack = inspect.stack()
-        return any(frame.function == "attach_tab" for frame in stack[1:4])
-
-
-class PpolicyAccountTab(Tab, metaclass=PpolicyUserTabMeta):
+class PpolicyAccountTab(Tab):
     """Password policy tab on a user (operational attributes)."""
 
     name = "ppolicy"
     acl_key = "ppolicyAccount"
     label = _("Password policy")
     object_classes = ()
+    # Always active: it has no objectClass of its own, so it is never deactivated.
+    optional = False
 
     policy = Section(
         _("Policy assignment"),
@@ -279,12 +271,6 @@ class PpolicyAccountTab(Tab, metaclass=PpolicyUserTabMeta):
         virtual(DateTimeAttr("pwdAccountLockedTime", _("Account locked at"), readonly=True)),
         virtual(DateTimeAttr("pwdFailureTime", _("Last authentication failure"), readonly=True)),
     )
-
-    @classmethod
-    def describe(cls) -> dict[str, JSON]:
-        out = super().describe()
-        out["optional"] = False
-        return out
 
     @classmethod
     def on_load(cls, ctx: TabContext) -> None:

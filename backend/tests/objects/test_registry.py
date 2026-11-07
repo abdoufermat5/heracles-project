@@ -157,3 +157,69 @@ def test_load_plugins_from_entry_points() -> None:
     )
     assert [(s.name, s.enabled) for s in statuses] == [("printers", True), ("dns", False)]
     assert reg.get("printer").name == "printer"
+
+
+class FlagTab(Tab):
+    """Always-active attached tab: no objectClass of its own."""
+
+    name = "flag"
+    label = "Flag"
+    optional = False
+    object_classes = ()
+    main = Section("Flag", StringAttr("description", "Note"))
+
+
+class RequiredClassTab(Tab):
+    name = "needs_class"
+    optional = False
+    object_classes = ("someClass",)
+
+
+def test_attach_non_optional_tab_without_object_classes() -> None:
+    reg = TypeRegistry()
+    register_builtin_types(reg)
+    reg.attach_tab("user", FlagTab)
+    with pytest.raises(ValueError, match="must be optional"):
+        reg.attach_tab("user", RequiredClassTab)
+    flag = next(t for t in reg.describe("user")["tabs"] if t["name"] == "flag")  # type: ignore[index]
+    assert flag["optional"] is False
+
+
+def test_always_active_attached_tab_lifecycle() -> None:
+    from heracles.objects import ObjectService, ObjectValidationError
+    from tests.objects.conftest import BASE, PEOPLE
+
+    d = FakeDirectory(BASE)
+    d.put(BASE, objectClass=["dcObject", "organization"], dc="example", o="Example")
+    d.put(PEOPLE, objectClass="organizationalUnit", ou="people")
+    reg = TypeRegistry()
+    register_builtin_types(reg)
+    reg.attach_tab("user", FlagTab)
+    service = ObjectService(d, reg)
+
+    main: dict[str, Any] = {"uid": "jdoe", "givenName": "John", "sn": "Doe"}
+    dn = service.create(
+        "user", BASE, {"main": {"values": main}, "flag": {"values": {"description": "hi"}}}
+    )
+    entry = d.get(dn)
+    assert entry is not None
+    assert entry.text("description") == "hi"
+    assert "flag" not in {c.lower() for c in entry.texts("objectClass")}
+
+    state = service.load("user", dn)
+    assert state.tabs["flag"].active
+    assert state.tabs["flag"].values["description"] == "hi"
+
+    service.update("user", dn, {"flag": {"values": {"description": "yo"}}})
+    entry = d.get(dn)
+    assert entry is not None
+    assert entry.text("description") == "yo"
+
+    with pytest.raises(ObjectValidationError) as exc:
+        service.update("user", dn, {"flag": {"active": False}})
+    assert exc.value.fields["flag"] == "This tab cannot be deactivated."
+    assert service.load("user", dn).tabs["flag"].active
+
+    # a user created without the tab still has it active (with defaults)
+    dn2 = service.create("user", BASE, {"main": {"values": {**main, "uid": "other"}}})
+    assert service.load("user", dn2).tabs["flag"].active

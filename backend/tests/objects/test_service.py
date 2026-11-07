@@ -149,7 +149,7 @@ def test_create_requires_tab_and_required_fields(service: ObjectService) -> None
 def test_create_requires_main_active(service: ObjectService) -> None:
     with pytest.raises(ObjectValidationError) as exc:
         service.create("user", BASE, {"main": {"active": False}})
-    assert exc.value.fields["main"] == "The main tab cannot be deactivated."
+    assert exc.value.fields["main"] == "This tab cannot be deactivated."
 
 
 def test_create_uniqueness(service: ObjectService, jdoe: str) -> None:

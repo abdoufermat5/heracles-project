@@ -170,12 +170,16 @@ class TypeRegistry:
         return info
 
     def attach_tab(self, type_name: str, tab_cls: type[Tab]) -> None:
-        """Add ``tab_cls`` to an existing type (e.g. from a plugin)."""
+        """Add ``tab_cls`` to an existing type (e.g. from a plugin).
+
+        A tab must be optional, except when it has no ``object_classes``: such a tab is
+        always active and cannot be deactivated (it only carries attributes).
+        """
         info = self.get(type_name)
         if info.tab(tab_cls.name) is not None:
             raise ValueError(f"tab {tab_cls.name!r} already on type {type_name!r}")
-        if not tab_cls.optional:
-            raise ValueError("attached tabs must be optional")
+        if not tab_cls.optional and tab_cls.object_classes:
+            raise ValueError("attached tabs with object classes must be optional")
         info.tabs.append(tab_cls)
 
     def get(self, name: str) -> TypeInfo:

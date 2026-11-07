@@ -529,7 +529,7 @@ class ObjectService:
                 errors[tab_name] = _("'active' must be a boolean.")
                 continue
             if not tab.optional and not wanted:
-                errors[tab_name] = _("The main tab cannot be deactivated.")
+                errors[tab_name] = _("This tab cannot be deactivated.")
                 continue
             if wanted != state.active:
                 touched.append((tab_name, TAB_ATTR))
