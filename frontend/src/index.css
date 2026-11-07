@@ -1,0 +1,136 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens. Neutral greys plus a single accent colour (--primary).
+ * Foreground/background pairs are chosen to meet WCAG AA contrast.
+ */
+:root {
+  --radius: 0.5rem;
+  --background: oklch(0.992 0 0);
+  --foreground: oklch(0.205 0.01 270);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0.01 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.205 0.01 270);
+  --primary: oklch(0.52 0.21 275);
+  --primary-foreground: oklch(0.99 0 0);
+  --primary-soft: oklch(0.955 0.03 275);
+  --secondary: oklch(0.96 0.004 270);
+  --secondary-foreground: oklch(0.25 0.01 270);
+  --muted: oklch(0.965 0.003 270);
+  --muted-foreground: oklch(0.47 0.015 270);
+  --accent: oklch(0.955 0.005 270);
+  --accent-foreground: oklch(0.205 0.01 270);
+  --destructive: oklch(0.55 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.5 0.14 150);
+  --warning: oklch(0.55 0.14 70);
+  --border: oklch(0.922 0.004 270);
+  --input: oklch(0.86 0.006 270);
+  --ring: oklch(0.55 0.2 275);
+  --sidebar: oklch(0.975 0.003 270);
+  --chart-1: oklch(0.52 0.21 275);
+  --chart-2: oklch(0.62 0.12 200);
+  --chart-3: oklch(0.62 0.13 150);
+  --chart-4: oklch(0.68 0.14 70);
+}
+
+.dark {
+  --background: oklch(0.16 0.008 270);
+  --foreground: oklch(0.96 0.003 270);
+  --card: oklch(0.2 0.01 270);
+  --card-foreground: oklch(0.96 0.003 270);
+  --popover: oklch(0.22 0.01 270);
+  --popover-foreground: oklch(0.96 0.003 270);
+  --primary: oklch(0.7 0.16 275);
+  --primary-foreground: oklch(0.15 0.02 270);
+  --primary-soft: oklch(0.28 0.06 275);
+  --secondary: oklch(0.26 0.01 270);
+  --secondary-foreground: oklch(0.96 0.003 270);
+  --muted: oklch(0.25 0.01 270);
+  --muted-foreground: oklch(0.76 0.012 270);
+  --accent: oklch(0.28 0.01 270);
+  --accent-foreground: oklch(0.96 0.003 270);
+  --destructive: oklch(0.7 0.19 25);
+  --destructive-foreground: oklch(0.15 0.02 270);
+  --success: oklch(0.75 0.15 150);
+  --warning: oklch(0.8 0.14 80);
+  --border: oklch(0.3 0.01 270);
+  --input: oklch(0.38 0.012 270);
+  --ring: oklch(0.7 0.16 275);
+  --sidebar: oklch(0.18 0.01 270);
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-sm antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  :focus-visible {
+    @apply outline-ring outline-2 outline-offset-2;
+  }
+  button,
+  [role='button'],
+  a {
+    transition-property: color, background-color, border-color, opacity, box-shadow;
+    transition-duration: 120ms;
+  }
+}
+
+.font-dn {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
