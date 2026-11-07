@@ -30,6 +30,7 @@ dns = "heracles_plugins.dns:plugin"
 posix = "heracles_plugins.posix:plugin"
 ssh = "heracles_plugins.ssh:plugin"
 sudo = "heracles_plugins.sudo:plugin"
+systems = "heracles_plugins.systems:plugin"
 
 [dependency-groups]
 dev = [
