@@ -343,6 +343,7 @@ def _process_task(
         for e in expand_members(directory, task.texts("fdTasksReminderRecipientsMembers"))
         if e.text("mail")
     }
+    sender = task.text("fdTasksReminderEmailSender") or None
     for user in expand_members(directory, task.texts("fdTasksReminderMembers")):
         expires = expiration_of(user)
         if expires is None:
@@ -375,7 +376,7 @@ def _process_task(
                 addresses.append(address)
         for address in addresses:
             try:
-                mailer.send(address, subject, body)
+                mailer.send(address, subject, body, sender=sender)
             except OSError as exc:
                 report.errors.append(f"{task.dn}: mail to {address} failed ({type(exc).__name__})")
                 continue

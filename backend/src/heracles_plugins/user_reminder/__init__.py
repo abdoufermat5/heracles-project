@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from heracles.attributes import (
     BooleanAttr,
@@ -38,11 +39,16 @@ from heracles.i18n import _
 from heracles.ldap import dn as dnlib
 from heracles.objects import ObjectType, Plugin, Section, Tab
 from heracles.objects.hooks import TabContext
+from heracles.objects.registry import PluginRouterContext
 from heracles_plugins.user_reminder.prolong import (
     ProlongError,
     build_prolong_router,
     prolong_account,
 )
+
+if TYPE_CHECKING:
+    from fastapi import APIRouter
+
 from heracles_plugins.user_reminder.runner import (
     SCHEDULES,
     STATUS_ACTIVATED,
@@ -250,7 +256,15 @@ def plugin() -> Plugin:
         types=(ReminderTask, MailTemplate),
         required_object_classes=("fdTasks", "fdTasksReminder"),
         settings=UserReminderSettings(),
+        public_routers=(_prolong_router,),
     )
+
+
+def _prolong_router(ctx: PluginRouterContext) -> APIRouter:
+    """Public ``POST /api/v2/reminder/prolong`` on the first configured directory."""
+    directory = next(iter(ctx.directories.values()))
+    settings = ctx.settings if ctx.settings is not None else UserReminderSettings()
+    return build_prolong_router(lambda: directory, settings)
 
 
 __all__ = [

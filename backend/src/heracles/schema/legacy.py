@@ -167,3 +167,47 @@ DEPARTMENT_STRUCTURAL_CLASSES: Final = (
 
 COMPAT_OBJECT_CLASSES: Final = frozenset(str(v) for v in astuple(OC))
 """All compatibility objectClass names (original case)."""
+
+PLUGIN_OBJECT_CLASSES: Final = frozenset(
+    {
+        # dns
+        "dNSZone",
+        "fdDNSView",
+        "fdDNSAcl",
+        # systems
+        "device",
+        "ieee802Device",
+        "ipHost",
+        "fdServer",
+        "fdWorkstation",
+        "fdTerminal",
+        "fdPrinter",
+        "fdPhone",
+        "fdMobilePhone",
+        "fdNetworkInterface",
+        # tasks / reminders
+        "fdTasksReminder",
+        # password policies
+        "pwdPolicyChecker",
+        # personal information
+        "fdPersonalInfo",
+        # mail
+        "gosaMailAccount",
+        "fdGroupMail",
+        "mailAliasRedirection",
+        "mailAliasDistribution",
+        # dhcp
+        "dhcpService",
+        "dhcpSharedNetwork",
+        "dhcpSubnet",
+        "dhcpPool",
+        "dhcpGroup",
+        "dhcpHost",
+        "dhcpClass",
+        "dhcpSubClass",
+        "dhcpTSigKey",
+        "dhcpDnsZone",
+        "dhcpFailOverPeer",
+    }
+)
+"""objectClasses used by the first-party plugins (standard and compatibility schemas)."""

@@ -180,6 +180,7 @@ def test_template_rendering(directory: MemoryDirectory) -> None:
     run(directory, mailer)
     (mail,) = mailer.outbox
     assert mail.subject == "Account jdoe expires in 7 days"
+    assert mail.sender == "noreply@example.com"
     assert mail.body == (
         f"Hi jdoe Doe (jdoe Doe, jdoe@example.com): expires {when.isoformat()}.  {{unknown}}"
     )

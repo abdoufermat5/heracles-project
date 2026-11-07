@@ -11,7 +11,7 @@ from heracles.acl.model import AclAssignment, AclScope, RoleTemplateValue
 from heracles.acl.parser import parse_role_value
 from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
-from heracles.schema.legacy import ATTR, OC
+from heracles.schema.legacy import ATTR, OC, PLUGIN_OBJECT_CLASSES
 
 BASE = "dc=heracles,dc=test"
 ADMIN_DN = f"uid=admin,ou=people,{BASE}"
@@ -183,6 +183,8 @@ def build_demo_directory() -> MemoryDirectory:
         _dept_base("lyon"),
         [assignment(0, AclScope.SUBTREE, "user-manager", [lyon_managers])],
     )
+    d.set_schema_object_classes([*d.schema_object_classes(), *PLUGIN_OBJECT_CLASSES])
+    _add_network_samples(d)
     return d
 
 
@@ -193,4 +195,59 @@ def _add_acl(d: MemoryDirectory, dn: str, values: list[bytes]) -> None:
             Modification("add", "objectClass", [OC.ACL_ASSIGNMENT.encode()]),
             Modification("add", ATTR.ACL_ENTRY, values),
         ],
+    )
+
+
+def _add_network_samples(d: MemoryDirectory) -> None:
+    """A DNS zone and a server with one interface (plugins: dns, systems)."""
+    dns = f"ou=dns,{BASE}"
+    d.add(dns, {"objectClass": [b"organizationalUnit"], "ou": [b"dns"]})
+    zone = f"zoneName=heracles.test,{dns}"
+    d.add(
+        zone,
+        {
+            "objectClass": [b"dNSZone"],
+            "zoneName": [b"heracles.test"],
+            "relativeDomainName": [b"@"],
+            "sOARecord": [
+                b"ns1.heracles.test. hostmaster.heracles.test. 2026110701 3600 900 604800 86400"
+            ],
+            "nSRecord": [b"ns1.heracles.test."],
+            "mXRecord": [b"10 mail.heracles.test."],
+        },
+    )
+    for name, ip in (("ns1", "10.0.0.2"), ("www", "10.0.0.10"), ("mail", "10.0.0.20")):
+        d.add(
+            f"relativeDomainName={name},{zone}",
+            {
+                "objectClass": [b"dNSZone"],
+                "zoneName": [b"heracles.test"],
+                "relativeDomainName": [name.encode()],
+                "aRecord": [ip.encode()],
+            },
+        )
+    systems = f"ou=systems,{BASE}"
+    servers = f"ou=servers,{systems}"
+    d.add(systems, {"objectClass": [b"organizationalUnit"], "ou": [b"systems"]})
+    d.add(servers, {"objectClass": [b"organizationalUnit"], "ou": [b"servers"]})
+    server = f"cn=srv-web,{servers}"
+    d.add(
+        server,
+        {
+            "objectClass": [b"fdServer", b"ieee802Device", b"ipHost"],
+            "cn": [b"srv-web"],
+            "description": [b"Web server"],
+            "fdMode": [b"unlocked"],
+            "macAddress": [b"52:54:00:12:34:56"],
+            "ipHostNumber": [b"10.0.0.10"],
+        },
+    )
+    d.add(
+        f"cn=eth0,{server}",
+        {
+            "objectClass": [b"fdNetworkInterface"],
+            "cn": [b"eth0"],
+            "macAddress": [b"52:54:00:12:34:56"],
+            "ipHostNumber": [b"10.0.0.10"],
+        },
     )

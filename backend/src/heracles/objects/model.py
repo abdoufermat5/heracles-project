@@ -150,6 +150,9 @@ class ObjectType:
     label_plural: ClassVar[str] = ""
     icon: ClassVar[str] = "file"
     category: ClassVar[str] = "directory"
+    #: objectClasses the directory schema must know for a plugin type to be
+    #: registered (default: the main tab's objectClasses).
+    required_object_classes: ClassVar[Sequence[str]] = ()
     #: ACL category of the type (defaults to ``name``); ACL object keys are
     #: ``<acl_category>/<tab acl_key>`` and must match existing directory data.
     acl_category: ClassVar[str] = ""

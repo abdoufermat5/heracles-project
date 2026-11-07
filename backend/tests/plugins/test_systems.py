@@ -30,7 +30,22 @@ def make_service(directory: MemoryDirectory, settings: Any = None) -> ObjectServ
     register_builtin_types(registry)
     status = registry.register_plugin(
         systems.plugin(),
-        {c.lower() for c in directory.schema_object_classes()} | {"ieee802device", "device"},
+        {c.lower() for c in directory.schema_object_classes()}
+        | {
+            c.lower()
+            for c in (
+                "ieee802Device",
+                "device",
+                "fdServer",
+                "fdWorkstation",
+                "fdTerminal",
+                "fdPrinter",
+                "fdPhone",
+                "fdMobilePhone",
+                "fdNetworkInterface",
+                "ipHost",
+            )
+        },
     )
     assert status.enabled
     if settings is not None:

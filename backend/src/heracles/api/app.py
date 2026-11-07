@@ -51,12 +51,14 @@ def create_app(
     is_admin: AdminResolver | None = None,
     logout_hooks: Iterable[LogoutHook] = (),
     extra_routers: Iterable[APIRouter] = (),
+    public_routers: Iterable[APIRouter] = (),
     clock: Callable[[], float] = time.time,
 ) -> FastAPI:
     """Build the application.
 
     ``extra_routers`` are included under the CSRF-protected ``/api/v2`` router
-    (their own prefix is relative to ``/api/v2``). Every service has an
+    (their own prefix is relative to ``/api/v2``); ``public_routers`` are mounted
+    at the root without session or CSRF checks. Every service has an
     in-memory default so the app runs without any backend but the directory.
     """
     app = FastAPI(
@@ -123,6 +125,8 @@ def create_app(
     install_middleware(app)
 
     app.include_router(v2.build_router(extra_routers))
+    for public in public_routers:
+        app.include_router(public)
     app.include_router(v1.router)
     _install_health(app)
 

@@ -289,3 +289,31 @@ def test_status() -> None:
 def test_ascii_gecos() -> None:
     assert ascii_gecos("Chloé Dupont-Lefèvre") == "Chloe Dupont-Lefevre"
     assert ascii_gecos("Smith, John") == ""
+
+
+class _NoMembershipRead:
+    """Policy: everything allowed except reading the virtual groupMembership."""
+
+    def can_read(self, dn: str, tab: str, attr: str) -> bool:
+        return attr != "groupMembership"
+
+    def can_write(self, dn: str, tab: str, attr: str) -> bool:
+        return True
+
+    def can_create(self, type_name: str, base: str) -> bool:
+        return True
+
+    def can_delete(self, dn: str, type_name: str) -> bool:
+        return True
+
+
+def test_virtual_values_respect_read_acl(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    dev = posix_group(directory, "dev", 3000)
+    dn = new_user(service, posix_values={"groupMembership": [dev]})
+    restricted = ObjectService(directory, service.registry, policy=_NoMembershipRead())
+    values = restricted.load("user", dn).tabs["posix"].values
+    assert "groupMembership" not in values
+    assert values["uidNumber"] == 1101
+    assert not any(k.startswith("_") for k in values)

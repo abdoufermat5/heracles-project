@@ -150,6 +150,16 @@ class ObjectService:
         for tab in info.tabs:
             if tabs[tab.name].active:
                 tab.on_load(self._ctx(info, tab, entry.dn, base, tabs, None, (), creating=False))
+        # Hooks may fill virtual attributes from other entries: enforce read ACLs on
+        # every value (stored or virtual) and drop keys that are not attributes.
+        for tab in info.tabs:
+            state = tabs[tab.name]
+            names = {a.name for a in tab.attributes()}
+            state.values = {
+                k: v
+                for k, v in state.values.items()
+                if k in names and self.policy.can_read(entry.dn, tab.name, k)
+            }
         raw = {k: list(v) for k, v in entry.attrs.items()}
         return ObjectState.build(entry.dn, type_name, tabs, raw, entry.texts("objectClass"))
 

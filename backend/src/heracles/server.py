@@ -37,6 +37,7 @@ from heracles.ldap.client import DirectoryClient
 from heracles.ldap.config import load_settings
 from heracles.objects import TypeRegistry
 from heracles.objects.builtin import register_builtin_types
+from heracles.objects.registry import PluginRouterContext
 
 __all__ = ["build_app", "build_demo_app", "create_full_app"]
 
@@ -67,12 +68,17 @@ def create_full_app(
         if directory is not None:
             domain.locks(session.directory_id, directory).release_all_for_user(session.user_dn)
 
+    public = [
+        factory(PluginRouterContext(directories, registry.settings.get(name)))
+        for name, factory in registry.public_router_factories
+    ]
     app = create_app(
         settings,
         directories,
         is_admin=is_admin,
         logout_hooks=[release_locks],
         extra_routers=[object_routes.router, directory_routes.router],
+        public_routers=public,
     )
     install_domain(app, domain)
 

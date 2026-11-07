@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
 from typing import Any, Protocol, cast
@@ -80,6 +80,19 @@ class TypeInfo:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class PluginRouterContext:
+    """What a plugin's public router factory receives."""
+
+    directories: Mapping[str, DirectoryClient]
+    #: The plugin's settings object (``registry.settings[plugin.name]``).
+    settings: Any
+
+
+#: ``factory(ctx) -> fastapi.APIRouter`` mounted at the application root, outside the
+#: session/CSRF protected API (for unauthenticated flows such as e-mailed links).
+type PublicRouterFactory = Callable[[PluginRouterContext], Any]
+
 #: ``hook(entry, locked) -> modifications`` run on account lock (True) / unlock (False).
 type AccountLockHook = Callable[[Entry, bool], list[Modification]]
 
@@ -103,6 +116,8 @@ class Plugin:
     required_object_classes: Sequence[str] = ()
     #: Extra modifications applied when a user account is locked/unlocked.
     account_lock_hooks: Sequence[AccountLockHook] = ()
+    #: Public (unauthenticated) routers, see :data:`PublicRouterFactory`.
+    public_routers: Sequence[PublicRouterFactory] = ()
     #: Default settings, registered as ``registry.settings[name]`` unless already set.
     settings: Any = None
     config: Any = None
@@ -139,6 +154,8 @@ class TypeRegistry:
         self.settings: dict[str, Any] = {}
         #: Account lock hooks of enabled plugins.
         self.account_lock_hooks: list[AccountLockHook] = []
+        #: ``(plugin name, factory)`` of enabled plugins' public routers.
+        self.public_router_factories: list[tuple[str, PublicRouterFactory]] = []
         self._types: dict[str, TypeInfo] = {}
         self.plugins: list[PluginStatus] = []
 
@@ -192,10 +209,14 @@ class TypeRegistry:
         if missing:
             return status
         for type_cls in plugin.types:
+            needed = type_cls.required_object_classes or type_cls.tabs[0].object_classes
+            if any(c.lower() not in available_classes for c in needed):
+                continue  # this type's schema is not loaded in the directory
             self.register_type(type_cls)
         for att in plugin.tabs:
             self.attach_tab(att.type_name, att.tab)
         self.account_lock_hooks.extend(plugin.account_lock_hooks)
+        self.public_router_factories.extend((plugin.name, f) for f in plugin.public_routers)
         if plugin.settings is not None:
             self.settings.setdefault(plugin.name, plugin.settings)
         return status

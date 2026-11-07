@@ -510,21 +510,13 @@ class DnsView(ObjectType):
             _ensure_container(ctx)
 
 
-class DnsPlugin(Plugin):
-    """Plugin whose view and ACL types exist only when their classes are in the schema."""
-
-    def missing_object_classes(self, available: set[str]) -> list[str]:
-        optional = [("fddnsview", DnsView), ("fddnsacl", DnsAcl)]
-        object.__setattr__(self, "types", (DnsZone, *(t for oc, t in optional if oc in available)))
-        return super().missing_object_classes(available)
-
-
 def plugin() -> Plugin:
     """Entry point of the DNS plugin."""
-    return DnsPlugin(
+    return Plugin(
         name=PLUGIN_NAME,
         version="0.1.0",
-        types=(DnsZone,),
+        # view/ACL types are only registered when their objectClasses are loaded
+        types=(DnsZone, DnsView, DnsAcl),
         tabs=(),
         required_object_classes=("dNSZone",),
         settings=DnsSettings(),
@@ -533,7 +525,6 @@ def plugin() -> Plugin:
 
 __all__ = [
     "DnsAcl",
-    "DnsPlugin",
     "DnsSettings",
     "DnsView",
     "DnsZone",

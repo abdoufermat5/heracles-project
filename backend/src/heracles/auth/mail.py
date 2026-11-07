@@ -10,7 +10,9 @@ from typing import Protocol
 
 
 class Mailer(Protocol):
-    def send(self, to: str, subject: str, body: str) -> None: ...
+    def send(self, to: str, subject: str, body: str, *, sender: str | None = None) -> None:
+        """Send a plain-text mail; ``sender`` overrides the configured From address."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +20,7 @@ class SentMail:
     to: str
     subject: str
     body: str
+    sender: str | None = None
 
 
 class MemoryMailer:
@@ -26,8 +29,8 @@ class MemoryMailer:
     def __init__(self) -> None:
         self.outbox: list[SentMail] = []
 
-    def send(self, to: str, subject: str, body: str) -> None:
-        self.outbox.append(SentMail(to, subject, body))
+    def send(self, to: str, subject: str, body: str, *, sender: str | None = None) -> None:
+        self.outbox.append(SentMail(to, subject, body, sender))
 
 
 class SmtpMailer:
@@ -54,9 +57,9 @@ class SmtpMailer:
         self._ssl = use_ssl
         self._timeout = timeout
 
-    def send(self, to: str, subject: str, body: str) -> None:
+    def send(self, to: str, subject: str, body: str, *, sender: str | None = None) -> None:
         msg = EmailMessage()
-        msg["From"] = self._sender
+        msg["From"] = sender or self._sender
         msg["To"] = to
         msg["Subject"] = subject
         msg.set_content(body)

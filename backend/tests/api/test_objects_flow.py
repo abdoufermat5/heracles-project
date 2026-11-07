@@ -337,3 +337,14 @@ def test_sudo_role_forbidden_for_helpdesk(app_client: TestClient) -> None:
         {"base": BASE, "tabs": {"main": {"values": {"cn": "nope", "sudoCommand": ["ALL"]}}}},
     )
     assert r.status_code == 403, r.text
+
+
+def test_demo_loads_plugins_and_public_routes(app_client: TestClient) -> None:
+    a = api(app_client, "admin")
+    names = {t["name"] for t in a.get("/types").json()}
+    assert {"dns_zone", "server", "reminder_task", "sudo", "posix_group"} <= names
+    page = a.get("/objects/server", base=BASE, scope="sub").json()
+    assert [i["values"]["cn"] for i in page["items"]] == ["srv-web"]
+    # public route: no session, no CSRF token, wrong token -> 400 (not 401/403)
+    r = app_client.post("/api/v2/reminder/prolong", json={"login": "jdoe", "token": "nope"})
+    assert r.status_code == 400, r.text

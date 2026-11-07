@@ -54,7 +54,19 @@ class Api:
 def app_client() -> Iterator[TestClient]:
     directory = build_demo_directory()
     directory.set_schema_object_classes(
-        [*directory.schema_object_classes(), "ieee802Device", "device"]
+        [
+            *directory.schema_object_classes(),
+            "ieee802Device",
+            "device",
+            "fdServer",
+            "fdWorkstation",
+            "fdTerminal",
+            "fdPrinter",
+            "fdPhone",
+            "fdMobilePhone",
+            "fdNetworkInterface",
+            "ipHost",
+        ]
     )
     settings = ApiSettings(admin_dns=[], directory_labels={"main": "Demo directory"})
     settings.session.cookie_secure = False
