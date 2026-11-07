@@ -39,6 +39,7 @@ dhcp = "heracles_plugins.dhcp:plugin"
 dovecot = "heracles_plugins.dovecot:plugin"
 cyrus = "heracles_plugins.cyrus:plugin"
 postfix = "heracles_plugins.postfix:plugin"
+sieve = "heracles_plugins.sieve:plugin"
 
 [dependency-groups]
 dev = [
