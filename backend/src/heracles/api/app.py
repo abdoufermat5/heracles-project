@@ -1,0 +1,154 @@
+"""FastAPI application factory."""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Callable, Iterable
+
+from fastapi import APIRouter, FastAPI
+from fastapi.responses import JSONResponse
+
+from heracles.api import v1, v2
+from heracles.api.errors import install_error_handlers
+from heracles.api.middleware import install_middleware
+from heracles.api.settings import ApiSettings
+from heracles.api.state import AdminResolver, AppState, LogoutHook
+from heracles.api.static import mount_spa
+from heracles.auth.login import LoginConfig, parse_networks
+from heracles.auth.mail import Mailer, MemoryMailer
+from heracles.auth.passwords import PasswordPolicy
+from heracles.auth.ratelimit import RateLimiter
+from heracles.auth.recovery import InMemoryTokenStore, RecoveryService, TokenStore
+from heracles.auth.second_factor import (
+    InMemorySecondFactorStore,
+    SecondFactorService,
+    SecondFactorStore,
+)
+from heracles.auth.sessions import InMemorySessionStore, SessionStore
+from heracles.auth.webauthn import WebAuthnService
+from heracles.ldap import dn as dnlib
+from heracles.ldap.client import DirectoryClient, DirectoryError
+
+
+def _default_admin_resolver(admin_dns: Iterable[str]) -> AdminResolver:
+    normalized = {dnlib.normalize(d) for d in admin_dns}
+
+    def resolve(_directory: DirectoryClient, user_dn: str) -> bool:
+        return dnlib.normalize(user_dn) in normalized
+
+    return resolve
+
+
+def create_app(
+    settings: ApiSettings,
+    directories: dict[str, DirectoryClient],
+    *,
+    sessions: SessionStore | None = None,
+    second_factor_store: SecondFactorStore | None = None,
+    token_store: TokenStore | None = None,
+    mailer: Mailer | None = None,
+    limiter: RateLimiter | None = None,
+    is_admin: AdminResolver | None = None,
+    logout_hooks: Iterable[LogoutHook] = (),
+    extra_routers: Iterable[APIRouter] = (),
+    clock: Callable[[], float] = time.time,
+) -> FastAPI:
+    """Build the application.
+
+    ``extra_routers`` are included under the CSRF-protected ``/api/v2`` router
+    (their own prefix is relative to ``/api/v2``). Every service has an
+    in-memory default so the app runs without any backend but the directory.
+    """
+    app = FastAPI(
+        title="Heracles",
+        docs_url="/api/docs" if settings.enable_docs else None,
+        redoc_url=None,
+        openapi_url="/api/openapi.json" if settings.enable_docs else None,
+    )
+
+    session_store = (
+        sessions
+        if sessions is not None
+        else InMemorySessionStore(
+            idle_timeout=settings.session.idle_timeout_seconds,
+            absolute_timeout=settings.session.absolute_timeout_seconds,
+        )
+    )
+    mail = mailer if mailer is not None else MemoryMailer()
+    sf_store = (
+        second_factor_store if second_factor_store is not None else InMemorySecondFactorStore()
+    )
+    policy_cfg = settings.password
+    policy = PasswordPolicy(
+        min_length=policy_cfg.min_length,
+        min_differing=policy_cfg.min_differing,
+        default_method=policy_cfg.default_method,
+        allowed_methods=tuple(policy_cfg.allowed_methods),
+        force_default=policy_cfg.force_default,
+    )
+    login_cfg = LoginConfig(
+        login_attribute=settings.login.login_attribute,
+        user_object_class=settings.login.user_object_class,
+    )
+    app.state.heracles = AppState(
+        settings=settings,
+        directories=directories,
+        sessions=session_store,
+        limiter=limiter
+        if limiter is not None
+        else RateLimiter(
+            free_attempts=settings.login.free_attempts,
+            base_delay=settings.login.base_delay_seconds,
+            max_delay=settings.login.max_delay_seconds,
+        ),
+        second_factor=SecondFactorService(sf_store, issuer=settings.totp_issuer, clock=clock),
+        webauthn=WebAuthnService(sf_store, settings.webauthn),
+        recovery=RecoveryService(
+            store=token_store if token_store is not None else InMemoryTokenStore(),
+            mailer=mail,
+            policy=policy,
+            login_config=login_cfg,
+            config=settings.recovery.to_config(),
+            clock=clock,
+        ),
+        mailer=mail,
+        policy=policy,
+        login_config=login_cfg,
+        trusted_proxies=parse_networks(settings.login.trusted_proxies),
+        is_admin=is_admin or _default_admin_resolver(settings.admin_dns),
+        logout_hooks=list(logout_hooks),
+    )
+
+    install_error_handlers(app)
+    install_middleware(app)
+
+    for extra in extra_routers:
+        v2.router.include_router(extra)
+    app.include_router(v2.router)
+    app.include_router(v1.router)
+    _install_health(app)
+
+    if settings.static_dir is not None:
+        mount_spa(app, settings.static_dir)
+    return app
+
+
+def _install_health(app: FastAPI) -> None:
+    @app.get("/healthz", include_in_schema=False)
+    def healthz() -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]
+        return {"status": "ok"}
+
+    @app.get("/readyz", include_in_schema=False)
+    def readyz() -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        state: AppState = app.state.heracles
+        results: dict[str, bool] = {}
+        for dir_id, directory in state.directories.items():
+            try:
+                results[dir_id] = directory.get(directory.base_dn, ["objectClass"]) is not None
+            except DirectoryError:
+                results[dir_id] = False
+        ready = all(results.values())
+        return JSONResponse(
+            {"status": "ok" if ready else "unavailable", "directories": results},
+            status_code=200 if ready else 503,
+        )
