@@ -10,6 +10,13 @@ dependencies = [
   "pydantic-settings>=2.6",
   "structlog>=24.4",
   "pyyaml>=6.0.3",
+  "argon2-cffi>=25.1.0",
+  "libpass>=1.9.4",
+  "pyotp>=2.10.0",
+  "webauthn>=3.0.1",
+  "authlib>=1.9.5",
+  "itsdangerous>=2.2.0",
+  "bcrypt>=5.0.0",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +37,7 @@ dev = [
   "ruff>=0.8",
   "types-pyyaml>=6.0.12.20261103",
   "pytest-cov>=7.1.0",
+  "httpx2>=2.16.0",
 ]
 
 [build-system]

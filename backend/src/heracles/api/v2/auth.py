@@ -1,0 +1,322 @@
+"""Authentication endpoints of API v2 (spec 04, "Auth")."""
+
+from __future__ import annotations
+
+import math
+from typing import Annotated, Literal
+
+import structlog
+from fastapi import APIRouter, BackgroundTasks, Request, Response
+from pydantic import BaseModel, Field
+
+from heracles.api.deps import (
+    CurrentUserDep,
+    PendingSessionDep,
+    StateDep,
+    client_ip,
+    session_from_cookie,
+)
+from heracles.api.errors import ApiError, unauthenticated, validation
+from heracles.api.state import AppState
+from heracles.auth import csrf
+from heracles.auth.login import (
+    InvalidLoginError,
+    authenticate_bind,
+    authenticate_header,
+)
+from heracles.auth.passwords import PasswordPolicyError
+from heracles.auth.recovery import RecoveryError
+from heracles.auth.sessions import Session
+from heracles.ldap.client import DirectoryClient
+
+log = structlog.get_logger(__name__)
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+directories_router = APIRouter(tags=["auth"])
+
+_GENERIC_LOGIN_ERROR = "Invalid username or password"
+
+
+# -- models --------------------------------------------------------------------------------------
+class CsrfResponse(BaseModel):
+    token: str
+
+
+class DirectoryInfo(BaseModel):
+    id: str
+    label: str
+
+
+class LoginBody(BaseModel):
+    directory: str = "main"
+    username: Annotated[str, Field(min_length=1, max_length=256)]
+    password: Annotated[str, Field(max_length=1024)]
+
+
+class HeaderLoginBody(BaseModel):
+    directory: str = "main"
+
+
+class LoginResponse(BaseModel):
+    status: Literal["ok", "second_factor"]
+    methods: list[str] = Field(default_factory=lambda: [])
+
+
+class SecondFactorBody(BaseModel):
+    method: Literal["totp", "webauthn", "recovery"]
+    code: Annotated[str, Field(max_length=2048)]
+
+
+class StatusResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+
+
+class Me(BaseModel):
+    dn: str
+    uid: str
+    display_name: str
+    avatar_url: str | None
+    is_admin: bool
+    directory: str
+    base: str
+
+
+class RecoveryBody(BaseModel):
+    email: Annotated[str, Field(max_length=320)]
+    directory: str | None = None
+
+
+class RecoveryConfirmBody(BaseModel):
+    login: Annotated[str, Field(min_length=1, max_length=256)]
+    token: Annotated[str, Field(min_length=1, max_length=512)]
+    password: Annotated[str, Field(max_length=1024)]
+    directory: str | None = None
+
+
+# -- helpers -------------------------------------------------------------------------------------
+def _set_session_cookie(response: Response, state: AppState, session: Session) -> None:
+    cfg = state.settings.session
+    response.set_cookie(
+        cfg.cookie_name,
+        session.id,
+        httponly=True,
+        secure=cfg.cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _set_csrf_cookie(response: Response, state: AppState, token: str) -> None:
+    response.set_cookie(
+        csrf.CSRF_COOKIE,
+        token,
+        httponly=False,
+        secure=state.settings.session.cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _directory(state: AppState, directory_id: str | None) -> tuple[str, DirectoryClient]:
+    if directory_id is None:
+        directory_id = next(iter(state.directories), "")
+    directory = state.directories.get(directory_id)
+    if directory is None:
+        raise validation("Unknown directory", {"directory": "Unknown directory"})
+    return directory_id, directory
+
+
+def _start_session(
+    request: Request,
+    response: Response,
+    state: AppState,
+    user_dn: str,
+    directory_id: str,
+) -> LoginResponse:
+    """Drop any previous session (rotation) and open a new one for ``user_dn``."""
+    old = session_from_cookie(request, state)
+    if old is not None:
+        state.sessions.delete(old.id)
+    methods = state.second_factor.methods_for(user_dn)
+    session = state.sessions.create(
+        user_dn,
+        directory_id,
+        second_factor_pending=bool(methods),
+        second_factor_methods=methods,
+    )
+    _set_session_cookie(response, state, session)
+    if methods:
+        return LoginResponse(status="second_factor", methods=methods)
+    return LoginResponse(status="ok")
+
+
+# -- endpoints -----------------------------------------------------------------------------------
+@router.get("/csrf")
+def get_csrf(request: Request, response: Response, state: StateDep) -> CsrfResponse:
+    token = request.cookies.get(csrf.CSRF_COOKIE) or csrf.new_token()
+    _set_csrf_cookie(response, state, token)
+    return CsrfResponse(token=token)
+
+
+@directories_router.get("/directories")
+def list_directories(state: StateDep) -> list[DirectoryInfo]:
+    labels = state.settings.directory_labels
+    return [DirectoryInfo(id=i, label=labels.get(i, i)) for i in state.directories]
+
+
+@router.post("/login")
+def login(body: LoginBody, request: Request, response: Response, state: StateDep) -> LoginResponse:
+    directory_id, directory = _directory(state, body.directory)
+    key = state.limiter.key(client_ip(request, state), body.username)
+    wait = state.limiter.retry_after(key)
+    if wait > 0:
+        raise ApiError(
+            429,
+            "rate_limited",
+            "Too many attempts, try again later",
+            extra={"retry_after": math.ceil(wait)},
+            headers={"Retry-After": str(math.ceil(wait))},
+        )
+    try:
+        user_dn = authenticate_bind(directory, state.login_config, body.username, body.password)
+    except InvalidLoginError:
+        state.limiter.record_failure(key)
+        log.info("login_failed", directory=directory_id)
+        raise unauthenticated(_GENERIC_LOGIN_ERROR) from None
+    state.limiter.record_success(key)
+    log.info("login_ok", directory=directory_id, user=user_dn)
+    return _start_session(request, response, state, user_dn, directory_id)
+
+
+@router.post("/login/header")
+def login_header(
+    body: HeaderLoginBody, request: Request, response: Response, state: StateDep
+) -> LoginResponse:
+    """Login by trusted reverse-proxy header (disabled unless configured)."""
+    cfg = state.settings.login
+    if not cfg.header_enabled:
+        raise ApiError(404, "not_found", "Not found")
+    directory_id, directory = _directory(state, body.directory)
+    peer = request.client.host if request.client else None
+    try:
+        user_dn = authenticate_header(
+            directory,
+            state.login_config,
+            peer_ip=peer,
+            trusted=state.trusted_proxies,
+            header_value=request.headers.get(cfg.header_name),
+        )
+    except InvalidLoginError:
+        raise unauthenticated() from None
+    return _start_session(request, response, state, user_dn, directory_id)
+
+
+@router.post("/second-factor")
+def second_factor(
+    body: SecondFactorBody, response: Response, state: StateDep, session: PendingSessionDep
+) -> StatusResponse:
+    if not session.second_factor_pending:
+        return StatusResponse()
+    if body.method not in session.second_factor_methods:
+        raise validation("Method not available", {"method": "Method not available"})
+    if body.method == "webauthn":
+        raise ApiError(501, "not_implemented", "WebAuthn is not available yet")
+    if not state.second_factor.verify(session.user_dn, body.method, body.code):
+        session.second_factor_failures += 1
+        if session.second_factor_failures >= state.settings.login.max_second_factor_failures:
+            state.sessions.delete(session.id)
+        raise unauthenticated("Invalid code")
+    rotated = state.sessions.rotate(session.id)
+    if rotated is None:
+        raise unauthenticated()
+    rotated.second_factor_pending = False
+    rotated.second_factor_failures = 0
+    _set_session_cookie(response, state, rotated)
+    return StatusResponse()
+
+
+@router.post("/logout", status_code=204)
+def logout(request: Request, response: Response, state: StateDep) -> None:
+    session = session_from_cookie(request, state)
+    if session is not None:
+        state.sessions.delete(session.id)
+        for hook in state.logout_hooks:
+            try:
+                hook(session)
+            except Exception:
+                log.exception("logout_hook_failed")
+    response.delete_cookie(state.settings.session.cookie_name, path="/")
+
+
+@router.get("/me")
+def me(user: CurrentUserDep, request: Request, state: StateDep) -> Me:
+    entry = user.directory.get(user.dn, ["uid", "displayName", "cn"])
+    if entry is None:
+        state.sessions.delete(user.session.id)
+        raise unauthenticated("Account no longer exists")
+    uid = entry.text("uid") or ""
+    display = entry.text("displayName") or entry.text("cn") or uid
+    return Me(
+        dn=user.dn,
+        uid=uid,
+        display_name=display,
+        avatar_url=None,
+        is_admin=state.is_admin(user.directory, user.dn),
+        directory=user.directory_id,
+        base=user.directory.base_dn,
+    )
+
+
+# -- password recovery ---------------------------------------------------------------------------
+@router.post("/recovery", status_code=202)
+def recovery_request(
+    body: RecoveryBody, request: Request, tasks: BackgroundTasks, state: StateDep
+) -> StatusResponse:
+    """Always 202, whatever happens: the work is done after the response is sent."""
+    if state.settings.recovery.enabled:
+        directory = state.directories.get(body.directory or next(iter(state.directories), ""))
+        key = state.limiter.key(client_ip(request, state), "recovery:" + body.email)
+        if directory is not None and state.limiter.retry_after(key) <= 0:
+            state.limiter.record_failure(key)
+            tasks.add_task(state.recovery.request, directory, body.email)
+    return StatusResponse()
+
+
+@router.post("/recovery/confirm")
+def recovery_confirm(
+    body: RecoveryConfirmBody, request: Request, state: StateDep
+) -> StatusResponse:
+    if not state.settings.recovery.enabled:
+        raise ApiError(404, "not_found", "Not found")
+    _, directory = _directory(state, body.directory)
+    key = state.limiter.key(client_ip(request, state), "recovery-confirm:" + body.login)
+    wait = state.limiter.retry_after(key)
+    if wait > 0:
+        raise ApiError(
+            429,
+            "rate_limited",
+            "Too many attempts, try again later",
+            headers={"Retry-After": str(math.ceil(wait))},
+        )
+    try:
+        state.recovery.confirm(directory, body.login, body.token, body.password)
+    except PasswordPolicyError as exc:
+        raise validation("Password rejected", {"password": "; ".join(exc.problems)}) from None
+    except RecoveryError:
+        state.limiter.record_failure(key)
+        raise validation(
+            "Invalid or expired recovery link", {"token": "Invalid or expired token"}
+        ) from None
+    state.limiter.record_success(key)
+    return StatusResponse()
+
+
+# -- OIDC (stubs) --------------------------------------------------------------------------------
+@router.get("/oidc/login")
+def oidc_login() -> None:
+    raise ApiError(501, "not_implemented", "OIDC login is not implemented yet")
+
+
+@router.get("/oidc/callback")
+def oidc_callback() -> None:
+    raise ApiError(501, "not_implemented", "OIDC login is not implemented yet")
