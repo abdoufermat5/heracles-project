@@ -12,12 +12,18 @@ from heracles.objects.model import ObjectType, Reference, Section, Tab
 
 
 def _department_tab(
-    main_attr: str, label: str, structural: Sequence[str], *, pattern: str | None = None
+    main_attr: str,
+    label: str,
+    structural: Sequence[str],
+    *,
+    acl_key: str,
+    pattern: str | None = None,
 ) -> type[Tab]:
     """Build the main tab of a department variant (they differ by naming attribute)."""
     namespace: dict[str, Any] = {
         "name": "main",
         "label": _("Department"),
+        "acl_key": acl_key,
         "object_classes": (*structural, DEPARTMENT_MARKER),
         "identity": Section(
             _("Identity"),
@@ -38,6 +44,7 @@ class DepartmentType(ObjectType):
 
     icon = "building"
     category = "directory"
+    acl_category = "department"
     rdn = ""
     columns = ("description",)
     references = (Reference("user", "manager"),)
@@ -58,7 +65,7 @@ class OuDepartment(DepartmentType):
     name_attr = "ou"
     columns = ("ou", "description")
     search_attrs = ("ou", "description")
-    Main = _department_tab("ou", _("Name"), ("organizationalUnit",))
+    Main = _department_tab("ou", _("Name"), ("organizationalUnit",), acl_key="department")
 
 
 class OrganizationDepartment(DepartmentType):
@@ -72,7 +79,7 @@ class OrganizationDepartment(DepartmentType):
     name_attr = "o"
     columns = ("o", "description")
     search_attrs = ("o", "description")
-    Main = _department_tab("o", _("Name"), ("organization",))
+    Main = _department_tab("o", _("Name"), ("organization",), acl_key="organization")
 
 
 class LocalityDepartment(DepartmentType):
@@ -86,7 +93,7 @@ class LocalityDepartment(DepartmentType):
     name_attr = "l"
     columns = ("l", "description")
     search_attrs = ("l", "description")
-    Main = _department_tab("l", _("Name"), ("locality",))
+    Main = _department_tab("l", _("Name"), ("locality",), acl_key="locality")
 
 
 class CountryDepartment(DepartmentType):
@@ -100,7 +107,9 @@ class CountryDepartment(DepartmentType):
     name_attr = "c"
     columns = ("c", "description")
     search_attrs = ("c", "description")
-    Main = _department_tab("c", _("Country code"), ("country",), pattern=r"[A-Za-z]{2}")
+    Main = _department_tab(
+        "c", _("Country code"), ("country",), acl_key="country", pattern=r"[A-Za-z]{2}"
+    )
 
 
 class DomainDepartment(DepartmentType):
@@ -114,7 +123,7 @@ class DomainDepartment(DepartmentType):
     name_attr = "dc"
     columns = ("dc", "description")
     search_attrs = ("dc", "description")
-    Main = _department_tab("dc", _("Domain component"), ("domain",))
+    Main = _department_tab("dc", _("Domain component"), ("domain",), acl_key="domain")
 
 
 DEPARTMENT_TYPES: tuple[type[DepartmentType], ...] = (

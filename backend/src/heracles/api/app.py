@@ -122,9 +122,7 @@ def create_app(
     install_error_handlers(app)
     install_middleware(app)
 
-    for extra in extra_routers:
-        v2.router.include_router(extra)
-    app.include_router(v2.router)
+    app.include_router(v2.build_router(extra_routers))
     app.include_router(v1.router)
     _install_health(app)
 

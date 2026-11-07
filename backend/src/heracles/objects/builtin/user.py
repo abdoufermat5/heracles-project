@@ -62,6 +62,7 @@ class User(ObjectType):
 
     class Main(Tab):
         name = "main"
+        acl_key = "user"
         label = _("User")
         object_classes = ("inetOrgPerson", "organizationalPerson", "person")
 

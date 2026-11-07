@@ -20,6 +20,7 @@ class Group(ObjectType):
     """A group of users."""
 
     name = "group"
+    acl_category = "ogroup"
     label = _("Group")
     label_plural = _("Groups")
     icon = "users"
@@ -34,6 +35,7 @@ class Group(ObjectType):
 
     class Main(Tab):
         name = "main"
+        acl_key = "ogroup"
         label = _("Group")
         object_classes = ("groupOfNames",)
 
@@ -71,6 +73,7 @@ class Role(ObjectType):
 
     class Main(Tab):
         name = "main"
+        acl_key = "roleGeneric"
         label = _("Role")
         object_classes = ("organizationalRole",)
 

@@ -347,9 +347,9 @@ class ObjectService:
         ) != dnlib.normalize(old_base)
         if renamed and isinstance(new_main, str) and not errors:
             self._check_unique(info, new_base, new_main, dn, errors)
+        self._check_writes(dn, touched)
         if errors:
             raise ObjectValidationError(errors)
-        self._check_writes(dn, touched)
 
         mods = diff_modifications(
             info.tabs, main_name, state.raw, state.object_classes, state.original, new
@@ -515,6 +515,13 @@ class ObjectService:
             for attr in tab.attributes():
                 key = f"{tab.name}.{attr.name}"
                 if key in errors or isinstance(attr, DisplayAttr):
+                    continue
+                if (
+                    old is not None
+                    and attr.name not in state.values
+                    and attr.name not in old.original.get(tab.name, TabState()).values
+                ):
+                    # not readable by the user and left untouched: nothing to validate
                     continue
                 value = state.values.get(attr.name)
                 problems = attr.validate(value)

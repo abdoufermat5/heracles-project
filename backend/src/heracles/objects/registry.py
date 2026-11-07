@@ -30,6 +30,15 @@ class TypeInfo:
     def main_tab(self) -> type[Tab]:
         return self.tabs[0]
 
+    @property
+    def acl_category(self) -> str:
+        """ACL category of the type."""
+        return self.type.acl_category or self.type.name
+
+    def acl_object(self, tab: type[Tab]) -> str:
+        """ACL object key ``<category>/<tabKey>`` of one of the type's tabs."""
+        return f"{self.acl_category}/{tab.acl_key or tab.name}"
+
     def tab(self, name: str) -> type[Tab] | None:
         """Tab class by name."""
         return next((t for t in self.tabs if t.name == name), None)

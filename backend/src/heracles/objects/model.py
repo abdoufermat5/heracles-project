@@ -57,6 +57,8 @@ class Tab:
     object_classes: ClassVar[Sequence[str]] = ()
     optional: ClassVar[bool] = False
     requires: ClassVar[Sequence[str]] = ()
+    #: ACL key of the tab inside its type's ACL category (defaults to ``name``).
+    acl_key: ClassVar[str] = ""
     sections: ClassVar[tuple[Section, ...]] = ()
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -119,6 +121,8 @@ class ObjectType:
     label_plural: ClassVar[str] = ""
     icon: ClassVar[str] = "file"
     category: ClassVar[str] = "directory"
+    #: ACL category of the type (defaults to ``name``); see docs/specs/02-acl.md.
+    acl_category: ClassVar[str] = ""
     filter: ClassVar[str] = "(objectClass=*)"
     main_attr: ClassVar[str] = ""
     name_attr: ClassVar[str] = ""
