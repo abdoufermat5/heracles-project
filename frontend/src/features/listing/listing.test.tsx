@@ -75,4 +75,92 @@ describe('listing page', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Load more' }))
     expect(await screen.findByText(/Showing 100 of 200/)).toBeInTheDocument()
   })
+
+  it('clears search when clear button is clicked', async () => {
+    signIn()
+    renderApp('/types/user')
+    await screen.findByText('200 items')
+    const input = screen.getByRole('searchbox', { name: 'Search' })
+    await userEvent.type(input, 'testquery')
+    expect(input).toHaveValue('testquery')
+    const clearBtn = await screen.findByRole('button', { name: 'Clear search' })
+    await userEvent.click(clearBtn)
+    expect(input).toHaveValue('')
+  })
+
+  it('opens and confirms bulk delete dialog listing selected objects', async () => {
+    signIn()
+    renderApp('/types/user')
+    await screen.findByText('200 items')
+    const rows = screen.getAllByRole('row')
+    await userEvent.click(within(must(rows[1])).getByRole('checkbox'))
+
+    const bar = await screen.findByRole('region', { name: 'Bulk actions' })
+    await userEvent.click(within(bar).getByRole('button', { name: /Delete/ }))
+
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByText('Delete 1 item?')).toBeInTheDocument()
+    expect(within(dialog).getByText(/permanently deleted/)).toBeInTheDocument()
+
+    // Cancel closes dialog
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+  })
+
+  it('shows no matches empty state with clear search action', async () => {
+    signIn()
+    renderApp('/types/user')
+    await screen.findByText('200 items')
+    const input = screen.getByRole('searchbox', { name: 'Search' })
+    await userEvent.type(input, 'nonexistent_user_12345')
+    expect(await screen.findByText('No matching results')).toBeInTheDocument()
+    const clearBtns = screen.getAllByRole('button', { name: 'Clear search' })
+    await userEvent.click(clearBtns[0]!)
+    await waitFor(() => expect(input).toHaveValue(''))
+    expect(await screen.findByText('200 items')).toBeInTheDocument()
+  })
+
+  it('shows permission denied state for 403 responses', async () => {
+    signIn()
+    server.use(
+      http.get('/api/v2/objects/user', () =>
+        HttpResponse.json(
+          { error: { code: 'forbidden', message: 'Not allowed' } },
+          { status: 403 },
+        ),
+      ),
+    )
+    renderApp('/types/user')
+    expect(await screen.findByText('Access denied')).toBeInTheDocument()
+  })
+
+  it('toggles the preview panel on wide screens', async () => {
+    signIn()
+    renderApp('/types/user')
+    await screen.findByText('200 items')
+    expect(screen.queryByRole('complementary', { name: 'Preview' })).not.toBeInTheDocument()
+
+    const toggleBtn = screen.getByRole('button', { name: 'Preview' })
+    await userEvent.click(toggleBtn)
+
+    const preview = await screen.findByRole('complementary', { name: 'Preview' })
+    expect(preview).toBeInTheDocument()
+    expect(within(preview).getByRole('link', { name: 'Open' })).toBeInTheDocument()
+
+    const closeBtn = within(preview).getByRole('button', { name: 'Close preview' })
+    await userEvent.click(closeBtn)
+    await waitFor(() =>
+      expect(screen.queryByRole('complementary', { name: 'Preview' })).not.toBeInTheDocument(),
+    )
+  })
+
+  it('toggles density between comfortable and compact', async () => {
+    signIn()
+    renderApp('/types/user')
+    await screen.findByText('200 items')
+    const densityBtn = screen.getByRole('button', { name: 'Compact' })
+    await userEvent.click(densityBtn)
+    expect(screen.getByRole('button', { name: 'Comfortable' })).toBeInTheDocument()
+  })
 })
+
