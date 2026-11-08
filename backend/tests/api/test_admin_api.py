@@ -341,3 +341,40 @@ def test_tasks_dashboard(client: TestClient, admin: Api) -> None:
     assert retried.json()["retried"] == []
     helpdesk = Api(TestClient(build_demo_app(), base_url="http://testserver")).login("bmartin")
     assert helpdesk.post(f"/tasks/{dnp(task_dn)}/run").status_code in (403, 404)
+
+
+def test_task_retry_requeues_failed_subtasks(client: TestClient, admin: Api) -> None:
+    created = client.post(
+        "/api/v2/objects/audit_task",
+        json={
+            "base": BASE,
+            "tabs": {"main": {"active": True, "values": {"cn": "purge-audit"}}},
+        },
+        headers=admin.headers,
+    )
+    task_dn = created.json()["dn"]
+    directory = cast("AppState", cast("FastAPI", client.app).state.heracles).directories["main"]
+    failed_dn = f"cn=sub-failed,{task_dn}"
+    done_dn = f"cn=sub-done,{task_dn}"
+    for sub_dn, status in ((failed_dn, "Failed"), (done_dn, "Done")):
+        directory.add(
+            sub_dn,
+            {
+                "objectClass": [b"fdTasksGranular"],
+                "cn": [sub_dn.split(",")[0].split("=")[1].encode()],
+                "fdTasksGranularMaster": [task_dn.encode()],
+                "fdTasksGranularStatus": [status.encode()],
+            },
+        )
+    row = admin.get("/tasks").json()["tasks"][0]
+    assert row["subtasks"] == {"total": 2, "done": 1, "failed": 1}
+    assert row["failed_subtasks"] == [failed_dn]
+
+    retried = admin.post(f"/tasks/{dnp(task_dn)}/retry").json()
+    assert retried["retried"] == [failed_dn]
+    entry = directory.get(failed_dn)
+    assert entry is not None and entry.text("fdTasksGranularStatus") == "Activated"
+    assert entry.text("fdTasksGranularNextExec")
+    untouched = directory.get(done_dn)
+    assert untouched is not None and untouched.text("fdTasksGranularStatus") == "Done"
+    assert admin.get("/tasks").json()["tasks"][0]["subtasks"]["failed"] == 0
