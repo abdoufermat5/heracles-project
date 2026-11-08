@@ -471,9 +471,12 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
             if info.acl_category == "tasks"
         )
         config = can(CONFIG_KEY)
+        acl = can(ROLE_KEY) or can(ASSIGNMENT_KEY)
         return {
             "is_admin": domain.is_admin(user.dn),
-            "acl": can(ROLE_KEY) or can(ASSIGNMENT_KEY),
+            # administration console (else the self-service portal)
+            "console": evaluator is None or acl or config or evaluator.manages_others(),
+            "acl": acl,
             "config": config,
             "config_write": rights_of(user, domain, CONFIG_KEY).write,
             "hooks": config,

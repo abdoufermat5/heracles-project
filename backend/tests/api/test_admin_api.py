@@ -74,6 +74,7 @@ def test_capabilities(client: TestClient) -> None:
     user = Api(TestClient(build_demo_app(), base_url="http://testserver")).login("bmartin")
     assert user.get("/capabilities").json() == {
         "is_admin": False,
+        "console": False,
         "acl": False,
         "config": False,
         "config_write": False,
@@ -85,6 +86,11 @@ def test_capabilities(client: TestClient) -> None:
     assert user.get("/acl/roles").status_code == 403
     assert user.get("/config").status_code == 403
     assert user.get("/checks").status_code == 403
+
+
+def test_console_is_for_people_who_manage_others(client: TestClient) -> None:
+    assert Api(client).login("admin").get("/capabilities").json()["console"] is True
+    assert Api(client).login("helpdesk").get("/capabilities").json()["console"] is True
 
 
 def test_helpdesk_cannot_manage(client: TestClient) -> None:

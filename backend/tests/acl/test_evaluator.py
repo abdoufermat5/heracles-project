@@ -369,3 +369,12 @@ def test_skip_write_is_subset_of_full(assigns: list[tuple[str, str, str]]) -> No
         assert ro.issubset(full)
         assert not (ro.write or ro.create or ro.delete or ro.move)
         assert ro.read == full.read
+
+
+def test_manages_others_ignores_read_only_and_self_only_roles() -> None:
+    assert _evaluator([]).manages_others() is False
+    ROLE_TEMPLATES.setdefault("readers", ["0:user/user;r"])
+    assert _evaluator([("readers", BASE, "subtree")]).manages_others() is False
+    assert _evaluator([("e", BASE, "subtree")]).manages_others() is False  # self-only
+    assert _evaluator([("d", SALES, "subtree")]).manages_others() is True
+    assert AclEvaluator(_evaluator([])._resolved, ignore_acl=True).manages_others() is True  # pyright: ignore[reportPrivateUsage]

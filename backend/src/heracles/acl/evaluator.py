@@ -20,6 +20,10 @@ def object_key(category: str, tab: str) -> str:
     return f"{category}/{tab}"
 
 
+def _changes_others(rights: Rights) -> bool:
+    return not rights.self_only and (rights.write or rights.create or rights.delete or rights.move)
+
+
 class AclEvaluator:
     """Answers ``permissions(dn, object, attribute)`` for one connected user.
 
@@ -106,6 +110,24 @@ class AclEvaluator:
     @staticmethod
     def _attribute_rights(block: AclBlock, attribute: str, *, own: bool) -> Rights:
         return block.attribute_rights(attribute, own=own).union(block.rights)
+
+    def manages_others(self) -> bool:
+        """True when some role lets the user change entries other than their own.
+
+        Read-only rights (a directory everyone may browse) and self-only rights
+        (edit my own phone number) do not count: such users get the self-service
+        portal, not the administration console.
+        """
+        if self._ignore:
+            return True
+        for rules in self._resolved.rules.values():
+            for rule in rules:
+                for block in rule.blocks.values():
+                    if _changes_others(block.rights) or any(
+                        _changes_others(r) for _, r in block.attributes
+                    ):
+                        return True
+        return False
 
     # --------------------------------------------------------------- helpers
 
