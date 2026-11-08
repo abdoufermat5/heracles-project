@@ -168,6 +168,8 @@ class Attribute[T](ABC):
             "default": self.to_json(self.default),
             "constraints": self.constraints(),
         }
+        if not self.stored:
+            out["stored"] = False  # virtual attribute: not available in templates
         out.update(self.describe_extra())
         return out
 

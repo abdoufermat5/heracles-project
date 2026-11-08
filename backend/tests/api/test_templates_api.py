@@ -172,3 +172,14 @@ def test_template_acl(app_client: TestClient, admin: Api) -> None:
     assert user.get(f"/types/user/templates/{q(dn)}").status_code == 403
     assert user.post("/types/user/templates", STAFF_BODY).status_code == 403
     assert user.delete(f"/types/user/templates/{q(dn)}").status_code == 403
+
+
+def test_descriptors_flag_template_support_and_virtual_attributes(admin: Api) -> None:
+    user = admin.get("/types/user").json()
+    assert user["supports_templates"] is True
+    attrs = {
+        a["name"]: a for tab in user["tabs"] for sec in tab["sections"] for a in sec["attributes"]
+    }
+    assert attrs["roles"]["stored"] is False  # memberships live on the role entries
+    assert "stored" not in attrs["uid"]
+    assert admin.get("/types/department").json()["supports_templates"] is False
