@@ -80,6 +80,10 @@ class CasClient:
 
 def parse_validation(body: str) -> CasUser:
     """Parse a ``serviceValidateResponse`` document."""
+    # A service response never carries a DTD: refuse entity declarations outright
+    # (entity-expansion bombs) instead of relying on the parser's own limits.
+    if "<!DOCTYPE" in body.upper() or "<!ENTITY" in body.upper():
+        raise CasError("malformed CAS answer")
     try:
         root = ElementTree.fromstring(body)  # noqa: S314
     except ElementTree.ParseError as exc:

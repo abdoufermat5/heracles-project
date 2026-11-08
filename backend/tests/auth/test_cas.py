@@ -118,3 +118,14 @@ def test_effective_sso_keeps_yaml_when_the_entry_stores_nothing() -> None:
     settings = SsoSettings(login_method="cas", cas_host="yaml.example.org")
     cfg = effective_sso(settings, directory)
     assert cfg.login_method == "cas" and cfg.cas_host == "yaml.example.org"
+
+
+def test_validation_refuses_entity_declarations() -> None:
+    bomb = (
+        '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY a "aaaa"><!ENTITY b "&a;&a;&a;&a;">]>'
+        '<cas:serviceResponse xmlns:cas="http://www.yale.edu/tp/cas">'
+        "<cas:authenticationSuccess><cas:user>&b;</cas:user></cas:authenticationSuccess>"
+        "</cas:serviceResponse>"
+    )
+    with pytest.raises(CasError):
+        parse_validation(bomb)
