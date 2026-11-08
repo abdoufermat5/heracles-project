@@ -269,3 +269,14 @@ PLUGIN_OBJECT_CLASSES: Final = frozenset(
     }
 )
 """objectClasses used by the first-party plugins (standard and compatibility schemas)."""
+
+# --- P3 objects ---
+TEMPLATE_FIELD_ATTR: Final = "fdTemplateField"
+"""Multi-valued attribute of a template entry; each value is ``<attribute>:<value>``."""
+
+INCREMENTAL_STATES_ATTR: Final = "fdIncrementalModifierStates"
+"""Attribute of the main configuration entry holding incremental counters (``<id>;<value>``)."""
+
+TEMPLATES_RDN: Final = "ou=templates"
+"""Container of the templates of a type, relative to the type's own container."""
+# --- end P3 objects ---
