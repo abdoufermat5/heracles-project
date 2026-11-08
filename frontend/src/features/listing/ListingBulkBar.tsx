@@ -1,4 +1,4 @@
-import { Lock, LockOpen, Trash2, X } from 'lucide-react'
+import { Copy, FolderInput, Lock, LockOpen, Pencil, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 
@@ -7,6 +7,11 @@ interface ListingBulkBarProps {
   selectedCount: number
   onLock?: (doLock: boolean) => void
   onDelete: () => void
+  /** Multiple edit of the selection. */
+  onEdit?: () => void
+  /** Copy / move the selection to another department. */
+  onCopy?: () => void
+  onMove?: () => void
   onClearSelection: () => void
   isLocking?: boolean
   isDeleting?: boolean
@@ -20,6 +25,9 @@ export function ListingBulkBar({
   selectedCount,
   onLock,
   onDelete,
+  onEdit,
+  onCopy,
+  onMove,
   onClearSelection,
   isLocking = false,
   isDeleting = false,
@@ -62,6 +70,25 @@ export function ListingBulkBar({
               {t('listing.unlock')}
             </Button>
           </>
+        )}
+
+        {onEdit && (
+          <Button size="sm" variant="ghost" className={darkGhost} onClick={onEdit}>
+            <Pencil className="size-3.5" aria-hidden />
+            {t('bulkEdit.action')}
+          </Button>
+        )}
+        {onCopy && (
+          <Button size="sm" variant="ghost" className={darkGhost} onClick={onCopy}>
+            <Copy className="size-3.5" aria-hidden />
+            {t('copy.copyTo')}
+          </Button>
+        )}
+        {onMove && (
+          <Button size="sm" variant="ghost" className={darkGhost} onClick={onMove}>
+            <FolderInput className="size-3.5" aria-hidden />
+            {t('copy.moveTo')}
+          </Button>
         )}
 
         <Button

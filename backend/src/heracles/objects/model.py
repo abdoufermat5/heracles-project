@@ -62,6 +62,8 @@ class Tab:
     requires: ClassVar[Sequence[str]] = ()
     #: ACL key of the tab inside its type's ACL category (defaults to ``name``).
     acl_key: ClassVar[str] = ""
+    #: Attributes that must be unique per object (cleared when the object is copied).
+    unique_attributes: ClassVar[Sequence[str]] = ()
     sections: ClassVar[tuple[Section, ...]] = ()
 
     def __init_subclass__(cls, **kwargs: Any) -> None:

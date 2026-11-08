@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Download, MoreHorizontal, Plus, RefreshCw } from 'lucide-react'
+import { ArchiveRestore, Download, MoreHorizontal, Plus, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TypeDescriptor, TypeSummary } from '@/api/types'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,8 @@ interface ListingHeaderProps {
   isFetching: boolean
   onRefresh: () => void
   onExportCsv: () => void
+  /** Opens the "restore a deleted object" dialog (needs snapshots). */
+  onRestoreDeleted?: () => void
 }
 
 export function ListingHeader({
@@ -32,6 +34,7 @@ export function ListingHeader({
   isFetching,
   onRefresh,
   onExportCsv,
+  onRestoreDeleted,
 }: ListingHeaderProps) {
   const { t } = useTranslation()
 
@@ -71,11 +74,17 @@ export function ListingHeader({
               <MoreHorizontal aria-hidden />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem onClick={onExportCsv} className="gap-2">
               <Download className="size-3.5 text-muted-foreground" aria-hidden />
               <span>{t('listing.exportCsv')}</span>
             </DropdownMenuItem>
+            {onRestoreDeleted && (
+              <DropdownMenuItem onClick={onRestoreDeleted} className="gap-2">
+                <ArchiveRestore className="size-3.5 text-muted-foreground" aria-hidden />
+                <span>{t('snapshots.deletedAction')}</span>
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

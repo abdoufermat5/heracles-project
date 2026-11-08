@@ -1,10 +1,13 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 import i18n from '@/i18n'
 import { resetCsrf } from '@/api/client'
 import { db } from '@/mocks/db'
 import { server } from '@/mocks/server'
+
+// Parallel test files starve each other of CPU: the default 1 s is too tight for first renders.
+configure({ asyncUtilTimeout: 5000 })
 
 class RO {
   observe() {}

@@ -12,15 +12,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   ldif: string
   title: string
+  /** The server text is still being fetched. */
+  loading?: boolean
 }
 
-export function LdifDialog({ open, onOpenChange, ldif, title }: Props) {
+export function LdifDialog({ open, onOpenChange, ldif, title, loading = false }: Props) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
@@ -47,13 +50,21 @@ export function LdifDialog({ open, onOpenChange, ldif, title }: Props) {
         </DialogHeader>
 
         <ScrollArea className="h-96 w-full rounded-sm border bg-muted/40 p-3">
-          <pre className="font-dn text-xs leading-relaxed whitespace-pre-wrap text-foreground select-text">
-            {ldif}
-          </pre>
+          {loading ? (
+            <div className="space-y-2" aria-busy="true" aria-label={t('common.loading')}>
+              <Skeleton className="h-3.5 w-2/3" />
+              <Skeleton className="h-3.5 w-1/2" />
+              <Skeleton className="h-3.5 w-3/4" />
+            </div>
+          ) : (
+            <pre className="font-dn text-xs leading-relaxed whitespace-pre-wrap text-foreground select-text">
+              {ldif}
+            </pre>
+          )}
         </ScrollArea>
 
         <DialogFooter className="flex items-center justify-between sm:justify-between">
-          <Button type="button" variant="outline" size="sm" onClick={onCopy}>
+          <Button type="button" variant="outline" size="sm" onClick={onCopy} disabled={loading}>
             {copied ? <Check className="text-success" /> : <Copy />}
             {t('editor.copyLdif')}
           </Button>

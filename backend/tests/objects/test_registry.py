@@ -64,15 +64,15 @@ def test_register_and_describe_user(registry: TypeRegistry) -> None:
         {"key": "mail", "label": "Email"},
     ]
     tabs: Any = desc["tabs"]
-    assert [t["name"] for t in tabs] == ["main", "posix", "ssh"]
-    assert [t["optional"] for t in tabs] == [False, True, True]
+    assert [t["name"] for t in tabs] == ["main", "roles", "posix", "ssh"]
+    assert [t["optional"] for t in tabs] == [False, False, True, True]
     sections = tabs[0]["sections"]
     assert [s["name"] for s in sections][:2] == ["identity", "contact"]
     names = {a["name"] for s in sections for a in s["attributes"]}
     assert {"sn", "givenName", "cn", "jpegPhoto", "uid", "userPassword", "base", "manager"} <= names
     pwd = next(a for s in sections for a in s["attributes"] if a["name"] == "userPassword")
     assert pwd["kind"] == "password"
-    assert tabs[1]["sections"][0]["attributes"][2]["default"] == "/bin/bash"
+    assert tabs[2]["sections"][0]["attributes"][2]["default"] == "/bin/bash"
 
 
 def test_summaries_and_lookup(registry: TypeRegistry) -> None:
@@ -105,8 +105,8 @@ def test_attach_does_not_mutate_class() -> None:
     reg.attach_tab("user", PosixTab)
     from heracles.objects.builtin import User
 
-    assert len(User.tabs) == 1
-    assert len(reg.get("user").tabs) == 2
+    assert len(User.tabs) == 2
+    assert len(reg.get("user").tabs) == 3
 
 
 def test_plugin_enabled_only_with_object_classes() -> None:
@@ -120,11 +120,11 @@ def test_plugin_enabled_only_with_object_classes() -> None:
     register_builtin_types(reg)
     status = reg.register_plugin(plugin, {"posixaccount"})
     assert not status.enabled and status.missing_object_classes == ["shadowAccount"]
-    assert len(reg.get("user").tabs) == 1
+    assert len(reg.get("user").tabs) == 2
 
     status = reg.register_plugin(plugin, {"posixaccount", "shadowaccount"})
     assert status.enabled
-    assert len(reg.get("user").tabs) == 2
+    assert len(reg.get("user").tabs) == 3
     assert [p.enabled for p in reg.plugins] == [False, True]
 
 

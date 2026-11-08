@@ -7,50 +7,50 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useTemplates } from './api'
+
+/** Select value standing for "no template" (an empty value is reserved by the Select). */
+const NONE = '__none__'
 
 interface Props {
-  templates?: Array<{ id: string; label: string }>
+  type: string
+  /** DN of the chosen template, `null` for a blank object. */
   selected: string | null
-  onChange: (templateId: string | null) => void
+  onChange: (templateDn: string | null) => void
   disabled?: boolean
 }
 
-export function TemplatePicker({
-  templates = [],
-  selected,
-  onChange,
-  disabled,
-}: Props) {
+/** Lists the templates of a type in create mode; renders nothing when there are none. */
+export function TemplatePicker({ type, selected, onChange, disabled }: Props) {
   const { t } = useTranslation()
+  const templates = useTemplates(type)
+  const items = templates.data ?? []
 
-  if (templates.length === 0) return null
+  if (items.length === 0) return null
 
   return (
     <div className="flex items-center gap-3 rounded-md border bg-card p-3">
       <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <div className="min-w-0 flex-1">
-        <label
-          htmlFor="template-picker"
-          className="block text-[13px] font-medium text-foreground"
-        >
-          {t('editor.template')}
+        <label htmlFor="template-picker" className="block text-[13px] font-medium text-foreground">
+          {t('templates.picker')}
         </label>
-        <p className="text-[12px] text-muted-foreground">{t('editor.selectTemplate')}</p>
+        <p className="text-xs text-muted-foreground">{t('templates.pickerHelp')}</p>
       </div>
-      <div className="w-56">
+      <div className="w-64">
         <Select
-          value={selected ?? ''}
-          onValueChange={(v) => onChange(v === '' ? null : v)}
+          value={selected ?? NONE}
+          onValueChange={(v) => onChange(v === NONE ? null : v)}
           disabled={disabled}
         >
           <SelectTrigger id="template-picker" className="h-8 text-[13px]">
-            <SelectValue placeholder={t('editor.selectTemplate')} />
+            <SelectValue placeholder={t('templates.pickerPlaceholder')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">{t('editor.noTemplate')}</SelectItem>
-            {templates.map((tpl) => (
-              <SelectItem key={tpl.id} value={tpl.id}>
-                {tpl.label}
+            <SelectItem value={NONE}>{t('templates.pickerNone')}</SelectItem>
+            {items.map((tpl) => (
+              <SelectItem key={tpl.dn} value={tpl.dn}>
+                {tpl.name}
               </SelectItem>
             ))}
           </SelectContent>

@@ -370,6 +370,7 @@ class ObjectService:
             original=original,
             touched=touched,
             errors=errors if errors is not None else {},
+            policy=self.policy,
         )
 
     def _prepare(

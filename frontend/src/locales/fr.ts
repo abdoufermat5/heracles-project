@@ -1,4 +1,5 @@
 import type { Translation } from './en'
+import { objectsFr } from './objects'
 
 const fr: Translation = {
   common: {
@@ -18,6 +19,9 @@ const fr: Translation = {
     no: 'Non',
   },
   nav: { main: 'Navigation principale', dashboard: 'Tableau de bord' },
+  // --- P3 objects ---
+  ...objectsFr,
+  // --- end P3 objects ---
   categories: {
     directory: 'Annuaire',
     access: 'Accès',
@@ -179,9 +183,6 @@ const fr: Translation = {
     accountUnlockedSuccess: 'Compte déverrouillé.',
     actions: 'Actions',
     backToList: 'Retour à {{type}}',
-    template: 'Modèle',
-    selectTemplate: 'Sélectionner un modèle…',
-    noTemplate: 'Vierge (par défaut)',
     saveShortcut: 'Enregistrer les modifications (⌘S)',
     saving: 'Enregistrement…',
   },

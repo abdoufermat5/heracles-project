@@ -77,6 +77,7 @@ class TypeInfo:
             "main_attr": self.type.main_attr,
             "name_attr": self.type.name_attr,
             "columns": columns,
+            "supports_templates": bool(self.type.rdn),
             "tabs": [t.describe() for t in self.tabs],
         }
 

@@ -43,6 +43,8 @@ interface Props {
   onSave: () => void
   onDelete: () => void
   onViewLdif: () => void
+  /** Open the create form prefilled from this object (needs create rights on the type). */
+  onCopy?: () => void
   onToggleAccountLock?: () => void
 }
 
@@ -98,6 +100,7 @@ export function EditorHeader({
   onSave,
   onDelete,
   onViewLdif,
+  onCopy,
   onToggleAccountLock,
 }: Props) {
   const { t } = useTranslation()
@@ -233,6 +236,12 @@ export function EditorHeader({
                   <FileCode2 className="size-3.5 text-muted-foreground" />
                   <span>{t('editor.rawLdif')}</span>
                 </DropdownMenuItem>
+                {onCopy && (
+                  <DropdownMenuItem onClick={onCopy}>
+                    <Copy className="size-3.5 text-muted-foreground" />
+                    <span>{t('copy.editorAction')}</span>
+                  </DropdownMenuItem>
+                )}
                 {canDelete && (
                   <>
                     <DropdownMenuSeparator />

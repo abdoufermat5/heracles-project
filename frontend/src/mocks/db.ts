@@ -52,11 +52,28 @@ export const departments = [
 
 export const USER_COUNT = 200
 
+/** A snapshot as the mock API stores it. */
+export type MockSnapshot = Snapshot & { dn: string; type: string }
+
+/** An object template as the mock API stores it. */
+export interface MockTemplate {
+  dn: string
+  name: string
+  type: string
+  base: string
+  tabs: Record<string, { active: boolean; values: Record<string, string | string[]> }>
+}
+
 class Db {
   records = new Map<string, Rec>()
   locks = new Map<string, LockInfo>()
-  snapshots = new Map<string, Snapshot & { dn: string; type: string }>()
+  snapshots = new Map<string, MockSnapshot>()
   session: { user: string | null; pending: string | null } = { user: null, pending: null }
+  // --- P3 objects ---
+  templates = new Map<string, MockTemplate>()
+  /** Stored tab values of each snapshot (so a deleted object can be restored). */
+  snapshotTabs = new Map<string, Record<string, TabState>>()
+  // --- end P3 objects ---
   csrf = 'mock-csrf-token'
   nextId = 1000
   recoveryTokens = new Set<string>(['valid-token'])
@@ -69,6 +86,8 @@ class Db {
     this.records.clear()
     this.locks.clear()
     this.snapshots.clear()
+    this.templates.clear()
+    this.snapshotTabs.clear()
     this.session = { user: null, pending: null }
     this.seed()
   }
