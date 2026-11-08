@@ -127,6 +127,15 @@ describe('field components', () => {
     expect(passwordStrength('Abcdef12!xyz')).toBe(4)
   })
 
+  it('password: generates strong password when generate button is clicked', async () => {
+    const onValue = vi.fn()
+    renderWithQuery(<Harness descriptor={base({ kind: 'password' })} onValue={onValue} />)
+    const genBtn = screen.getByRole('button', { name: /Generate password/i })
+    await userEvent.click(genBtn)
+    expect(onValue).toHaveBeenCalled()
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '4')
+  })
+
   it('list: add, edit, reorder and remove entries', async () => {
     const onValue = vi.fn()
     renderWithQuery(
