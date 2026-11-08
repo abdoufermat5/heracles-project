@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import base64
 import binascii
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 
 from heracles.ldap.client import Entry
 
@@ -87,31 +87,41 @@ def _needs_base64(value: bytes) -> bool:
     return any(b in (0, 10, 13) or b > 127 for b in value)
 
 
-def _fold(line: str) -> str:
-    if len(line) <= FOLD_WIDTH:
+def _fold(line: str, width: int = FOLD_WIDTH) -> str:
+    """Wrap ``line`` after ``width`` columns (``0`` disables wrapping)."""
+    if width <= 0 or len(line) <= width:
         return line
-    parts = [line[:FOLD_WIDTH]]
-    rest = line[FOLD_WIDTH:]
+    parts = [line[:width]]
+    rest = line[width:]
     while rest:
-        parts.append(" " + rest[: FOLD_WIDTH - 1])
-        rest = rest[FOLD_WIDTH - 1 :]
+        parts.append(" " + rest[: width - 1])
+        rest = rest[width - 1 :]
     return "\n".join(parts)
 
 
-def _format(name: str, value: bytes) -> str:
+def _format(name: str, value: bytes, width: int = FOLD_WIDTH) -> str:
     if _needs_base64(value):
-        return _fold(f"{name}:: {base64.b64encode(value).decode('ascii')}")
-    return _fold(f"{name}: {value.decode('ascii')}")
+        return _fold(f"{name}:: {base64.b64encode(value).decode('ascii')}", width)
+    return _fold(f"{name}: {value.decode('ascii')}", width)
 
 
-def dump_entry(entry: Entry) -> str:
-    """Serialize one entry (no trailing blank line)."""
-    lines = [_format("dn", entry.dn.encode("utf-8"))]
+def dump_entry(entry: Entry, *, wrap: int = FOLD_WIDTH) -> str:
+    """Serialize one entry (no trailing blank line); ``wrap`` 0 disables line folding."""
+    lines = [_format("dn", entry.dn.encode("utf-8"), wrap)]
     for name, values in entry.attrs.items():
-        lines.extend(_format(name, v) for v in values)
+        lines.extend(_format(name, v, wrap) for v in values)
     return "\n".join(lines) + "\n"
 
 
-def dump_ldif(entries: Iterable[Entry]) -> str:
+def dump_ldif(entries: Iterable[Entry], *, wrap: int = FOLD_WIDTH) -> str:
     """Serialize entries, separated by blank lines."""
-    return "\n".join(dump_entry(e) for e in entries)
+    return "\n".join(dump_entry(e, wrap=wrap) for e in entries)
+
+
+def iter_ldif(entries: Iterable[Entry], *, wrap: int = FOLD_WIDTH) -> Iterator[str]:
+    """Serialize entries lazily: one chunk per entry, blank-line separated (for streaming)."""
+    first = True
+    for entry in entries:
+        chunk = dump_entry(entry, wrap=wrap)
+        yield chunk if first else "\n" + chunk
+        first = False

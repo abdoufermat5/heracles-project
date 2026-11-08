@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from heracles.auth.oidc import OidcSettings
 from heracles.auth.recovery import RecoveryConfig
+from heracles.auth.sso import SsoSettings
 from heracles.auth.webauthn import WebAuthnSettings
 
 
@@ -86,3 +87,6 @@ class ApiSettings(BaseModel):
     enable_docs: bool = False
     #: Issuer name shown in authenticator apps.
     totp_issuer: str = "Heracles"
+    # --- P3 compat ---
+    #: Login methods (YAML defaults; the directory-stored configuration overrides them).
+    sso: SsoSettings = Field(default_factory=SsoSettings)

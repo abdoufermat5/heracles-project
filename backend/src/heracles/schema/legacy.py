@@ -469,3 +469,24 @@ CONFIG_ENTRY_CLASSES: Final = (
     MAIL_TEMPLATE_CONFIG_CLASS,
 )
 """Classes the configuration entry may carry (main first)."""
+
+# --- P3 compat ---
+@dataclass(frozen=True, slots=True)
+class SsoConfigAttrs:
+    """Single-valued attributes of the main configuration entry describing the login methods."""
+
+    LOGIN_METHOD: str = "fdLoginMethod"
+    HTTP_AUTH_ACTIVATED: str = "fdHttpAuthActivated"
+    HTTP_HEADER_AUTH_ACTIVATED: str = "fdHttpHeaderAuthActivated"
+    HTTP_HEADER_AUTH_HEADER_NAME: str = "fdHttpHeaderAuthHeaderName"
+    CAS_ACTIVATED: str = "fdCasActivated"
+    CAS_HOST: str = "fdCasHost"
+    CAS_PORT: str = "fdCasPort"
+    CAS_CONTEXT: str = "fdCasContext"
+    CAS_SERVER_CA_CERT_PATH: str = "fdCasServerCaCertPath"
+    CAS_VERBOSE: str = "fdCasVerbose"
+    CAS_LIBRARY_BOOL: str = "fdCasLibraryBool"
+    CAS_CLIENT_SERVICE_NAME: str = "fdCasClientServiceName"
+
+
+SSO_ATTR: Final = SsoConfigAttrs()

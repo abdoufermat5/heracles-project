@@ -33,6 +33,7 @@ import { ConfigPage } from '@/features/admin/ConfigPage'
 import { HealthPage } from '@/features/admin/HealthPage'
 import { PluginsPage } from '@/features/admin/PluginsPage'
 import { TasksPage } from '@/features/admin/TasksPage'
+import { IoPage } from '@/features/io/IoPage'
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -70,8 +71,9 @@ function safeRedirect(v: unknown): string | undefined {
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
-  validateSearch: (s: Record<string, unknown>): { redirect?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { redirect?: string; sso_error?: string } => ({
     redirect: safeRedirect(s.redirect),
+    sso_error: s.sso_error === undefined ? undefined : String(s.sso_error),
   }),
   component: LoginPage,
 })
@@ -191,6 +193,9 @@ const adminHealthRoute = adminRoute('/admin/health', 'health', HealthPage)
 const adminPluginsRoute = adminRoute('/admin/plugins', 'plugins', PluginsPage)
 const adminTasksRoute = adminRoute('/admin/tasks', 'tasks', TasksPage)
 
+// --- P3 compat ---
+const ioRoute = createRoute({ getParentRoute: () => appRoute, path: '/io', component: IoPage })
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   secondFactorRoute,
@@ -204,6 +209,7 @@ const routeTree = rootRoute.addChildren([
     templateNewRoute,
     templateEditRoute,
     editRoute,
+    ioRoute,
     adminAccessRoute,
     adminConfigRoute,
     adminHealthRoute,

@@ -1,3 +1,4 @@
+import { casLogoutUrl, hasSsoCookie, navigateExternal } from '@/features/auth/sso'
 import { dnPath, request, resetCsrf } from './client'
 import type {
   CreateObjectRequest,
@@ -31,6 +32,11 @@ export const api = {
   secondFactor: (body: SecondFactorRequest) =>
     request<{ status: 'ok' }>('/auth/second-factor', { method: 'POST', body, silent401: true }),
   logout: async () => {
+    if (hasSsoCookie()) {
+      // opened through CAS: the server ends our session and the CAS one, then returns to /login
+      navigateExternal(casLogoutUrl())
+      return
+    }
     await request<undefined>('/auth/logout', { method: 'POST' })
     resetCsrf()
   },

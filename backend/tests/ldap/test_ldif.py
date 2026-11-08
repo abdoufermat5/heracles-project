@@ -80,3 +80,16 @@ def test_empty() -> None:
 def test_errors(bad: str) -> None:
     with pytest.raises(LdifError):
         parse_ldif(bad)
+
+
+def test_wrap_columns() -> None:
+    from heracles.ldap.ldif import dump_entry, iter_ldif
+
+    entry = Entry("cn=x", {"description": [b"a" * 100]})
+    wrapped = dump_entry(entry, wrap=40)
+    assert all(len(line) <= 40 for line in wrapped.splitlines())
+    assert parse_ldif(wrapped)[0].text("description") == "a" * 100
+    flat = dump_entry(entry, wrap=0)
+    assert len(flat.splitlines()) == 2 and "a" * 100 in flat
+    chunks = list(iter_ldif([entry, entry], wrap=0))
+    assert "".join(chunks) == dump_ldif([entry, entry], wrap=0)

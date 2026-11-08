@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import {
+  ArrowLeftRight,
   HeartPulse,
   LayoutDashboard,
   ListChecks,
@@ -12,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { useDashboard, useTypes } from '@/api/hooks'
 import { CATEGORIES } from '@/api/types'
 import { useCapabilities } from '@/features/admin/hooks'
+import { useIoAccess } from '@/features/io/hooks'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { TypeIcon } from '@/lib/icons'
@@ -35,7 +37,7 @@ function NavLink({
   label: string
   count?: number | null
   children: React.ReactNode
-  to: '/' | '/types/$type' | AdminPath
+  to: '/' | '/types/$type' | AdminPath | '/io'
   params?: { type: string }
   exact?: boolean
 }) {
@@ -140,6 +142,7 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
         )
       })}
       <AdminNavGroup collapsed={collapsed} />
+      <IoNavEntry collapsed={collapsed} />
     </nav>
   )
 }
@@ -180,6 +183,27 @@ function AdminNavGroup({ collapsed }: { collapsed: boolean }) {
           <Icon className="size-4 shrink-0" aria-hidden />
         </NavLink>
       ))}
+    </div>
+  )
+}
+
+// --- P3 compat ---
+function IoNavEntry({ collapsed }: { collapsed: boolean }) {
+  const { t } = useTranslation()
+  const { data } = useIoAccess()
+  if (!data || !(data.ldif_export || data.ldif_import || data.csv_import)) return null
+  return (
+    <div className="space-y-0.5">
+      {!collapsed ? (
+        <h2 className="label-caps px-3 pt-4 pb-1.5 text-sidebar-muted select-none">
+          {t('io.navSection')}
+        </h2>
+      ) : (
+        <div className="mx-1.5 my-1.5 h-px bg-sidebar-border" role="separator" />
+      )}
+      <NavLink to="/io" collapsed={collapsed} label={t('io.navLabel')}>
+        <ArrowLeftRight className="size-4 shrink-0" aria-hidden />
+      </NavLink>
     </div>
   )
 }

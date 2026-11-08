@@ -1,74 +1,88 @@
-"""API v1 (compatibility REST API) — router skeleton.
+"""API v1: the compatibility REST API used by existing scripts.
 
-Sessions are identified by the ``X-Session-Token`` header instead of a cookie,
-so v1 is exempt from CSRF protection.
-
-TODO: the remaining v1 resources (objects, types, ...) once the object layer
-is merged. Only ``/login`` and ``/logout`` exist for now. Second-factor
-accounts cannot use v1 login.
+Sessions are identified by the ``Session-Token`` header (the older
+``X-Session-Token`` spelling is also accepted) instead of a cookie, so v1 is
+exempt from CSRF protection. Tabs and attributes are addressed by their legacy
+names, see :mod:`heracles.api.v1.names`. Accounts with a second factor cannot
+use API v1: the login is refused with a 401 explaining it. The contract is
+published at ``/api/v1/openapi.json``.
 """
 
 from __future__ import annotations
 
-import math
-from typing import Annotated
+import copy
+from typing import cast
 
-from fastapi import APIRouter, Header, Request
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Request
 
-from heracles.api.deps import StateDep, client_ip
-from heracles.api.errors import ApiError, unauthenticated, validation
-from heracles.auth.login import InvalidLoginError, authenticate_bind
+from heracles.api.v1 import misc, objects, session
+from heracles.api.v1.common import V1Route
 
-SESSION_HEADER = "X-Session-Token"
+PREFIX = "/api/v1"
 
-router = APIRouter(prefix="/api/v1", tags=["v1"])
-
-
-class V1LoginBody(BaseModel):
-    username: Annotated[str, Field(min_length=1, max_length=256)]
-    password: Annotated[str, Field(max_length=1024)]
-    directory: str | None = None
+router = APIRouter(prefix=PREFIX)
+router.include_router(session.router)
+router.include_router(objects.router)
+router.include_router(misc.router)
 
 
-class V1LoginResponse(BaseModel):
-    token: str
+def _refs(node: object, found: set[str]) -> None:
+    if isinstance(node, dict):
+        for key, value in cast("dict[str, object]", node).items():
+            if key == "$ref" and isinstance(value, str):
+                found.add(value.rsplit("/", 1)[-1])
+            else:
+                _refs(value, found)
+    elif isinstance(node, list):
+        for item in cast("list[object]", node):
+            _refs(item, found)
 
 
-@router.post("/login")
-def login(body: V1LoginBody, request: Request, state: StateDep) -> V1LoginResponse:
-    directory_id = body.directory or next(iter(state.directories), "")
-    directory = state.directories.get(directory_id)
-    if directory is None:
-        raise validation("Unknown directory", {"directory": "Unknown directory"})
-    key = state.limiter.key(client_ip(request, state), body.username)
-    wait = state.limiter.retry_after(key)
-    if wait > 0:
-        raise ApiError(
-            429,
-            "rate_limited",
-            "Too many attempts, try again later",
-            headers={"Retry-After": str(math.ceil(wait))},
-        )
-    try:
-        user_dn = authenticate_bind(directory, state.login_config, body.username, body.password)
-    except InvalidLoginError:
-        state.limiter.record_failure(key)
-        raise unauthenticated("Invalid username or password") from None
-    if state.second_factor.methods_for(user_dn):
-        raise unauthenticated("Second factor accounts cannot use API v1")
-    state.limiter.record_success(key)
-    session = state.sessions.create(user_dn, directory_id)
-    return V1LoginResponse(token=session.id)
+def build_openapi(request: Request) -> dict[str, object]:
+    """OpenAPI description of the v1 routes only (paths relative to ``/api/v1``)."""
+    full = copy.deepcopy(request.app.openapi())
+    paths: dict[str, object] = {}
+    for path, item in cast("dict[str, object]", full.get("paths", {})).items():
+        if path.startswith(PREFIX + "/"):
+            paths[path.removeprefix(PREFIX)] = item
+    used: set[str] = set()
+    _refs(paths, used)
+    all_schemas = cast("dict[str, object]", full.get("components", {}).get("schemas", {}))
+    pending = list(used)
+    while pending:
+        name = pending.pop()
+        extra: set[str] = set()
+        _refs(all_schemas.get(name), extra)
+        for other in extra - used:
+            used.add(other)
+            pending.append(other)
+    schema: dict[str, object] = {
+        "openapi": full.get("openapi", "3.1.0"),
+        "info": {
+            "title": "Heracles REST API v1",
+            "version": "1.0.0",
+            "description": "Compatibility REST API.",
+        },
+        "servers": [{"url": PREFIX}],
+        "security": [{"session": []}],
+        "paths": paths,
+        "components": {
+            "schemas": {k: v for k, v in all_schemas.items() if k in used},
+            "securitySchemes": {
+                "session": {"type": "apiKey", "name": "Session-Token", "in": "header"}
+            },
+        },
+    }
+    for path in ("/login", "/directories"):
+        item = cast("dict[str, dict[str, object]]", paths.get(path, {}))
+        for operation in item.values():
+            operation["security"] = []
+    return schema
 
 
-@router.post("/logout", status_code=204)
-def logout(
-    state: StateDep,
-    token: Annotated[str | None, Header(alias=SESSION_HEADER)] = None,
-) -> None:
-    if token:
-        session = state.sessions.delete(token)
-        if session is not None:
-            for hook in state.logout_hooks:
-                hook(session)
+@router.get("/openapi.json", include_in_schema=False)
+def openapi(request: Request) -> dict[str, object]:
+    return build_openapi(request)
+
+
+__all__ = ["V1Route", "router"]
