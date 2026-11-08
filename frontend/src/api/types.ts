@@ -245,7 +245,14 @@ export interface TabAcl {
   attributes: Record<string, string>
 }
 
-export interface ObjectDetail {
+export interface TriggerOutput {
+  /** Failed `post*` triggers and other non-blocking problems reported by the directory. */
+  warnings?: string[]
+  /** Output of successful triggers, when the configuration asks to show it. */
+  messages?: string[]
+}
+
+export interface ObjectDetail extends TriggerOutput {
   dn: string
   type: string
   tabs: Record<string, TabState>

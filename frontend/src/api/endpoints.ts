@@ -16,6 +16,7 @@ import type {
   RecoveryRequest,
   SecondFactorRequest,
   Snapshot,
+  TriggerOutput,
   TreeNode,
   TypeDescriptor,
   TypeSummary,
@@ -60,7 +61,10 @@ export const api = {
   getObject: (type: string, dn: string) =>
     request<ObjectDetail>(`/objects/${encodeURIComponent(type)}/${dnPath(dn)}`),
   createObject: (type: string, body: CreateObjectRequest) =>
-    request<{ dn: string }>(`/objects/${encodeURIComponent(type)}`, { method: 'POST', body }),
+    request<{ dn: string } & TriggerOutput>(`/objects/${encodeURIComponent(type)}`, {
+      method: 'POST',
+      body,
+    }),
   patchObject: (type: string, dn: string, body: PatchObjectRequest) =>
     request<ObjectDetail>(`/objects/${encodeURIComponent(type)}/${dnPath(dn)}`, {
       method: 'PATCH',

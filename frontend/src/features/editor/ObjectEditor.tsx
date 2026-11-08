@@ -18,6 +18,7 @@ import {
   useTypes,
 } from '@/api/hooks'
 import type { LockInfo, ObjectDetail, TypeDescriptor } from '@/api/types'
+import { showTriggerOutput } from '@/features/editor/triggerOutput'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -327,6 +328,7 @@ function EditorInner({ desc, detail, source }: InnerProps) {
             base,
             tabs: buildCreateTabs(desc, values, active),
           })
+          showTriggerOutput(res)
           toast.success(t('editor.created', { type: desc.label }))
           baseline.current = { values, active }
           bypassGuard.current = true
@@ -341,6 +343,7 @@ function EditorInner({ desc, detail, source }: InnerProps) {
         let result: ObjectDetail = detail
         if (Object.keys(changes).length > 0) {
           result = await patch.mutateAsync({ tabs: changes })
+          showTriggerOutput(result)
         }
         let finalDn = result.dn
         const newBase = values.main?.base
