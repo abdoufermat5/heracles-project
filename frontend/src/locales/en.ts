@@ -1,3 +1,6 @@
+import { peopleEn } from './people'
+import { accessEn } from './access'
+import { settingsEn } from './settings'
 import { objectsEn } from './objects'
 import { adminEn } from '@/features/admin/locale-en'
 
@@ -21,6 +24,9 @@ const en = {
   nav: { main: 'Main navigation', dashboard: 'Dashboard', people: 'People', organization: 'Organization' },
   // --- P3 objects ---
   ...objectsEn,
+  ...peopleEn,
+  ...accessEn,
+  ...settingsEn,
   // --- end P3 objects ---
   categories: {
     directory: 'Directory',

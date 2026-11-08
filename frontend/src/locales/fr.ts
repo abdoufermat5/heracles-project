@@ -1,3 +1,6 @@
+import { peopleFr } from './people'
+import { accessFr } from './access'
+import { settingsFr } from './settings'
 import type { Translation } from './en'
 import { objectsFr } from './objects'
 import { adminFr } from '@/features/admin/locale-fr'
@@ -22,6 +25,9 @@ const fr: Translation = {
   nav: { main: 'Navigation principale', dashboard: 'Tableau de bord', people: 'Personnes', organization: 'Organisation' },
   // --- P3 objects ---
   ...objectsFr,
+  ...peopleFr,
+  ...accessFr,
+  ...settingsFr,
   // --- end P3 objects ---
   categories: {
     directory: 'Annuaire',
