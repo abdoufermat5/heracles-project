@@ -25,6 +25,7 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { ObjectEditor } from '@/features/editor/ObjectEditor'
 import { ObjectListPage } from '@/features/listing/ObjectListPage'
 import { MePage } from '@/features/me/MePage'
+import { IoPage } from '@/features/io/IoPage'
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -62,8 +63,9 @@ function safeRedirect(v: unknown): string | undefined {
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
-  validateSearch: (s: Record<string, unknown>): { redirect?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { redirect?: string; sso_error?: string } => ({
     redirect: safeRedirect(s.redirect),
+    sso_error: s.sso_error === undefined ? undefined : String(s.sso_error),
   }),
   component: LoginPage,
 })
@@ -137,12 +139,15 @@ const editRoute = createRoute({
   },
 })
 
+// --- P3 compat ---
+const ioRoute = createRoute({ getParentRoute: () => appRoute, path: '/io', component: IoPage })
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   secondFactorRoute,
   recoveryRoute,
   recoveryConfirmRoute,
-  appRoute.addChildren([dashboardRoute, meRoute, listRoute, newRoute, editRoute]),
+  appRoute.addChildren([dashboardRoute, meRoute, listRoute, newRoute, editRoute, ioRoute]),
 ])
 
 export function createAppRouter(queryClient: QueryClient, history?: RouterHistory) {

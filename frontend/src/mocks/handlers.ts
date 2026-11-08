@@ -1,6 +1,7 @@
 import { http, HttpResponse, delay, type HttpHandler } from 'msw'
 import type { ErrorCode, ObjectListItem, TabState } from '@/api/types'
 import { BASE_DN, db } from './db'
+import { ioHandlers } from './io'
 import { typeSummaries } from './typeDefs'
 
 const B = '/api/v2'
@@ -402,4 +403,7 @@ export const handlers: HttpHandler[] = [
       { mutation: true },
     ),
   ),
+
+  // --- P3 compat ---
+  ...ioHandlers,
 ]
