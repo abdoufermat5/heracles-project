@@ -13,7 +13,7 @@ import type {
   RightsReport,
   TaskRow,
 } from '@/features/admin/types'
-import { BASE_DN, db } from './db'
+import { BASE_DN, db, departments } from './db'
 
 const A = '/api/v2/admin'
 
@@ -38,18 +38,35 @@ const catalog: Catalog = {
       objects: [
         {
           key: 'user/user',
-          label: 'User',
+          label: 'User account',
           type: 'user',
           attributes: [
+            { name: 'cn', label: 'Full name' },
             { name: 'sn', label: 'Surname' },
+            { name: 'givenName', label: 'First name' },
+            { name: 'uid', label: 'Login' },
+            { name: 'mail', label: 'Email' },
+            { name: 'telephoneNumber', label: 'Phone' },
+            { name: 'employeeType', label: 'Contract type' },
             { name: 'userPassword', label: 'Password' },
           ],
         },
         {
           key: 'user/posixAccount',
-          label: 'Unix',
+          label: 'Unix account',
           type: 'user',
-          attributes: [{ name: 'loginShell', label: 'Shell' }],
+          attributes: [
+            { name: 'uidNumber', label: 'User ID' },
+            { name: 'gidNumber', label: 'Group ID' },
+            { name: 'homeDirectory', label: 'Home folder' },
+            { name: 'loginShell', label: 'Shell' },
+          ],
+        },
+        {
+          key: 'user/mailAccount',
+          label: 'Mail account',
+          type: 'user',
+          attributes: [{ name: 'mailQuota', label: 'Mailbox quota' }],
         },
       ],
     },
@@ -58,7 +75,67 @@ const catalog: Catalog = {
       label: 'Groups',
       wildcard: 'group/0',
       objects: [
-        { key: 'group/group', label: 'Group', type: 'group', attributes: [{ name: 'cn', label: 'Name' }] },
+        {
+          key: 'group/group',
+          label: 'Group',
+          type: 'group',
+          attributes: [
+            { name: 'cn', label: 'Name' },
+            { name: 'description', label: 'Description' },
+            { name: 'member', label: 'Members' },
+          ],
+        },
+      ],
+    },
+    {
+      category: 'department',
+      label: 'Departments',
+      wildcard: 'department/0',
+      objects: [
+        {
+          key: 'department/department',
+          label: 'Department',
+          type: 'department',
+          attributes: [
+            { name: 'ou', label: 'Name' },
+            { name: 'description', label: 'Description' },
+          ],
+        },
+      ],
+    },
+    {
+      category: 'role',
+      label: 'Organizational roles',
+      wildcard: 'role/0',
+      objects: [
+        {
+          key: 'role/role',
+          label: 'Organizational role',
+          type: 'role',
+          attributes: [
+            { name: 'cn', label: 'Name' },
+            { name: 'roleOccupant', label: 'Members' },
+          ],
+        },
+      ],
+    },
+    {
+      category: 'acl',
+      label: 'Access control',
+      wildcard: 'acl/0',
+      objects: [
+        {
+          key: 'acl/aclRole',
+          label: 'Role definition',
+          type: 'role',
+          attributes: [{ name: 'cn', label: 'Name' }],
+        },
+        {
+          key: 'acl/aclAssignment',
+          label: 'Assignment',
+          type: 'role',
+          attributes: [{ name: 'cn', label: 'Name' }],
+        },
       ],
     },
   ],
@@ -120,58 +197,167 @@ const SECTIONS = [
   'misc',
 ]
 
+function role(
+  cn: string,
+  description: string,
+  blocks: AclRole['templates'][number]['blocks'],
+  raw: string,
+): AclRole {
+  return {
+    dn: `cn=${cn},${ROLES_DN}`,
+    cn,
+    description,
+    templates: [{ index: 0, raw, blocks }],
+  }
+}
+
 function initialRoles(): AclRole[] {
   return [
-    {
-      dn: `cn=manager,${ROLES_DN}`,
-      cn: 'manager',
-      description: 'All rights on users',
-      used_by: 1,
-      templates: [
+    role(
+      'manager',
+      'Full management of user accounts',
+      [
+        { object: 'user/user', rights: 'cmdrw', attributes: [] },
+        { object: 'user/posixAccount', rights: 'cmdrw', attributes: [] },
+      ],
+      '0:user/user;cmdrw,user/posixAccount;cmdrw',
+    ),
+    role(
+      'helpdesk',
+      'Resets passwords and keeps contact details up to date',
+      [
         {
-          raw: '0:user/user;cmdrw,user/posixAccount;cmdrw',
-          index: 0,
-          blocks: [
-            { object: 'user/user', rights: 'cmdrw', attributes: [] },
-            { object: 'user/posixAccount', rights: 'cmdrw', attributes: [] },
+          object: 'user/user',
+          rights: 'rw',
+          attributes: [
+            { name: 'userPassword', rights: 'w' },
+            { name: 'telephoneNumber', rights: 'rw' },
           ],
         },
+        { object: 'group/group', rights: 'r', attributes: [] },
       ],
-    },
-    {
-      dn: `cn=editownpwd,${ROLES_DN}`,
-      cn: 'editownpwd',
-      description: 'Users edit their own password',
-      used_by: 0,
-      templates: [
+      '0:user/user;rw#userPassword;w#telephoneNumber;rw,group/group;r',
+    ),
+    role(
+      'hr',
+      'Reads user accounts and edits employee data',
+      [
         {
-          raw: '0:user/user;s#userPassword;rw',
-          index: 0,
-          blocks: [
-            {
-              object: 'user/user',
-              rights: 's',
-              attributes: [{ name: 'userPassword', rights: 'rw' }],
-            },
-          ],
+          object: 'user/user',
+          rights: 'rw',
+          attributes: [{ name: 'employeeType', rights: 'rw' }],
+        },
+        { object: 'department/department', rights: 'r', attributes: [] },
+      ],
+      '0:user/user;rw#employeeType;rw,department/department;r',
+    ),
+    role(
+      'auditor',
+      'Read-only view of people, groups and departments',
+      [
+        { object: 'user/user', rights: 'r', attributes: [] },
+        { object: 'group/group', rights: 'r', attributes: [] },
+        { object: 'department/department', rights: 'r', attributes: [] },
+      ],
+      '0:user/user;r,group/group;r,department/department;r',
+    ),
+    role(
+      'group-admin',
+      'Creates, renames and removes groups',
+      [
+        { object: 'group/group', rights: 'cmdrw', attributes: [] },
+        { object: 'department/department', rights: 'r', attributes: [] },
+      ],
+      '0:group/group;cmdrw,department/department;r',
+    ),
+    role(
+      'editownpwd',
+      'Everyone edits the password of their own account',
+      [
+        {
+          object: 'user/user',
+          rights: 's',
+          attributes: [{ name: 'userPassword', rights: 'rw' }],
         },
       ],
-    },
+      '0:user/user;s#userPassword;rw',
+    ),
   ]
 }
 
 function initialAssignments(): Record<string, Assignment[]> {
+  const paris = departments[0]
+  const lyon = departments[1]
+  const sales = departments[3]
+  const users = db.all('user')
+  const agent = users[0]?.dn ?? `uid=ada,ou=people,${BASE_DN}`
+  const operator = users[1]?.dn ?? `uid=bob,ou=people,${BASE_DN}`
+  const groupDn = (name: string) =>
+    paris ? `cn=${name},ou=groups,${paris.dn}` : `cn=${name},ou=groups,${BASE_DN}`
+  const entry = (roleDn: string, scope: Assignment['scope'], members: Assignment['members'], index: number): Assignment => ({
+    raw: `${index}:${scope}:${roleDn}`,
+    index,
+    scope,
+    role: roleDn,
+    role_name: roleDn.slice(3, roleDn.indexOf(',')),
+    members,
+  })
+  const everyone = [{ dn: '*', kind: 'everyone' as const }]
+
   return {
     [BASE_DN]: [
-      {
-        raw: `0:subtree:cn=manager,${ROLES_DN}:uid=ada,ou=people,${BASE_DN}`,
-        index: 0,
-        scope: 'subtree',
-        role: `cn=manager,${ROLES_DN}`,
-        role_name: 'manager',
-        members: [{ dn: `uid=ada,ou=people,${BASE_DN}`, kind: 'user' }],
-      },
+      entry(
+        `cn=manager,${ROLES_DN}`,
+        'subtree',
+        [{ dn: groupDn('admins'), kind: 'group' }],
+        0,
+      ),
+      entry(`cn=editownpwd,${ROLES_DN}`, 'subtree', everyone, 1),
+      entry(
+        `cn=auditor,${ROLES_DN}`,
+        'subtree',
+        [{ dn: `cn=auditor,ou=roles,${BASE_DN}`, kind: 'role' }],
+        2,
+      ),
     ],
+    ...(paris
+      ? {
+          [paris.dn]: [
+            entry(
+              `cn=helpdesk,${ROLES_DN}`,
+              'subtree',
+              [{ dn: groupDn('staff'), kind: 'group' }],
+              0,
+            ),
+          ],
+        }
+      : {}),
+    ...(sales
+      ? {
+          [sales.dn]: [
+            entry(
+              `cn=hr,${ROLES_DN}`,
+              'base',
+              [{ dn: groupDn('sales'), kind: 'group' }],
+              0,
+            ),
+          ],
+        }
+      : {}),
+    ...(lyon
+      ? {
+          [lyon.dn]: [
+            entry(
+              `cn=group-admin,${ROLES_DN}`,
+              'subtree',
+              [{ dn: `cn=it-operator,ou=roles,${BASE_DN}`, kind: 'role' }],
+              0,
+            ),
+            entry(`cn=helpdesk,${ROLES_DN}`, 'base', [{ dn: agent, kind: 'user' }], 1),
+            entry(`cn=auditor,${ROLES_DN}`, 'base', [{ dn: operator, kind: 'user' }], 2),
+          ],
+        }
+      : {}),
   }
 }
 
@@ -376,12 +562,134 @@ function guarded<
   }
 }
 
+// ── a minimal but faithful rights evaluation for the mock ──────────────────
+
+const RIGHT_ORDER = ['s', 'r', 'w', 'c', 'd', 'm', 't']
+
+function unionRights(...values: string[]): string {
+  const set = new Set(values.join('').split(''))
+  return RIGHT_ORDER.filter((letter) => set.has(letter)).join('')
+}
+
+function withoutSelf(rights: string): string {
+  return rights.replace(/s/g, '')
+}
+
+function objectApplies(blockKey: string, objectKey: string): boolean {
+  if (blockKey === objectKey || blockKey === 'all') return true
+  return blockKey.endsWith('/0') && objectKey.startsWith(blockKey.slice(0, -1))
+}
+
+function isUnder(targetDn: string, entryDn: string): boolean {
+  const target = targetDn.trim().toLowerCase()
+  const entry = entryDn.trim().toLowerCase()
+  return target === entry || target.endsWith(`,${entry}`)
+}
+
+function memberMatches(member: { dn: string; kind: string }, userDn: string): boolean {
+  if (member.kind === 'everyone' || member.dn === '*') return true
+  if (member.dn.toLowerCase() === userDn.trim().toLowerCase()) return true
+  if (member.kind === 'group') {
+    const group = db.get(member.dn)
+    const members = group?.tabs.main?.values.member
+    return (
+      Array.isArray(members) &&
+      members.some((dn) => String(dn).toLowerCase() === userDn.trim().toLowerCase())
+    )
+  }
+  return false
+}
+
+function membersOf(assignment: Assignment): { dn: string; kind: string }[] {
+  return (assignment.members ?? []).map((m) =>
+    typeof m === 'string'
+      ? { dn: m, kind: m === '*' ? 'everyone' : 'user' }
+      : { dn: m.dn, kind: m.kind },
+  )
+}
+
+function evaluateRights(
+  userDn: string,
+  targetDn: string,
+  objectKey: string,
+  attributes: string[],
+): RightsReport {
+  const own = targetDn.trim().toLowerCase() === userDn.trim().toLowerCase()
+  const bootstrap = userDn.trim().toLowerCase().includes('uid=admin,')
+  const rights: string[] = []
+  const attributeRights = new Map<string, string>()
+  const rules: RightsReport['rules'] = []
+
+  for (const [entryDn, assignments] of Object.entries(adminMock.assignments)) {
+    for (const assignment of assignments) {
+      if (assignment.ignored || !assignment.role) continue
+      if (!membersOf(assignment).some((member) => memberMatches(member, userDn))) continue
+      const applies =
+        assignment.scope === 'base'
+          ? entryDn.toLowerCase() === targetDn.toLowerCase()
+          : isUnder(targetDn, entryDn)
+      if (!applies) continue
+      const roleDefinition = adminMock.roles.find((role) => role.dn === assignment.role)
+      if (!roleDefinition) continue
+      for (const template of roleDefinition.templates) {
+        if (template.ignored) continue
+        rules.push({
+          origin: entryDn,
+          scope: assignment.scope ?? 'subtree',
+          blocks: template.blocks.map((b) => b.object).sort(),
+        })
+        for (const block of template.blocks) {
+          if (!objectApplies(block.object, objectKey)) continue
+          if (own || !block.rights.includes('s')) rights.push(withoutSelf(block.rights))
+          for (const attribute of block.attributes) {
+            if (!own && attribute.rights.includes('s')) continue
+            const name = attribute.name.toLowerCase()
+            attributeRights.set(
+              name,
+              unionRights(attributeRights.get(name) ?? '', withoutSelf(attribute.rights)),
+            )
+          }
+        }
+      }
+    }
+  }
+
+  const objectRights = bootstrap ? 'rwcdm' : withoutSelf(unionRights(...rights))
+  return {
+    dn: targetDn,
+    object: objectKey,
+    rights: objectRights,
+    attributes: Object.fromEntries(
+      attributes.map((attribute) => [
+        attribute,
+        bootstrap
+          ? 'rw'
+          : unionRights(objectRights, attributeRights.get(attribute.toLowerCase()) ?? ''),
+      ]),
+    ),
+    warnings: [],
+    rules,
+    bootstrap_admin: bootstrap,
+  }
+}
+
 export const adminHandlers: HttpHandler[] = [
   http.get(`${A}/capabilities`, guarded(() => HttpResponse.json(capabilities()))),
 
   // ── ACL ──────────────────────────────────────────────────────────────────
   http.get(`${A}/acl/catalog`, guarded(() => HttpResponse.json(catalog))),
-  http.get(`${A}/acl/roles`, guarded(() => HttpResponse.json(adminMock.roles))),
+  http.get(
+    `${A}/acl/roles`,
+    guarded(() => {
+      const uses = Object.values(adminMock.assignments).flat()
+      return HttpResponse.json(
+        adminMock.roles.map((role) => ({
+          ...role,
+          used_by: uses.filter((a) => !a.ignored && a.role === role.dn).length,
+        })),
+      )
+    }),
+  ),
   http.post(
     `${A}/acl/roles`,
     guarded(async ({ request }) => {
@@ -456,18 +764,14 @@ export const adminHandlers: HttpHandler[] = [
   http.post(
     `${A}/acl/check`,
     guarded(async ({ request }) => {
-      const body = (await request.json()) as { user: string; dn: string; object: string; attributes: string[] }
-      record('POST', '/acl/check', body)
-      const report: RightsReport = {
-        dn: body.dn,
-        object: body.object,
-        rights: 'rw',
-        attributes: Object.fromEntries(body.attributes.map((a) => [a, 'r'])),
-        warnings: [],
-        rules: [{ origin: BASE_DN, scope: 'subtree', blocks: [`${body.object};rw`] }],
-        bootstrap_admin: false,
+      const body = (await request.json()) as {
+        user: string
+        dn: string
+        object: string
+        attributes: string[]
       }
-      return HttpResponse.json(report)
+      record('POST', '/acl/check', body)
+      return HttpResponse.json(evaluateRights(body.user, body.dn, body.object, body.attributes))
     }),
   ),
 

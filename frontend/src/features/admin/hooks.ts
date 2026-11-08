@@ -55,6 +55,23 @@ export function useAssignments(dn: string | null) {
   })
 }
 
+/** Every entry that carries assignments, in one list. */
+export function useAllAssignments() {
+  return useQuery({ queryKey: ak.allAssignments, queryFn: adminApi.allAssignments })
+}
+
+export function useSaveEntryAssignments() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { dn: string; items: Assignment[] }) => adminApi.putAssignments(v.dn, v.items),
+    onSuccess: (data) => {
+      qc.setQueryData(ak.assignments(data.dn), data)
+      void qc.invalidateQueries({ queryKey: ak.allAssignments })
+      void qc.invalidateQueries({ queryKey: ak.roles })
+    },
+  })
+}
+
 export function useSaveAssignments(dn: string) {
   const qc = useQueryClient()
   return useMutation({
