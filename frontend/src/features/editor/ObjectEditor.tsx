@@ -1,12 +1,19 @@
 import { useBlocker, useNavigate } from '@tanstack/react-router'
-import { AlertTriangle, Pencil, Save, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
 import { api } from '@/api/endpoints'
-import { useCreateObject, useObject, usePatchObject, useTypeDescriptor, useDeleteObjects } from '@/api/hooks'
+import {
+  useAccountLock,
+  useCreateObject,
+  useDeleteObjects,
+  useObject,
+  useObjectAccountLocked,
+  usePatchObject,
+  useTypeDescriptor,
+} from '@/api/hooks'
 import type { LockInfo, ObjectDetail, TypeDescriptor } from '@/api/types'
 import {
   AlertDialog,
@@ -18,30 +25,32 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { TypeIcon } from '@/lib/icons'
+import { ErrorState } from '@/components/ErrorState'
 import {
   activeFromDetail,
   allAttributes,
-  attrRight,
   buildCreateTabs,
   computeChanges,
   defaultValue,
   deepEqual,
+  listFieldDiffs,
   nameValue,
+  objectToLdif,
   splitFieldKey,
   valuesFromDetail,
   type FormValues,
 } from '@/lib/objects'
 import { useScope } from '@/lib/scope'
 import { makeResolver } from '@/lib/validation'
-import { ErrorState } from '@/components/ErrorState'
-import { FieldRow } from './FieldRow'
+import { EditorHeader } from './EditorHeader'
+import { EditorSaveBar } from './EditorSaveBar'
+import { EditorSection } from './EditorSection'
+import { EditorTabNav } from './EditorTabNav'
+import { LdifDialog } from './LdifDialog'
 import { LockedDialog } from './LockedDialog'
+import { TemplatePicker } from './TemplatePicker'
 
 const BASE_KEY = 'main.base'
 
@@ -60,9 +69,15 @@ export function ObjectEditor({ type, dn }: Props) {
   if (dn !== null && obj.isError) return <ErrorState error={obj.error} onRetry={() => void obj.refetch()} />
   if (!desc.data || (dn !== null && !obj.data)) {
     return (
-      <div className="space-y-4" aria-busy="true" aria-label={t('common.loading')}>
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-64 w-full" />
+      <div className="space-y-6" aria-busy="true" aria-label={t('common.loading')}>
+        <div className="flex items-center gap-4">
+          <Skeleton className="size-12 rounded-xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+        </div>
+        <Skeleton className="h-96 w-full rounded-lg" />
       </div>
     )
   }
@@ -80,20 +95,23 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
     const v = valuesFromDetail(desc, detail)
     if (isCreate && v.main && !v.main.base) v.main.base = scope.base
     return v
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [desc, detail])
+  }, [desc, detail, isCreate, scope.base])
+
   const initialActive = useMemo(() => activeFromDetail(desc, detail), [desc, detail])
 
   const [active, setActive] = useState(initialActive)
   const activeRef = useRef(active)
   activeRef.current = active
+
   const [editing, setEditing] = useState(isCreate)
   const [tab, setTab] = useState(desc.tabs[0]?.name ?? 'main')
   const [lockInfo, setLockInfo] = useState<LockInfo | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [ldifOpen, setLdifOpen] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
+
   const locked = useRef(false)
   const bypassGuard = useRef(false)
-
   const baseline = useRef({ values: initial, active: initialActive })
 
   const resolver = useMemo(() => makeResolver(desc, () => activeRef.current), [desc])
@@ -111,22 +129,48 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
     () => computeChanges(desc, baseline.current.values, baseline.current.active, current, active, skip),
     [desc, current, active, skip],
   )
+
+  const diffs = useMemo(
+    () => listFieldDiffs(desc, baseline.current.values, current, active),
+    [desc, current, active],
+  )
+
   const baseChanged =
     !isCreate &&
     !deepEqual(current.main?.base ?? null, baseline.current.values.main?.base ?? null) &&
     desc.tabs[0]?.sections.some((s) => s.attributes.some((a) => a.name === 'base' && a.kind === 'department'))
+
   const dirty = isCreate
     ? !deepEqual(current, baseline.current.values) || !deepEqual(active, baseline.current.active)
     : Object.keys(changes).length > 0 || !!baseChanged
 
-  // ── unsaved-changes guard ────────────────────────────────────────────
+  // Compute dirty tabs
+  const dirtyTabs = useMemo(() => {
+    const set = new Set<string>()
+    for (const d of diffs) set.add(d.tab)
+    return set
+  }, [diffs])
+
+  // Count errors by tab
+  const errorsByTab = useMemo(() => {
+    const counts: Record<string, number> = {}
+    const errs = formState.errors as Record<string, Record<string, unknown>>
+    for (const [tbName, tbErrors] of Object.entries(errs)) {
+      if (tbErrors && typeof tbErrors === 'object') {
+        counts[tbName] = Object.keys(tbErrors).length
+      }
+    }
+    return counts
+  }, [formState.errors])
+
+  // Unsaved-changes blocker
   const blocker = useBlocker({
     shouldBlockFn: () => editing && dirty && !bypassGuard.current,
     withResolver: true,
     enableBeforeUnload: () => editing && dirty && !bypassGuard.current,
   })
 
-  // release the edit lock if the page goes away while editing
+  // Edit lock release on unmount
   useEffect(() => {
     return () => {
       if (locked.current && detail) void api.unlockObject(type, detail.dn).catch(() => undefined)
@@ -136,6 +180,8 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
   const patch = usePatchObject(type, detail?.dn ?? '')
   const create = useCreateObject(type)
   const del = useDeleteObjects(type)
+  const accountLock = useAccountLock(type)
+  const accountLockedQuery = useObjectAccountLocked(type, detail?.dn ?? null)
 
   const readOnlyMode = !editing
   const objectRights = detail?.acl[desc.tabs[0]?.name ?? 'main']?.object ?? 'rwcdm'
@@ -143,6 +189,18 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
   const canDelete = !isCreate && objectRights.includes('d')
 
   const title = isCreate ? t('editor.newTitle', { type: desc.label }) : nameValue(desc, detail)
+
+  // Find photo if available
+  const photo = useMemo(() => {
+    for (const tb of Object.values(current)) {
+      if (tb && typeof tb.jpegPhoto === 'string' && tb.jpegPhoto) return tb.jpegPhoto
+    }
+    return null
+  }, [current])
+
+  const ldifText = useMemo(() => {
+    return objectToLdif(desc, detail?.dn ?? 'new', current, active)
+  }, [desc, detail, current, active])
 
   const applyServerErrors = (fields: Record<string, string>) => {
     let firstTab: string | null = null
@@ -182,6 +240,10 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
   }
 
   const cancel = async () => {
+    if (isCreate) {
+      void navigate({ to: '/types/$type', params: { type } })
+      return
+    }
     await release()
     form.reset(baseline.current.values)
     setActive(baseline.current.active)
@@ -200,7 +262,7 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
           const base = (values.main?.base as string | null) ?? scope.base ?? ''
           const res = await create.mutateAsync({
             base,
-            template: null,
+            template: selectedTemplate,
             tabs: buildCreateTabs(desc, values, active),
           })
           toast.success(t('editor.created', { type: desc.label }))
@@ -269,145 +331,158 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
     setTimeout(() => void navigate({ to: '/types/$type', params: { type } }), 0)
   }
 
-  const errorsByTab = formState.errors as Record<string, unknown>
+  const toggleAccountLock = async () => {
+    if (!detail) return
+    const curLock = accountLockedQuery.data ?? false
+    try {
+      await accountLock.mutateAsync({ dns: [detail.dn], lock: !curLock })
+      await accountLockedQuery.refetch()
+      toast.success(t(curLock ? 'editor.accountUnlockedSuccess' : 'editor.accountLockedSuccess'))
+    } catch {
+      toast.error(t('common.error'))
+    }
+  }
+
+  const duplicateObject = () => {
+    void navigate({
+      to: '/types/$type/new',
+      params: { type },
+    })
+  }
+
+  const currentTabObj = desc.tabs.find((tb) => tb.name === tab) ?? desc.tabs[0]
+  const isCurrentTabActive = currentTabObj ? (active[currentTabObj.name] ?? false) : false
+  const currentTabAcl = currentTabObj ? detail?.acl[currentTabObj.name] : undefined
+  const canToggleCurrentTab =
+    editing && currentTabObj && (isCreate || !currentTabAcl || currentTabAcl.object.includes('m'))
 
   return (
     <form onSubmit={(e) => void save(e)} noValidate className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="bg-primary-soft text-primary flex size-10 shrink-0 items-center justify-center rounded-lg">
-            <TypeIcon name={desc.icon} className="size-5" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold tracking-tight">{title}</h1>
-            {detail && <p className="font-dn text-muted-foreground truncate">{detail.dn}</p>}
-          </div>
-          {editing && !isCreate && <Badge variant="outline">{t('editor.editing')}</Badge>}
-          {dirty && editing && (
-            <Badge variant="secondary" data-testid="dirty-indicator">
-              {t('editor.unsaved')}
-            </Badge>
+      <EditorHeader
+        desc={desc}
+        dn={detail?.dn ?? null}
+        title={title}
+        photo={photo}
+        isCreate={isCreate}
+        editing={editing}
+        dirty={dirty}
+        canEdit={canEdit}
+        canDelete={canDelete}
+        isSubmitting={formState.isSubmitting}
+        accountLocked={accountLockedQuery.data}
+        onStartEdit={() => void startEdit()}
+        onCancel={() => void cancel()}
+        onSave={() => void save()}
+        onDelete={() => setConfirmDelete(true)}
+        onDuplicate={duplicateObject}
+        onViewLdif={() => setLdifOpen(true)}
+        onToggleAccountLock={type === 'user' ? () => void toggleAccountLock() : undefined}
+      />
+
+      {isCreate && (
+        <TemplatePicker
+          selected={selectedTemplate}
+          onChange={setSelectedTemplate}
+          disabled={!editing}
+        />
+      )}
+
+      {/* Main tabbed layout */}
+      <div className="flex flex-col lg:flex-row items-start gap-6 pt-1">
+        <EditorTabNav
+          tabs={desc.tabs}
+          currentTab={tab}
+          onSelectTab={setTab}
+          active={active}
+          errorsByTab={errorsByTab}
+          dirtyTabs={dirtyTabs}
+        />
+
+        <div
+          role="tabpanel"
+          id={`panel-${currentTabObj?.name}`}
+          aria-labelledby={`tab-${currentTabObj?.name}`}
+          className="w-full flex-1 min-w-0 space-y-6"
+        >
+          {currentTabObj?.optional && (
+            <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4 shadow-xs">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {t('editor.enableTab', { tab: currentTabObj.label })}
+                </p>
+                <p className="text-muted-foreground text-xs">{t('editor.enableTabHelp')}</p>
+              </div>
+              <Switch
+                checked={isCurrentTabActive}
+                disabled={!canToggleCurrentTab}
+                onCheckedChange={(v) => {
+                  if (v) {
+                    for (const a of allAttributes(currentTabObj)) {
+                      const key = `${currentTabObj.name}.${a.name}` as never
+                      const cur = form.getValues(key) as unknown
+                      if (cur === null || cur === undefined || cur === '' || (Array.isArray(cur) && cur.length === 0))
+                        form.setValue(key, defaultValue(a) as never)
+                    }
+                  }
+                  setActive((a) => ({ ...a, [currentTabObj.name]: v }))
+                }}
+                aria-label={t('editor.enableTab', { tab: currentTabObj.label })}
+              />
+            </div>
           )}
+
+          {isCurrentTabActive &&
+            currentTabObj?.sections.map((sec) => (
+              <EditorSection
+                key={sec.name}
+                section={sec}
+                tabName={currentTabObj.name}
+                control={control}
+                acl={detail?.acl}
+                isCreate={isCreate}
+                readOnlyMode={readOnlyMode}
+              />
+            ))}
         </div>
-        <div className="flex items-center gap-2">
-          {editing ? (
-            <>
-              <Button type="button" variant="ghost" onClick={() => void (isCreate ? navigate({ to: '/types/$type', params: { type } }) : cancel())}>
-                <X className="size-4" />
-                {t('common.cancel')}
-              </Button>
-              <Button type="submit" disabled={!dirty || formState.isSubmitting}>
-                <Save className="size-4" />
-                {isCreate ? t('common.create') : t('common.save')}
-              </Button>
-            </>
-          ) : (
-            <>
-              {canDelete && (
-                <Button type="button" variant="outline" onClick={() => setConfirmDelete(true)}>
-                  <Trash2 className="size-4" />
-                  {t('common.delete')}
-                </Button>
-              )}
-              {canEdit && (
-                <Button type="button" onClick={() => void startEdit()}>
-                  <Pencil className="size-4" />
-                  {t('common.edit')}
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-      </header>
+      </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="h-auto flex-wrap justify-start">
-          {desc.tabs.map((tb) => (
-            <TabsTrigger key={tb.name} value={tb.name} className="gap-2">
-              {tb.label}
-              {tb.optional && !active[tb.name] && (
-                <span className="text-muted-foreground text-xs">({t('editor.inactive')})</span>
-              )}
-              {errorsByTab[tb.name] ? (
-                <AlertTriangle className="text-destructive size-3.5" aria-label={t('editor.tabHasErrors')} />
-              ) : null}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      {/* Save Bar */}
+      {editing && (
+        <EditorSaveBar
+          dirty={dirty}
+          isSubmitting={formState.isSubmitting}
+          isCreate={isCreate}
+          changesCount={Object.keys(changes).length}
+          diffs={diffs}
+          onDiscard={() => void cancel()}
+          onSave={() => void save()}
+        />
+      )}
 
-        {desc.tabs.map((tb) => {
-          const isActive = active[tb.name] ?? false
-          const tabAcl = detail?.acl[tb.name]
-          const canToggle = editing && (isCreate || !tabAcl || tabAcl.object.includes('m'))
-          return (
-            <TabsContent key={tb.name} value={tb.name} className="space-y-6 pt-2" forceMount={undefined}>
-              {tb.optional && (
-                <div className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <p className="font-medium">{t('editor.enableTab', { tab: tb.label })}</p>
-                    <p className="text-muted-foreground text-sm">{t('editor.enableTabHelp')}</p>
-                  </div>
-                  <Switch
-                    checked={isActive}
-                    disabled={!canToggle}
-                    onCheckedChange={(v) => {
-                      if (v) {
-                        for (const a of allAttributes(tb)) {
-                          const key = `${tb.name}.${a.name}` as never
-                          const cur = form.getValues(key) as unknown
-                          if (cur === null || cur === undefined || cur === '' || (Array.isArray(cur) && cur.length === 0))
-                            form.setValue(key, defaultValue(a) as never)
-                        }
-                      }
-                      setActive((a) => ({ ...a, [tb.name]: v }))
-                    }}
-                    aria-label={t('editor.enableTab', { tab: tb.label })}
-                  />
-                </div>
-              )}
-              {isActive &&
-                tb.sections.map((sec) => {
-                  const visible = sec.attributes.filter((a) => {
-                    if (a.kind === 'hidden') return false
-                    if (isCreate && a.kind === 'display') return false
-                    return attrRight(detail?.acl, tb.name, a) !== 'hidden'
-                  })
-                  if (visible.length === 0) return null
-                  return (
-                    <section key={sec.name} aria-labelledby={`sec-${tb.name}-${sec.name}`} className="bg-card rounded-xl border p-5 shadow-xs">
-                      <h2 id={`sec-${tb.name}-${sec.name}`} className="mb-4 text-sm font-semibold">
-                        {sec.label}
-                      </h2>
-                      <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
-                        {visible.map((a) => {
-                          const right = attrRight(detail?.acl, tb.name, a)
-                          // the RDN attribute can only be set at creation time via ACL; honour descriptor
-                          const ro = readOnlyMode || right !== 'rw' || (a.readonly === true && !isCreate)
-                          return (
-                            <FieldRow key={a.name} control={control as never} tab={tb.name} attr={a} readOnly={ro} />
-                          )
-                        })}
-                      </div>
-                    </section>
-                  )
-                })}
-            </TabsContent>
-          )
-        })}
-      </Tabs>
-
+      {/* Dialogs */}
       <LockedDialog lock={lockInfo} onClose={() => setLockInfo(null)} />
+
+      <LdifDialog
+        open={ldifOpen}
+        onOpenChange={setLdifOpen}
+        ldif={ldifText}
+        title={title}
+      />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('editor.deleteTitle', { name: title })}</AlertDialogTitle>
-            <AlertDialogDescription>{t('editor.deleteBody')}</AlertDialogDescription>
+            <AlertDialogTitle className="text-base font-semibold">
+              {t('editor.deleteTitle', { name: title })}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              {t('editor.deleteBody')}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogCancel className="h-8 text-xs">{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 h-8 text-xs"
               onClick={() => void doDelete()}
             >
               {t('common.delete')}
@@ -419,14 +494,24 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
       <AlertDialog open={blocker.status === 'blocked'}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('editor.leaveTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('editor.leaveBody')}</AlertDialogDescription>
+            <AlertDialogTitle className="text-base font-semibold">
+              {t('editor.leaveTitle')}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              {t('editor.leaveBody')}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => blocker.status === 'blocked' && blocker.reset()}>
+            <AlertDialogCancel
+              onClick={() => blocker.status === 'blocked' && blocker.reset()}
+              className="h-8 text-xs"
+            >
               {t('editor.stay')}
             </AlertDialogCancel>
-            <AlertDialogAction onClick={() => blocker.status === 'blocked' && blocker.proceed()}>
+            <AlertDialogAction
+              onClick={() => blocker.status === 'blocked' && blocker.proceed()}
+              className="h-8 text-xs"
+            >
               {t('editor.leave')}
             </AlertDialogAction>
           </AlertDialogFooter>

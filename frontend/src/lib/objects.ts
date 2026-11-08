@@ -221,3 +221,69 @@ export function departmentOf(dn: string, knownDepartments: ReadonlySet<string>):
   }
   return null
 }
+
+export interface FieldDiff {
+  tab: string
+  tabLabel: string
+  attr: string
+  attrLabel: string
+  oldValue: unknown
+  newValue: unknown
+}
+
+export function listFieldDiffs(
+  desc: TypeDescriptor,
+  baseline: FormValues,
+  current: FormValues,
+  active: Record<string, boolean>,
+): FieldDiff[] {
+  const diffs: FieldDiff[] = []
+  for (const tab of desc.tabs) {
+    if (!active[tab.name]) continue
+    for (const a of allAttributes(tab)) {
+      if (a.kind === 'display' || a.kind === 'hidden') continue
+      const oldVal = baseline[tab.name]?.[a.name]
+      const newVal = current[tab.name]?.[a.name]
+      if (!deepEqual(oldVal, newVal)) {
+        diffs.push({
+          tab: tab.name,
+          tabLabel: tab.label,
+          attr: a.name,
+          attrLabel: a.label,
+          oldValue: oldVal,
+          newValue: newVal,
+        })
+      }
+    }
+  }
+  return diffs
+}
+
+export function objectToLdif(
+  desc: TypeDescriptor,
+  dn: string,
+  values: FormValues,
+  active: Record<string, boolean>,
+): string {
+  const lines: string[] = [`dn: ${dn}`, 'objectClass: top', `objectClass: ${desc.name}`]
+  for (const tab of desc.tabs) {
+    if (!active[tab.name]) continue
+    for (const a of allAttributes(tab)) {
+      if (a.kind === 'display' || a.kind === 'hidden') continue
+      const v = values[tab.name]?.[a.name]
+      if (v === null || v === undefined || v === '') continue
+      if (Array.isArray(v)) {
+        for (const item of v) {
+          if (item !== null && item !== undefined && item !== '') {
+            lines.push(`${a.name}: ${String(item)}`)
+          }
+        }
+      } else if (typeof v === 'object') {
+        lines.push(`${a.name}: ${JSON.stringify(v)}`)
+      } else {
+        lines.push(`${a.name}: ${String(v)}`)
+      }
+    }
+  }
+  return lines.join('\n') + '\n'
+}
