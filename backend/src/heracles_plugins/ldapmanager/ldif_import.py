@@ -6,8 +6,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
+from heracles.core import config_store
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Entry, Modification
+from heracles.schema import legacy
 
 Action = Literal["add", "modify", "unchanged", "exists", "error"]
 
@@ -34,6 +36,32 @@ class EntryResult:
     action: Action
     changes: list[str] = field(default_factory=lambda: [])
     error: str | None = None
+
+
+def configuration_entry(directory: DirectoryClient) -> Callable[[Entry], bool]:
+    """Predicate for the entries only administrators may import.
+
+    The configuration entry defines the triggers, i.e. commands the server runs, so
+    writing it (or any entry carrying a trigger or one of its object classes) through
+    a raw import is equivalent to code execution.
+    """
+    config_dn = dnlib.normalize(config_store.config_dn(directory))
+    classes = {c.lower() for c in legacy.CONFIG_ENTRY_CLASSES}
+
+    def check(entry: Entry) -> bool:
+        if dnlib.normalize(entry.dn) == config_dn:
+            return True
+        names = {name.lower() for name in entry.attrs}
+        if legacy.TAB_HOOK_ATTR.lower() in names:
+            return True
+        return any(
+            value.decode("utf-8", "replace").lower() in classes
+            for name, values in entry.attrs.items()
+            if name.lower() == "objectclass"
+            for value in values
+        )
+
+    return check
 
 
 def _by_name(entry: Entry) -> dict[str, tuple[str, list[bytes]]]:
@@ -67,11 +95,13 @@ def run_import(
     *,
     allowed: Callable[[str], bool],
     apply: bool,
+    protected: Callable[[Entry], bool] | None = None,
 ) -> list[EntryResult]:
     """Process ``entries`` in order; with ``apply`` false nothing is written (dry run).
 
     A record whose parent is neither in the directory nor an earlier record is an error.
-    Failures never stop the run: every record gets a result.
+    Failures never stop the run: every record gets a result. ``protected`` marks the
+    entries a raw import must never write (the new record, or the entry it would change).
     """
     results: list[EntryResult] = []
     planned: set[str] = set()
@@ -87,6 +117,11 @@ def run_import(
             continue
         try:
             existing = directory.get(entry.dn)
+            if protected is not None and (
+                protected(entry) or (existing is not None and protected(existing))
+            ):
+                result.error = "This entry can only be changed by an administrator"
+                continue
             if existing is None and key not in planned:
                 _add(directory, entry, result, planned, apply=apply)
             elif key in planned and existing is None:

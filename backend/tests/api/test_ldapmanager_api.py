@@ -250,6 +250,62 @@ def test_import_requires_write_rights(app: FastAPI) -> None:
         assert r.status_code == 403
 
 
+def _grant_ldif_write(app: FastAPI, member_uid: str) -> None:
+    from heracles.acl import serialise_assignment, serialise_role_value
+    from heracles.acl.model import AclAssignment, AclScope, RoleTemplateValue
+    from heracles.acl.parser import parse_role_value
+    from heracles.ldap.client import Modification
+    from heracles.schema.legacy import ATTR, OC
+
+    api = Api(app).login("admin")
+    role = parse_role_value("0:ldif/ldifManager;rw")
+    assert isinstance(role, RoleTemplateValue)
+    role_dn = f"cn=ldif-writer,ou=aclroles,{BASE}"
+    api.directory.add(
+        role_dn,
+        {
+            "objectClass": [OC.ACL_ROLE.encode()],
+            "cn": [b"ldif-writer"],
+            ATTR.ACL_TEMPLATE: [serialise_role_value(role).encode()],
+        },
+    )
+    member = f"uid={member_uid},ou=people,{BASE}"
+    value = serialise_assignment(
+        AclAssignment(index=9, scope=AclScope.SUBTREE, role_dn=role_dn, members=(member,))
+    ).encode()
+    api.directory.modify(BASE, [Modification("add", ATTR.ACL_ENTRY, [value])])
+
+
+def test_import_cannot_define_triggers_unless_administrator(app: FastAPI) -> None:
+    """Raw LDIF write rights must not become command execution through the trigger list."""
+    _grant_ldif_write(app, "helpdesk")
+    hook_text = (
+        f"dn: ou=sneaky,{BASE}\nobjectClass: organizationalUnit\nou: sneaky\n"
+        "fdTabHook: user|postcreate|touch /tmp/pwned\n"
+    )
+    config_text = (
+        f"dn: cn=config,ou=fusiondirectory,{BASE}\nobjectClass: fusionDirectoryConf\ncn: config\n"
+    )
+    helpdesk = Api(app).login("helpdesk")
+    # the right itself works for ordinary entries
+    ok = helpdesk.post("/ldif/import", {"text": NEW_LDIF}).json()
+    assert ok["summary"]["add"] == 1
+    for text in (hook_text, config_text):
+        body = helpdesk.post("/ldif/import", {"text": text}).json()
+        assert body["summary"]["error"] == 1 and body["summary"]["add"] == 0
+        assert "administrator" in body["results"][0]["error"]
+    assert helpdesk.directory.get(f"ou=sneaky,{BASE}") is None
+
+
+def test_import_of_triggers_is_allowed_for_administrators(admin: Api) -> None:
+    text = (
+        f"dn: ou=hooked,{BASE}\nobjectClass: organizationalUnit\nou: hooked\n"
+        "fdTabHook: user|postcreate|true\n"
+    )
+    body = admin.post("/ldif/import", {"text": text}).json()
+    assert "administrator" not in str(body["results"][0]["error"]), body
+
+
 # -- CSV import ---------------------------------------------------------------------------------
 CSV_TEXT = "login,first,last,mail\nzed,Zed,Zulu,zed@x.org\nbad,,Nobody,\nzoe,Zoe,Zulu,zoe@x.org\n"
 MAPPING = [
