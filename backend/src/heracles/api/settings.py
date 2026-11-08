@@ -70,6 +70,17 @@ class PasswordSettings(BaseModel):
     force_default: bool = False
 
 
+class BrandingSettings(BaseModel):
+    """How the sign-in page and the portal present the organisation."""
+
+    #: Organisation name shown on the sign-in page ("Example Corp").
+    organization: str = ""
+    #: Logo URL (absolute, or a path under the served frontend); empty for the product mark.
+    logo_url: str = ""
+    #: One line under the name on the sign-in page.
+    tagline: str = ""
+
+
 class DatabaseSettings(BaseModel):
     """The application's own SQLite database (second-factor registrations, ...)."""
 
@@ -92,6 +103,7 @@ class ApiSettings(BaseModel):
     oidc: OidcSettings = Field(default_factory=OidcSettings)
     webauthn: WebAuthnSettings = Field(default_factory=WebAuthnSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    branding: BrandingSettings = Field(default_factory=BrandingSettings)
     #: Host names the server may build links from when no public address is configured
     #: (``cas_service_name``, the invitations ``public_base_url``): the request ``Host``
     #: header is client-chosen. ``*.example.org`` matches subdomains. Set it in production.

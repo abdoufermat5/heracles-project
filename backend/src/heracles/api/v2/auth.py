@@ -203,6 +203,19 @@ def get_csrf(request: Request, response: Response, state: StateDep) -> CsrfRespo
     return CsrfResponse(token=token)
 
 
+class Branding(BaseModel):
+    organization: str
+    logo_url: str | None
+    tagline: str
+
+
+@directories_router.get("/branding")
+def branding(state: StateDep) -> Branding:
+    """Public: how the sign-in page presents the organisation."""
+    b = state.settings.branding
+    return Branding(organization=b.organization, logo_url=b.logo_url or None, tagline=b.tagline)
+
+
 @directories_router.get("/directories")
 def list_directories(state: StateDep) -> list[DirectoryInfo]:
     labels = state.settings.directory_labels
