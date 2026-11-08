@@ -6,8 +6,9 @@ import { server } from '@/mocks/server'
 import { renderApp, signIn, userPath } from '@/test/utils'
 
 async function openEditor(path = userPath(0)) {
+  const url = path.includes('?') ? path : `${path}?view=generic`
   signIn()
-  renderApp(path)
+  renderApp(url)
   await screen.findByRole('heading', { level: 1 })
   await screen.findByLabelText(/^Last name/ )
 }
@@ -53,7 +54,7 @@ describe('object editor', () => {
 
   it('offers no edit action when the user has read-only object rights', async () => {
     signIn('viewer')
-    renderApp(userPath(0))
+    renderApp(`${userPath(0)}?view=generic`)
     await screen.findByLabelText(/^Last name/ )
     expect(screen.queryByRole('button', { name: /Edit/ })).not.toBeInTheDocument()
     expect(screen.getByLabelText(/^Last name/ )).toBeDisabled()

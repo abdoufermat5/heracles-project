@@ -24,18 +24,20 @@ describe('full flow', () => {
       String(a.tabs.main?.values.uid).localeCompare(String(b.tabs.main?.values.uid), undefined, { numeric: true }),
     )[0]
     if (!first) throw new Error('no users')
-    await userEvent.click(await screen.findByRole('link', { name: String(first.tabs.main?.values.uid) }))
-    const given = await screen.findByLabelText(/^First name/ )
-    expect(given).toBeDisabled()
+    const userLinks = await screen.findAllByRole('link', { name: String(first.tabs.main?.values.cn) })
+    await userEvent.click(userLinks[0]!)
+    await screen.findByRole('heading', { name: String(first.tabs.main?.values.cn), level: 1 })
 
-    // edit and save
-    await userEvent.click(screen.getByRole('button', { name: /Edit/ }))
-    await waitFor(() => expect(given).toBeEnabled())
+    // switch to Details tab for descriptor-driven sections
+    await userEvent.click(screen.getByRole('tab', { name: 'Details' }))
+    await userEvent.click(screen.getAllByRole('button', { name: /Edit/ })[0]!)
+
+    const given = await screen.findByLabelText(/^First name/)
     await userEvent.clear(given)
     await userEvent.type(given, 'Zed')
     await userEvent.click(screen.getByRole('button', { name: /Save/ }))
 
-    await waitFor(() => expect(screen.getByLabelText(/^First name/ )).toBeDisabled())
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Save/ })).not.toBeInTheDocument())
     expect(db.get(first.dn)?.tabs.main?.values.givenName).toBe('Zed')
     expect(db.get(first.dn)?.tabs.main?.values.cn).toContain('Zed')
     expect(db.locks.has(first.dn.toLowerCase())).toBe(false)

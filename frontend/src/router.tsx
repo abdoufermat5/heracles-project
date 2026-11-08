@@ -28,6 +28,9 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { ObjectEditor } from '@/features/editor/ObjectEditor'
 import { TemplateEditorPage } from '@/features/editor/TemplateEditor'
 import { ObjectListPage } from '@/features/listing/ObjectListPage'
+import { CreateUserWizard } from '@/features/people/CreateUserWizard'
+import { GroupProfilePage } from '@/features/people/GroupProfilePage'
+import { UserProfilePage } from '@/features/people/UserProfilePage'
 import { MePage } from '@/features/me/MePage'
 import { StyleguidePage } from '@/features/styleguide/StyleguidePage'
 import { AccessPage } from '@/features/admin/AccessPage'
@@ -161,6 +164,9 @@ const newRoute = createRoute({
   component: function NewRoute() {
     const { type } = newRoute.useParams()
     const { copy } = newRoute.useSearch()
+    if (type === 'user') {
+      return <CreateUserWizard key={`user:${copy ?? ''}`} copyFrom={copy ?? null} />
+    }
     return <ObjectEditor key={`${type}:${copy ?? ''}`} type={type} dn={null} copyFrom={copy ?? null} />
   },
 })
@@ -188,8 +194,18 @@ const templateEditRoute = createRoute({
 const editRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/types/$type/$dn',
+  validateSearch: (s: Record<string, unknown>): { view?: string } => ({
+    view: typeof s.view === 'string' ? s.view : undefined,
+  }),
   component: function EditRoute() {
     const { type, dn } = editRoute.useParams()
+    const { view } = editRoute.useSearch()
+    if (type === 'user' && view !== 'generic') {
+      return <UserProfilePage key={`user:${dn}`} dn={dn} />
+    }
+    if (type === 'group' && view !== 'generic') {
+      return <GroupProfilePage key={`group:${dn}`} dn={dn} />
+    }
     return <ObjectEditor key={`${type}:${dn}`} type={type} dn={dn} />
   },
 })

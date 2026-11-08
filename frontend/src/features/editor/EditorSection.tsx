@@ -1,5 +1,6 @@
 import type { Control } from 'react-hook-form'
 import type { AttributeDescriptor, ObjectDetail, SectionDescriptor } from '@/api/types'
+import { SectionCard } from '@/components/patterns/SectionCard'
 import { attrRight, type FormValues } from '@/lib/objects'
 import { FieldRow } from './FieldRow'
 
@@ -29,20 +30,8 @@ export function EditorSection({
   if (visible.length === 0) return null
 
   return (
-    <section
-      aria-labelledby={`sec-${tabName}-${section.name}`}
-      className="rounded-md border bg-card"
-    >
-      <div className="flex h-10 items-center justify-between border-b px-4">
-        <h2
-          id={`sec-${tabName}-${section.name}`}
-          className="text-body font-semibold text-foreground"
-        >
-          {section.label}
-        </h2>
-      </div>
-
-      <div className="grid grid-cols-1 gap-x-8 gap-y-4 p-4 md:grid-cols-2">
+    <SectionCard title={section.label} className="w-full">
+      <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
         {visible.map((a: AttributeDescriptor) => {
           const right = attrRight(acl, tabName, a)
           const ro = readOnlyMode || right !== 'rw' || (a.readonly === true && !isCreate)
@@ -57,6 +46,6 @@ export function EditorSection({
           )
         })}
       </div>
-    </section>
+    </SectionCard>
   )
 }
