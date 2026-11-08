@@ -26,6 +26,7 @@ from heracles.objects import (
     ObjectValidationError,
     PermissionDeniedError,
     UnknownTypeError,
+    templates,
 )
 
 router = APIRouter(tags=["objects"])
@@ -117,6 +118,115 @@ def describe_type(type_name: str, user: CurrentUserDep, domain: DomainDep) -> di
         return domain.registry.describe(type_name)
 
 
+# ---------------------------------------------------------------- templates
+
+
+class TemplateCreateBody(BaseModel):
+    name: str
+    base: str
+    tabs: dict[str, TabPayload] = Field(default_factory=lambda: {})
+
+
+class TemplatePatchBody(BaseModel):
+    name: str | None = None
+    tabs: dict[str, TabPayload] = Field(default_factory=lambda: {})
+
+
+class TemplatePreviewBody(BaseModel):
+    values: dict[str, dict[str, Any]] = Field(default_factory=lambda: {})
+
+
+def _template_tabs(tabs: dict[str, TabPayload]) -> dict[str, Any]:
+    """Template payloads only carry ``active`` when the client sent it for a tab."""
+    return {
+        name: {
+            **({"active": tab.active} if "active" in tab.model_fields_set else {}),
+            "values": tab.values,
+        }
+        for name, tab in tabs.items()
+    }
+
+
+@router.get("/types/{type_name}/templates")
+def list_type_templates(
+    type_name: str, user: CurrentUserDep, domain: DomainDep, base: str | None = None
+) -> list[JSON]:
+    with object_errors():
+        service, _policy = domain.service(user, type_name)
+        found = templates.list_templates(service, type_name, base)
+    return [t.to_json() for t in found]
+
+
+@router.post("/types/{type_name}/templates", status_code=status.HTTP_201_CREATED)
+def create_type_template(
+    type_name: str, body: TemplateCreateBody, user: CurrentUserDep, domain: DomainDep
+) -> dict[str, JSON]:
+    with object_errors():
+        service, _policy = domain.service(user, type_name)
+        tpl = templates.create_template(
+            service, type_name, body.base, body.name, _template_tabs(body.tabs)
+        )
+        return templates.template_json(service, tpl)
+
+
+@router.get("/types/{type_name}/templates/{dn:path}/fields")
+def template_fields(
+    type_name: str, dn: str, user: CurrentUserDep, domain: DomainDep
+) -> dict[str, JSON]:
+    with object_errors():
+        service, _policy = domain.service(user, type_name)
+        templates.get_template(service, type_name, dn)
+        fields = templates.template_fields(service, type_name, dn)
+    return {"fields": {tab: list(names) for tab, names in fields.items()}}
+
+
+@router.post("/types/{type_name}/templates/{dn:path}/preview")
+def preview_template(
+    type_name: str,
+    dn: str,
+    body: TemplatePreviewBody,
+    user: CurrentUserDep,
+    domain: DomainDep,
+) -> dict[str, JSON]:
+    """Resolved values for the given field values, without storing anything."""
+    with object_errors():
+        service, _policy = domain.service(user, type_name)
+        templates.get_template(service, type_name, dn)
+        resolved = templates.apply_template(service, type_name, dn, body.values, preview=True)
+    return {"tabs": {tab: dict(values) for tab, values in resolved.items()}}  # pyright: ignore[reportReturnType]
+
+
+@router.get("/types/{type_name}/templates/{dn:path}")
+def get_type_template(
+    type_name: str, dn: str, user: CurrentUserDep, domain: DomainDep
+) -> dict[str, JSON]:
+    with object_errors():
+        service, _policy = domain.service(user, type_name)
+        return templates.template_json(service, templates.get_template(service, type_name, dn))
+
+
+@router.patch("/types/{type_name}/templates/{dn:path}")
+def patch_type_template(
+    type_name: str, dn: str, body: TemplatePatchBody, user: CurrentUserDep, domain: DomainDep
+) -> dict[str, JSON]:
+    with object_errors():
+        service, _policy = domain.service(user, type_name)
+        tpl = templates.update_template(
+            service, type_name, dn, _template_tabs(body.tabs), body.name
+        )
+        return templates.template_json(service, tpl)
+
+
+@router.delete("/types/{type_name}/templates/{dn:path}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_type_template(
+    type_name: str, dn: str, user: CurrentUserDep, domain: DomainDep
+) -> Response:
+    with object_errors():
+        service, _policy = domain.service(user, type_name)
+        templates.delete_template(service, type_name, dn)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # ------------------------------------------------------------------ listing
 
 
@@ -180,7 +290,7 @@ class TabPayload(BaseModel):
 class CreateBody(BaseModel):
     base: str
     template: str | None = None
-    tabs: dict[str, TabPayload]
+    tabs: dict[str, TabPayload] = Field(default_factory=lambda: {})
 
 
 class PatchBody(BaseModel):
@@ -199,12 +309,28 @@ def _tabs_json(tabs: dict[str, TabPayload]) -> dict[str, Any]:
 def create_object(
     type_name: str, body: CreateBody, user: CurrentUserDep, domain: DomainDep
 ) -> dict[str, str]:
-    if body.template is not None:
-        raise ApiError(501, "not_implemented", "Templates are not supported yet")
     with object_errors():
         service, _policy = domain.service(user, type_name)
-        new_dn = service.create(type_name, body.base, _tabs_json(body.tabs))
+        tabs = _tabs_json(body.tabs)
+        if body.template is not None:
+            tabs = _tabs_from_template(service, type_name, body.template, body.tabs)
+        new_dn = service.create(type_name, body.base, tabs)
     return {"dn": new_dn}
+
+
+def _tabs_from_template(
+    service: ObjectService, type_name: str, template: str, given: dict[str, TabPayload]
+) -> dict[str, Any]:
+    """Resolve ``template`` with the values of the request (they win over the template)."""
+    supplied = {name: payload.values for name, payload in given.items() if payload.active}
+    resolved = templates.apply_template(service, type_name, template, supplied)
+    tabs: dict[str, Any] = {
+        name: {"active": True, "values": values} for name, values in resolved.items()
+    }
+    for name, payload in given.items():
+        if not payload.active:
+            tabs[name] = {"active": False, "values": {}}
+    return tabs
 
 
 @router.post("/objects/{type_name}/{dn:path}/lock")
