@@ -1,8 +1,14 @@
 import type { ColumnDescriptor, ObjectListItem } from '@/api/types'
 
-function escapeCsvField(val: unknown): string {
+/**
+ * One CSV cell. Values starting with a character a spreadsheet reads as a formula
+ * (`=`, `+`, `-`, `@`, tab, carriage return) are prefixed with an apostrophe, so
+ * a directory value cannot run as a formula when the file is opened.
+ */
+export function escapeCsvField(val: unknown): string {
   if (val === null || val === undefined) return ''
-  const str = Array.isArray(val) ? val.join('; ') : String(val)
+  let str = Array.isArray(val) ? val.join('; ') : String(val)
+  if (/^[=+\-@\t\r]/.test(str)) str = `'${str}`
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`
   }
