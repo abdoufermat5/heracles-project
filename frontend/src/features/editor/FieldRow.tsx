@@ -13,11 +13,6 @@ interface Props {
   readOnly: boolean
 }
 
-function usePasswordConfirm({ control, name }: { control: Control<FormValues>; name: string }) {
-  const { field } = useController({ control, name: `${name}__confirm` as never })
-  return { value: (field.value as string | undefined) ?? '', onChange: field.onChange as (v: string) => void }
-}
-
 /** Label + description + control + error for one attribute, bound to the form. */
 export function FieldRow({ control, tab, attr, readOnly }: Props) {
   const name = `${tab}.${attr.name}`
@@ -28,16 +23,31 @@ export function FieldRow({ control, tab, attr, readOnly }: Props) {
 
   return (
     <div className={cn('space-y-1.5', isWide(attr) && 'md:col-span-2')} data-field={name}>
-      <Label htmlFor={id} id={`${id}-label`} className="gap-1">
-        {attr.label}
-        {attr.required && attr.kind !== 'password' && (
-          <span aria-hidden className="text-destructive">
-            *
-          </span>
+      <div className="flex items-center justify-between">
+        <Label htmlFor={id} id={`${id}-label`} className="flex items-center gap-1 text-xs font-medium text-foreground">
+          <span>{attr.label}</span>
+          {attr.required && attr.kind !== 'password' && (
+            <span aria-hidden className="text-destructive font-medium">
+              *
+            </span>
+          )}
+        </Label>
+        {attr.readonly && !readOnly && (
+          <span className="text-[10px] text-muted-foreground font-mono">readonly</span>
         )}
-      </Label>
+      </div>
+
       {attr.kind === 'password' ? (
-        <PasswordRow control={control} name={name} id={id} attr={attr} readOnly={readOnly} value={field.value} onChange={field.onChange} error={message} />
+        <PasswordRow
+          control={control}
+          name={name}
+          id={id}
+          attr={attr}
+          readOnly={readOnly}
+          value={field.value}
+          onChange={field.onChange}
+          error={message}
+        />
       ) : (
         <FieldInput
           descriptor={attr}
@@ -50,11 +60,13 @@ export function FieldRow({ control, tab, attr, readOnly }: Props) {
           errorTree={error}
         />
       )}
+
       {attr.description && !message && (
-        <p className="text-muted-foreground text-xs">{attr.description}</p>
+        <p className="text-muted-foreground text-xs leading-normal">{attr.description}</p>
       )}
+
       {message && (
-        <p id={`${id}-error`} role="alert" className="text-destructive text-xs">
+        <p id={`${id}-error`} role="alert" className="text-destructive text-xs font-medium">
           {message}
         </p>
       )}
@@ -81,7 +93,9 @@ function PasswordRow({
   onChange: (v: unknown) => void
   error?: string
 }) {
-  const conf = usePasswordConfirm({ control, name })
+  const { field: confirmField } = useController({ control, name: `${name}__confirm` as never })
+  const confirmValue = (confirmField.value as string | undefined) ?? ''
+
   return (
     <FieldInput
       descriptor={attr}
@@ -91,8 +105,8 @@ function PasswordRow({
       readOnly={readOnly}
       invalid={!!error}
       error={error}
-      confirm={conf.value}
-      onConfirmChange={conf.onChange}
+      confirm={confirmValue}
+      onConfirmChange={confirmField.onChange as (v: string) => void}
     />
   )
 }

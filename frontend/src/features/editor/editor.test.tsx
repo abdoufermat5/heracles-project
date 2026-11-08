@@ -119,4 +119,85 @@ describe('object editor', () => {
     expect(posix?.active).toBe(true)
     expect(posix?.values).toMatchObject({ uidNumber: 2000, gidNumber: 2000, homeDirectory: '/home/x' })
   })
+
+  it('shows sticky save bar when dirty and discard resets changes', async () => {
+    await openEditor()
+    await userEvent.click(screen.getByRole('button', { name: /Edit/ }))
+    const sn = await screen.findByLabelText(/^Last name/ )
+    await waitFor(() => expect(sn).toBeEnabled())
+    const originalValue = (sn as HTMLInputElement).value
+
+    // Save bar not visible yet
+    expect(screen.queryByTestId('dirty-indicator')).not.toBeInTheDocument()
+
+    // Make change
+    await userEvent.clear(sn)
+    await userEvent.type(sn, 'Temporary')
+
+    // Dirty bar appears
+    const indicator = await screen.findByTestId('dirty-indicator')
+    expect(indicator).toBeInTheDocument()
+    expect(indicator).toHaveTextContent(/unsaved change/i)
+
+    // Discard changes
+    const discardBtn = screen.getByRole('button', { name: /Discard/i })
+    await userEvent.click(discardBtn)
+
+    // Reverts to original value and exits edit mode
+    await waitFor(() => {
+      expect(screen.queryByTestId('dirty-indicator')).not.toBeInTheDocument()
+      expect(screen.getByLabelText(/^Last name/ )).toHaveValue(originalValue)
+      expect(screen.getByLabelText(/^Last name/ )).toBeDisabled()
+    })
+  })
+
+  it('opens review changes popover displaying old and new values', async () => {
+    await openEditor()
+    await userEvent.click(screen.getByRole('button', { name: /Edit/ }))
+    const sn = await screen.findByLabelText(/^Last name/ )
+    await waitFor(() => expect(sn).toBeEnabled())
+
+    await userEvent.clear(sn)
+    await userEvent.type(sn, 'BrandNewName')
+
+    // Open Review changes popover
+    const reviewBtn = await screen.findByRole('button', { name: /Review changes/i })
+    await userEvent.click(reviewBtn)
+
+    // Verify diff content
+    expect(await screen.findByText('BrandNewName')).toBeInTheDocument()
+    expect(screen.getAllByText('Last name').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('opens raw LDIF dialog from actions menu', async () => {
+    await openEditor()
+    const actionsBtn = screen.getByRole('button', { name: /Actions/i })
+    await userEvent.click(actionsBtn)
+
+    const ldifItem = await screen.findByRole('menuitem', { name: /View raw LDIF/i })
+    await userEvent.click(ldifItem)
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toBeInTheDocument()
+    expect(dialog).toHaveTextContent(/dn:/)
+    expect(screen.getByRole('button', { name: /Copy LDIF/i })).toBeInTheDocument()
+  })
+
+  it('saves changes when Ctrl+S keyboard shortcut is pressed', async () => {
+    const patch = vi.spyOn(api, 'patchObject')
+    await openEditor()
+    await userEvent.click(screen.getByRole('button', { name: /Edit/ }))
+    const sn = await screen.findByLabelText(/^Last name/ )
+    await waitFor(() => expect(sn).toBeEnabled())
+
+    await userEvent.clear(sn)
+    await userEvent.type(sn, 'ShortcutSaved')
+    expect(await screen.findByTestId('dirty-indicator')).toBeInTheDocument()
+
+    await userEvent.keyboard('{Control>}s{/Control}')
+
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1))
+    const body = patch.mock.calls[0]?.[2]
+    expect(body).toEqual({ tabs: { main: { active: true, values: { sn: 'ShortcutSaved' } } } })
+  })
 })

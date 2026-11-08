@@ -132,3 +132,18 @@ export function useAccountLock(type: string) {
     },
   })
 }
+
+export function useObjectAccountLocked(type: string, dn: string | null) {
+  return useQuery({
+    queryKey: [...qk.objects(type), 'accountLocked', dn],
+    queryFn: async () => {
+      if (!dn || type !== 'user') return false
+      const rdn = dn.split(',')[0]?.replace(/^[^=]+=/, '') ?? dn
+      const list = await api.listObjects(type, { q: rdn, limit: 10 })
+      const found = list.items.find((i) => i.dn.toLowerCase() === dn.toLowerCase())
+      return found?.locked ?? false
+    },
+    enabled: !!dn && type === 'user',
+    staleTime: 30_000,
+  })
+}

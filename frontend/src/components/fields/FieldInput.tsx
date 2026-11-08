@@ -11,11 +11,15 @@ import {
   DateField,
   DateTimeField,
   DisplayField,
+  EmailInputField,
   MultiSelectField,
   NumberField,
+  PhoneInputField,
+  PostalAddressField,
   SelectField,
   TextAreaField,
   TextInputField,
+  UrlInputField,
 } from './SimpleFields'
 import { errorAt, subTree, type FieldInputProps } from './types'
 
@@ -78,6 +82,7 @@ function ListLike({
                     disabled={i === 0}
                     onClick={() => move(i, -1)}
                     aria-label={t('fields.moveUp')}
+                    title={t('fields.moveUp')}
                   >
                     <ArrowUp className="size-4" />
                   </Button>
@@ -89,6 +94,7 @@ function ListLike({
                     disabled={i === items.length - 1}
                     onClick={() => move(i, 1)}
                     aria-label={t('fields.moveDown')}
+                    title={t('fields.moveDown')}
                   >
                     <ArrowDown className="size-4" />
                   </Button>
@@ -96,9 +102,10 @@ function ListLike({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="text-destructive size-8"
+                    className="text-destructive hover:text-destructive size-8"
                     onClick={() => set(items.filter((_, k) => k !== i))}
                     aria-label={t('fields.removeItem', { name: String(i + 1) })}
+                    title={t('fields.removeItem', { name: String(i + 1) })}
                   >
                     <Trash2 className="size-4" />
                   </Button>
@@ -113,9 +120,10 @@ function ListLike({
           type="button"
           variant="outline"
           size="sm"
+          className="h-8 gap-1.5"
           onClick={() => set([...items, defaultValue({ ...item, multivalued: false })])}
         >
-          <Plus className="size-4" />
+          <Plus className="size-3.5" />
           {t('fields.addItem')}
         </Button>
       )}
@@ -133,16 +141,16 @@ function CompositeField({ p }: { p: FieldInputProps }) {
       id={p.id}
       role="group"
       aria-labelledby={`${p.id}-label`}
-      className="bg-muted/40 grid gap-3 rounded-lg border p-3 sm:grid-cols-2"
+      className="bg-muted/30 grid gap-3 rounded-lg border border-border p-3.5 sm:grid-cols-2"
     >
       {(p.descriptor.fields ?? []).map((f) => {
         const fid = `${p.id}-${f.name}`
         const err = errorAt(p.errorTree, f.name)
         return (
           <div key={f.name} className="space-y-1.5">
-            <label htmlFor={fid} id={`${fid}-label`} className="text-xs font-medium">
+            <label htmlFor={fid} id={`${fid}-label`} className="text-xs font-medium text-foreground">
               {f.label}
-              {f.required && <span aria-hidden className="text-destructive"> *</span>}
+              {f.required && <span aria-hidden className="text-destructive font-medium"> *</span>}
             </label>
             <FieldInput
               descriptor={f}
@@ -181,15 +189,15 @@ export function FieldInput(p: FieldInputProps) {
     case 'string':
       return <TextInputField p={p} />
     case 'email':
-      return <TextInputField p={p} type="email" inputMode="email" />
+      return <EmailInputField p={p} />
     case 'phone':
-      return <TextInputField p={p} type="tel" inputMode="tel" />
+      return <PhoneInputField p={p} />
     case 'url':
-      return <TextInputField p={p} type="url" inputMode="url" />
+      return <UrlInputField p={p} />
     case 'text':
       return <TextAreaField p={p} />
     case 'postal_address':
-      return <TextAreaField p={p} rows={4} />
+      return <PostalAddressField p={p} />
     case 'int':
       return <NumberField p={p} />
     case 'float':

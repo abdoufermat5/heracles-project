@@ -1,4 +1,14 @@
-import { Check, ChevronDown, ChevronRight, ChevronsUpDown, X } from 'lucide-react'
+import {
+  Building2,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
+  Search,
+  User,
+  Users,
+  X,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useRefSearch, useTree } from '@/api/hooks'
@@ -25,6 +35,17 @@ function useDebounced<T>(value: T, ms = 250): T {
     return () => clearTimeout(id)
   }, [value, ms])
   return v
+}
+
+function getRefIcon(refType: string) {
+  switch (refType) {
+    case 'group':
+      return <Users className="size-3.5 text-muted-foreground shrink-0" />
+    case 'department':
+      return <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+    default:
+      return <User className="size-3.5 text-muted-foreground shrink-0" />
+  }
 }
 
 /** Async searchable combobox over `GET /objects/{ref_type}?q=`. */
@@ -62,34 +83,37 @@ export function ObjectRefPicker({
           aria-expanded={open}
           aria-invalid={invalid || undefined}
           disabled={disabled}
-          className="w-full justify-between font-normal"
+          className="h-8 w-full justify-between font-normal text-sm"
         >
           <span className="text-muted-foreground truncate">{label}</span>
-          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
+      <PopoverContent className="w-(--radix-popover-trigger-width) min-w-72 p-0 shadow-md" align="start">
         <Command shouldFilter={false}>
-          <div className="border-b p-2">
+          <div className="flex items-center border-b px-2.5 py-1.5">
+            <Search className="size-3.5 text-muted-foreground mr-2 shrink-0" />
             <Input
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t('fields.searchPlaceholder')}
               aria-label={t('fields.searchPlaceholder')}
+              className="h-7 border-0 p-0 text-sm shadow-none focus-visible:ring-0"
             />
           </div>
-          <CommandList>
+          <CommandList className="max-h-64">
             {!isFetching && (data?.items.length ?? 0) === 0 && (
               <CommandEmpty>{t('fields.noResults')}</CommandEmpty>
             )}
             {isFetching && !data && (
-              <div className="text-muted-foreground p-3 text-sm">{t('common.loading')}</div>
+              <div className="text-muted-foreground p-3 text-center text-xs">{t('common.loading')}</div>
             )}
             <CommandGroup>
               {data?.items.map((item) => {
                 const isSel = selected.includes(item.dn)
                 const first = Object.values(item.values).find((v) => typeof v === 'string')
+                const displayName = typeof first === 'string' ? first : rdnValue(item.dn)
                 return (
                   <CommandItem
                     key={item.dn}
@@ -98,10 +122,12 @@ export function ObjectRefPicker({
                       onPick(item.dn)
                       setOpen(false)
                     }}
+                    className="flex items-center gap-2 px-2.5 py-2 cursor-pointer"
                   >
-                    <Check className={cn('size-4', isSel ? 'opacity-100' : 'opacity-0')} />
-                    <div className="min-w-0">
-                      <div className="truncate">{typeof first === 'string' ? first : rdnValue(item.dn)}</div>
+                    <Check className={cn('size-3.5 shrink-0', isSel ? 'opacity-100 text-primary' : 'opacity-0')} />
+                    {getRefIcon(refType)}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{displayName}</div>
                       <div className="font-dn text-muted-foreground truncate text-xs">{item.dn}</div>
                     </div>
                   </CommandItem>
@@ -115,17 +141,33 @@ export function ObjectRefPicker({
   )
 }
 
-function Chip({ dn, onRemove, disabled }: { dn: string; onRemove: () => void; disabled?: boolean }) {
+function Chip({
+  dn,
+  refType,
+  onRemove,
+  disabled,
+}: {
+  dn: string
+  refType?: string
+  onRemove: () => void
+  disabled?: boolean
+}) {
   const { t } = useTranslation()
+  const display = rdnValue(dn)
   return (
-    <Badge variant="secondary" className="max-w-full gap-1 pr-1 font-normal" title={dn}>
-      <span className="truncate">{rdnValue(dn)}</span>
+    <Badge
+      variant="secondary"
+      className="max-w-full gap-1.5 pl-2 pr-1 py-0.5 font-normal text-xs transition-colors"
+      title={dn}
+    >
+      {refType && getRefIcon(refType)}
+      <span className="truncate max-w-[200px]">{display}</span>
       {!disabled && (
         <button
           type="button"
           onClick={onRemove}
-          aria-label={t('fields.removeItem', { name: rdnValue(dn) })}
-          className="hover:bg-accent rounded-sm p-0.5"
+          aria-label={t('fields.removeItem', { name: display })}
+          className="hover:bg-accent text-muted-foreground hover:text-foreground rounded-sm p-0.5 transition-colors"
         >
           <X className="size-3" />
         </button>
@@ -149,18 +191,19 @@ export function ObjectRefField({ p }: { p: FieldInputProps }) {
   return (
     <div className="space-y-2">
       {values.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 py-0.5">
           {values.map((dn) => (
             <Chip
               key={dn}
               dn={dn}
+              refType={refType}
               disabled={p.readOnly}
               onRemove={() => p.onChange(multi ? values.filter((x) => x !== dn) : null)}
             />
           ))}
         </div>
       )}
-      {(!p.readOnly && (multi || values.length === 0)) && (
+      {!p.readOnly && (multi || values.length === 0) && (
         <ObjectRefPicker
           id={p.id}
           refType={refType}
@@ -170,7 +213,9 @@ export function ObjectRefField({ p }: { p: FieldInputProps }) {
           onPick={(dn) => p.onChange(multi ? Array.from(new Set([...values, dn])) : dn)}
         />
       )}
-      {p.readOnly && values.length === 0 && <span className="text-muted-foreground">—</span>}
+      {p.readOnly && values.length === 0 && (
+        <span className="text-muted-foreground text-sm">—</span>
+      )}
     </div>
   )
 }
@@ -182,6 +227,23 @@ function findNode(nodes: TreeNode[], dn: string): TreeNode | null {
     if (c) return c
   }
   return null
+}
+
+function filterTree(nodes: TreeNode[], term: string): TreeNode[] {
+  if (!term) return nodes
+  const lower = term.toLowerCase()
+  const out: TreeNode[] = []
+  for (const n of nodes) {
+    const matchesSelf = n.label.toLowerCase().includes(lower) || n.dn.toLowerCase().includes(lower)
+    const matchingChildren = filterTree(n.children, term)
+    if (matchesSelf || matchingChildren.length > 0) {
+      out.push({
+        ...n,
+        children: matchingChildren,
+      })
+    }
+  }
+  return out
 }
 
 export function TreeList({
@@ -222,14 +284,14 @@ function TreeItem({
     <li role="treeitem" aria-expanded={has ? open : undefined} aria-selected={isSel}>
       <div
         className={cn(
-          'hover:bg-accent flex items-center gap-1 rounded-md pr-2',
-          isSel && 'bg-primary-soft text-foreground',
+          'hover:bg-accent flex items-center gap-1 rounded-md pr-2 transition-colors',
+          isSel && 'bg-primary-soft text-foreground font-medium',
         )}
         style={{ paddingLeft: level * 14 }}
       >
         <button
           type="button"
-          className="text-muted-foreground flex size-6 items-center justify-center"
+          className="text-muted-foreground hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded-sm"
           onClick={() => setOpen((o) => !o)}
           tabIndex={has ? 0 : -1}
           aria-label={has ? node.label : undefined}
@@ -241,8 +303,12 @@ function TreeItem({
           type="button"
           className="flex-1 truncate py-1.5 text-left text-sm"
           onClick={() => onSelect(node)}
+          title={node.dn}
         >
-          {node.label}
+          <span className="flex items-center gap-1.5">
+            <Building2 className="size-3 text-muted-foreground shrink-0" />
+            <span className="truncate">{node.label}</span>
+          </span>
         </button>
       </div>
       {has && open && <TreeList nodes={node.children} onSelect={onSelect} selected={selected} level={level + 1} />}
@@ -266,8 +332,20 @@ export function DepartmentPicker({
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
   const { data: tree } = useTree()
   const current = value && tree ? findNode(tree, value) : null
+  const filteredNodes = tree ? filterTree(tree, search) : []
+
+  if (disabled) {
+    return (
+      <div id={id} className="h-8 flex items-center text-sm font-medium gap-1.5">
+        <Building2 className="size-3.5 text-muted-foreground" />
+        <span className="truncate">{current?.label ?? (value ? rdnValue(value) : '—')}</span>
+      </div>
+    )
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -277,27 +355,46 @@ export function DepartmentPicker({
           variant="outline"
           disabled={disabled}
           aria-invalid={invalid || undefined}
-          className="w-full justify-between font-normal"
+          className="h-8 w-full justify-between font-normal text-sm"
         >
-          <span className={cn('truncate', !value && 'text-muted-foreground')}>
-            {current?.label ?? (value ? rdnValue(value) : t('fields.selectDepartment'))}
+          <span className={cn('flex items-center gap-1.5 truncate', !value && 'text-muted-foreground')}>
+            <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+            <span className="truncate">{current?.label ?? (value ? rdnValue(value) : t('fields.selectDepartment'))}</span>
           </span>
-          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="max-h-80 w-72 overflow-auto p-2" align="start">
-        {tree ? (
-          <TreeList
-            nodes={tree}
-            selected={value}
-            onSelect={(n) => {
-              onChange(n.dn)
-              setOpen(false)
-            }}
-          />
-        ) : (
-          <div className="text-muted-foreground p-2 text-sm">{t('common.loading')}</div>
-        )}
+      <PopoverContent className="w-80 p-2 shadow-md" align="start">
+        <div className="mb-2 border-b pb-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-2 size-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('fields.searchPlaceholder')}
+              className="h-7 pl-7 text-xs"
+            />
+          </div>
+        </div>
+        <div className="max-h-72 overflow-auto">
+          {tree ? (
+            filteredNodes.length > 0 ? (
+              <TreeList
+                nodes={filteredNodes}
+                selected={value}
+                onSelect={(n) => {
+                  onChange(n.dn)
+                  setOpen(false)
+                  setSearch('')
+                }}
+              />
+            ) : (
+              <div className="text-muted-foreground p-3 text-center text-xs">{t('fields.noResults')}</div>
+            )
+          ) : (
+            <div className="text-muted-foreground p-3 text-center text-xs">{t('common.loading')}</div>
+          )}
+        </div>
       </PopoverContent>
     </Popover>
   )

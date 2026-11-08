@@ -1,7 +1,9 @@
-import { FileUp, ImageUp, Trash2, User } from 'lucide-react'
-import { useRef } from 'react'
+import { FileText, FileUp, ImageUp, Trash2, UploadCloud, User } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import type { FieldInputProps } from './types'
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -19,11 +21,14 @@ async function fitImage(dataUrl: string, maxW: number, maxH: number): Promise<st
   return new Promise((resolve) => {
     const img = new Image()
     img.onload = () => {
-      const ratio = Math.min(1, maxW / img.width, maxH / img.height)
-      if (ratio >= 1 || !img.width) return resolve(dataUrl)
+      let { width, height } = img
+      if (width <= maxW && height <= maxH) return resolve(dataUrl)
+      const ratio = Math.min(maxW / width, maxH / height)
+      width = Math.round(width * ratio)
+      height = Math.round(height * ratio)
       const canvas = document.createElement('canvas')
-      canvas.width = Math.round(img.width * ratio)
-      canvas.height = Math.round(img.height * ratio)
+      canvas.width = width
+      canvas.height = height
       const ctx = canvas.getContext('2d')
       if (!ctx) return resolve(dataUrl)
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
@@ -37,6 +42,7 @@ async function fitImage(dataUrl: string, maxW: number, maxH: number): Promise<st
 export function ImageField({ p }: { p: FieldInputProps }) {
   const { t } = useTranslation()
   const input = useRef<HTMLInputElement>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
   const src = typeof p.value === 'string' && p.value ? p.value : null
   const max = p.descriptor.image ?? { max_width: 200, max_height: 200 }
 
@@ -46,38 +52,100 @@ export function ImageField({ p }: { p: FieldInputProps }) {
     p.onChange(await fitImage(url, max.max_width, max.max_height))
   }
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    if (p.readOnly) return
+    const file = e.dataTransfer.files[0]
+    if (file && file.type.startsWith('image/')) {
+      void onFile(file)
+    }
+  }
+
+  if (p.readOnly) {
+    return (
+      <div className="flex items-center gap-3">
+        <div className="bg-muted flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border">
+          {src ? (
+            <img src={src} alt={p.descriptor.label} className="size-full object-cover" />
+          ) : (
+            <User className="text-muted-foreground size-6" aria-hidden />
+          )}
+        </div>
+        {!src && <span className="text-muted-foreground text-sm">—</span>}
+      </div>
+    )
+  }
+
   return (
-    <div className="flex items-center gap-4">
-      <div className="bg-muted flex size-20 items-center justify-center overflow-hidden rounded-lg border">
+    <div className="flex flex-wrap items-center gap-4">
+      <div
+        className={cn(
+          'bg-muted/30 relative flex size-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed transition-colors',
+          isDragOver
+            ? 'border-primary bg-primary-soft/40'
+            : 'border-border hover:border-primary/50',
+        )}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setIsDragOver(true)
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => input.current?.click()}
+        title={t('fields.upload')}
+      >
         {src ? (
           <img src={src} alt={p.descriptor.label} className="size-full object-cover" />
         ) : (
-          <User className="text-muted-foreground size-8" aria-hidden />
+          <div className="flex flex-col items-center gap-1 text-center">
+            {isDragOver ? (
+              <UploadCloud className="size-6 text-primary animate-pulse" />
+            ) : (
+              <User className="text-muted-foreground size-6" aria-hidden />
+            )}
+          </div>
         )}
       </div>
-      {!p.readOnly && (
-        <div className="flex gap-2">
-          <input
-            ref={input}
-            id={p.id}
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            data-testid={`${p.id}-input`}
-            onChange={(e) => void onFile(e.target.files?.[0])}
-          />
-          <Button type="button" variant="outline" size="sm" onClick={() => input.current?.click()}>
-            <ImageUp className="size-4" />
+
+      <div className="flex flex-col gap-1.5">
+        <input
+          ref={input}
+          id={p.id}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          data-testid={`${p.id}-input`}
+          onChange={(e) => void onFile(e.target.files?.[0])}
+        />
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => input.current?.click()}
+          >
+            <ImageUp className="size-3.5" />
             {t('fields.upload')}
           </Button>
           {src && (
-            <Button type="button" variant="ghost" size="sm" onClick={() => p.onChange(null)}>
-              <Trash2 className="size-4" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive h-8 gap-1.5"
+              onClick={() => p.onChange(null)}
+            >
+              <Trash2 className="size-3.5" />
               {t('fields.remove')}
             </Button>
           )}
         </div>
-      )}
+        <p className="text-muted-foreground text-xs">
+          {t('fields.dragDropImage', 'Drag and drop an image or click to browse.')}
+        </p>
+      </div>
     </div>
   )
 }
@@ -85,17 +153,56 @@ export function ImageField({ p }: { p: FieldInputProps }) {
 export function FileField({ p }: { p: FieldInputProps }) {
   const { t } = useTranslation()
   const input = useRef<HTMLInputElement>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
   const has = typeof p.value === 'string' && p.value !== ''
   const size = has ? Math.round(((p.value as string).length * 3) / 4 / 1024) : 0
 
   const onFile = async (file: File | undefined) => {
     if (!file) return
     const url = await readAsDataUrl(file)
-    p.onChange(url.slice(url.indexOf(',') + 1)) // plain base64 per the contract
+    p.onChange(url.slice(url.indexOf(',') + 1)) // plain base64 per contract
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    if (p.readOnly) return
+    const file = e.dataTransfer.files[0]
+    if (file) void onFile(file)
+  }
+
+  if (p.readOnly) {
+    return (
+      <div className="flex h-8 items-center gap-2 text-sm">
+        {has ? (
+          <>
+            <FileText className="size-4 text-muted-foreground" />
+            <Badge variant="secondary" className="font-mono text-xs">
+              {t('fields.fileStored', { size })}
+            </Badge>
+          </>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </div>
+    )
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-3 rounded-lg border p-2.5 transition-colors',
+        isDragOver
+          ? 'border-primary bg-primary-soft/30'
+          : 'border-border bg-card',
+      )}
+      onDragOver={(e) => {
+        e.preventDefault()
+        setIsDragOver(true)
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={handleDrop}
+    >
       <input
         ref={input}
         id={p.id}
@@ -104,23 +211,36 @@ export function FileField({ p }: { p: FieldInputProps }) {
         data-testid={`${p.id}-input`}
         onChange={(e) => void onFile(e.target.files?.[0])}
       />
-      <span className="text-muted-foreground text-sm">
-        {has ? t('fields.fileStored', { size }) : t('fields.noFile')}
-      </span>
-      {!p.readOnly && (
-        <>
-          <Button type="button" variant="outline" size="sm" onClick={() => input.current?.click()}>
-            <FileUp className="size-4" />
-            {t('fields.upload')}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <FileText className="text-muted-foreground size-4 shrink-0" />
+        <span className="text-muted-foreground truncate text-sm">
+          {has ? t('fields.fileStored', { size }) : t('fields.noFile')}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5"
+          onClick={() => input.current?.click()}
+        >
+          <FileUp className="size-3.5" />
+          {t('fields.upload')}
+        </Button>
+        {has && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:text-destructive h-8 gap-1.5"
+            onClick={() => p.onChange(null)}
+          >
+            <Trash2 className="size-3.5" />
+            {t('fields.remove')}
           </Button>
-          {has && (
-            <Button type="button" variant="ghost" size="sm" onClick={() => p.onChange(null)}>
-              <Trash2 className="size-4" />
-              {t('fields.remove')}
-            </Button>
-          )}
-        </>
-      )}
+        )}
+      </div>
     </div>
   )
 }
