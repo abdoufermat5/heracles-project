@@ -1,3 +1,5 @@
+import { adminEn } from '@/features/admin/locale-en'
+
 const en = {
   common: {
     loading: 'Loading…',
@@ -296,6 +298,8 @@ const en = {
     permLocks: 'Manage account locks and password status',
     permScope: 'Global department scope override',
   },
+  // --- P3 admin ---
+  ...adminEn,
 }
 
 export default en

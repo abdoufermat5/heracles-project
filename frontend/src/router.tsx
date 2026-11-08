@@ -8,6 +8,7 @@ import {
   redirect,
   type RouterHistory,
 } from '@tanstack/react-router'
+import type { ComponentType } from 'react'
 import { Compass } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/endpoints'
@@ -25,6 +26,12 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { ObjectEditor } from '@/features/editor/ObjectEditor'
 import { ObjectListPage } from '@/features/listing/ObjectListPage'
 import { MePage } from '@/features/me/MePage'
+import { AccessPage } from '@/features/admin/AccessPage'
+import { AdminGate, type AdminCapability } from '@/features/admin/AdminGate'
+import { ConfigPage } from '@/features/admin/ConfigPage'
+import { HealthPage } from '@/features/admin/HealthPage'
+import { PluginsPage } from '@/features/admin/PluginsPage'
+import { TasksPage } from '@/features/admin/TasksPage'
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -137,12 +144,41 @@ const editRoute = createRoute({
   },
 })
 
+// --- P3 admin ---
+function adminRoute<P extends string>(path: P, capability: AdminCapability, Page: ComponentType) {
+  return createRoute({
+    getParentRoute: () => appRoute,
+    path,
+    component: () => (
+      <AdminGate capability={capability}>
+        <Page />
+      </AdminGate>
+    ),
+  })
+}
+const adminAccessRoute = adminRoute('/admin/access', 'acl', AccessPage)
+const adminConfigRoute = adminRoute('/admin/config', 'config', ConfigPage)
+const adminHealthRoute = adminRoute('/admin/health', 'health', HealthPage)
+const adminPluginsRoute = adminRoute('/admin/plugins', 'plugins', PluginsPage)
+const adminTasksRoute = adminRoute('/admin/tasks', 'tasks', TasksPage)
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   secondFactorRoute,
   recoveryRoute,
   recoveryConfirmRoute,
-  appRoute.addChildren([dashboardRoute, meRoute, listRoute, newRoute, editRoute]),
+  appRoute.addChildren([
+    dashboardRoute,
+    meRoute,
+    listRoute,
+    newRoute,
+    editRoute,
+    adminAccessRoute,
+    adminConfigRoute,
+    adminHealthRoute,
+    adminPluginsRoute,
+    adminTasksRoute,
+  ]),
 ])
 
 export function createAppRouter(queryClient: QueryClient, history?: RouterHistory) {

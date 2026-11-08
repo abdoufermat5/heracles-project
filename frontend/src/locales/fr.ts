@@ -1,4 +1,5 @@
 import type { Translation } from './en'
+import { adminFr } from '@/features/admin/locale-fr'
 
 const fr: Translation = {
   common: {
@@ -298,6 +299,8 @@ const fr: Translation = {
     permLocks: 'Gérer les verrouillages de compte et l’état des mots de passe',
     permScope: 'Dérogation globale de périmètre départemental',
   },
+  // --- P3 admin ---
+  ...adminFr,
 }
 
 export default fr
