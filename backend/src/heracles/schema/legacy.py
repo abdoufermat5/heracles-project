@@ -269,3 +269,193 @@ PLUGIN_OBJECT_CLASSES: Final = frozenset(
     }
 )
 """objectClasses used by the first-party plugins (standard and compatibility schemas)."""
+
+
+# --- P3 admin ---------------------------------------------------------------
+
+MAIL_TEMPLATE_CONFIG_CLASS: Final = "fdMailTemplateConf"
+"""Auxiliary class of the configuration entry holding the mail template settings."""
+
+TAB_HOOK_ATTR: Final = "fdTabHook"
+"""Multi-valued attribute of the configuration entry holding the triggers."""
+
+DISPLAY_HOOK_OUTPUT_ATTR: Final = "fdDisplayHookOutput"
+"""Single-valued boolean: show the successful output of a trigger to the user."""
+
+TASKS_GRANULAR_MASTER_ATTR: Final = "fdTasksGranularMaster"
+TASKS_GRANULAR_STATUS_ATTR: Final = "fdTasksGranularStatus"
+TASKS_GRANULAR_NEXT_EXEC_ATTR: Final = "fdTasksGranularNextExec"
+TASKS_GRANULAR_LAST_EXEC_ATTR: Final = "fdTasksGranularLastExec"
+TASKS_GRANULAR_TYPE_ATTR: Final = "fdTasksGranularType"
+TASKS_STATUS_ATTR: Final = "fdTasksStatus"
+TASKS_NEXT_EXEC_ATTR: Final = "fdTasksNextExec"
+TASKS_LAST_EXEC_ATTR: Final = "fdTasksLastExec"
+TASKS_CREATION_DATE_ATTR: Final = "fdTasksCreationDate"
+"""Task bookkeeping attributes (read by the task dashboard)."""
+
+# Heracles configuration key -> attribute name, for the configuration entry.
+CONFIG_ATTRS: Final[dict[str, str]] = {
+    # look and feel
+    "language": "fdLanguage",
+    "theme": "fdTheme",
+    "timezone": "fdTimezone",
+    # core
+    "schema_check": "fdSchemaCheck",
+    "account_primary_attribute": "fdAccountPrimaryAttribute",
+    "next_id_hook": "fdNextIdHook",
+    "strict_naming_rules": "fdStrictNamingRules",
+    "min_id": "fdMinId",
+    "uid_number_base": "fdUidNumberBase",
+    "gid_number_base": "fdGidNumberBase",
+    "user_rdn": "fdUserRDN",
+    "group_rdn": "fdGroupRDN",
+    "acl_role_rdn": "fdAclRoleRDN",
+    "ogroup_rdn": "fdOGroupRDN",
+    "token_rdn": "fdTokenRDN",
+    "orchestrator_token_rdn": "fdOrchestratorTokenRDN",
+    "recovery_token_rdn": "fdRecoveryTokenRDN",
+    "id_allocation_method": "fdIdAllocationMethod",
+    "gid_pool_min": "fdGidNumberPoolMin",
+    "gid_pool_max": "fdGidNumberPoolMax",
+    "uid_pool_min": "fdUidNumberPoolMin",
+    "uid_pool_max": "fdUidNumberPoolMax",
+    "cn_pattern": "fdCnPattern",
+    "restrict_role_members": "fdRestrictRoleMembers",
+    "split_postal_address": "fdSplitPostalAddress",
+    "postal_address_pattern": "fdPostalAddressPattern",
+    "max_avatar_size": "fdMaxAvatarSize",
+    "given_name_required": "fdGivenNameRequired",
+    "list_summary": "fdListSummary",
+    "modification_detection_attribute": "fdModificationDetectionAttribute",
+    "ldap_size_limit": "fdLdapSizeLimit",
+    "wildcard_foreign_keys": "fdWildcardForeignKeys",
+    "store_filter_settings": "fdStoreFilterSettings",
+    "shells": "fdShells",
+    "default_shell": "fdDefaultShell",
+    "acl_tab_on_objects": "fdAclTabOnObjects",
+    "department_categories": "fdDepartmentCategories",
+    "plugins_menu_blacklist": "fdPluginsMenuBlacklist",
+    "acl_target_filter_limit": "fdAclTargetFilterLimit",
+    "management_config": "fdManagementConfig",
+    "management_user_config": "fdManagementUserConfig",
+    "incremental_modifier_states": "fdIncrementalModifierStates",
+    "ogroup_default_user": "fdOGroupDefaultUser",
+    "force_sasl_password_ask": "fdForceSaslPasswordAsk",
+    "config_checksum": "fusionConfigMd5",
+    # password
+    "password_default_hash": "fdPasswordDefaultHash",
+    "password_min_length": "fdPasswordMinLength",
+    "password_min_differ": "fdPasswordMinDiffer",
+    "force_password_default_hash": "fdForcePasswordDefaultHash",
+    "password_allowed_hashes": "fdPasswordAllowedHashes",
+    "handle_expired_accounts": "fdHandleExpiredAccounts",
+    "sasl_realm": "fdSaslRealm",
+    "sasl_exop": "fdSaslExop",
+    # login and session
+    "login_attribute": "fdLoginAttribute",
+    "session_lifetime": "fdSessionLifeTime",
+    "login_method": "fdLoginMethod",
+    "http_auth_enabled": "fdHttpAuthActivated",
+    "http_header_auth_enabled": "fdHttpHeaderAuthActivated",
+    "http_header_name": "fdHttpHeaderAuthHeaderName",
+    "cas_enabled": "fdCasActivated",
+    "cas_host": "fdCasHost",
+    "cas_port": "fdCasPort",
+    "cas_context": "fdCasContext",
+    "cas_ca_cert_path": "fdCasServerCaCertPath",
+    "cas_verbose": "fdCasVerbose",
+    "cas_new_library": "fdCasLibraryBool",
+    "cas_service_name": "fdCasClientServiceName",
+    # ssl
+    "force_ssl": "fdForceSSL",
+    "warn_ssl": "fdWarnSSL",
+    "ssl_ca_cert_path": "fdSslCaCertPath",
+    "ssl_key_path": "fdSslKeyPath",
+    "ssl_cert_path": "fdSslCertPath",
+    # snapshots
+    "snapshots_enabled": "fdEnableSnapshots",
+    "snapshot_base": "fdSnapshotBase",
+    "automatic_snapshots": "fdEnableAutomaticSnapshots",
+    "snapshot_min_retention": "fdSnapshotMinRetention",
+    "snapshot_retention_days": "fdSnapshotRetentionDays",
+    "snapshot_source_data": "fdSnapshotSourceData",
+    # triggers
+    "tab_hooks": TAB_HOOK_ATTR,
+    "display_hook_output": DISPLAY_HOOK_OUTPUT_ATTR,
+    # password recovery
+    "recovery_enabled": "fdPasswordRecoveryActivated",
+    "recovery_email": "fdPasswordRecoveryEmail",
+    "recovery_mail_subject": "fdPasswordRecoveryMailSubject",
+    "recovery_mail_body": "fdPasswordRecoveryMailBody",
+    "recovery_mail2_subject": "fdPasswordRecoveryMail2Subject",
+    "recovery_mail2_body": "fdPasswordRecoveryMail2Body",
+    "recovery_validity": "fdPasswordRecoveryValidity",
+    "recovery_salt": "fdPasswordRecoverySalt",
+    "recovery_use_alternate": "fdPasswordRecoveryUseAlternate",
+    "recovery_login_attribute": "fdPasswordRecoveryLoginAttribute",
+    # tasks
+    "tasks_rdn": "fdTasksRDN",
+    "tasks_last_exec_time": "fdTasksConfLastExecTime",
+    "tasks_max_emails": "fdTasksConfMaxEmails",
+    "tasks_interval_emails": "fdTasksConfIntervalEmails",
+    # mail templates
+    "mail_template_rdn": "fdMailTemplateRDN",
+    # dashboard
+    "dashboard_prefix": "fdDashboardPrefix",
+    "dashboard_digits": "fdDashboardNumberOfDigit",
+    "dashboard_expired_days": "fdDashboardExpiredAccountsDays",
+    # debugging
+    "display_errors": "fdDisplayErrors",
+    "ldap_max_query_time": "fdLdapMaxQueryTime",
+    "ldap_stats": "fdLdapStats",
+    "debug_level": "fdDebugLevel",
+    "debug_logging": "fdDebugLogging",
+    "logging": "fdLogging",
+}
+
+CONFIG_ATTR_CLASS: Final[dict[str, str]] = {
+    **{
+        a: OC.PLUGINS_CONFIG
+        for a in ("fdOGroupRDN", "fdForceSaslPasswordAsk", "fdOGroupDefaultUser")
+    },
+    **{
+        a: OC.RECOVERY_CONFIG
+        for a in (
+            "fdPasswordRecoveryActivated",
+            "fdPasswordRecoveryEmail",
+            "fdPasswordRecoveryMailSubject",
+            "fdPasswordRecoveryMailBody",
+            "fdPasswordRecoveryMail2Subject",
+            "fdPasswordRecoveryMail2Body",
+            "fdPasswordRecoveryValidity",
+            "fdPasswordRecoverySalt",
+            "fdPasswordRecoveryUseAlternate",
+            "fdPasswordRecoveryLoginAttribute",
+        )
+    },
+    **{
+        a: OC.DASHBOARD_CONFIG
+        for a in ("fdDashboardPrefix", "fdDashboardNumberOfDigit", "fdDashboardExpiredAccountsDays")
+    },
+    **{
+        a: OC.TASKS_CONF
+        for a in (
+            "fdTasksRDN",
+            "fdTasksConfLastExecTime",
+            "fdTasksConfMaxEmails",
+            "fdTasksConfIntervalEmails",
+        )
+    },
+    "fdMailTemplateRDN": MAIL_TEMPLATE_CONFIG_CLASS,
+}
+"""Auxiliary class of the configuration entry that allows each non-main attribute."""
+
+CONFIG_ENTRY_CLASSES: Final = (
+    OC.MAIN_CONFIG,
+    OC.PLUGINS_CONFIG,
+    OC.RECOVERY_CONFIG,
+    OC.DASHBOARD_CONFIG,
+    OC.TASKS_CONF,
+    MAIL_TEMPLATE_CONFIG_CLASS,
+)
+"""Classes the configuration entry may carry (main first)."""
