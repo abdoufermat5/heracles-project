@@ -8,11 +8,13 @@ import {
   redirect,
   type RouterHistory,
 } from '@tanstack/react-router'
+import { Compass } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/endpoints'
 import { qk } from '@/api/hooks'
 import { AppShell } from '@/components/shell/AppShell'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
 import {
   LoginPage,
   RecoveryConfirmPage,
@@ -31,11 +33,18 @@ export interface RouterContext {
 function NotFound() {
   const { t } = useTranslation()
   return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center">
-      <p className="text-lg font-semibold">{t('common.notFound')}</p>
-      <Button asChild variant="outline">
-        <Link to="/">{t('nav.dashboard')}</Link>
-      </Button>
+    <div className="flex min-h-[60vh] items-center justify-center p-6">
+      <EmptyState
+        icon={<Compass className="size-6 text-muted-foreground" aria-hidden />}
+        title={t('common.notFound')}
+        description={t('common.notFoundHelp', 'The requested page or directory object could not be found.')}
+        action={
+          <Button asChild variant="outline" size="sm" className="h-8">
+            <Link to="/">{t('nav.dashboard')}</Link>
+          </Button>
+        }
+        className="max-w-md w-full py-14"
+      />
     </div>
   )
 }

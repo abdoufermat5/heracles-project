@@ -58,4 +58,21 @@ describe('full flow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password.')
   })
+
+  it('renders profile page with identity and rights', async () => {
+    renderApp('/me')
+    await userEvent.type(await screen.findByLabelText('Username'), 'admin')
+    await userEvent.type(screen.getByLabelText('Password'), 'secret')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(await screen.findByRole('heading', { name: 'My account' })).toBeInTheDocument()
+    expect(await screen.findByText('Administrator')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /Edit my account/ })[0]).toBeInTheDocument()
+  })
+
+  it('renders 404 empty state for unknown routes', async () => {
+    renderApp('/unknown-page')
+    expect(await screen.findByText('Not found')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+  })
 })
