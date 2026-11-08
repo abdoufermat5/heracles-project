@@ -287,3 +287,25 @@ def test_deleted_snapshots_listing_and_restore(admin: Api) -> None:
     assert r.status_code == 200, r.text
     assert admin.get(f"/objects/user/{q(target)}").status_code == 200
     assert admin.get("/snapshots/deleted").json() == []
+
+
+def test_snapshot_settings_from_the_directory(app_client: TestClient) -> None:
+    admin = Api(app_client).login("admin")
+    admin_put = admin.client.put
+    headers = admin.headers
+    base = "/api/v2/admin"
+    target = f"uid=dlefevre,ou=people,ou=lyon,{BASE}"
+    assert admin.post(f"/objects/user/{q(target)}/snapshots", {}).status_code == 201
+
+    r = admin_put(f"{base}/config", json={"changes": {"snapshots_enabled": False}}, headers=headers)
+    assert r.status_code == 200, r.text
+    disabled = admin.post(f"/objects/user/{q(target)}/snapshots", {})
+    assert disabled.status_code == 403, disabled.text
+
+    assert (
+        admin_put(
+            f"{base}/config", json={"changes": {"snapshots_enabled": True}}, headers=headers
+        ).status_code
+        == 200
+    )
+    assert admin.post(f"/objects/user/{q(target)}/snapshots", {}).status_code == 201

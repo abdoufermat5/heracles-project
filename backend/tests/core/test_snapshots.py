@@ -113,6 +113,23 @@ def test_delete(svc: SnapshotService, directory: MemoryDirectory) -> None:
     assert directory.get(snap.dn) is None
 
 
+def test_prune_honours_retention_and_floor(directory: MemoryDirectory) -> None:
+    now = [1_700_000_000.0]
+    svc = SnapshotService(directory, clock=lambda: now[0])
+    old = svc.create(ALICE, description="old")
+    now[0] += 10 * 86_400
+    middle = svc.create(ALICE, description="middle")
+    now[0] += 10 * 86_400
+    recent = svc.create(ALICE, description="recent")
+    removed = svc.prune(retention_days=15)
+    assert removed == [old.dn]
+    assert {s.dn for s in svc.list_all()} == {middle.dn, recent.dn}
+    # the floor wins over the retention
+    assert svc.prune(retention_days=1, min_retention_days=100) == []
+    assert svc.prune(retention_days=0) == []
+    assert len(svc.list_all()) == 2
+
+
 def test_corruption_detected(svc: SnapshotService, directory: MemoryDirectory) -> None:
     from heracles.ldap.client import Modification
 

@@ -234,6 +234,29 @@ class SnapshotService:
         """Remove a snapshot entry."""
         self._dir.delete(snapshot_dn)
 
+    def prune(self, retention_days: int, min_retention_days: int | None = None) -> list[str]:
+        """Delete the snapshots older than ``retention_days``.
+
+        ``min_retention_days`` keeps the most recent snapshots whatever the
+        retention says. Returns the DNs removed.
+        """
+        if retention_days <= 0:
+            return []
+        now = self._clock()
+        cutoff = now - retention_days * 86_400
+        floor = now - (min_retention_days or 0) * 86_400
+        removed: list[str] = []
+        for snapshot in self.list_all():
+            created = snapshot.created_at
+            if created is None:
+                continue
+            moment = created.timestamp()
+            if moment >= cutoff or moment > floor:
+                continue
+            self._dir.delete(snapshot.dn)
+            removed.append(snapshot.dn)
+        return removed
+
     def _list(self, flt: str) -> list[Snapshot]:
         full = f"(&(objectClass={legacy.OC.SNAPSHOT}){flt})"
         attrs = [
