@@ -8,12 +8,12 @@ is available and falls back to the YAML settings otherwise.
 
 from __future__ import annotations
 
-import importlib
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel
 
+from heracles.core.config_store import effective_settings
 from heracles.ldap.client import DirectoryClient
 
 LoginMethod = Literal["form", "http-basic", "http-header", "cas", "oidc"]
@@ -84,32 +84,44 @@ def _as_int(value: object, default: int) -> int:
 
 
 def effective_sso(settings: SsoSettings, directory: DirectoryClient | None) -> SsoConfig:
-    """YAML settings overlaid with the directory-stored configuration, when available."""
+    """YAML settings overlaid with the directory-stored configuration.
+
+    Only the knobs the configuration entry actually stores override the YAML
+    defaults (``RuntimeConfig.from_directory``), so an installation that has not
+    created the entry keeps its file configuration.
+    """
     base = from_settings(settings)
     if directory is None:
         return base
     try:
-        module = importlib.import_module("heracles.core.config_store")
-        runtime: Any = module.effective_settings(directory)
-    except (ImportError, AttributeError):
+        runtime = effective_settings(directory)
+    except Exception:  # a broken configuration entry must not block login
         return base
-    method = str(getattr(runtime, "login_method", "") or base.login_method)
+    stored = runtime.from_directory
+
+    def text(key: str, default: str) -> str:
+        return str(getattr(runtime, key, "") or default) if key in stored else default
+
+    def flag(key: str, default: bool) -> bool:
+        return _as_bool(getattr(runtime, key, None), default) if key in stored else default
+
+    method = text("login_method", base.login_method)
     if method not in LOGIN_METHODS:
         method = base.login_method
     return SsoConfig(
         login_method=method,
-        http_auth_enabled=_as_bool(
-            getattr(runtime, "http_auth_enabled", None), base.http_auth_enabled
+        http_auth_enabled=flag("http_auth_enabled", base.http_auth_enabled),
+        http_header_auth_enabled=flag("http_header_auth_enabled", base.http_header_auth_enabled),
+        http_header_name=text("http_header_name", base.http_header_name),
+        cas_enabled=flag("cas_enabled", base.cas_enabled),
+        cas_host=text("cas_host", base.cas_host),
+        cas_port=(
+            _as_int(getattr(runtime, "cas_port", None), base.cas_port)
+            if "cas_port" in stored
+            else base.cas_port
         ),
-        http_header_auth_enabled=_as_bool(
-            getattr(runtime, "http_header_auth_enabled", None), base.http_header_auth_enabled
-        ),
-        http_header_name=str(getattr(runtime, "http_header_name", "") or base.http_header_name),
-        cas_enabled=_as_bool(getattr(runtime, "cas_enabled", None), base.cas_enabled),
-        cas_host=str(getattr(runtime, "cas_host", "") or base.cas_host),
-        cas_port=_as_int(getattr(runtime, "cas_port", None), base.cas_port),
-        cas_context=str(getattr(runtime, "cas_context", "") or base.cas_context),
-        cas_ca_cert_path=str(getattr(runtime, "cas_ca_cert_path", "") or base.cas_ca_cert_path),
-        cas_verbose=_as_bool(getattr(runtime, "cas_verbose", None), base.cas_verbose),
-        cas_service_name=str(getattr(runtime, "cas_service_name", "") or base.cas_service_name),
+        cas_context=text("cas_context", base.cas_context),
+        cas_ca_cert_path=text("cas_ca_cert_path", base.cas_ca_cert_path),
+        cas_verbose=flag("cas_verbose", base.cas_verbose),
+        cas_service_name=text("cas_service_name", base.cas_service_name),
     )

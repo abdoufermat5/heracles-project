@@ -5,8 +5,10 @@ from __future__ import annotations
 import httpx2
 import pytest
 
+from heracles import demo
 from heracles.auth.cas import CasClient, CasError, parse_validation
 from heracles.auth.sso import SsoConfig, SsoSettings, effective_sso
+from heracles.core import config_store
 
 SERVICE = "https://heracles.example.org/api/v2/auth/cas/callback?directory=main"
 CONFIG = SsoConfig(login_method="cas", cas_enabled=True, cas_host="cas.example.org", cas_port=8443)
@@ -88,30 +90,31 @@ def test_effective_sso_falls_back_to_yaml() -> None:
     assert not SsoConfig(cas_host="x").cas_available  # not activated
 
 
-def test_effective_sso_reads_the_stored_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
-    import sys
-    import types
-    from dataclasses import dataclass
-
-    @dataclass
-    class Runtime:
-        login_method: str = "cas"
-        http_auth_enabled: str = "TRUE"
-        http_header_auth_enabled: bool = False
-        http_header_name: str = "X-User"
-        cas_host: str = "cas.stored"
-        cas_port: str = "9443"
-        cas_context: str = ""
-        cas_ca_cert_path: str = "/ca.pem"
-        cas_service_name: str = "heracles.stored"
-
-    module = types.ModuleType("heracles.core.config_store")
-    module.effective_settings = lambda _directory: Runtime()  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "heracles.core.config_store", module)
-    from tests.auth.fakes import FakeDirectory
-
-    cfg = effective_sso(SsoSettings(cas_context="/cas"), FakeDirectory())
+def test_effective_sso_reads_the_stored_configuration() -> None:
+    directory = demo.build_demo_directory()
+    config_store.save_config(
+        directory,
+        {
+            "login_method": "cas",
+            "http_auth_enabled": True,
+            "http_header_name": "X-User",
+            "cas_host": "cas.stored",
+            "cas_port": 9443,
+            "cas_ca_cert_path": "/ca.pem",
+            "cas_service_name": "heracles.stored",
+        },
+    )
+    config_store.invalidate(directory)
+    settings = SsoSettings(login_method="form", cas_context="/cas")
+    cfg = effective_sso(settings, directory)
     assert cfg.login_method == "cas" and cfg.http_auth_enabled is True
     assert cfg.cas_host == "cas.stored" and cfg.cas_port == 9443
-    assert cfg.cas_context == "/cas"  # empty stored value keeps the default
+    assert cfg.cas_context == "/cas"  # not stored: the YAML value stays
     assert cfg.http_header_name == "X-User" and cfg.cas_ca_cert_path == "/ca.pem"
+
+
+def test_effective_sso_keeps_yaml_when_the_entry_stores_nothing() -> None:
+    directory = demo.build_demo_directory()
+    settings = SsoSettings(login_method="cas", cas_host="yaml.example.org")
+    cfg = effective_sso(settings, directory)
+    assert cfg.login_method == "cas" and cfg.cas_host == "yaml.example.org"
