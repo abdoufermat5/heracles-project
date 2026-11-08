@@ -24,10 +24,12 @@ from heracles.auth.second_factor import (
     SecondFactorService,
     SecondFactorStore,
 )
+from heracles.auth.second_factor_db import SqliteSecondFactorStore
 from heracles.auth.sessions import InMemorySessionStore, SessionStore
 from heracles.auth.webauthn import WebAuthnService
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError
+from heracles.storage import Database
 
 
 def _default_admin_resolver(admin_dns: Iterable[str]) -> AdminResolver:
@@ -77,9 +79,14 @@ def create_app(
         )
     )
     mail = mailer if mailer is not None else MemoryMailer()
-    sf_store = (
-        second_factor_store if second_factor_store is not None else InMemorySecondFactorStore()
-    )
+    database = Database(settings.database.path) if settings.database.path is not None else None
+    sf_store: SecondFactorStore
+    if second_factor_store is not None:
+        sf_store = second_factor_store
+    elif database is not None:
+        sf_store = SqliteSecondFactorStore(database)
+    else:
+        sf_store = InMemorySecondFactorStore()
     policy_cfg = settings.password
     policy = PasswordPolicy(
         min_length=policy_cfg.min_length,
@@ -120,6 +127,7 @@ def create_app(
         is_admin=is_admin or _default_admin_resolver(settings.admin_dns),
         logout_hooks=list(logout_hooks),
         clock=clock,
+        database=database,
     )
 
     install_error_handlers(app)

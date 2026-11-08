@@ -12,6 +12,8 @@ Config file (YAML/TOML, path in ``$HERACLES_CONFIG``)::
     api:                    # see heracles.api.settings.ApiSettings
       admin_dns: ["uid=admin,ou=people,dc=example,dc=com"]
       static_dir: /srv/heracles/frontend
+      database:
+        path: /var/lib/heracles/heracles.db   # default: $HERACLES_DATA_DIR/heracles.db
 """
 
 from __future__ import annotations
@@ -118,6 +120,9 @@ def build_app(config_path: str | os.PathLike[str] | None = None) -> FastAPI:
     directories: dict[str, DirectoryClient] = {
         cfg.id: PyLdapDirectory(cfg) for cfg in ldap_settings.directories
     }
+    if api_settings.database.path is None:
+        data_dir = Path(os.environ.get("HERACLES_DATA_DIR", "/var/lib/heracles"))
+        api_settings.database.path = data_dir / "heracles.db"
     if not api_settings.directory_labels:
         api_settings.directory_labels = {cfg.id: cfg.label for cfg in ldap_settings.directories}
     return create_full_app(api_settings, directories)

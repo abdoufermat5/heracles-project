@@ -70,6 +70,14 @@ class PasswordSettings(BaseModel):
     force_default: bool = False
 
 
+class DatabaseSettings(BaseModel):
+    """The application's own SQLite database (second-factor registrations, ...)."""
+
+    #: Database file. Unset: in-memory stores (demo, tests); the production server
+    #: defaults it to ``$HERACLES_DATA_DIR/heracles.db`` (``/var/lib/heracles``).
+    path: Path | None = None
+
+
 class ApiSettings(BaseModel):
     """Everything ``create_app`` needs besides the directories."""
 
@@ -83,6 +91,7 @@ class ApiSettings(BaseModel):
     password: PasswordSettings = Field(default_factory=PasswordSettings)
     oidc: OidcSettings = Field(default_factory=OidcSettings)
     webauthn: WebAuthnSettings = Field(default_factory=WebAuthnSettings)
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     #: Host names the server may build links from when no public address is configured
     #: (``cas_service_name``, the invitations ``public_base_url``): the request ``Host``
     #: header is client-chosen. ``*.example.org`` matches subdomains. Set it in production.

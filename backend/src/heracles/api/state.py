@@ -16,6 +16,7 @@ from heracles.auth.second_factor import SecondFactorService
 from heracles.auth.sessions import Session, SessionStore
 from heracles.auth.webauthn import WebAuthnService
 from heracles.ldap.client import DirectoryClient
+from heracles.storage import Database
 
 AdminResolver = Callable[[DirectoryClient, str], bool]
 LogoutHook = Callable[[Session], None]
@@ -38,3 +39,5 @@ class AppState:
     logout_hooks: list[LogoutHook] = field(default_factory=lambda: [])
     #: Wall clock shared with the session store (injectable in tests).
     clock: Callable[[], float] = time.time
+    #: The application database, when one is configured (``settings.database.path``).
+    database: Database | None = None
