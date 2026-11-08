@@ -425,6 +425,15 @@ def test_invitation_flow_on_the_full_application(full_client: TestClient) -> Non
         == 404
     )
 
+    # without a configured public address the request Host must be an allowed one
+    forged = full_client.post(
+        "/api/v2/invitations/send",
+        json={"invitation": invitation, "emails": ["victim@example.com"]},
+        headers={**admin.headers, "Host": "evil.example"},
+    )
+    assert forged.status_code == 400 and forged.json()["error"]["code"] == "untrusted_host"
+    assert len(mailer.outbox) == 1
+
     # one session per client: sign in as someone else last
     helpdesk = Api(full_client).login("helpdesk")
     denied = helpdesk.post("/invitations/send", {"invitation": invitation, "emails": ["a@b.co"]})

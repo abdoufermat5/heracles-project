@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from heracles.api.deps import CurrentUserDep, get_state
 from heracles.api.domain import DomainDep
 from heracles.api.errors import forbidden, not_found, validation
+from heracles.api.hosts import request_base
 from heracles.objects.registry import PluginRouterContext
 from heracles_plugins.invitations.sending import InvitationError, send_invitation
 
@@ -36,11 +37,14 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             raise forbidden("You cannot send this invitation")
         if user.directory.get(body.invitation, ["objectClass"]) is None:
             raise not_found("Invitation not found")
-        base_url = str(getattr(settings, "public_base_url", "") or request.base_url)
+        state = get_state(request)
+        base_url = str(getattr(settings, "public_base_url", "") or "") or request_base(
+            request, state.settings.allowed_hosts, setting="the invitations public_base_url"
+        )
         try:
             report = send_invitation(
                 user.directory,
-                get_state(request).mailer,
+                state.mailer,
                 body.invitation,
                 body.emails,
                 base_url=base_url,

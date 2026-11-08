@@ -13,3 +13,7 @@ api:
   enable_docs: true
   session:
     cookie_secure: false
+  # Host names the server may build links from (CAS service URL, invitation links) when no public
+  # address is configured (cas_service_name, the invitations public_base_url). Defaults to the
+  # local addresses; set it to the console's public host name in production.
+  # allowed_hosts: ["heracles.example.org", "*.corp.example.org"]

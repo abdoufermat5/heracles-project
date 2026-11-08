@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from heracles.api.deps import StateDep, client_ip, session_from_cookie
 from heracles.api.errors import ApiError, not_found, unauthenticated, validation
+from heracles.api.hosts import request_base
 from heracles.api.state import AppState
 from heracles.auth.cas import CasClient, CasError
 from heracles.auth.login import InvalidLoginError, authenticate_bind, find_user_dn
@@ -67,16 +68,18 @@ def safe_next(value: str | None) -> str:
     return "/"
 
 
-def _public_base(request: Request, config: SsoConfig) -> str:
+def _public_base(request: Request, state: AppState, config: SsoConfig) -> str:
     name = config.cas_service_name.strip()
     if name:
         return (name if "://" in name else f"https://{name}").rstrip("/")
-    return str(request.base_url).rstrip("/")
+    return request_base(request, state.settings.allowed_hosts, setting="cas_service_name")
 
 
-def _service_url(request: Request, config: SsoConfig, directory_id: str, next_path: str) -> str:
+def _service_url(
+    request: Request, state: AppState, config: SsoConfig, directory_id: str, next_path: str
+) -> str:
     query = urlencode({"directory": directory_id, "next": next_path})
-    return f"{_public_base(request, config)}/api/v2/auth/cas/callback?{query}"
+    return f"{_public_base(request, state, config)}/api/v2/auth/cas/callback?{query}"
 
 
 def _cas_client(request: Request, config: SsoConfig) -> CasClient:
@@ -183,7 +186,7 @@ def cas_login(
     """Send the browser to the CAS server."""
     directory_id, client = _directory(state, directory)
     config = _cas_config(state, client)
-    service = _service_url(request, config, directory_id, safe_next(next))
+    service = _service_url(request, state, config, directory_id, safe_next(next))
     return RedirectResponse(_cas_client(request, config).login_url(service), status_code=302)
 
 
@@ -202,7 +205,7 @@ def cas_callback(
     failure = RedirectResponse("/login?sso_error=1", status_code=302)
     if not ticket:
         return failure
-    service = _service_url(request, config, directory_id, target)
+    service = _service_url(request, state, config, directory_id, target)
     try:
         principal = _cas_client(request, config).validate(ticket, service)
     except CasError as exc:
@@ -242,7 +245,7 @@ def cas_logout(
         _, client = _directory(state, directory)
         config = _config(state, client)
         if config.cas_available:
-            back = f"{_public_base(request, config)}/login"
+            back = f"{_public_base(request, state, config)}/login"
             destination = _cas_client(request, config).logout_url(back)
     except ApiError:
         pass

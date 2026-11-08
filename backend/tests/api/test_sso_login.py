@@ -108,6 +108,41 @@ def test_cas_disabled_is_404() -> None:
         assert client.get("/api/v2/auth/cas/callback?ticket=x").status_code == 404
 
 
+def test_cas_without_public_name_refuses_unknown_hosts() -> None:
+    """The service URL is built from the request Host only when that host is allowed."""
+    sso = SsoSettings(login_method="cas", cas_enabled=True, cas_host="cas.example.org")
+    app = make_app(sso)
+    with TestClient(app, follow_redirects=False) as client:
+        ok = client.get("/api/v2/auth/cas/login")  # "testserver" is allowed by default
+        assert ok.status_code == 302
+        assert (
+            "service=http%3A%2F%2Ftestserver%2Fapi%2Fv2%2Fauth%2Fcas%2Fcallback"
+            in (ok.headers["location"])
+        )
+        forged = client.get("/api/v2/auth/cas/login", headers={"Host": "evil.example"})
+        assert forged.status_code == 400
+        assert forged.json()["error"]["code"] == "untrusted_host"
+        assert (
+            client.get(
+                "/api/v2/auth/cas/callback?ticket=t", headers={"Host": "evil.example"}
+            ).status_code
+            == 400
+        )
+    settings = ApiSettings(
+        directory_labels={"main": "Demo"}, sso=sso, allowed_hosts=["*.corp.test"]
+    )
+    settings.session.cookie_secure = False
+    app = create_full_app(settings, {"main": demo.build_demo_directory()})
+    with TestClient(app, follow_redirects=False) as client:
+        assert (
+            client.get("/api/v2/auth/cas/login", headers={"Host": "h.corp.test"}).status_code == 302
+        )
+        assert (
+            client.get("/api/v2/auth/cas/login", headers={"Host": "evil.example"}).status_code
+            == 400
+        )
+
+
 def test_cas_callback_opens_a_session(cas_app: FastAPI, cas_client: TestClient) -> None:
     seen = fake_cas(cas_app, {"ST-1": "asmith"})
     r = cas_client.get(

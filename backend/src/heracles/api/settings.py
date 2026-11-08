@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from heracles.api.hosts import DEFAULT_ALLOWED_HOSTS
 from heracles.auth.oidc import OidcSettings
 from heracles.auth.recovery import RecoveryConfig
 from heracles.auth.sso import SsoSettings
@@ -82,6 +83,10 @@ class ApiSettings(BaseModel):
     password: PasswordSettings = Field(default_factory=PasswordSettings)
     oidc: OidcSettings = Field(default_factory=OidcSettings)
     webauthn: WebAuthnSettings = Field(default_factory=WebAuthnSettings)
+    #: Host names the server may build links from when no public address is configured
+    #: (``cas_service_name``, the invitations ``public_base_url``): the request ``Host``
+    #: header is client-chosen. ``*.example.org`` matches subdomains. Set it in production.
+    allowed_hosts: list[str] = Field(default_factory=lambda: list(DEFAULT_ALLOWED_HOSTS))
     #: Directory holding the built SPA; served when it exists.
     static_dir: Path | None = None
     enable_docs: bool = False
