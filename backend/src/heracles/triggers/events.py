@@ -171,6 +171,9 @@ class TriggerEvents(NullEvents):
             text = result.output or f"Trigger {hook.mode} on {hook.tab} failed."
             if abort:
                 raise ObjectValidationError({"_": text})
+            log.warning(
+                "trigger_failed", tab=hook.tab, mode=hook.mode, dn=dn, exit_code=result.exit_code
+            )
             self.warnings.append(text)
         return results
 

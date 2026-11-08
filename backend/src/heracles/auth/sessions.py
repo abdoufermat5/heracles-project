@@ -77,6 +77,15 @@ class InMemorySessionStore:
         self._sessions: dict[str, Session] = {}
         self._lock = threading.Lock()
 
+    @property
+    def idle_timeout(self) -> float:
+        """Seconds of inactivity after which a session expires (changeable at runtime)."""
+        return self._idle
+
+    @idle_timeout.setter
+    def idle_timeout(self, seconds: float) -> None:
+        self._idle = seconds
+
     def _expired(self, s: Session, now: float) -> bool:
         return now - s.last_seen > self._idle or now - s.created_at > self._absolute
 

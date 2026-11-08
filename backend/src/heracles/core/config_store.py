@@ -93,7 +93,7 @@ CONFIG_FIELDS: Final[tuple[ConfigField, ...]] = (
     # --- look and feel
     _f("language", "look_and_feel", "select", options=("en", "fr"), default="en"),
     _f("theme", "look_and_feel"),
-    _f("timezone", "look_and_feel", default="UTC", honoured=True),
+    _f("timezone", "look_and_feel", default="UTC"),
     _f("list_summary", "look_and_feel", "bool"),
     _f("store_filter_settings", "look_and_feel", "bool"),
     _f("max_avatar_size", "look_and_feel", "int", default=200),
@@ -172,15 +172,15 @@ CONFIG_FIELDS: Final[tuple[ConfigField, ...]] = (
     _f("ssl_key_path", "ssl", "path"),
     _f("ssl_cert_path", "ssl", "path"),
     # --- storage (RDNs)
-    _f("user_rdn", "storage", default="ou=people"),
+    _f("user_rdn", "storage", honoured=True, default="ou=people"),
     _f("group_rdn", "storage", honoured=True, default="ou=groups"),
-    _f("acl_role_rdn", "storage", default="ou=aclroles"),
+    _f("acl_role_rdn", "storage", honoured=True, default="ou=aclroles"),
     _f("ogroup_rdn", "storage"),
     _f("token_rdn", "storage"),
     _f("orchestrator_token_rdn", "storage"),
     _f("recovery_token_rdn", "storage"),
     # --- snapshots
-    _f("snapshots_enabled", "snapshots", "bool", honoured=True, default=True),
+    _f("snapshots_enabled", "snapshots", "bool", default=True),
     _f("snapshot_base", "snapshots", honoured=True),
     _f("automatic_snapshots", "snapshots", "bool"),
     _f("snapshot_min_retention", "snapshots", "int"),

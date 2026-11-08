@@ -6,15 +6,16 @@ rights of the connected user (bootstrap administrators have all rights).
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
-from collections.abc import Iterator
-from contextlib import contextmanager  # pyright: ignore[reportDeprecated]
+from collections.abc import AsyncGenerator, Iterator
+from contextlib import asynccontextmanager, contextmanager  # pyright: ignore[reportDeprecated]
 from datetime import UTC, datetime
 from importlib.metadata import entry_points
 from typing import Any, cast
 
 import structlog
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, FastAPI, Query, Response
 from pydantic import BaseModel, Field
 
 from heracles.acl import FULL_RIGHTS, NO_RIGHTS, Rights
@@ -105,6 +106,16 @@ def effective(state: AppState, directory_id: str) -> config_store.RuntimeConfig:
     return config_store.effective_settings(state.directories[directory_id])
 
 
+#: RDN defaults of the types whose container is configurable (captured before any override).
+_ORIGINAL_RDN: dict[str, str] = {}
+
+_RDN_KEYS = (
+    ("user_rdn", "user"),
+    ("group_rdn", "group"),
+    ("acl_role_rdn", "acl_role"),
+)
+
+
 def apply_runtime(
     state: AppState,
     domain: Domain,
@@ -113,6 +124,7 @@ def apply_runtime(
 ) -> None:
     """Make the running application follow ``config`` (no restart needed)."""
     from heracles.auth.login import LoginConfig
+    from heracles.auth.sessions import InMemorySessionStore
 
     policy = state.policy
     policy.min_length = config.password_min_length
@@ -121,23 +133,23 @@ def apply_runtime(
     policy.force_default = config.force_password_default_hash
     if config.password_allowed_hashes:
         policy.allowed_methods = tuple(config.password_allowed_hashes)
-    state.login_config = LoginConfig(
+    login = LoginConfig(
         login_attribute=config.login_attribute,
         user_object_class=state.login_config.user_object_class,
     )
-    state.settings.session.idle_timeout_seconds = config.session_lifetime
+    state.login_config = login
+    state.recovery.login_config = login
+    if isinstance(state.sessions, InMemorySessionStore):
+        state.sessions.idle_timeout = config.session_lifetime
     domain.acl_target_limit = config.acl_target_filter_limit
 
     stored = config.from_directory
     registry = domain.registry
-    for key, type_name in (
-        ("user_rdn", "user"),
-        ("group_rdn", "group"),
-        ("acl_role_rdn", "acl_role"),
-    ):
-        if key in stored:
-            with contextlib.suppress(UnknownTypeError):
-                registry.get(type_name).type.rdn = str(config.get(key))
+    for key, type_name in _RDN_KEYS:
+        with contextlib.suppress(UnknownTypeError):
+            info = registry.get(type_name)
+            original = _ORIGINAL_RDN.setdefault(type_name, info.type.rdn)
+            info.type.rdn = str(config.get(key)) if key in stored else original
     if "snapshot_base" in stored and config.snapshot_base:
         directory = state.directories[directory_id]
         domain.snapshots(directory_id, directory).snapshot_base = config.snapshot_base
@@ -156,6 +168,38 @@ def apply_runtime(
     if isinstance(own, TriggerSettings):
         own.registry = registry
         own.location = directory_id
+
+
+def refresh_runtime(app: FastAPI) -> None:
+    """Re-read the configuration entry of the default directory and apply it."""
+    state: AppState = app.state.heracles
+    domain: Domain = app.state.domain
+    directory_id = next(iter(state.directories), None)
+    if directory_id is None:
+        return
+    config_store.invalidate(state.directories[directory_id])
+    apply_runtime(state, domain, directory_id, effective(state, directory_id))
+
+
+@asynccontextmanager
+async def runtime_lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    """Apply the stored configuration at startup, then follow changes made elsewhere."""
+
+    async def follow() -> None:
+        while True:
+            try:
+                await asyncio.to_thread(refresh_runtime, app)
+            except Exception:
+                log.warning("runtime_config_refresh_failed", exc_info=True)
+            await asyncio.sleep(config_store.CACHE_TTL_SECONDS)
+
+    task = asyncio.create_task(follow())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 # ------------------------------------------------------------------ catalog
@@ -403,7 +447,7 @@ class FixBody(BaseModel):
 
 def build_router(settings: TriggerSettings | None = None) -> APIRouter:
     """The ``/admin`` router (``settings`` is the plugin settings object, may be ``None``)."""
-    router = APIRouter(prefix="/admin", tags=["admin"])
+    router = APIRouter(prefix="/admin", tags=["admin"], lifespan=runtime_lifespan)
     holder = settings
 
     def remember(domain: Domain) -> None:
