@@ -55,9 +55,20 @@ src/
 ## Design tokens
 
 Colours, radii and fonts are CSS variables in `src/index.css`, exposed to
-Tailwind through `@theme`. There is one accent colour (`--primary`); light and
-dark palettes are defined side by side. The theme follows the system by
-default and can be toggled from the top bar or the user menu.
+Tailwind through `@theme`; light and dark palettes are defined side by side.
+The theme follows the system by default and can be toggled from the top bar or
+the user menu.
+
+* Type: IBM Plex Sans for the interface, IBM Plex Mono for identifiers (DNs,
+  logins, counts, versions). `.label-caps` is the uppercase micro-label used
+  for section labels, table headers and definition-list terms; `.font-dn`
+  renders distinguished names.
+* Colour: cool grey canvas, white work surfaces, ink-navy `--primary`, one
+  cobalt `--signal` for focus rings and active markers. `--success`,
+  `--warning` and `--destructive` are reserved for state.
+* The sidebar is dark in both themes (`--sidebar-*`).
+* Depth comes from 1px borders; only floating layers (menus, dialogs,
+  popovers) cast a shadow. Base radius is 4px.
 
 ## Notes on behaviour
 
