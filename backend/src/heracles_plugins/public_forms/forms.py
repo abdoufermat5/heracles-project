@@ -28,7 +28,12 @@ from heracles.objects import (
 )
 from heracles.objects.policy import TAB_ATTR
 from heracles.objects.service import department_of
-from heracles_plugins.invitations.tokens import InvitationContext, complete_registration
+from heracles_plugins.invitations.tokens import (
+    InvitationContext,
+    claim_token,
+    complete_registration,
+    release_token,
+)
 
 FORM_CLASS = "fdPublicForm"
 FORMS_RDN = "ou=forms"
@@ -351,8 +356,9 @@ def submit_form(
 ) -> str:
     """Create the object described by ``values``; returns its DN.
 
-    Raises :class:`ObjectValidationError` on invalid input and :class:`FormError`
-    when the form is misconfigured.
+    Raises :class:`ObjectValidationError` on invalid input, :class:`FormError`
+    when the form is misconfigured and :class:`InvitationUsedError` when the invitation
+    token was already consumed.
     """
     try:
         info = registry.get(form.type_name)
@@ -365,7 +371,15 @@ def submit_form(
     if info.type.rdn:
         ensure_container(directory, dnlib.join(info.type.rdn, form.base))
     service = ObjectService(directory, registry, policy=policy)
-    dn = service.create(info.name, form.base, submission.tabs)
+    # The token is consumed before anything is written, so concurrent submissions with one
+    # invitation cannot both create an object; a failed creation gives it back.
+    claimed = claim_token(directory, context) if context is not None else None
+    try:
+        dn = service.create(info.name, form.base, submission.tabs)
+    except BaseException:
+        if claimed is not None:
+            release_token(directory, claimed)
+        raise
     if form.default_locked and info.name == "user":
         lock_user(directory, registry, dn)
     if context is not None:

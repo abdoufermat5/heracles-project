@@ -18,6 +18,7 @@ from heracles.core.containers import ensure_container
 from heracles.core.generalized_time import format_generalized_time
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import (
+    AlreadyExistsError,
     DirectoryClient,
     Entry,
     Modification,
@@ -170,6 +171,34 @@ def create_invitation_token(
     return token
 
 
+class InvitationUsedError(Exception):
+    """The token was consumed by another submission."""
+
+
+def claim_token(directory: DirectoryClient, context: InvitationContext) -> Entry:
+    """Consume the token of ``context`` so that only one submission can use it.
+
+    :func:`resolve_invitation_token` only reads, so two submissions racing with one token
+    both pass it. The claim is the deletion of the token entry, which the directory
+    performs atomically: one caller deletes it, the others get ``NoSuchObjectError`` and
+    :class:`InvitationUsedError`. Returns the removed entry for :func:`release_token`.
+    """
+    entry = directory.get(context.token_dn)
+    if entry is None:
+        raise InvitationUsedError(context.token_dn)
+    try:
+        directory.delete(context.token_dn)
+    except NoSuchObjectError:
+        raise InvitationUsedError(context.token_dn) from None
+    return entry
+
+
+def release_token(directory: DirectoryClient, claimed: Entry) -> None:
+    """Put a claimed token back (the submission failed, the person may try again)."""
+    with contextlib.suppress(AlreadyExistsError):
+        directory.add(claimed.dn, claimed.attrs)
+
+
 def _token_entry(directory: DirectoryClient, token: str) -> Entry | None:
     hashed = hash_token(token)
     flt = (
@@ -195,7 +224,7 @@ def resolve_invitation_token(
 ) -> InvitationContext | None:
     """The context of a valid (known, unexpired, not yet registered) token, else ``None``.
 
-    The token is not consumed; see :func:`complete_registration`.
+    The token is not consumed; :func:`claim_token` does that.
     """
     entry = _token_entry(directory, token)
     if entry is None:
@@ -231,9 +260,12 @@ __all__ = [
     "STATE_INVITED",
     "STATE_REGISTERED",
     "InvitationContext",
+    "InvitationUsedError",
+    "claim_token",
     "complete_registration",
     "create_invitation_token",
     "hash_token",
+    "release_token",
     "resolve_invitation_token",
     "upsert_registration",
 ]

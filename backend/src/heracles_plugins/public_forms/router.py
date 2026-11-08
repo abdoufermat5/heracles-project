@@ -34,7 +34,11 @@ from heracles.objects import (
     UnknownTypeError,
 )
 from heracles.objects.registry import PluginRouterContext
-from heracles_plugins.invitations.tokens import InvitationContext, resolve_invitation_token
+from heracles_plugins.invitations.tokens import (
+    InvitationContext,
+    InvitationUsedError,
+    resolve_invitation_token,
+)
 from heracles_plugins.public_forms.captcha import Captcha
 from heracles_plugins.public_forms.forms import (
     FormDefinition,
@@ -288,6 +292,9 @@ def build_public_router(
             submit_form(
                 directory, registry_of(request), form, body.values, context=context, now=now()
             )
+        except InvitationUsedError:
+            guard.record_failure(key)
+            return _error(404, "not_found", "Form not found")
         except ObjectValidationError as exc:
             guard.record_failure(key)
             return _error(422, "validation", "Some fields are invalid", fields=exc.fields)

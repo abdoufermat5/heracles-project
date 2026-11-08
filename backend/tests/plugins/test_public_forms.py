@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import threading
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
@@ -18,6 +19,7 @@ from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
 from heracles_plugins.invitations import resolve_invitation_token, send_invitation
+from heracles_plugins.invitations.tokens import InvitationUsedError
 from heracles_plugins.public_forms.forms import (
     FormError,
     FormPolicy,
@@ -251,6 +253,101 @@ def test_invitation_context_imports_the_address_and_completes_the_registration(
     registration = directory.get(context.registration_dn) or pytest.fail()
     assert registration.text("fdRegistrationState") == "registered"
     assert registration.text("fdRegistrationUserDN") == dn
+    assert resolve_invitation_token(directory, token, NOW) is None
+
+
+def _invite(service: ObjectService, directory: MemoryDirectory, template: str) -> tuple[Any, str]:
+    form_dn = new_form(service, template, fdPublicFormPrivate=True)
+    invitation = service.create(
+        "invitation",
+        BASE,
+        {
+            "main": {
+                "values": {
+                    "cn": "welcome",
+                    "fdInvitationFormDN": form_dn,
+                    "fdInvitationEmailSubject": "Welcome",
+                }
+            }
+        },
+    )
+    mailer = MemoryMailer()
+    send_invitation(
+        directory, mailer, invitation, ["new@example.com"], base_url="https://h", now=NOW
+    )
+    token = mailer.outbox[0].body.split("token=")[1].split()[0]
+    context = resolve_invitation_token(directory, token, NOW)
+    assert context is not None
+    return context, token
+
+
+def test_a_token_cannot_be_used_twice(
+    service: ObjectService, directory: MemoryDirectory, template: str
+) -> None:
+    """Two submissions that both resolved the token before either finished: one wins."""
+    context, _ = _invite(service, directory, template)
+    form = load(service)
+    first = submit_form(directory, service.registry, form, visitor(), context=context, now=NOW)
+    with pytest.raises(InvitationUsedError):
+        submit_form(
+            directory,
+            service.registry,
+            form,
+            visitor(**{"main.uid": "other"}),
+            context=context,
+            now=NOW,
+        )
+    assert directory.get(f"uid=other,ou=people,{BASE}") is None
+    assert directory.get(first) is not None
+
+
+def test_simultaneous_submissions_consume_the_token_once(
+    service: ObjectService, directory: MemoryDirectory, template: str
+) -> None:
+    context, _ = _invite(service, directory, template)
+    form = load(service)
+    start = threading.Barrier(8)
+    outcomes: list[str] = []
+
+    def submit(i: int) -> None:
+        start.wait()
+        try:
+            submit_form(
+                directory,
+                service.registry,
+                form,
+                visitor(**{"main.uid": f"user{i}"}),
+                context=context,
+                now=NOW,
+            )
+            outcomes.append("created")
+        except InvitationUsedError:
+            outcomes.append("used")
+
+    threads = [threading.Thread(target=submit, args=(i,)) for i in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sorted(outcomes) == ["created", *["used"] * 7]
+    created = [e for e in directory.search(f"ou=people,{BASE}", "(uid=user*)")]
+    assert len(created) == 1
+
+
+def test_a_failed_submission_gives_the_token_back(
+    service: ObjectService, directory: MemoryDirectory, template: str
+) -> None:
+    context, token = _invite(service, directory, template)
+    form = load(service)
+    submit_form(directory, service.registry, form, visitor(), context=None, now=NOW)
+    # the account name is taken: the creation fails after the token was claimed
+    with pytest.raises(ObjectValidationError):
+        submit_form(directory, service.registry, form, visitor(), context=context, now=NOW)
+    assert resolve_invitation_token(directory, token, NOW) is not None
+    dn = submit_form(
+        directory, service.registry, form, visitor(**{"main.uid": "free"}), context=context, now=NOW
+    )
+    assert directory.get(dn) is not None
     assert resolve_invitation_token(directory, token, NOW) is None
 
 
