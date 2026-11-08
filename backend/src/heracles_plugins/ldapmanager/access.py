@@ -18,6 +18,8 @@ from heracles.objects.model import Tab
 LDIF_OBJECT = "ldif/ldifManager"
 #: ACL object of the CSV import page.
 CSV_OBJECT = "csv/csvImport"
+#: Attributes any reader of an entry may test in an export filter.
+_OPEN_FILTER_ATTRS = frozenset({"objectclass"})
 
 
 @dataclass(slots=True)
@@ -76,6 +78,26 @@ class Access:
             if decision:
                 shown[name] = list(values)
         return Entry(entry.dn, shown)
+
+    def filter_readable(self, entry: Entry, names: frozenset[str]) -> bool:
+        """Whether every attribute a search filter tests is readable on ``entry``.
+
+        A filter is an oracle on the attributes it names, evaluated before the export hides
+        anything. Entries of a known type must expose each tested attribute through a
+        readable tab; an attribute named by option (``attr;x``) is judged by its base name
+        and one named by OID is refused. Other entries are shown whole or not at all.
+        """
+        infos = self._types_of(entry)
+        if not infos:
+            return True
+        policies = [(info, TypeAclPolicy(self.evaluator, info)) for info in infos]
+        for name in names - _OPEN_FILTER_ATTRS:
+            base = name.partition(";")[0]
+            if not base or base[0].isdigit():
+                return False
+            if not self._attribute_visible(entry.dn, base, policies):
+                return False
+        return True
 
     @staticmethod
     def _attribute_visible(

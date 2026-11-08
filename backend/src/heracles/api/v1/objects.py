@@ -26,14 +26,7 @@ from heracles.api.v2.objects import locked_error, object_errors
 from heracles.attributes import JSON, AnyAttribute
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Entry, NoSuchObjectError, Scope
-from heracles.ldap.filter import (
-    And,
-    Filter,
-    FilterError,
-    Not,
-    Or,
-    parse_filter,
-)
+from heracles.ldap.filter import Filter, FilterError, filter_attributes, parse_filter
 from heracles.objects import ObjectService, ObjectState, PermissionDeniedError, TypeInfo, filters
 
 router = APIRouter(route_class=V1Route)
@@ -99,16 +92,6 @@ def _update(
 _OPEN_FILTER_ATTRS = frozenset({"objectclass"})
 
 
-def _filter_attributes(node: Filter, found: set[str]) -> None:
-    if isinstance(node, And | Or):
-        for child in node.children:
-            _filter_attributes(child, found)
-    elif isinstance(node, Not):
-        _filter_attributes(node.child, found)
-    else:
-        found.add(node.attr.lower())
-
-
 def _filter_checks(info: TypeInfo, flt: Filter) -> list[tuple[str, str]]:
     """``(tab, attribute)`` pairs a search filter tests, to be readable by the caller.
 
@@ -116,8 +99,7 @@ def _filter_checks(info: TypeInfo, flt: Filter) -> list[tuple[str, str]]:
     probe the value of an attribute the ACLs hide (a password hash, say) one character
     at a time. Unknown and write-only attributes are refused.
     """
-    names: set[str] = set()
-    _filter_attributes(flt, names)
+    names = filter_attributes(flt)
     checks: list[tuple[str, str]] = []
     for name in sorted(names - _OPEN_FILTER_ATTRS):
         found = next(

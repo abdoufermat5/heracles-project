@@ -216,6 +216,18 @@ def parse_filter(text: str) -> Filter:
     return _Parser(text).parse()
 
 
+def filter_attributes(node: Filter) -> set[str]:
+    """Lower-cased names of every attribute a filter tests (a filter is an oracle on them)."""
+    if isinstance(node, And | Or):
+        found: set[str] = set()
+        for child in node.children:
+            found |= filter_attributes(child)
+        return found
+    if isinstance(node, Not):
+        return filter_attributes(node.child)
+    return {node.attr.lower()}
+
+
 def _fold(value: bytes) -> str:
     return value.decode("utf-8", errors="replace").casefold()
 

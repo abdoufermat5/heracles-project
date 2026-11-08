@@ -15,7 +15,7 @@ from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.v2.objects import object_errors
 from heracles.attributes import JSON
 from heracles.ldap.client import DirectoryError, NoSuchObjectError, Scope
-from heracles.ldap.filter import FilterError, matches, parse_filter
+from heracles.ldap.filter import FilterError, filter_attributes, matches, parse_filter
 from heracles.ldap.ldif import FOLD_WIDTH, LdifError, dump_entry, iter_ldif, parse_ldif
 from heracles.objects import (
     ObjectConflictError,
@@ -98,7 +98,7 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         start = base or directory.base_dn
         gate.require_export(start)
         try:
-            parse_filter(filter)
+            tested = frozenset(filter_attributes(parse_filter(filter)))
         except FilterError as exc:
             raise validation(f"Invalid filter: {exc}", {"filter": str(exc)}) from None
         if directory.get(start) is None:
@@ -107,6 +107,8 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         def entries() -> Any:
             try:
                 for entry in directory.search(start, filter, _SCOPES[scope]):
+                    if not gate.filter_readable(entry, tested):
+                        continue
                     shown = gate.visible(entry)
                     if shown is not None:
                         yield shown

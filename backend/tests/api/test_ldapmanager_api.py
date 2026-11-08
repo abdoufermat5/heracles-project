@@ -159,6 +159,16 @@ def test_export_only_returns_readable_entries_and_attributes(app: FastAPI) -> No
     assert users and all(e.get("userPassword") == [] for e in users)  # write-only: hidden
     groups_ou = [e for e in entries if e.dn == f"ou=groups,ou=paris,{BASE}"]
     assert groups_ou  # containers need the LDIF right only
+    # a filter on an attribute the reader cannot see must not select (or exclude) entries
+    for hidden in ("(userPassword=*)", "(!(userPassword=*))", "(&(uid=*)(userPassword;x=*))"):
+        probe = reader.get("/ldif/export", base=f"ou=paris,{BASE}", filter=hidden)
+        probed = parse_ldif(probe.text)
+        assert not [e for e in probed if e.has_object_class("inetOrgPerson")], hidden
+    visible = reader.get("/ldif/export", base=f"ou=paris,{BASE}", filter="(uid=asmith)")
+    assert [e.dn for e in parse_ldif(visible.text)] == [ASMITH]
+    # secrets are never exported, so nobody (administrators included) may test them
+    root = Api(app).login("admin").get("/ldif/export", base=ASMITH, filter="(userPassword=*)")
+    assert parse_ldif(root.text) == []
     assert (
         reader.post("/ldif/import", {"text": f"dn: ou=x,{BASE}\nobjectClass: top\n"}).status_code
         == 403
