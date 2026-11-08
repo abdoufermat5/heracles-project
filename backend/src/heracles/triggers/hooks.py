@@ -7,8 +7,11 @@ after ``%attribute%`` placeholders were replaced by shell-quoted attribute value
 
 from __future__ import annotations
 
+import contextlib
+import os
 import re
 import shlex
+import signal
 import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -45,6 +48,11 @@ HOOK_MODES: Final = (
 DEFAULT_TIMEOUT: Final = 30.0
 MAX_OUTPUT: Final = 4000
 MASK: Final = "********"
+#: Environment of the commands: nothing of the server's own (secrets, bind credentials).
+SAFE_ENV: Final = {
+    "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "LANG": "C.UTF-8",
+}
 
 _PLACEHOLDER = re.compile(r"%([A-Za-z][A-Za-z0-9;_-]*)%")
 _SENSITIVE = re.compile(r"password|secret|token|pin$|passwd|hash", re.IGNORECASE)
@@ -83,20 +91,80 @@ def parse_hooks(values: Sequence[str]) -> list[TabHook]:
     return [h for h in (parse_hook(v) for v in values) if h is not None]
 
 
+class _ShellContext:
+    """Tracks the shell quoting state while a command is assembled.
+
+    A value must be escaped for the place where it lands: unquoted, inside single
+    quotes, inside double quotes or inside a backquoted command. A single quoting
+    style would let a value break out of a placeholder written between quotes.
+    """
+
+    def __init__(self) -> None:
+        self._stack: list[str] = []  # "'" | '"' | "(" (a $( ) command) | "`"
+        self._pending_escape = False
+
+    def feed(self, text: str) -> None:
+        i = 0
+        while i < len(text):
+            ch = text[i]
+            top = self._stack[-1] if self._stack else ""
+            if self._pending_escape:
+                self._pending_escape = False
+            elif top == "'":
+                if ch == "'":
+                    self._stack.pop()
+            elif ch == "\\":
+                if i + 1 < len(text):
+                    i += 1
+                else:
+                    self._pending_escape = True
+            elif ch == "$" and text[i + 1 : i + 2] == "(":
+                self._stack.append("(")
+                i += 1
+            elif ch == "`":
+                if top == "`":
+                    self._stack.pop()
+                else:
+                    self._stack.append("`")
+            elif ch == '"':
+                if top == '"':
+                    self._stack.pop()
+                else:
+                    self._stack.append('"')
+            elif ch == "'" and top != '"':
+                self._stack.append("'")
+            elif ch == ")" and top == "(":
+                self._stack.pop()
+            i += 1
+
+    def escape(self, value: str) -> str:
+        """``value`` made inert at the current position."""
+        if self._pending_escape:
+            return ""
+        top = self._stack[-1] if self._stack else ""
+        if top == "'":
+            return value.replace("'", "'\\''")
+        if top == '"':
+            return re.sub(r'([\\"$`])', r"\\\1", value)
+        if top == "`":
+            return re.sub(r"[^A-Za-z0-9_@%+=:,./ -]", "", value)
+        return shlex.quote(value)
+
+
 def render_command(cmd: str, attrs: Mapping[str, Sequence[str] | str]) -> str:
-    """Render a trigger command, shell-quoting every substituted value.
+    """Render a trigger command, escaping every substituted value for its quoting context.
 
     Placeholders use the syntax of the template masks
     (:mod:`heracles.objects.masks`), so ``%attr%`` and ``%modifiers|attr%`` mean the
-    same thing here and in templates, and values are shell-quoted. A placeholder
-    naming an attribute the object does not have is left verbatim, so shell text
-    such as ``date +%s`` keeps working. An invalid mask or a failed modifier becomes
-    an empty quoted string; a value can never inject text into the command line.
+    same thing here and in templates. A value is shell-quoted when the placeholder is
+    unquoted and escaped for the enclosing quotes when it is written between single or
+    double quotes. A placeholder naming an attribute the object does not have is left
+    verbatim, so shell text such as ``date +%s`` keeps working. An invalid mask or a
+    failed modifier becomes an empty string; a value can never inject text into the
+    command line.
     """
     lowered = {k.lower(): v for k, v in attrs.items()}
-
-    def quote(text: str) -> str:
-        return shlex.quote(text)
+    shell = _ShellContext()
 
     def first_of(name: str) -> str:
         value = lowered.get(name.lower())
@@ -109,10 +177,20 @@ def render_command(cmd: str, attrs: Mapping[str, Sequence[str] | str]) -> str:
     try:
         segments = parse_mask(cmd)
     except MaskError:
-        return _PLACEHOLDER.sub(
-            lambda m: quote(first_of(m.group(1))) if m.group(1).lower() in lowered else m.group(0),
-            cmd,
-        )
+        out: list[str] = []
+        last = 0
+        for m in _PLACEHOLDER.finditer(cmd):
+            literal = cmd[last : m.start()]
+            shell.feed(literal)
+            out.append(literal)
+            if m.group(1).lower() in lowered:
+                out.append(shell.escape(first_of(m.group(1))))
+            else:
+                out.append(m.group(0))
+                shell.feed(m.group(0))
+            last = m.end()
+        out.append(cmd[last:])
+        return "".join(out)
     if not any(
         isinstance(s, Placeholder) and (s.modifiers or s.attr.lower() in lowered) for s in segments
     ):
@@ -121,18 +199,21 @@ def render_command(cmd: str, attrs: Mapping[str, Sequence[str] | str]) -> str:
     parts: list[str] = []
     for segment in segments:
         if isinstance(segment, Literal):
+            shell.feed(segment.text)
             parts.append(segment.text)
             continue
         value = lowered.get(segment.attr.lower())
         if value is None and not segment.modifiers:
-            parts.append(f"%{segment.attr}%")
+            text = f"%{segment.attr}%"
+            shell.feed(text)
+            parts.append(text)
             continue
         values = [] if value is None else ([value] if isinstance(value, str) else list(value))
         try:
             resolved = evaluate_placeholder(segment, values, env)
         except (MaskError, ValueError):
             resolved = []
-        parts.append(quote(resolved[0] if resolved else ""))
+        parts.append(shell.escape(resolved[0] if resolved else ""))
     return "".join(parts)
 
 
@@ -161,19 +242,28 @@ def run_hook(
     logged = render_command(hook.command, mask_attrs(attrs))
     log.info("trigger_run", tab=hook.tab, mode=hook.mode, command=logged)
     try:
-        done = subprocess.run(  # noqa: S603
+        proc = subprocess.Popen(  # noqa: S603
             ["/bin/sh", "-c", command],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
             stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=dict(SAFE_ENV),
+            start_new_session=True,
         )
-    except subprocess.TimeoutExpired:
-        log.warning("trigger_timeout", tab=hook.tab, mode=hook.mode, command=logged)
-        return HookResult(hook, None, "The command timed out.", timed_out=True)
     except OSError as exc:
         return HookResult(hook, None, f"The command could not be started: {exc.strerror}")
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # Kill the whole process group: a grandchild holding the pipes must not outlive the run.
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.communicate(timeout=2)
+        log.warning("trigger_timeout", tab=hook.tab, mode=hook.mode, command=logged)
+        return HookResult(hook, None, "The command timed out.", timed_out=True)
+    done = subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
     output = ((done.stdout or "") + (done.stderr or "")).strip()[:MAX_OUTPUT]
     if done.returncode != 0:
         log.warning("trigger_failed", tab=hook.tab, mode=hook.mode, code=done.returncode)

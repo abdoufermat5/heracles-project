@@ -58,6 +58,47 @@ def test_render_keeps_unusable_percent_text() -> None:
     assert render_command("echo %uid%", {"uid": ["a' b"]}) == "echo 'a'\"'\"' b'"
 
 
+@pytest.mark.parametrize(
+    "command",
+    ["echo '%cn%'", 'echo "%cn%"', "echo $(printf %s %cn%)", "echo `printf %s %cn%`", "echo %cn%"],
+)
+def test_render_resists_injection_in_every_quoting_context(command: str) -> None:
+    payload = "x'\"); touch /tmp/heracles-pwned-$$; echo (`id`)$(id) \\"
+    rendered = render_command(command, {"cn": [payload]})
+    result = run_hook(TabHook("user", "check", command), {"cn": [payload]})
+    # Nothing but the value reaches the shell as text: no command ran, no file appeared.
+    assert "uid=" not in result.output
+    assert not list(Path("/tmp").glob("heracles-pwned-*")), rendered
+
+
+def test_double_quoted_value_is_echoed_verbatim() -> None:
+    value = 'a"; echo PWNED; "$HOME`id`\\'
+    result = run_hook(TabHook("user", "check", 'printf %s "%cn%"'), {"cn": [value]})
+    assert result.ok and result.output == value
+
+
+def test_single_quoted_value_is_echoed_verbatim() -> None:
+    value = "a'; echo PWNED; '"
+    result = run_hook(TabHook("user", "check", "printf %s '%cn%'"), {"cn": [value]})
+    assert result.ok and result.output == value
+
+
+def test_run_hook_does_not_leak_the_server_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HERACLES_SECRET_TEST", "hunter2")
+    result = run_hook(TabHook("user", "check", "env"), {})
+    assert result.ok
+    assert "hunter2" not in result.output and "HERACLES_SECRET_TEST" not in result.output
+
+
+def test_timeout_kills_grandchildren_promptly() -> None:
+    import time
+
+    started = time.monotonic()
+    result = run_hook(TabHook("user", "check", "sleep 30 & sleep 30"), {}, timeout=0.3)
+    assert result.timed_out
+    assert time.monotonic() - started < 5
+
+
 def test_mask_attrs_hides_passwords() -> None:
     masked = mask_attrs({"userPassword": ["{SSHA}x"], "uid": ["a"]})
     assert masked["userPassword"] == ["********"]
