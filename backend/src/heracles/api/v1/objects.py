@@ -26,7 +26,14 @@ from heracles.api.v2.objects import locked_error, object_errors
 from heracles.attributes import JSON, AnyAttribute
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Entry, NoSuchObjectError, Scope
-from heracles.ldap.filter import FilterError, parse_filter
+from heracles.ldap.filter import (
+    And,
+    Filter,
+    FilterError,
+    Not,
+    Or,
+    parse_filter,
+)
 from heracles.objects import ObjectService, ObjectState, PermissionDeniedError, TypeInfo, filters
 
 router = APIRouter(route_class=V1Route)
@@ -86,6 +93,40 @@ def _update(
     if dnlib.normalize(state.dn) != dnlib.normalize(dn):
         domain.locks(user.directory_id, user.directory).release(dn, user.dn)
     return state
+
+
+#: Attributes any reader of an entry may test in a search filter.
+_OPEN_FILTER_ATTRS = frozenset({"objectclass"})
+
+
+def _filter_attributes(node: Filter, found: set[str]) -> None:
+    if isinstance(node, And | Or):
+        for child in node.children:
+            _filter_attributes(child, found)
+    elif isinstance(node, Not):
+        _filter_attributes(node.child, found)
+    else:
+        found.add(node.attr.lower())
+
+
+def _filter_checks(info: TypeInfo, flt: Filter) -> list[tuple[str, str]]:
+    """``(tab, attribute)`` pairs a search filter tests, to be readable by the caller.
+
+    A filter is an oracle on the attributes it names: without this check a user could
+    probe the value of an attribute the ACLs hide (a password hash, say) one character
+    at a time. Unknown and write-only attributes are refused.
+    """
+    names: set[str] = set()
+    _filter_attributes(flt, names)
+    checks: list[tuple[str, str]] = []
+    for name in sorted(names - _OPEN_FILTER_ATTRS):
+        found = next(
+            ((t, a) for t in info.tabs if (a := find_attribute(t, name)) is not None), None
+        )
+        if found is None or found[1].write_only:
+            raise bad_request(f"The attribute '{name}' cannot be used in a filter")
+        checks.append((found[0].name, found[1].name))
+    return checks
 
 
 # -- types ------------------------------------------------------------------------------------
@@ -199,11 +240,13 @@ def search_objects(
 ) -> dict[str, JSON]:
     info = _info(domain, type)
     search_base = base or user.directory.base_dn
+    filter_checks: list[tuple[str, str]] = []
     if filter:
         try:
-            parse_filter(filter)
+            parsed_filter = parse_filter(filter)
         except FilterError as exc:
             raise bad_request(f"Invalid filter: {exc}") from None
+        filter_checks = _filter_checks(info, parsed_filter)
     if templates:
         module = _templates()
         with object_errors():
@@ -230,6 +273,8 @@ def search_objects(
         entries = []
     for entry in entries:
         if not policy.can_read(entry.dn, info.main_tab.name, info.type.main_attr):
+            continue
+        if not all(policy.can_read(entry.dn, tab, attr) for tab, attr in filter_checks):
             continue
         if not wanted:
             result[entry.dn] = entry.text(info.type.name_attr) or ""

@@ -171,6 +171,18 @@ def test_search_hides_unreadable_entries_and_attributes(client: TestClient) -> N
         assert "userPassword" not in row
 
 
+def test_search_filter_cannot_probe_hidden_attributes(client: TestClient) -> None:
+    """A filter on an attribute the caller cannot read must not leak through the result."""
+    admin = V1(client).login()
+    assert admin.get("/objects/USER", params={"filter": "(userPassword=*)"}).status_code == 400
+    api = V1(client).login("bmartin")
+    for flt in ("(userPassword=*)", "(!(userPassword=x))", "(&(uid=*)(unknownThing=*))"):
+        r = api.get("/objects/USER", params={"filter": flt})
+        assert r.status_code == 400, flt
+    # a readable attribute still works
+    assert api.get("/objects/USER", params={"filter": "(uid=*)"}).status_code == 200
+
+
 def _install_templates(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     calls: dict[str, Any] = {}
 
