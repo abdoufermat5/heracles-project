@@ -154,7 +154,7 @@ function FillInner({
         <Link
           to="/types/$type"
           params={{ type }}
-          className="inline-flex items-center gap-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-1 text-body text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft className="size-3.5" aria-hidden />
           <span>{t('editor.backToList', { type: desc.label })}</span>
@@ -167,7 +167,7 @@ function FillInner({
               </h1>
               <Badge variant="neutral">{templateName}</Badge>
             </div>
-            <p className="text-[13px] text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('templates.fillHelp', { name: templateName })}
             </p>
           </div>
@@ -212,7 +212,7 @@ function FillInner({
               )),
             )
           ) : (
-            <p className="rounded-md border border-dashed bg-card p-4 text-[13px] text-muted-foreground">
+            <p className="rounded-md border border-dashed bg-card p-4 text-body text-muted-foreground">
               {t('templates.noFields')}
             </p>
           )}
@@ -223,7 +223,7 @@ function FillInner({
           className="rounded-md border bg-card lg:sticky lg:top-4"
         >
           <div className="border-b px-4 py-2.5">
-            <h2 className="text-[13px] font-semibold text-foreground">{t('templates.previewTitle')}</h2>
+            <h2 className="text-body font-semibold text-foreground">{t('templates.previewTitle')}</h2>
             <p className="text-xs text-muted-foreground">{t('templates.previewHelp')}</p>
           </div>
           <PreviewBody desc={desc} query={preview} />
@@ -250,7 +250,7 @@ function PreviewBody({
   const { t } = useTranslation()
   if (query.isError) {
     return (
-      <p className="p-4 text-[13px] text-muted-foreground">
+      <p className="p-4 text-body text-muted-foreground">
         {isApiError(query.error) && query.error.code === 'validation'
           ? t('templates.previewEmpty')
           : t('templates.previewFailed')}
@@ -277,10 +277,10 @@ function PreviewBody({
     }
   }
   if (rows.length === 0) {
-    return <p className="p-4 text-[13px] text-muted-foreground">{t('templates.previewEmpty')}</p>
+    return <p className="p-4 text-body text-muted-foreground">{t('templates.previewEmpty')}</p>
   }
   return (
-    <dl className="divide-y text-[13px]" data-testid="template-preview">
+    <dl className="divide-y text-body" data-testid="template-preview">
       {rows.map((r) => (
         <div key={r.key} className="grid grid-cols-[8rem_minmax(0,1fr)] gap-2 px-4 py-2">
           <dt className="truncate text-xs text-muted-foreground">{r.label}</dt>

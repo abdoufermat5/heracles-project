@@ -13,10 +13,10 @@ export function ListingPermissionDenied({ onRetry }: ListingPermissionDeniedProp
       role="alert"
       className="flex flex-col items-center justify-center gap-2 rounded-md border bg-card px-6 py-12 text-center"
     >
-      <p className="text-[13px] font-semibold text-foreground">
+      <p className="text-body font-semibold text-foreground">
         {t('listing.permissionDenied')}
       </p>
-      <p className="max-w-sm text-[13px] text-muted-foreground">
+      <p className="max-w-sm text-body text-muted-foreground">
         {t('listing.permissionDeniedDesc')}
       </p>
       {onRetry && (

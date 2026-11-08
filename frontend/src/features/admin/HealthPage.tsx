@@ -60,7 +60,7 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
               {t(`setup.status.${check.status}`)}
             </Badge>
           </div>
-          <p className="text-[13px] text-muted-foreground">{check.message}</p>
+          <p className="text-body text-muted-foreground">{check.message}</p>
         </div>
         {check.fixable && (
           <Button size="sm" variant="outline" disabled={!canApply || fix.isPending} onClick={() => void apply()}>
@@ -81,7 +81,7 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
             onPick={setAdminDn}
             disabled={!canFix}
           />
-          <p className="text-[11px] text-muted-foreground">{t('setup.chooseAdminHelp')}</p>
+          <p className="text-caption text-muted-foreground">{t('setup.chooseAdminHelp')}</p>
         </div>
       )}
 
@@ -158,7 +158,7 @@ export function HealthPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground" aria-live="polite">
+          <p className="flex flex-wrap items-center gap-2 text-body text-muted-foreground" aria-live="polite">
             <Badge variant="success">{t('setup.countOk', { count: counts.ok })}</Badge>
             <Badge variant="warning">{t('setup.countWarning', { count: counts.warning })}</Badge>
             <Badge variant="destructive">{t('setup.countError', { count: counts.error })}</Badge>

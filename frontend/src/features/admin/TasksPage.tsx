@@ -50,7 +50,7 @@ function Progression({ row }: { row: TaskRow }) {
         value={Math.round((done / total) * 100)}
         aria-label={t('tasks.progress', { done, total })}
       />
-      <p className="text-[11px] tabular-nums text-muted-foreground">
+      <p className="text-caption tabular-nums text-muted-foreground">
         {t('tasks.progress', { done, total })}
         {failed > 0 && <span className="ml-1 text-destructive">· {t('tasks.failedCount', { count: failed })}</span>}
       </p>
@@ -94,7 +94,7 @@ export function TasksPage() {
       ) : (
         <div className="space-y-3">
           {summary && (
-            <p className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground" aria-live="polite">
+            <p className="flex flex-wrap items-center gap-2 text-body text-muted-foreground" aria-live="polite">
               <Badge variant="neutral">{t('tasks.total', { count: summary.total })}</Badge>
               <Badge variant="success">{t('tasks.active', { count: summary.active })}</Badge>
               <Badge variant={summary.failed_subtasks > 0 ? 'destructive' : 'neutral'}>
@@ -167,10 +167,10 @@ export function TasksPage() {
                       <TableCell>
                         <Badge variant={statusVariant(row.status)}>{row.status || '—'}</Badge>
                       </TableCell>
-                      <TableCell className="text-[13px] tabular-nums text-muted-foreground">
+                      <TableCell className="text-body tabular-nums text-muted-foreground">
                         {formatDateTime(row.last_run, i18n.language)}
                       </TableCell>
-                      <TableCell className="text-[13px] tabular-nums text-muted-foreground">
+                      <TableCell className="text-body tabular-nums text-muted-foreground">
                         {formatDateTime(row.next_run, i18n.language)}
                       </TableCell>
                       <TableCell>

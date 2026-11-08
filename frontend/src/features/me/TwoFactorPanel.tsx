@@ -117,23 +117,23 @@ export function TwoFactorPanel() {
   return (
     <Card className="overflow-hidden lg:col-span-2">
       <CardHeader className={PANEL_HEADER}>
-        <CardTitle className="text-[13px] font-semibold">{t('twofactor.title')}</CardTitle>
+        <CardTitle className="text-body font-semibold">{t('twofactor.title')}</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         <p className="px-4 pt-3 text-xs text-muted-foreground">{t('twofactor.help')}</p>
 
         {error && (
-          <p role="alert" className="mx-4 mt-3 rounded-sm border border-destructive/30 bg-destructive-soft p-2.5 text-[13px] text-destructive">
+          <p role="alert" className="mx-4 mt-3 rounded-sm border border-destructive/30 bg-destructive-soft p-2.5 text-body text-destructive">
             {error}
           </p>
         )}
 
         {status.isPending ? (
-          <p className="px-4 py-3 text-[13px] text-muted-foreground">{t('common.loading')}</p>
+          <p className="px-4 py-3 text-body text-muted-foreground">{t('common.loading')}</p>
         ) : (
           <>
             <section aria-label={t('twofactor.appTitle')} className="mt-3 border-t p-4">
-              <div className="flex items-center gap-2 text-[13px]">
+              <div className="flex items-center gap-2 text-body">
                 <Smartphone className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="font-medium text-foreground">{t('twofactor.appTitle')}</span>
                 <span className="flex-1 text-muted-foreground">
@@ -168,9 +168,9 @@ export function TwoFactorPanel() {
                     confirm.mutate(code.trim())
                   }}
                 >
-                  <p className="text-[13px] text-muted-foreground">{t('twofactor.scan')}</p>
+                  <p className="text-body text-muted-foreground">{t('twofactor.scan')}</p>
                   <QrImage value={setup.uri} alt={t('twofactor.qrAlt')} />
-                  <div className="grid gap-1 text-[13px]">
+                  <div className="grid gap-1 text-body">
                     <span className="text-xs text-muted-foreground">{t('twofactor.secret')}</span>
                     <code data-testid="totp-secret" className="w-fit select-all rounded-sm bg-muted px-2 py-1 font-mono text-xs tracking-wider">
                       {setup.secret}
@@ -185,7 +185,7 @@ export function TwoFactorPanel() {
                       maxLength={6}
                       aria-label={t('twofactor.code')}
                       aria-invalid={codeError !== null}
-                      className="h-8 w-32 text-center font-mono text-[13px] tracking-widest"
+                      className="h-8 w-32 text-center font-mono text-body tracking-widest"
                     />
                     <Button type="submit" size="sm" disabled={code.length !== 6 || confirm.isPending}>
                       {confirm.isPending && <Loader2 className="animate-spin" aria-hidden="true" />}
@@ -204,7 +204,7 @@ export function TwoFactorPanel() {
                     </Button>
                   </div>
                   {codeError && (
-                    <p role="alert" className="text-[13px] text-destructive">
+                    <p role="alert" className="text-body text-destructive">
                       {codeError}
                     </p>
                   )}
@@ -213,7 +213,7 @@ export function TwoFactorPanel() {
             </section>
 
             <section aria-label={t('twofactor.recoveryTitle')} className="border-t p-4">
-              <div className="flex items-center gap-2 text-[13px]">
+              <div className="flex items-center gap-2 text-body">
                 <ShieldCheck className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="font-medium text-foreground">{t('twofactor.recoveryTitle')}</span>
                 <span className="flex-1 text-muted-foreground">
@@ -236,10 +236,10 @@ export function TwoFactorPanel() {
 
               {codes && (
                 <div className="mt-3 grid gap-3">
-                  <p className="text-[13px] text-foreground">{t('twofactor.saveNow')}</p>
+                  <p className="text-body text-foreground">{t('twofactor.saveNow')}</p>
                   <ul
                     aria-label={t('twofactor.recoveryTitle')}
-                    className="grid w-fit grid-cols-2 gap-x-6 gap-y-1 rounded-sm border bg-muted/40 p-3 font-mono text-[13px]"
+                    className="grid w-fit grid-cols-2 gap-x-6 gap-y-1 rounded-sm border bg-muted/40 p-3 font-mono text-body"
                   >
                     {codes.map((c) => (
                       <li key={c}>{c}</li>
@@ -278,8 +278,8 @@ export function TwoFactorPanel() {
       <AlertDialog open={confirmLast} onOpenChange={setConfirmLast}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[15px]">{t('twofactor.lastTitle')}</AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px]">{t('twofactor.lastBody')}</AlertDialogDescription>
+            <AlertDialogTitle className="text-lead">{t('twofactor.lastTitle')}</AlertDialogTitle>
+            <AlertDialogDescription className="text-body">{t('twofactor.lastBody')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('twofactor.cancel')}</AlertDialogCancel>

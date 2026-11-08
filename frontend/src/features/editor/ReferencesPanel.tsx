@@ -25,7 +25,7 @@ export function ReferencesPanel({ type, dn }: { type: string; dn: string }) {
   return (
     <section aria-labelledby="refs-title" className="rounded-md border bg-card">
       <div className="border-b px-4 py-3">
-        <h2 id="refs-title" className="text-[13px] font-semibold text-foreground">
+        <h2 id="refs-title" className="text-body font-semibold text-foreground">
           {t('references.title')}
         </h2>
         <p className="text-xs text-muted-foreground">{t('references.help')}</p>

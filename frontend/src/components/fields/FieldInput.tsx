@@ -47,7 +47,7 @@ function ListLike({
   return (
     <div className="space-y-2" id={p.id} role="group" aria-labelledby={`${p.id}-label`}>
       {items.length === 0 && (
-        <p className="text-[13px] text-muted-foreground">{t('fields.listEmpty')}</p>
+        <p className="text-body text-muted-foreground">{t('fields.listEmpty')}</p>
       )}
       <ul className="space-y-2">
         {items.map((it, i) => {

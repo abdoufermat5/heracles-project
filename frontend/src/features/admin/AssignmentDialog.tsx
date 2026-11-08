@@ -115,7 +115,7 @@ export function AssignmentDialog({
                   checked={everyone}
                   onCheckedChange={(on) => setMembers(on ? [EVERYONE] : [])}
                 />
-                <Label htmlFor="asg-everyone" className="text-[13px] font-normal">
+                <Label htmlFor="asg-everyone" className="text-body font-normal">
                   {t('acl.everyone')}
                 </Label>
               </div>
@@ -166,7 +166,7 @@ export function AssignmentDialog({
                 aria-invalid={!!errors?.user_filter}
                 onChange={(e) => setUserFilter(e.target.value)}
               />
-              <p className="text-[11px] text-muted-foreground">{t('acl.userFilterHelp')}</p>
+              <p className="text-caption text-muted-foreground">{t('acl.userFilterHelp')}</p>
               {errors?.user_filter && <p className="text-xs text-destructive">{errors.user_filter}</p>}
             </div>
             <div className="space-y-1">
@@ -179,7 +179,7 @@ export function AssignmentDialog({
                 aria-invalid={!!errors?.target_filter}
                 onChange={(e) => setTargetFilter(e.target.value)}
               />
-              <p className="text-[11px] text-muted-foreground">{t('acl.targetFilterHelp')}</p>
+              <p className="text-caption text-muted-foreground">{t('acl.targetFilterHelp')}</p>
               {errors?.target_filter && (
                 <p className="text-xs text-destructive">{errors.target_filter}</p>
               )}

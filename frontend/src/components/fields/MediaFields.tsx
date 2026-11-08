@@ -72,7 +72,7 @@ export function ImageField({ p }: { p: FieldInputProps }) {
             <User className="text-muted-foreground size-6" aria-hidden />
           )}
         </div>
-        {!src && <span className="text-[13px] text-muted-foreground">—</span>}
+        {!src && <span className="text-body text-muted-foreground">—</span>}
       </div>
     )
   }
@@ -142,7 +142,7 @@ export function ImageField({ p }: { p: FieldInputProps }) {
             </Button>
           )}
         </div>
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-small text-muted-foreground">
           {t('fields.dragDropImage', 'Drag and drop an image or click to browse.')}
         </p>
       </div>
@@ -173,7 +173,7 @@ export function FileField({ p }: { p: FieldInputProps }) {
 
   if (p.readOnly) {
     return (
-      <div className="flex h-8 items-center gap-2 text-[13px]">
+      <div className="flex h-8 items-center gap-2 text-body">
         {has ? (
           <>
             <FileText className="size-4 text-muted-foreground" />
@@ -213,7 +213,7 @@ export function FileField({ p }: { p: FieldInputProps }) {
       />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <FileText className="text-muted-foreground size-4 shrink-0" />
-        <span className="truncate text-[13px] text-muted-foreground">
+        <span className="truncate text-body text-muted-foreground">
           {has ? t('fields.fileStored', { size }) : t('fields.noFile')}
         </span>
       </div>

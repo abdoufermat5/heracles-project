@@ -53,7 +53,7 @@ export function RolesPanel() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[13px] text-muted-foreground">{t('acl.rolesHelp')}</p>
+        <p className="text-body text-muted-foreground">{t('acl.rolesHelp')}</p>
         <Button size="sm" onClick={() => setEditing(null)}>
           <Plus />
           {t('acl.newRole')}
@@ -90,7 +90,7 @@ export function RolesPanel() {
                     >
                       {r.cn}
                     </button>
-                    <div className="font-dn text-[11px] text-muted-foreground">{r.dn}</div>
+                    <div className="font-dn text-caption text-muted-foreground">{r.dn}</div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{r.description || '—'}</TableCell>
                   <TableCell className="text-right">

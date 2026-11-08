@@ -64,7 +64,7 @@ export function CheckRightsPanel() {
 
   return (
     <div className="space-y-4">
-      <p className="text-[13px] text-muted-foreground">{t('acl.checkHelp')}</p>
+      <p className="text-body text-muted-foreground">{t('acl.checkHelp')}</p>
       <div className="grid gap-3 md:grid-cols-3">
         <div className="space-y-1">
           <Label htmlFor="chk-user">{t('acl.checkUser')}</Label>
@@ -123,14 +123,14 @@ export function CheckRightsPanel() {
             </Badge>
           </div>
           {report.bootstrap_admin && (
-            <p className="text-[13px] text-warning">{t('acl.bootstrapNote')}</p>
+            <p className="text-body text-warning">{t('acl.bootstrapNote')}</p>
           )}
           {report.warnings.map((w) => (
-            <p key={w} className="text-[13px] text-warning">
+            <p key={w} className="text-body text-warning">
               {w}
             </p>
           ))}
-          <table className="w-full text-[13px]">
+          <table className="w-full text-body">
             <thead>
               <tr className="text-left">
                 <th className="label-caps py-1 font-medium">{t('acl.attribute')}</th>
@@ -142,7 +142,7 @@ export function CheckRightsPanel() {
                 <tr key={name} className="border-t">
                   <td className="py-1">
                     {attributeLabels.get(name) ?? name}
-                    <span className="ml-2 font-mono text-[11px] text-muted-foreground">{name}</span>
+                    <span className="ml-2 font-mono text-caption text-muted-foreground">{name}</span>
                   </td>
                   <td className="py-1 font-mono">{rightsLabel(rights)}</td>
                 </tr>

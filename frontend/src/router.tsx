@@ -27,6 +27,7 @@ import { ObjectEditor } from '@/features/editor/ObjectEditor'
 import { TemplateEditorPage } from '@/features/editor/TemplateEditor'
 import { ObjectListPage } from '@/features/listing/ObjectListPage'
 import { MePage } from '@/features/me/MePage'
+import { StyleguidePage } from '@/features/styleguide/StyleguidePage'
 import { AccessPage } from '@/features/admin/AccessPage'
 import { AdminGate, type AdminCapability } from '@/features/admin/AdminGate'
 import { ConfigPage } from '@/features/admin/ConfigPage'
@@ -119,6 +120,12 @@ const appRoute = createRoute({
 
 const dashboardRoute = createRoute({ getParentRoute: () => appRoute, path: '/', component: DashboardPage })
 const meRoute = createRoute({ getParentRoute: () => appRoute, path: '/me', component: MePage })
+// Living design reference; not linked from the navigation.
+const styleguideRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/styleguide',
+  component: StyleguidePage,
+})
 
 const listRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -204,6 +211,7 @@ const routeTree = rootRoute.addChildren([
   appRoute.addChildren([
     dashboardRoute,
     meRoute,
+    styleguideRoute,
     listRoute,
     newRoute,
     templateNewRoute,

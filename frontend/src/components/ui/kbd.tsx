@@ -12,7 +12,7 @@ export function Kbd({ className, children, keys, ...props }: KbdProps) {
         {keys.map((k, i) => (
           <kbd
             key={i}
-            className="inline-flex h-5 min-w-5 items-center justify-center rounded-sm border border-border bg-card px-1.5 font-mono text-[11px] font-medium text-muted-foreground select-none"
+            className="inline-flex h-5 min-w-5 items-center justify-center rounded-sm border border-border bg-card px-1.5 font-mono text-caption font-medium text-muted-foreground select-none"
             {...props}
           >
             {k}
@@ -25,7 +25,7 @@ export function Kbd({ className, children, keys, ...props }: KbdProps) {
   return (
     <kbd
       className={cn(
-        "inline-flex h-5 min-w-5 items-center justify-center rounded-sm border border-border bg-card px-1.5 font-mono text-[11px] font-medium text-muted-foreground select-none",
+        "inline-flex h-5 min-w-5 items-center justify-center rounded-sm border border-border bg-card px-1.5 font-mono text-caption font-medium text-muted-foreground select-none",
         className
       )}
       {...props}

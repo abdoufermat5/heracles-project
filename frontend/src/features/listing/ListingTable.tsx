@@ -167,7 +167,7 @@ export function ListingTable({
               <span
                 className={cn(
                   'block truncate text-muted-foreground',
-                  mono && 'font-mono text-[13px] text-foreground/80',
+                  mono && 'font-mono text-body text-foreground/80',
                 )}
                 title={text}
               >
@@ -182,7 +182,7 @@ export function ListingTable({
                 to="/types/$type/$dn"
                 params={{ type, dn: row.original.dn }}
                 className={cn(
-                  'truncate text-[13px] font-medium text-foreground hover:text-signal focus-visible:underline focus-visible:outline-none',
+                  'truncate text-body font-medium text-foreground hover:text-signal focus-visible:underline focus-visible:outline-none',
                   mono && 'font-mono',
                 )}
                 onClick={(e) => e.stopPropagation()}
@@ -193,7 +193,7 @@ export function ListingTable({
               {row.original.locked && (
                 <Badge
                   variant="warning"
-                  className="h-5 shrink-0 gap-1 rounded-sm px-1.5 text-[11px]"
+                  className="h-5 shrink-0 gap-1 rounded-sm px-1.5 text-caption"
                 >
                   <Lock className="size-3" aria-hidden />
                   {t('listing.locked')}
@@ -416,7 +416,7 @@ export function ListingTable({
         ref={scrollerRef}
         className="min-h-56 max-h-[calc(100vh-18rem)] overflow-auto"
       >
-        <table className="w-full border-collapse text-[13px]">
+        <table className="w-full border-collapse text-body">
           <thead className="sticky top-0 z-10 bg-muted/50">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b">

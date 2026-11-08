@@ -111,7 +111,7 @@ export function ImportLdifTab() {
         <CardTitle>{t('io.ldif.title')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 p-4">
-        <div className="flex items-start gap-2 rounded-sm border border-warning/30 bg-warning-soft p-2.5 text-[13px] text-warning">
+        <div className="flex items-start gap-2 rounded-sm border border-warning/30 bg-warning-soft p-2.5 text-body text-warning">
           <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <span>{t('io.ldif.restricted')}</span>
         </div>
@@ -121,7 +121,7 @@ export function ImportLdifTab() {
             type="file"
             accept=".ldif,.txt,text/plain"
             onChange={(e) => void onFile(e.target.files?.[0])}
-            className="block w-full text-[13px] file:mr-3 file:h-8 file:rounded-md file:border file:border-input file:bg-card file:px-3 file:text-[13px] file:font-medium"
+            className="block w-full text-body file:mr-3 file:h-8 file:rounded-md file:border file:border-input file:bg-card file:px-3 file:text-body file:font-medium"
           />
         </FormField>
         <FormField id="ldif-text" label={t('io.ldif.text')}>
@@ -141,7 +141,7 @@ export function ImportLdifTab() {
               checked={overwrite}
               onCheckedChange={(v) => change(() => setOverwrite(v === true))}
             />
-            <Label htmlFor="ldif-overwrite" className="text-[13px]">
+            <Label htmlFor="ldif-overwrite" className="text-body">
               {t('io.ldif.overwrite')}
             </Label>
           </div>
@@ -152,7 +152,7 @@ export function ImportLdifTab() {
               disabled={!overwrite}
               onCheckedChange={(v) => change(() => setRemoveMissing(v === true))}
             />
-            <Label htmlFor="ldif-remove" className="text-[13px]">
+            <Label htmlFor="ldif-remove" className="text-body">
               {t('io.ldif.removeMissing')}
             </Label>
           </div>
@@ -174,7 +174,7 @@ export function ImportLdifTab() {
         </div>
         {result && (
           <div className="space-y-2">
-            <h3 className="text-[13px] font-semibold">
+            <h3 className="text-body font-semibold">
               {result.dry_run ? t('io.ldif.previewTitle') : t('io.ldif.appliedTitle')}
             </h3>
             <ResultTable data={result} />

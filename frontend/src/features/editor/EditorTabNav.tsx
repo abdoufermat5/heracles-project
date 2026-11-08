@@ -50,7 +50,7 @@ export function EditorTabNav({
               id={`tab-${tb.name}`}
               onClick={() => onSelectTab(tb.name)}
               className={cn(
-                'group relative flex h-8 items-center justify-between gap-2 whitespace-nowrap rounded-sm border border-transparent px-3 text-left text-[13px] transition-colors lg:whitespace-normal',
+                'group relative flex h-8 items-center justify-between gap-2 whitespace-nowrap rounded-sm border border-transparent px-3 text-left text-body transition-colors lg:whitespace-normal',
                 isSelected
                   ? 'border-border bg-card font-medium text-foreground'
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -69,7 +69,7 @@ export function EditorTabNav({
                 {isOptional && !isActive && (
                   <Badge
                     variant="neutral"
-                    className="h-4 shrink-0 rounded-sm px-1 text-[10px] font-normal"
+                    className="h-4 shrink-0 rounded-sm px-1 text-micro font-normal"
                   >
                     {t('editor.inactive')}
                   </Badge>
@@ -86,7 +86,7 @@ export function EditorTabNav({
                 {errorCount > 0 && (
                   <Badge
                     variant="destructive"
-                    className="flex h-4 min-w-4 items-center gap-0.5 rounded-sm px-1 text-[10px] leading-none"
+                    className="flex h-4 min-w-4 items-center gap-0.5 rounded-sm px-1 text-micro leading-none"
                     aria-label={t('editor.tabHasErrors')}
                   >
                     <AlertTriangle className="size-2.5" />
@@ -109,7 +109,7 @@ export function EditorTabNav({
               id={`tab-${x.name}`}
               onClick={() => onSelectTab(x.name)}
               className={cn(
-                'relative flex h-8 items-center gap-2 whitespace-nowrap rounded-sm border border-transparent px-3 text-left text-[13px] transition-colors',
+                'relative flex h-8 items-center gap-2 whitespace-nowrap rounded-sm border border-transparent px-3 text-left text-body transition-colors',
                 isSelected
                   ? 'border-border bg-card font-medium text-foreground'
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground',

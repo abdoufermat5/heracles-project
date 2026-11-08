@@ -131,18 +131,18 @@ function Inner({ onOpenChange, type, descriptor, dns }: Props) {
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-[15px]">{t('bulkEdit.title', { count: dns.length })}</DialogTitle>
-          <DialogDescription className="text-[13px]">{t('bulkEdit.help')}</DialogDescription>
+          <DialogTitle className="text-lead">{t('bulkEdit.title', { count: dns.length })}</DialogTitle>
+          <DialogDescription className="text-body">{t('bulkEdit.help')}</DialogDescription>
         </DialogHeader>
 
         {results !== null ? (
           <div className="space-y-3">
-            <p role="status" className="text-[13px] font-medium text-foreground">
+            <p role="status" className="text-body font-medium text-foreground">
               {failed === 0
                 ? t('bulkEdit.allOk', { count: okCount })
                 : t('bulkEdit.partial', { ok: okCount, failed })}
             </p>
-            <ul className="max-h-72 space-y-1.5 overflow-y-auto text-[13px]" aria-label={t('bulkEdit.results')}>
+            <ul className="max-h-72 space-y-1.5 overflow-y-auto text-body" aria-label={t('bulkEdit.results')}>
               {results.map((r) => (
                 <li key={r.dn} className="flex items-start gap-2">
                   {r.ok ? (
@@ -174,7 +174,7 @@ function Inner({ onOpenChange, type, descriptor, dns }: Props) {
             <Skeleton className="h-8 w-2/3" />
           </div>
         ) : choices.length === 0 ? (
-          <p className="rounded-md border border-dashed p-4 text-[13px] text-muted-foreground">
+          <p className="rounded-md border border-dashed p-4 text-body text-muted-foreground">
             {t('bulkEdit.noAttributes')}
           </p>
         ) : (
@@ -191,7 +191,7 @@ function Inner({ onOpenChange, type, descriptor, dns }: Props) {
                           {t('bulkEdit.attribute')}
                         </Label>
                         <Select value={r.key} onValueChange={(v) => pick(r.id, v)}>
-                          <SelectTrigger id={`bulk-attr-${r.id}`} className="h-8 text-[13px]">
+                          <SelectTrigger id={`bulk-attr-${r.id}`} className="h-8 text-body">
                             <SelectValue placeholder={t('bulkEdit.choose')} />
                           </SelectTrigger>
                           <SelectContent>
@@ -214,7 +214,7 @@ function Inner({ onOpenChange, type, descriptor, dns }: Props) {
                           onValueChange={(v) => update(r.id, { op: v as Op })}
                           disabled={!choice}
                         >
-                          <SelectTrigger id={`bulk-op-${r.id}`} className="h-8 text-[13px]">
+                          <SelectTrigger id={`bulk-op-${r.id}`} className="h-8 text-body">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>

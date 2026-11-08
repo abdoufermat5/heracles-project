@@ -57,8 +57,8 @@ export function ReauthDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle className="text-[15px]">{t('security.reauthTitle')}</DialogTitle>
-            <DialogDescription className="text-[13px]">{t('security.reauthBody')}</DialogDescription>
+            <DialogTitle className="text-lead">{t('security.reauthTitle')}</DialogTitle>
+            <DialogDescription className="text-body">{t('security.reauthBody')}</DialogDescription>
           </DialogHeader>
           <Input
             type="password"
@@ -67,10 +67,10 @@ export function ReauthDialog({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             aria-label={t('security.password')}
-            className="h-8 text-[13px]"
+            className="h-8 text-body"
           />
           {error && (
-            <p role="alert" className="text-[13px] text-destructive">
+            <p role="alert" className="text-body text-destructive">
               {error}
             </p>
           )}

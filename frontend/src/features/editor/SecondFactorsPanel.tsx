@@ -65,7 +65,7 @@ export function SecondFactorsPanel({ dn }: Props) {
   return (
     <section aria-labelledby="second-factors-title" className="rounded-md border bg-card">
       <div className="border-b px-4 py-3">
-        <h2 id="second-factors-title" className="text-[13px] font-semibold text-foreground">
+        <h2 id="second-factors-title" className="text-body font-semibold text-foreground">
           {t('secondFactors.title')}
         </h2>
         <p className="text-xs text-muted-foreground">{t('secondFactors.help')}</p>
@@ -82,7 +82,7 @@ export function SecondFactorsPanel({ dn }: Props) {
         </div>
       ) : (
         <>
-          <dl className="divide-y text-[13px]">
+          <dl className="divide-y text-body">
             <div className="flex items-center justify-between gap-4 px-4 py-2.5">
               <dt className="text-muted-foreground">{t('secondFactors.totp')}</dt>
               <dd className="text-foreground">
@@ -155,10 +155,10 @@ export function SecondFactorsPanel({ dn }: Props) {
       <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[15px] font-semibold">
+            <AlertDialogTitle className="text-lead font-semibold">
               {t('secondFactors.resetTitle')}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px] text-muted-foreground">
+            <AlertDialogDescription className="text-body text-muted-foreground">
               {t('secondFactors.resetBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -174,10 +174,10 @@ export function SecondFactorsPanel({ dn }: Props) {
       <AlertDialog open={keyToRemove !== null} onOpenChange={(o) => !o && setKeyToRemove(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[15px] font-semibold">
+            <AlertDialogTitle className="text-lead font-semibold">
               {t('secondFactors.removeKeyTitle')}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px] text-muted-foreground">
+            <AlertDialogDescription className="text-body text-muted-foreground">
               {t('secondFactors.removeKeyBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>

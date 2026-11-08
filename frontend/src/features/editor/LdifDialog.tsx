@@ -40,11 +40,11 @@ export function LdifDialog({ open, onOpenChange, ldif, title, loading = false }:
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-w-2xl flex-col sm:max-h-[85vh]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-[15px]">
+          <DialogTitle className="flex items-center gap-2 text-lead">
             <FileCode2 className="size-4 text-muted-foreground" aria-hidden />
             {t('editor.ldifTitle')} — {title}
           </DialogTitle>
-          <DialogDescription className="text-[13px]">
+          <DialogDescription className="text-body">
             {t('editor.rawLdif')}
           </DialogDescription>
         </DialogHeader>

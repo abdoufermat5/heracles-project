@@ -120,9 +120,9 @@ function BlockRows({
               {open ? <ChevronDown /> : <ChevronRight />}
             </Button>
             <div className="min-w-0">
-              <div className="font-mono text-[12px]">{block.object}</div>
+              <div className="font-mono text-small">{block.object}</div>
               {(pretty ?? special) && (
-                <div className="truncate text-[11px] text-muted-foreground">{pretty ?? special}</div>
+                <div className="truncate text-caption text-muted-foreground">{pretty ?? special}</div>
               )}
             </div>
           </div>
@@ -280,7 +280,7 @@ function TemplateCard({
   const { t } = useTranslation()
   if (template.ignored) {
     return (
-      <div className="rounded-md border border-dashed p-3 text-[13px]">
+      <div className="rounded-md border border-dashed p-3 text-body">
         <p className="font-medium">{t('acl.unreadableTemplate')}</p>
         <p className="font-mono text-xs break-all text-muted-foreground">{template.raw}</p>
         <p className="text-xs text-muted-foreground">{template.reason}</p>
@@ -325,10 +325,10 @@ function TemplateCard({
         </div>
       </div>
       {template.blocks.length === 0 ? (
-        <p className="px-3 py-4 text-[13px] text-muted-foreground">{t('acl.noObjects')}</p>
+        <p className="px-3 py-4 text-body text-muted-foreground">{t('acl.noObjects')}</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-body">
             <thead>
               <tr className="text-left">
                 <th className="label-caps px-3 py-1.5 font-medium">{t('acl.object')}</th>

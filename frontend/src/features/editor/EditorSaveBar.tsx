@@ -50,7 +50,7 @@ export function EditorSaveBar({
         <span className="size-1.5 rounded-full bg-signal" />
         <span
           data-testid="dirty-indicator"
-          className="text-[13px] font-medium text-foreground"
+          className="text-body font-medium text-foreground"
         >
           {t('editor.unsavedCount', {
             count: changesCount || diffs.length || 1,
@@ -81,7 +81,7 @@ export function EditorSaveBar({
         >
           <Save aria-hidden />
           <span>{isCreate ? t('common.create') : t('common.save')}</span>
-          <kbd className="ml-1 hidden rounded-sm border border-primary-foreground/30 px-1 py-0.5 font-mono text-[10px] leading-none sm:inline-block">
+          <kbd className="ml-1 hidden rounded-sm border border-primary-foreground/30 px-1 py-0.5 font-mono text-micro leading-none sm:inline-block">
             ⌘S
           </kbd>
         </Button>

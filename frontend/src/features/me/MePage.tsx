@@ -101,13 +101,13 @@ export function MePage() {
             <div className="flex items-center gap-3">
               <Avatar size="lg" className="size-10">
                 {me.avatar_url && <AvatarImage src={me.avatar_url} alt="" />}
-                <AvatarFallback className="bg-muted text-[13px] font-semibold text-muted-foreground">
+                <AvatarFallback className="bg-muted text-body font-semibold text-muted-foreground">
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-[15px] font-semibold tracking-tight text-foreground">
+                  <span className="truncate text-lead font-semibold tracking-tight text-foreground">
                     {me.display_name}
                   </span>
                   <Badge variant="neutral" className="shrink-0">
@@ -118,7 +118,7 @@ export function MePage() {
               </div>
             </div>
 
-            <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 border-t pt-4 text-[13px]">
+            <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 border-t pt-4 text-body">
               <dt className="label-caps pt-0.5">{t('me.login')}</dt>
               <dd className="truncate font-mono text-foreground">{me.uid}</dd>
 
@@ -154,13 +154,13 @@ export function MePage() {
         {/* Permissions */}
         <Card className="overflow-hidden">
           <CardHeader className={PANEL_HEADER}>
-            <CardTitle className="text-[13px] font-semibold">{t('me.rights')}</CardTitle>
+            <CardTitle className="text-body font-semibold">{t('me.rights')}</CardTitle>
             <span className="truncate text-xs text-muted-foreground">
               {me.is_admin ? t('me.rightsAdmin') : t('me.rightsStandard')}
             </span>
           </CardHeader>
           <CardContent className="p-0">
-            <ul className="divide-y text-[13px]">
+            <ul className="divide-y text-body">
               {permissions.map((permission) => (
                 <li key={permission} className="flex items-start gap-2 px-4 py-2.5">
                   <Check className="mt-0.5 size-3.5 shrink-0 text-success" aria-hidden="true" />
@@ -174,12 +174,12 @@ export function MePage() {
         {/* Preferences */}
         <Card className="overflow-hidden">
           <CardHeader className={PANEL_HEADER}>
-            <CardTitle className="text-[13px] font-semibold">{t('me.preferences')}</CardTitle>
+            <CardTitle className="text-body font-semibold">{t('me.preferences')}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
               <div className="flex items-center justify-between gap-4 px-4 py-2.5">
-                <span className="text-[13px] text-foreground">{t('user.theme')}</span>
+                <span className="text-body text-foreground">{t('user.theme')}</span>
                 <ToggleGroup
                   type="single"
                   size="sm"
@@ -204,7 +204,7 @@ export function MePage() {
               </div>
 
               <div className="flex items-center justify-between gap-4 px-4 py-2.5">
-                <span className="text-[13px] text-foreground">{t('user.language')}</span>
+                <span className="text-body text-foreground">{t('user.language')}</span>
                 <ToggleGroup
                   type="single"
                   size="sm"
@@ -229,10 +229,10 @@ export function MePage() {
         {/* Session */}
         <Card>
           <CardHeader className={PANEL_HEADER}>
-            <CardTitle className="text-[13px] font-semibold">{t('me.sessionInfo')}</CardTitle>
+            <CardTitle className="text-body font-semibold">{t('me.sessionInfo')}</CardTitle>
           </CardHeader>
           <CardContent className="p-4">
-            <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 text-[13px]">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 text-body">
               <dt className="label-caps pt-0.5">{t('me.activeSession')}</dt>
               <dd className="flex items-center gap-1.5 text-foreground">
                 <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />

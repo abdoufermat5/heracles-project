@@ -84,21 +84,21 @@ export function SecurityKeysPanel() {
   return (
     <Card className="overflow-hidden lg:col-span-2">
       <CardHeader className={PANEL_HEADER}>
-        <CardTitle className="text-[13px] font-semibold">{t('security.title')}</CardTitle>
+        <CardTitle className="text-body font-semibold">{t('security.title')}</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         <p className="px-4 pt-3 text-xs text-muted-foreground">{t('security.help')}</p>
 
         {error && (
-          <p role="alert" className="mx-4 mt-3 rounded-sm border border-destructive/30 bg-destructive-soft p-2.5 text-[13px] text-destructive">
+          <p role="alert" className="mx-4 mt-3 rounded-sm border border-destructive/30 bg-destructive-soft p-2.5 text-body text-destructive">
             {error}
           </p>
         )}
 
         {keys.isPending ? (
-          <p className="px-4 py-3 text-[13px] text-muted-foreground">{t('common.loading')}</p>
+          <p className="px-4 py-3 text-body text-muted-foreground">{t('common.loading')}</p>
         ) : keys.data && keys.data.length > 0 ? (
-          <ul className="mt-3 divide-y border-t text-[13px]" aria-label={t('security.title')}>
+          <ul className="mt-3 divide-y border-t text-body" aria-label={t('security.title')}>
             {keys.data.map((k) => (
               <li key={k.id} className="flex items-center gap-2 px-4 py-2.5">
                 <KeyRound className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -120,7 +120,7 @@ export function SecurityKeysPanel() {
             ))}
           </ul>
         ) : (
-          <p className="px-4 py-3 text-[13px] text-muted-foreground">{t('security.none')}</p>
+          <p className="px-4 py-3 text-body text-muted-foreground">{t('security.none')}</p>
         )}
 
         <div className="border-t p-4">
@@ -139,7 +139,7 @@ export function SecurityKeysPanel() {
                 maxLength={64}
                 placeholder={t('security.labelPlaceholder')}
                 aria-label={t('security.label')}
-                className="h-8 max-w-64 text-[13px]"
+                className="h-8 max-w-64 text-body"
               />
               <Button type="submit" size="sm" disabled={add.isPending}>
                 {add.isPending ? (
@@ -151,7 +151,7 @@ export function SecurityKeysPanel() {
               </Button>
             </form>
           ) : (
-            <p className="text-[13px] text-muted-foreground">{t('security.unsupported')}</p>
+            <p className="text-body text-muted-foreground">{t('security.unsupported')}</p>
           )}
         </div>
       </CardContent>
@@ -169,8 +169,8 @@ export function SecurityKeysPanel() {
       <AlertDialog open={lastKey !== null} onOpenChange={(o) => !o && setLastKey(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[15px]">{t('security.lastTitle')}</AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px]">
+            <AlertDialogTitle className="text-lead">{t('security.lastTitle')}</AlertDialogTitle>
+            <AlertDialogDescription className="text-body">
               {t('security.lastBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>

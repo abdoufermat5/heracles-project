@@ -125,7 +125,7 @@ function TemplateForm({ desc, template }: { desc: TypeDescriptor; template: Temp
           to="/types/$type"
           params={{ type }}
           search={{ view: 'templates' }}
-          className="inline-flex items-center gap-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-1 text-body text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft className="size-3.5" aria-hidden />
           <span>{t('templates.backToList', { type: desc.label })}</span>
@@ -140,7 +140,7 @@ function TemplateForm({ desc, template }: { desc: TypeDescriptor; template: Temp
               </h1>
               <Badge variant="neutral">{t('templates.badge')}</Badge>
             </div>
-            <p className="text-[13px] text-muted-foreground">{t('templates.editHelp')}</p>
+            <p className="text-body text-muted-foreground">{t('templates.editHelp')}</p>
           </div>
           <div className="flex items-center gap-2">
             <MaskHelp />
@@ -168,7 +168,7 @@ function TemplateForm({ desc, template }: { desc: TypeDescriptor; template: Temp
             value={name}
             onChange={(e) => setName(e.target.value)}
             aria-invalid={errors.name ? true : undefined}
-            className="h-8 text-[13px]"
+            className="h-8 text-body"
           />
           {errors.name && (
             <p role="alert" className="text-xs font-medium text-destructive">
@@ -207,7 +207,7 @@ function TemplateForm({ desc, template }: { desc: TypeDescriptor; template: Temp
           {current?.optional && (
             <div className="flex items-center justify-between rounded-md border bg-card p-4">
               <div>
-                <p className="text-[13px] font-medium text-foreground">{t('templates.includeTab', { tab: current.label })}</p>
+                <p className="text-body font-medium text-foreground">{t('templates.includeTab', { tab: current.label })}</p>
                 <p className="text-xs text-muted-foreground">{t('templates.includeTabHelp')}</p>
               </div>
               <Switch
@@ -224,7 +224,7 @@ function TemplateForm({ desc, template }: { desc: TypeDescriptor; template: Temp
               return (
                 <section key={sec.name} aria-labelledby={`tsec-${current.name}-${sec.name}`} className="rounded-md border bg-card">
                   <div className="flex h-10 items-center border-b px-4">
-                    <h2 id={`tsec-${current.name}-${sec.name}`} className="text-[13px] font-semibold text-foreground">
+                    <h2 id={`tsec-${current.name}-${sec.name}`} className="text-body font-semibold text-foreground">
                       {sec.label}
                     </h2>
                   </div>
@@ -279,7 +279,7 @@ function MaskField({ tab, attr, value, error, onChange }: MaskFieldProps) {
                 onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))}
                 placeholder={t('templates.maskPlaceholder')}
                 aria-invalid={error ? true : undefined}
-                className="h-8 font-mono text-[13px]"
+                className="h-8 font-mono text-body"
               />
               <Button
                 type="button"
@@ -304,7 +304,7 @@ function MaskField({ tab, attr, value, error, onChange }: MaskFieldProps) {
           onChange={(e) => onChange(e.target.value)}
           placeholder={t('templates.maskPlaceholder')}
           aria-invalid={error ? true : undefined}
-          className="h-8 font-mono text-[13px]"
+          className="h-8 font-mono text-body"
         />
       )}
       {error && (

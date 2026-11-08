@@ -14,8 +14,8 @@ export function MaskHelp() {
           {t('templates.syntaxButton')}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[26rem] max-w-[90vw] space-y-2 text-[13px]">
-        <h2 className="text-[13px] font-semibold text-foreground">{t('templates.syntaxTitle')}</h2>
+      <PopoverContent align="end" className="w-[26rem] max-w-[90vw] space-y-2 text-body">
+        <h2 className="text-body font-semibold text-foreground">{t('templates.syntaxTitle')}</h2>
         <p className="text-muted-foreground">{t('templates.syntaxIntro')}</p>
         <ul className="space-y-2 text-muted-foreground">
           <li>{t('templates.syntaxAttr')}</li>

@@ -43,7 +43,7 @@ export function Logo({ collapsed = false, className, tone = 'default' }: LogoPro
       {!collapsed && (
         <span
           className={cn(
-            'text-[15px] font-semibold tracking-tight',
+            'text-lead font-semibold tracking-tight',
             tone === 'inverse' && 'text-sidebar-accent-foreground',
           )}
         >

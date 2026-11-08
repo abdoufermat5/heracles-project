@@ -155,7 +155,7 @@ export function DashboardPage() {
             {/* Composition */}
             <Card className="lg:col-span-2">
               <CardHeader className={PANEL_HEADER}>
-                <CardTitle className="text-[13px] font-semibold">
+                <CardTitle className="text-body font-semibold">
                   {t('dashboard.composition')}
                 </CardTitle>
                 <span className="font-mono text-xs tabular-nums text-muted-foreground">
@@ -183,7 +183,7 @@ export function DashboardPage() {
                   })}
                 </div>
 
-                <table className="mt-3 w-full text-[13px]">
+                <table className="mt-3 w-full text-body">
                   <tbody className="divide-y">
                     {data.cards.map((c, index) => (
                       <tr key={c.key}>
@@ -213,7 +213,7 @@ export function DashboardPage() {
             {/* Directory status */}
             <Card>
               <CardHeader className={PANEL_HEADER}>
-                <CardTitle className="text-[13px] font-semibold">
+                <CardTitle className="text-body font-semibold">
                   {t('dashboard.systemInfo')}
                 </CardTitle>
                 <span className="flex items-center gap-1.5 text-xs text-success">
@@ -222,7 +222,7 @@ export function DashboardPage() {
                 </span>
               </CardHeader>
               <CardContent className="p-4">
-                <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 text-[13px]">
+                <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2.5 text-body">
                   <dt className="label-caps pt-0.5">{t('dashboard.activeDirectory')}</dt>
                   <dd className="truncate font-mono text-foreground">
                     {me?.directory ?? t('dashboard.defaultDirectory')}
@@ -249,14 +249,14 @@ export function DashboardPage() {
             {/* Needs attention */}
             <Card className="overflow-hidden" role="region" aria-label={t('dashboard.attention')}>
               <CardHeader className={PANEL_HEADER}>
-                <CardTitle className="text-[13px] font-semibold">
+                <CardTitle className="text-body font-semibold">
                   {t('dashboard.attention')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <ul className="divide-y">
                   {attentionRows.map((row) => (
-                    <li key={row.key} className="flex h-9 items-center gap-2 px-4 text-[13px]">
+                    <li key={row.key} className="flex h-9 items-center gap-2 px-4 text-body">
                       {row.dot ? (
                         <span className={cn('size-1.5 shrink-0 rounded-full', row.dot)} aria-hidden="true" />
                       ) : (
@@ -299,7 +299,7 @@ export function DashboardPage() {
             {/* Quick actions */}
             <Card className="overflow-hidden">
               <CardHeader className={PANEL_HEADER}>
-                <CardTitle className="text-[13px] font-semibold">
+                <CardTitle className="text-body font-semibold">
                   {t('dashboard.quickActions')}
                 </CardTitle>
               </CardHeader>
@@ -309,7 +309,7 @@ export function DashboardPage() {
                     <Link
                       to="/types/$type/new"
                       params={{ type: 'user' }}
-                      className="flex h-9 items-center justify-between px-4 text-[13px] text-foreground transition-colors hover:bg-accent/40"
+                      className="flex h-9 items-center justify-between px-4 text-body text-foreground transition-colors hover:bg-accent/40"
                     >
                       {t('dashboard.createUser')}
                       <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
@@ -319,7 +319,7 @@ export function DashboardPage() {
                     <Link
                       to="/types/$type/new"
                       params={{ type: 'group' }}
-                      className="flex h-9 items-center justify-between px-4 text-[13px] text-foreground transition-colors hover:bg-accent/40"
+                      className="flex h-9 items-center justify-between px-4 text-body text-foreground transition-colors hover:bg-accent/40"
                     >
                       {t('dashboard.createGroup')}
                       <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
@@ -329,7 +329,7 @@ export function DashboardPage() {
                     <Link
                       to="/types/$type"
                       params={{ type: 'department' }}
-                      className="flex h-9 items-center justify-between px-4 text-[13px] text-foreground transition-colors hover:bg-accent/40"
+                      className="flex h-9 items-center justify-between px-4 text-body text-foreground transition-colors hover:bg-accent/40"
                     >
                       {t('dashboard.browseTree')}
                       <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
@@ -343,7 +343,7 @@ export function DashboardPage() {
           {/* Recently viewed objects */}
           <Card className="overflow-hidden">
             <CardHeader className={PANEL_HEADER}>
-              <CardTitle className="text-[13px] font-semibold">
+              <CardTitle className="text-body font-semibold">
                 {t('dashboard.recentObjects')}
               </CardTitle>
               <Clock className="size-4 text-muted-foreground" aria-hidden="true" />
@@ -362,7 +362,7 @@ export function DashboardPage() {
                       <Link
                         to="/types/$type/$dn"
                         params={{ type: item.type, dn: item.dn }}
-                        className="flex h-9 items-center justify-between gap-3 px-4 text-[13px] transition-colors hover:bg-accent/40"
+                        className="flex h-9 items-center justify-between gap-3 px-4 text-body transition-colors hover:bg-accent/40"
                       >
                         <span className="flex min-w-0 items-center gap-2.5">
                           <TypeIcon name={item.type} className="size-3.5 shrink-0 text-muted-foreground" />

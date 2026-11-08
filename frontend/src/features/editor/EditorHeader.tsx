@@ -123,7 +123,7 @@ export function EditorHeader({
       <Link
         to="/types/$type"
         params={{ type }}
-        className="inline-flex items-center gap-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+        className="inline-flex items-center gap-1 text-body text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="size-3.5" aria-hidden />
         <span>{t('editor.backToList', { type: desc.label })}</span>
@@ -145,18 +145,18 @@ export function EditorHeader({
               <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">
                 {title}
               </h1>
-              <Badge variant="neutral" className="h-5 rounded-sm px-1.5 text-[11px]">
+              <Badge variant="neutral" className="h-5 rounded-sm px-1.5 text-caption">
                 {desc.label}
               </Badge>
               {editing && !isCreate && (
-                <Badge variant="outline" className="h-5 rounded-sm px-1.5 text-[11px]">
+                <Badge variant="outline" className="h-5 rounded-sm px-1.5 text-caption">
                   {t('editor.editing')}
                 </Badge>
               )}
               {accountLocked && (
                 <Badge
                   variant="warning"
-                  className="h-5 gap-1 rounded-sm px-1.5 text-[11px]"
+                  className="h-5 gap-1 rounded-sm px-1.5 text-caption"
                 >
                   <Lock className="size-3" aria-hidden />
                   {t('editor.accountLocked')}

@@ -33,7 +33,7 @@ export function PasswordField({ p }: { p: FieldInputProps }) {
 
   if (p.readOnly) {
     return (
-      <div className="flex h-8 items-center text-[13px] text-muted-foreground select-none">
+      <div className="flex h-8 items-center text-body text-muted-foreground select-none">
         ••••••••
       </div>
     )
@@ -56,7 +56,7 @@ export function PasswordField({ p }: { p: FieldInputProps }) {
           autoComplete="new-password"
           aria-invalid={p.invalid || undefined}
           aria-describedby={p.error ? `${p.id}-error` : undefined}
-          className="h-8 pr-16 text-[13px]"
+          className="h-8 pr-16 text-body"
         />
         <div className="absolute right-1 flex items-center gap-0.5">
           <Button
@@ -103,7 +103,7 @@ export function PasswordField({ p }: { p: FieldInputProps }) {
                 />
               ))}
             </div>
-            <span className="w-16 text-right text-[11px] text-muted-foreground">
+            <span className="w-16 text-right text-caption text-muted-foreground">
               {t(`fields.strength.${score}`)}
             </span>
           </div>
@@ -116,7 +116,7 @@ export function PasswordField({ p }: { p: FieldInputProps }) {
             aria-label={t('fields.passwordConfirm')}
             autoComplete="new-password"
             aria-invalid={mismatch || undefined}
-            className="h-8 text-[13px]"
+            className="h-8 text-body"
           />
 
           {mismatch && (

@@ -20,7 +20,7 @@ import { TypeIcon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 const linkBaseClass =
-  'group relative flex h-8 items-center gap-2.5 rounded-sm px-3 text-[13px] font-medium text-sidebar-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg]:opacity-80'
+  'group relative flex h-9 items-center gap-2.5 rounded-md px-3 text-body font-medium text-sidebar-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg]:opacity-80'
 const activeClass =
   'bg-sidebar-accent text-sidebar-accent-foreground! font-medium before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-sidebar-signal'
 
@@ -55,7 +55,7 @@ function NavLink({
         <>
           <span className="flex-1 truncate">{label}</span>
           {typeof count === 'number' && (
-            <span className="ml-auto font-mono text-[11px] tabular-nums text-sidebar-muted group-hover:text-sidebar-accent-foreground">
+            <span className="ml-auto font-mono text-caption tabular-nums text-sidebar-muted group-hover:text-sidebar-accent-foreground">
               {count.toLocaleString()}
             </span>
           )}
@@ -72,7 +72,7 @@ function NavLink({
       <TooltipContent side="right" sideOffset={8} className="flex items-center gap-1.5">
         <span>{label}</span>
         {typeof count === 'number' && (
-          <span className="font-mono text-[11px] tabular-nums opacity-70">
+          <span className="font-mono text-caption tabular-nums opacity-70">
             {count.toLocaleString()}
           </span>
         )}

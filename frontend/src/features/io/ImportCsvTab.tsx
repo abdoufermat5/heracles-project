@@ -188,7 +188,7 @@ export function ImportCsvTab() {
               setParsed(null)
             }}
           />
-          <Label htmlFor="csv-header" className="text-[13px]">
+          <Label htmlFor="csv-header" className="text-body">
             {t('io.csv.hasHeader')}
           </Label>
         </div>
@@ -199,7 +199,7 @@ export function ImportCsvTab() {
             type="file"
             accept=".csv,.txt,text/csv,text/plain"
             onChange={(e) => void onFile(e.target.files?.[0])}
-            className="block w-full text-[13px] file:mr-3 file:h-8 file:rounded-md file:border file:border-input file:bg-card file:px-3 file:text-[13px] file:font-medium"
+            className="block w-full text-body file:mr-3 file:h-8 file:rounded-md file:border file:border-input file:bg-card file:px-3 file:text-body file:font-medium"
           />
         </FormField>
         <FormField id="csv-text" label={t('io.csv.text')}>
@@ -225,7 +225,7 @@ export function ImportCsvTab() {
         {parsed && (
           <>
             <section aria-labelledby="csv-mapping-title" className="space-y-2">
-              <h3 id="csv-mapping-title" className="text-[13px] font-semibold">
+              <h3 id="csv-mapping-title" className="text-body font-semibold">
                 {t('io.csv.mapping')}
               </h3>
               <p className="text-xs text-muted-foreground">{t('io.csv.mappingHelp')}</p>
@@ -255,7 +255,7 @@ export function ImportCsvTab() {
             </section>
 
             <section aria-labelledby="csv-fixed-title" className="space-y-2">
-              <h3 id="csv-fixed-title" className="text-[13px] font-semibold">
+              <h3 id="csv-fixed-title" className="text-body font-semibold">
                 {t('io.csv.fixed')}
               </h3>
               <p className="text-xs text-muted-foreground">{t('io.csv.fixedHelp')}</p>
@@ -304,7 +304,7 @@ export function ImportCsvTab() {
             </section>
 
             <section aria-labelledby="csv-preview-title" className="space-y-2">
-              <h3 id="csv-preview-title" className="text-[13px] font-semibold">
+              <h3 id="csv-preview-title" className="text-body font-semibold">
                 {t('io.csv.preview', { count: parsed.rows.length, total: parsed.total })}
               </h3>
               <div className="max-h-64 overflow-auto rounded-md border">
@@ -341,13 +341,13 @@ export function ImportCsvTab() {
 
         {outcome && (
           <section aria-live="polite" className="space-y-2">
-            <p className="text-[13px] font-medium text-foreground">
+            <p className="text-body font-medium text-foreground">
               {t('io.csv.imported', { count: outcome.imported })}
             </p>
             {outcome.results
               .filter((r) => r.error)
               .map((r) => (
-                <p key={r.line} role="alert" className="text-[13px] text-destructive">
+                <p key={r.line} role="alert" className="text-body text-destructive">
                   {t('io.csv.failedLine', { line: r.line, error: r.error })}
                 </p>
               ))}

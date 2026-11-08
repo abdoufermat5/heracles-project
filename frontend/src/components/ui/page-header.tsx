@@ -27,7 +27,7 @@ export function PageHeader({
         <div className="space-y-1">
           <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
           {description && (
-            <p className="text-[13px] leading-normal text-muted-foreground">{description}</p>
+            <p className="text-body leading-normal text-muted-foreground">{description}</p>
           )}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2 sm:justify-end">{actions}</div>}

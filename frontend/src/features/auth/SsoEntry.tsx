@@ -26,7 +26,7 @@ export function SsoEntry({ next, failed }: { next?: string; failed?: boolean }) 
       {failed && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-sm border border-destructive/30 bg-destructive-soft p-2.5 text-[13px] text-destructive"
+          className="flex items-start gap-2 rounded-sm border border-destructive/30 bg-destructive-soft p-2.5 text-body text-destructive"
         >
           <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <span className="leading-snug">{t('sso.failed')}</span>

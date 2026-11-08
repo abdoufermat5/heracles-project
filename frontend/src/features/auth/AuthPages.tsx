@@ -49,7 +49,7 @@ function AuthLayout({
             <div className="space-y-1">
               <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
               {subtitle && (
-                <p className="text-[13px] leading-snug text-muted-foreground">{subtitle}</p>
+                <p className="text-body leading-snug text-muted-foreground">{subtitle}</p>
               )}
             </div>
             <div className="mt-5">{children}</div>
@@ -79,12 +79,12 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-[13px] font-medium text-foreground">
+      <Label htmlFor={id} className="text-body font-medium text-foreground">
         {label}
       </Label>
       {children}
       {error && (
-        <p id={`${id}-error`} role="alert" className="mt-1 text-[13px] font-medium text-destructive">
+        <p id={`${id}-error`} role="alert" className="mt-1 text-body font-medium text-destructive">
           {error}
         </p>
       )}
@@ -97,7 +97,7 @@ function FormError({ message }: { message: string | null }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-2 rounded-sm border border-destructive/30 bg-destructive-soft p-2.5 text-[13px] text-destructive"
+      className="flex items-start gap-2 rounded-sm border border-destructive/30 bg-destructive-soft p-2.5 text-body text-destructive"
     >
       <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
       <span className="leading-snug">{message}</span>
@@ -152,7 +152,7 @@ function PasswordInput({
         </button>
       </div>
       {capsLock && (
-        <div className="flex items-center gap-1 text-[11px] text-warning" role="status">
+        <div className="flex items-center gap-1 text-caption text-warning" role="status">
           <AlertTriangle className="size-3 shrink-0" aria-hidden />
           <span>{t('auth.capsLock')}</span>
         </div>
@@ -320,7 +320,7 @@ export function LoginPage() {
           <select
             id="directory"
             {...form.register('directory')}
-            className="h-9 w-full rounded-md border border-input bg-card px-2.5 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            className="h-9 w-full rounded-md border border-input bg-card px-2.5 text-body outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             {dirs.data?.map((d) => (
               <option key={d.id} value={d.id}>
@@ -341,8 +341,8 @@ export function LoginPage() {
           />
         </Field>
         <Submit pending={form.formState.isSubmitting}>{t('auth.signIn')}</Submit>
-        <p className="pt-1 text-center text-[13px] text-muted-foreground">
-          <Link to="/recovery" className="text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+        <p className="pt-1 text-center text-body text-muted-foreground">
+          <Link to="/recovery" className="text-body text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
             {t('auth.forgotPassword')}
           </Link>
         </p>
@@ -429,7 +429,7 @@ export function SecondFactorPage() {
                   setError(null)
                 }}
                 className={cn(
-                  'h-7 rounded-sm text-[13px] font-medium transition-colors',
+                  'h-7 rounded-sm text-body font-medium transition-colors',
                   method === m
                     ? 'bg-primary-soft font-semibold text-foreground'
                     : 'text-muted-foreground hover:text-foreground',
@@ -444,11 +444,11 @@ export function SecondFactorPage() {
         {method === 'webauthn' ? (
           <>
             {!webauthnSupported() && (
-              <p className="text-[13px] text-muted-foreground">{t('auth.webauthn_unsupported')}</p>
+              <p className="text-body text-muted-foreground">{t('auth.webauthn_unsupported')}</p>
             )}
             <Button
               type="submit"
-              className="h-9 w-full text-[13px]"
+              className="h-9 w-full text-body"
               disabled={pending || !webauthnSupported()}
             >
               {pending ? <Loader2 className="size-3.5 animate-spin" /> : <KeyRound className="size-3.5" />}
@@ -474,8 +474,8 @@ export function SecondFactorPage() {
         )}
 
         {method !== 'webauthn' && <Submit pending={pending}>{t('auth.verify')}</Submit>}
-        <p className="pt-1 text-center text-[13px] text-muted-foreground">
-          <Link to="/login" className="text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+        <p className="pt-1 text-center text-body text-muted-foreground">
+          <Link to="/login" className="text-body text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
             {t('auth.backToLogin')}
           </Link>
         </p>
@@ -508,12 +508,12 @@ export function RecoveryRequestPage() {
         <div className="space-y-4">
           <div
             role="status"
-            className="flex items-start gap-2 rounded-sm border border-success/30 bg-success-soft p-3 text-[13px] text-success"
+            className="flex items-start gap-2 rounded-sm border border-success/30 bg-success-soft p-3 text-body text-success"
           >
             <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
             <span className="leading-snug">{t('auth.recoverySent')}</span>
           </div>
-          <Button asChild variant="outline" className="h-9 w-full text-[13px]">
+          <Button asChild variant="outline" className="h-9 w-full text-body">
             <Link to="/login">{t('auth.backToLogin')}</Link>
           </Button>
         </div>
@@ -524,8 +524,8 @@ export function RecoveryRequestPage() {
             <Input id="email" type="email" autoComplete="email" autoFocus {...form.register('email')} />
           </Field>
           <Submit pending={form.formState.isSubmitting}>{t('auth.sendLink')}</Submit>
-          <p className="pt-1 text-center text-[13px] text-muted-foreground">
-            <Link to="/login" className="text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+          <p className="pt-1 text-center text-body text-muted-foreground">
+            <Link to="/login" className="text-body text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
               {t('auth.backToLogin')}
             </Link>
           </p>

@@ -27,7 +27,7 @@ export function ListingSkeleton({
       className="overflow-hidden rounded-b-md border bg-card"
     >
       <div className="overflow-x-auto">
-        <table className="w-full text-[13px]">
+        <table className="w-full text-body">
           <thead className="border-b bg-muted/50">
             <tr>
               <th className="h-8 w-10 px-3">

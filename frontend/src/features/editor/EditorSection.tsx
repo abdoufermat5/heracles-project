@@ -36,7 +36,7 @@ export function EditorSection({
       <div className="flex h-10 items-center justify-between border-b px-4">
         <h2
           id={`sec-${tabName}-${section.name}`}
-          className="text-[13px] font-semibold text-foreground"
+          className="text-body font-semibold text-foreground"
         >
           {section.label}
         </h2>

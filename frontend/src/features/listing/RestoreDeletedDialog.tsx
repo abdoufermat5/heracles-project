@@ -41,8 +41,8 @@ export function RestoreDeletedDialog({ open, onOpenChange, type }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-[15px]">{t('snapshots.deletedTitle')}</DialogTitle>
-          <DialogDescription className="text-[13px]">{t('snapshots.deletedHelp')}</DialogDescription>
+          <DialogTitle className="text-lead">{t('snapshots.deletedTitle')}</DialogTitle>
+          <DialogDescription className="text-body">{t('snapshots.deletedHelp')}</DialogDescription>
         </DialogHeader>
 
         {deleted.isError ? (
@@ -59,7 +59,7 @@ export function RestoreDeletedDialog({ open, onOpenChange, type }: Props) {
             {deleted.data.map((s) => (
               <li key={s.id} className="flex items-center justify-between gap-3 px-3 py-2">
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] font-medium text-foreground" title={s.object_dn}>
+                  <p className="truncate text-body font-medium text-foreground" title={s.object_dn}>
                     {rdnValue(s.object_dn ?? s.id)}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">

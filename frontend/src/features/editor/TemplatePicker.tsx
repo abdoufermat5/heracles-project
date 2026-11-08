@@ -32,7 +32,7 @@ export function TemplatePicker({ type, selected, onChange, disabled }: Props) {
     <div className="flex items-center gap-3 rounded-md border bg-card p-3">
       <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <div className="min-w-0 flex-1">
-        <label htmlFor="template-picker" className="block text-[13px] font-medium text-foreground">
+        <label htmlFor="template-picker" className="block text-body font-medium text-foreground">
           {t('templates.picker')}
         </label>
         <p className="text-xs text-muted-foreground">{t('templates.pickerHelp')}</p>
@@ -43,7 +43,7 @@ export function TemplatePicker({ type, selected, onChange, disabled }: Props) {
           onValueChange={(v) => onChange(v === NONE ? null : v)}
           disabled={disabled}
         >
-          <SelectTrigger id="template-picker" className="h-8 text-[13px]">
+          <SelectTrigger id="template-picker" className="h-8 text-body">
             <SelectValue placeholder={t('templates.pickerPlaceholder')} />
           </SelectTrigger>
           <SelectContent>

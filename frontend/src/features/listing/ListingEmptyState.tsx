@@ -23,10 +23,10 @@ export function ListingEmptyState({
   if (isFiltered) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-b-md border border-dashed bg-card px-6 py-12 text-center">
-        <p className="text-[13px] font-semibold text-foreground">
+        <p className="text-body font-semibold text-foreground">
           {t('listing.noMatches')}
         </p>
-        <p className="text-[13px] text-muted-foreground">
+        <p className="text-body text-muted-foreground">
           {t('listing.noMatchesHelp')}
         </p>
         <Button variant="outline" size="sm" className="mt-2" onClick={onClearFilter}>
@@ -38,7 +38,7 @@ export function ListingEmptyState({
 
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-b-md border border-dashed bg-card px-6 py-12 text-center">
-      <p className="text-[13px] font-semibold text-foreground">{t('listing.empty')}</p>
+      <p className="text-body font-semibold text-foreground">{t('listing.empty')}</p>
       {canCreate && (
         <Button asChild size="sm" className="mt-2">
           <Link to="/types/$type/new" params={{ type }}>

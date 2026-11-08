@@ -3,7 +3,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
 export const NATIVE_SELECT =
-  'h-8 w-full rounded-md border border-input bg-card px-2.5 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50'
+  'h-8 w-full rounded-md border border-input bg-card px-2.5 text-body outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25 disabled:opacity-50'
 
 export function FormField({
   id,
@@ -20,7 +20,7 @@ export function FormField({
 }) {
   return (
     <div className={cn('space-y-1.5', className)}>
-      <Label htmlFor={id} className="text-[13px] font-medium">
+      <Label htmlFor={id} className="text-body font-medium">
         {label}
       </Label>
       {children}
@@ -45,7 +45,7 @@ export function Notice({
     <div
       role={tone === 'error' ? 'alert' : 'note'}
       className={cn(
-        'flex items-start gap-2 rounded-sm border p-2.5 text-[13px]',
+        'flex items-start gap-2 rounded-sm border p-2.5 text-body',
         tone === 'error'
           ? 'border-destructive/30 bg-destructive-soft text-destructive'
           : 'border-border bg-muted text-muted-foreground',

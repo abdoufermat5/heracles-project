@@ -51,7 +51,7 @@ export function PluginsPage() {
                     ) : (
                       <div className="space-y-1">
                         <Badge variant="warning">{t('plugins.disabled')}</Badge>
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-caption text-muted-foreground">
                           {t('plugins.missing')}{' '}
                           <span className="font-mono">{p.missing_object_classes.join(', ')}</span>
                         </p>

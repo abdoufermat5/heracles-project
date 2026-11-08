@@ -476,7 +476,7 @@ function EditorInner({ desc, detail, source }: InnerProps) {
         />
       )}
       {source && (
-        <p className="rounded-md border bg-card p-3 text-[13px] text-muted-foreground">
+        <p className="rounded-md border bg-card p-3 text-body text-muted-foreground">
           {t('copy.prefilled', { name: nameValue(desc, source) })}
         </p>
       )}
@@ -508,7 +508,7 @@ function EditorInner({ desc, detail, source }: InnerProps) {
           {currentTabObj?.optional && (
             <div className="flex items-center justify-between rounded-md border bg-card p-4">
               <div>
-                <p className="text-[13px] font-medium text-foreground">
+                <p className="text-body font-medium text-foreground">
                   {t('editor.enableTab', { tab: currentTabObj.label })}
                 </p>
                 <p className="text-muted-foreground text-xs">{t('editor.enableTabHelp')}</p>
@@ -574,10 +574,10 @@ function EditorInner({ desc, detail, source }: InnerProps) {
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[15px] font-semibold">
+            <AlertDialogTitle className="text-lead font-semibold">
               {t('editor.deleteTitle', { name: title })}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px] text-muted-foreground">
+            <AlertDialogDescription className="text-body text-muted-foreground">
               {t('editor.deleteBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -596,10 +596,10 @@ function EditorInner({ desc, detail, source }: InnerProps) {
       <AlertDialog open={blocker.status === 'blocked'}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[15px] font-semibold">
+            <AlertDialogTitle className="text-lead font-semibold">
               {t('editor.leaveTitle')}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px] text-muted-foreground">
+            <AlertDialogDescription className="text-body text-muted-foreground">
               {t('editor.leaveBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>

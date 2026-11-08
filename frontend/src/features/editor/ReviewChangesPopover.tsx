@@ -30,13 +30,13 @@ export function ReviewChangesPopover({ diffs }: Props) {
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0 sm:w-96" align="end">
         <div className="flex h-10 items-center border-b px-4">
-          <p className="text-[13px] font-semibold text-foreground">
+          <p className="text-body font-semibold text-foreground">
             {t('editor.reviewChanges')} ({diffs.length})
           </p>
         </div>
         <ScrollArea className="max-h-72">
           {diffs.length === 0 ? (
-            <p className="p-4 text-center text-[13px] text-muted-foreground">
+            <p className="p-4 text-center text-body text-muted-foreground">
               {t('editor.noChanges')}
             </p>
           ) : (
@@ -44,10 +44,10 @@ export function ReviewChangesPopover({ diffs }: Props) {
               {diffs.map((d) => (
                 <li key={`${d.tab}.${d.attr}`} className="space-y-2 px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[13px] font-medium text-foreground">
+                    <span className="text-body font-medium text-foreground">
                       {d.attrLabel}
                     </span>
-                    <span className="font-mono text-[11px] text-muted-foreground">
+                    <span className="font-mono text-caption text-muted-foreground">
                       {d.tabLabel}
                     </span>
                   </div>

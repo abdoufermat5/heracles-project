@@ -21,7 +21,7 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
           <p className="text-sm font-semibold tracking-tight text-foreground">
             {notFound ? t('common.notFound') : t('common.errorTitle')}
           </p>
-          <p className="text-[13px] leading-relaxed text-muted-foreground">{message}</p>
+          <p className="text-body leading-relaxed text-muted-foreground">{message}</p>
           {onRetry && !notFound && (
             <div className="pt-2">
               <Button variant="outline" size="sm" onClick={onRetry}>

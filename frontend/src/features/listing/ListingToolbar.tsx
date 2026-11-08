@@ -47,7 +47,7 @@ interface ListingToolbarProps {
 }
 
 const segmentClass =
-  'inline-flex h-6 items-center rounded-sm px-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+  'inline-flex h-6 items-center rounded-sm px-2 text-caption font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
 const segmentOn = 'bg-card text-foreground'
 const segmentOff = 'text-muted-foreground hover:text-foreground'
 
@@ -107,7 +107,7 @@ export function ListingToolbar({
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={t('listing.searchPlaceholder', { type: label.toLowerCase() })}
           aria-label={t('listing.search')}
-          className="h-8 pr-14 pl-8 text-[13px]"
+          className="h-8 pr-14 pl-8 text-body"
           type="search"
         />
         {searchQuery ? (
@@ -123,7 +123,7 @@ export function ListingToolbar({
             <X className="size-3.5" aria-hidden />
           </button>
         ) : (
-          <kbd className="pointer-events-none absolute top-1/2 right-2 hidden h-5 -translate-y-1/2 items-center rounded-sm border bg-muted/60 px-1.5 font-mono text-[10px] font-medium text-muted-foreground select-none sm:inline-flex">
+          <kbd className="pointer-events-none absolute top-1/2 right-2 hidden h-5 -translate-y-1/2 items-center rounded-sm border bg-muted/60 px-1.5 font-mono text-micro font-medium text-muted-foreground select-none sm:inline-flex">
             /
           </kbd>
         )}
@@ -203,7 +203,7 @@ export function ListingToolbar({
           </Tooltip>
 
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel className="text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">
+            <DropdownMenuLabel className="text-caption font-semibold tracking-[0.06em] uppercase text-muted-foreground">
               {t('listing.columns')}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

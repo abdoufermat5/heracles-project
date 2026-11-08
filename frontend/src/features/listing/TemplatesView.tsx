@@ -66,7 +66,7 @@ export function TemplatesView({ type, typeLabel, canCreate }: Props) {
     <section aria-labelledby="templates-title" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 id="templates-title" className="text-[13px] font-semibold text-foreground">
+          <h2 id="templates-title" className="text-body font-semibold text-foreground">
             {t('templates.title')} — {typeLabel}
           </h2>
           <p className="text-xs text-muted-foreground">{t('templates.emptyHelp')}</p>
@@ -148,10 +148,10 @@ export function TemplatesView({ type, typeLabel, canCreate }: Props) {
       <AlertDialog open={target !== null} onOpenChange={(o) => !o && setTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[15px] font-semibold">
+            <AlertDialogTitle className="text-lead font-semibold">
               {t('templates.deleteTitle', { name: target?.name ?? '' })}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px] text-muted-foreground">
+            <AlertDialogDescription className="text-body text-muted-foreground">
               {t('templates.deleteBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>

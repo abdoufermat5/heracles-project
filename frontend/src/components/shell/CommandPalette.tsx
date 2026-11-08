@@ -130,7 +130,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   >
                     <Clock className="size-3.5 text-muted-foreground shrink-0" />
                     <span className="font-medium text-foreground truncate">{item.title}</span>
-                    <span className="font-dn text-muted-foreground ml-auto truncate text-[11px] max-w-[200px]">
+                    <span className="font-dn text-muted-foreground ml-auto truncate text-caption max-w-[200px]">
                       {item.dn}
                     </span>
                   </CommandItem>
@@ -236,7 +236,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                     >
                       <TypeIcon name={g.type.icon} className="size-3.5 text-muted-foreground shrink-0" />
                       <span className="font-medium text-foreground truncate">{label}</span>
-                      <span className="font-dn text-muted-foreground ml-auto truncate text-[11px] max-w-[220px]">
+                      <span className="font-dn text-muted-foreground ml-auto truncate text-caption max-w-[220px]">
                         {it.dn}
                       </span>
                       <ExternalLink className="size-3 text-muted-foreground/60 shrink-0 ml-1" />
@@ -248,7 +248,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           </CommandList>
 
           {/* Keyboard hints footer */}
-          <div className="flex items-center justify-between border-t border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between border-t border-border bg-muted/30 px-3 py-2 text-caption text-muted-foreground">
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
                 <Kbd keys={['↑', '↓']} />

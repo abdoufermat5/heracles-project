@@ -45,7 +45,7 @@ export function ListingHeader({
           {label}
         </h1>
         <span
-          className="font-mono text-[13px] text-muted-foreground tabular-nums"
+          className="font-mono text-body text-muted-foreground tabular-nums"
           aria-live="polite"
         >
           {isSuccess && total !== null ? t('listing.count', { count: total }) : '\u00a0'}

@@ -106,8 +106,8 @@ function Inner({ onOpenChange, mode, type, descriptor, items }: Props) {
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-[15px]">{title}</DialogTitle>
-          <DialogDescription className="text-[13px]">
+          <DialogTitle className="text-lead">{title}</DialogTitle>
+          <DialogDescription className="text-body">
             {t(mode === 'copy' ? 'copy.copyHelp' : 'copy.moveHelp')}
           </DialogDescription>
         </DialogHeader>
@@ -146,7 +146,7 @@ function Inner({ onOpenChange, mode, type, descriptor, items }: Props) {
                               id={`copy-${key}`}
                               value={given[key] ?? ''}
                               onChange={(e) => setGiven((g) => ({ ...g, [key]: e.target.value }))}
-                              className="h-8 text-[13px]"
+                              className="h-8 text-body"
                             />
                           </div>
                         )
@@ -159,12 +159,12 @@ function Inner({ onOpenChange, mode, type, descriptor, items }: Props) {
           </div>
         ) : (
           <div className="space-y-3">
-            <p role="status" className="text-[13px] font-medium text-foreground">
+            <p role="status" className="text-body font-medium text-foreground">
               {failed === 0
                 ? t(mode === 'copy' ? 'copy.copied' : 'copy.moved', { count: okCount })
                 : t('copy.partial', { ok: okCount, failed })}
             </p>
-            <ul className="max-h-64 space-y-1.5 overflow-y-auto text-[13px]">
+            <ul className="max-h-64 space-y-1.5 overflow-y-auto text-body">
               {results.map((r) => (
                 <li key={r.dn} className="flex items-start gap-2">
                   {r.ok ? (

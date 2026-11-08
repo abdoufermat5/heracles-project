@@ -84,7 +84,7 @@ export function SnapshotsPanel({ type, dn, onRestored }: Props) {
   return (
     <section aria-labelledby="snaps-title" className="rounded-md border bg-card">
       <div className="border-b px-4 py-3">
-        <h2 id="snaps-title" className="text-[13px] font-semibold text-foreground">
+        <h2 id="snaps-title" className="text-body font-semibold text-foreground">
           {t('snapshots.title')}
         </h2>
         <p className="text-xs text-muted-foreground">{t('snapshots.help')}</p>
@@ -108,7 +108,7 @@ export function SnapshotsPanel({ type, dn, onRestored }: Props) {
               }
             }}
             placeholder={t('snapshots.descriptionPlaceholder')}
-            className="h-8 text-[13px]"
+            className="h-8 text-body"
           />
         </div>
         <Button type="button" size="sm" onClick={() => void take()} disabled={create.isPending}>
@@ -177,8 +177,8 @@ export function SnapshotsPanel({ type, dn, onRestored }: Props) {
       <AlertDialog open={toRestore !== null} onOpenChange={(o) => !o && setToRestore(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[15px] font-semibold">{t('snapshots.restoreTitle')}</AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px] text-muted-foreground">
+            <AlertDialogTitle className="text-lead font-semibold">{t('snapshots.restoreTitle')}</AlertDialogTitle>
+            <AlertDialogDescription className="text-body text-muted-foreground">
               {t('snapshots.restoreBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -192,8 +192,8 @@ export function SnapshotsPanel({ type, dn, onRestored }: Props) {
       <AlertDialog open={toDelete !== null} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[15px] font-semibold">{t('snapshots.deleteTitle')}</AlertDialogTitle>
-            <AlertDialogDescription className="text-[13px] text-muted-foreground">
+            <AlertDialogTitle className="text-lead font-semibold">{t('snapshots.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription className="text-body text-muted-foreground">
               {t('snapshots.deleteBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>

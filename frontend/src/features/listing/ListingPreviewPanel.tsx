@@ -53,7 +53,7 @@ export function ListingPreviewPanel({
     >
       {/* Panel header bar */}
       <div className="flex h-10 items-center justify-between gap-2 border-b px-4">
-        <h2 className="truncate text-[13px] font-semibold" title={item ? title : undefined}>
+        <h2 className="truncate text-body font-semibold" title={item ? title : undefined}>
           {title}
         </h2>
         <Button
@@ -68,18 +68,18 @@ export function ListingPreviewPanel({
       </div>
 
       {!item ? (
-        <p className="p-4 text-[13px] text-muted-foreground">{t('listing.itemDetails')}</p>
+        <p className="p-4 text-body text-muted-foreground">{t('listing.itemDetails')}</p>
       ) : (
         <>
           {/* Status + primary action */}
           <div className="flex items-center gap-2 border-b px-4 py-2.5">
             {item.locked ? (
-              <Badge variant="warning" className="h-5 gap-1 rounded-sm px-1.5 text-[11px]">
+              <Badge variant="warning" className="h-5 gap-1 rounded-sm px-1.5 text-caption">
                 <Lock className="size-3" aria-hidden />
                 {t('listing.locked')}
               </Badge>
             ) : (
-              <Badge variant="success" className="h-5 rounded-sm px-1.5 text-[11px]">
+              <Badge variant="success" className="h-5 rounded-sm px-1.5 text-caption">
                 {t('listing.filterActive')}
               </Badge>
             )}
@@ -124,7 +124,7 @@ export function ListingPreviewPanel({
                   <div key={col.key}>
                     <dt className="label-caps">{col.label}</dt>
                     <dd
-                      className={`mt-1 truncate text-[13px] text-foreground ${mono ? 'font-mono' : ''}`}
+                      className={`mt-1 truncate text-body text-foreground ${mono ? 'font-mono' : ''}`}
                       title={val}
                     >
                       {val}

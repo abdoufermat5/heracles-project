@@ -42,7 +42,7 @@ export function ListingBulkBar({
       aria-label={t('listing.bulkActions')}
       className="flex h-11 items-center justify-between gap-3 border-x border-primary bg-primary px-3 text-primary-foreground"
     >
-      <span className="text-[13px] font-medium tabular-nums">
+      <span className="text-body font-medium tabular-nums">
         {t('listing.selected', { count: selectedCount })}
       </span>
 

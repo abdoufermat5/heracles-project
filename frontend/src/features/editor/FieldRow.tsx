@@ -37,7 +37,7 @@ export function FieldRow({ control, tab, attr, readOnly }: Props) {
           )}
         </Label>
         {attr.readonly && !readOnly && (
-          <span className="font-mono text-[10px] text-muted-foreground">readonly</span>
+          <span className="font-mono text-micro text-muted-foreground">readonly</span>
         )}
       </div>
 

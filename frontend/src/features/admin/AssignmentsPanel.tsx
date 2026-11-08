@@ -102,7 +102,7 @@ export function AssignmentsPanel() {
           {t('acl.addAssignment')}
         </Button>
       </div>
-      <p className="text-[13px] text-muted-foreground">{t('acl.assignmentsHelp')}</p>
+      <p className="text-body text-muted-foreground">{t('acl.assignmentsHelp')}</p>
 
       {isPending && dn !== null ? (
         <Skeleton className="h-32 w-full" />
@@ -131,10 +131,10 @@ export function AssignmentsPanel() {
                   <TableRow key={a.raw ?? i}>
                     <TableCell className="font-mono text-xs">—</TableCell>
                     <TableCell colSpan={4}>
-                      <span className="text-[13px] text-muted-foreground">
+                      <span className="text-body text-muted-foreground">
                         {t('acl.unreadableAssignment')}
                       </span>
-                      <div className="font-mono text-[11px] break-all text-muted-foreground">
+                      <div className="font-mono text-caption break-all text-muted-foreground">
                         {a.raw}
                       </div>
                     </TableCell>
@@ -181,7 +181,7 @@ export function AssignmentsPanel() {
                         })}
                       </div>
                     </TableCell>
-                    <TableCell className="font-mono text-[11px] text-muted-foreground">
+                    <TableCell className="font-mono text-caption text-muted-foreground">
                       {a.user_filter && <div>{t('acl.userFilterShort')}: {a.user_filter}</div>}
                       {a.target_filter && <div>{t('acl.targetFilterShort')}: {a.target_filter}</div>}
                       {!a.user_filter && !a.target_filter && '—'}

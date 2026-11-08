@@ -29,7 +29,7 @@ export function EmptyState({
       <div className="mt-2.5 max-w-sm space-y-1">
         <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>
         {description && (
-          <p className="text-[13px] leading-relaxed text-muted-foreground">{description}</p>
+          <p className="text-body leading-relaxed text-muted-foreground">{description}</p>
         )}
       </div>
       {action && <div className="mt-4 flex items-center gap-2">{action}</div>}

@@ -153,7 +153,7 @@ function FieldControl({
       <div className="min-w-0 space-y-1">
         {control}
         {field.kind === 'list' && (
-          <p id={`${id}-hint`} className="text-[11px] text-muted-foreground">
+          <p id={`${id}-hint`} className="text-caption text-muted-foreground">
             {t('config.listHint')}
           </p>
         )}
@@ -208,7 +208,7 @@ function ConfigEditor({ view }: { view: ConfigView }) {
               aria-current={s === section ? 'page' : undefined}
               onClick={() => setSection(s)}
               className={cn(
-                'flex h-8 items-center justify-between gap-2 rounded-sm px-3 text-left text-[13px] font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
+                'flex h-8 items-center justify-between gap-2 rounded-sm px-3 text-left text-body font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
                 s === section && 'bg-accent text-accent-foreground',
               )}
             >
@@ -226,7 +226,7 @@ function ConfigEditor({ view }: { view: ConfigView }) {
           <h2 id="config-section-title" className="text-sm font-semibold tracking-tight">
             {t(`config.section.${section}`)}
           </h2>
-          <p className="text-[13px] text-muted-foreground">{t(`config.sectionHelp.${section}`)}</p>
+          <p className="text-body text-muted-foreground">{t(`config.sectionHelp.${section}`)}</p>
         </div>
 
         {section === 'triggers' ? (
@@ -249,12 +249,12 @@ function ConfigEditor({ view }: { view: ConfigView }) {
         {section !== 'triggers' && (
           <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/95 py-3 backdrop-blur">
             {readOnly ? (
-              <p className="mr-auto flex items-center gap-1.5 text-[13px] text-muted-foreground">
+              <p className="mr-auto flex items-center gap-1.5 text-body text-muted-foreground">
                 <Lock className="size-3.5" aria-hidden />
                 {t('config.readOnly')}
               </p>
             ) : (
-              <p className="mr-auto text-[13px] text-muted-foreground" aria-live="polite">
+              <p className="mr-auto text-body text-muted-foreground" aria-live="polite">
                 {dirty > 0 ? t('config.pending', { count: dirty }) : t('config.noChanges')}
               </p>
             )}

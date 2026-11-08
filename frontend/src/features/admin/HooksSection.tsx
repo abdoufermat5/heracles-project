@@ -109,7 +109,7 @@ function HookDialog({
               onChange={(e) => setHook({ ...hook, command: e.target.value })}
             />
             {errors.command && <p className="text-xs text-destructive">{errors.command}</p>}
-            <p className="text-[11px] text-muted-foreground">{t('hooks.placeholders')}</p>
+            <p className="text-caption text-muted-foreground">{t('hooks.placeholders')}</p>
           </div>
           <div className="flex items-center gap-2">
             <Switch
@@ -196,12 +196,12 @@ function HooksEditor({ view }: { view: HooksView }) {
       </div>
 
       {view.invalid.length > 0 && (
-        <div role="status" className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-[13px]">
+        <div role="status" className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-body">
           <p className="flex items-center gap-1.5 font-medium text-warning">
             <TriangleAlert className="size-3.5" aria-hidden />
             {t('hooks.invalid')}
           </p>
-          <ul className="mt-1 font-mono text-[11px] text-muted-foreground">
+          <ul className="mt-1 font-mono text-caption text-muted-foreground">
             {view.invalid.map((raw) => (
               <li key={raw} className="break-all">
                 {raw}
@@ -283,7 +283,7 @@ function HooksEditor({ view }: { view: HooksView }) {
       )}
 
       <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/95 py-3 backdrop-blur">
-        <p className="mr-auto text-[13px] text-muted-foreground" aria-live="polite">
+        <p className="mr-auto text-body text-muted-foreground" aria-live="polite">
           {readOnly ? t('config.readOnly') : dirty ? t('hooks.unsaved') : t('config.noChanges')}
         </p>
         <Button

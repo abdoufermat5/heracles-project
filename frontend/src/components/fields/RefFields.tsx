@@ -83,7 +83,7 @@ export function ObjectRefPicker({
           aria-expanded={open}
           aria-invalid={invalid || undefined}
           disabled={disabled}
-          className="h-8 w-full justify-between text-[13px] font-normal"
+          className="h-8 w-full justify-between text-body font-normal"
         >
           <span className="text-muted-foreground truncate">{label}</span>
           <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
@@ -99,7 +99,7 @@ export function ObjectRefPicker({
               onChange={(e) => setQ(e.target.value)}
               placeholder={t('fields.searchPlaceholder')}
               aria-label={t('fields.searchPlaceholder')}
-              className="h-7 border-0 p-0 text-[13px] shadow-none focus-visible:ring-0"
+              className="h-7 border-0 p-0 text-body shadow-none focus-visible:ring-0"
             />
           </div>
           <CommandList className="max-h-64">
@@ -127,7 +127,7 @@ export function ObjectRefPicker({
                     <Check className={cn('size-3.5 shrink-0', isSel ? 'opacity-100 text-primary' : 'opacity-0')} />
                     {getRefIcon(refType)}
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-medium">{displayName}</div>
+                      <div className="truncate text-body font-medium">{displayName}</div>
                       <div className="font-dn text-muted-foreground truncate text-xs">{item.dn}</div>
                     </div>
                   </CommandItem>
@@ -214,7 +214,7 @@ export function ObjectRefField({ p }: { p: FieldInputProps }) {
         />
       )}
       {p.readOnly && values.length === 0 && (
-        <span className="text-[13px] text-muted-foreground">—</span>
+        <span className="text-body text-muted-foreground">—</span>
       )}
     </div>
   )
@@ -301,7 +301,7 @@ function TreeItem({
         </button>
         <button
           type="button"
-          className="flex-1 truncate py-1 text-left text-[13px]"
+          className="flex-1 truncate py-1 text-left text-body"
           onClick={() => onSelect(node)}
           title={node.dn}
         >
@@ -339,7 +339,7 @@ export function DepartmentPicker({
 
   if (disabled) {
     return (
-      <div id={id} className="flex h-8 items-center gap-1.5 text-[13px] font-medium">
+      <div id={id} className="flex h-8 items-center gap-1.5 text-body font-medium">
         <Building2 className="size-3.5 text-muted-foreground" />
         <span className="truncate">{current?.label ?? (value ? rdnValue(value) : '—')}</span>
       </div>
@@ -355,7 +355,7 @@ export function DepartmentPicker({
           variant="outline"
           disabled={disabled}
           aria-invalid={invalid || undefined}
-          className="h-8 w-full justify-between text-[13px] font-normal"
+          className="h-8 w-full justify-between text-body font-normal"
         >
           <span className={cn('flex items-center gap-1.5 truncate', !value && 'text-muted-foreground')}>
             <Building2 className="size-3.5 text-muted-foreground shrink-0" />

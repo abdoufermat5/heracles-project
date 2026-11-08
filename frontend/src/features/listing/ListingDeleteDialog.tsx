@@ -40,10 +40,10 @@ export function ListingDeleteDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-md">
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-[15px]">
+          <AlertDialogTitle className="text-lead">
             {t('listing.deleteTitle', { count })}
           </AlertDialogTitle>
-          <AlertDialogDescription className="space-y-2 text-left text-[13px]">
+          <AlertDialogDescription className="space-y-2 text-left text-body">
             <span>{t('listing.deleteConfirmDesc')}</span>
             <div className="max-h-48 overflow-y-auto rounded-sm border bg-muted/40 p-2">
               <ul className="space-y-1">
@@ -53,7 +53,7 @@ export function ListingDeleteDialog({
                     ? String(item.values[nameAttr])
                     : dn
                   return (
-                    <li key={dn} className="truncate font-mono text-[12px] text-foreground">
+                    <li key={dn} className="truncate font-mono text-small text-foreground">
                       {displayName}
                     </li>
                   )
@@ -65,7 +65,7 @@ export function ListingDeleteDialog({
                 </p>
               )}
             </div>
-            <p className="pt-1 text-[12px] font-medium text-destructive">
+            <p className="pt-1 text-small font-medium text-destructive">
               {t('editor.deleteBody')}
             </p>
           </AlertDialogDescription>
