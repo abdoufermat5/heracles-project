@@ -9,6 +9,12 @@ from collections.abc import Awaitable, Callable
 
 import structlog
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from heracles.api.errors import error_body
+from heracles.api.settings import ApiSettings
 
 log = structlog.get_logger("heracles.http")
 
@@ -28,6 +34,71 @@ SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "Cross-Origin-Opener-Policy": "same-origin",
 }
+
+
+TOO_LARGE = "The request body is too large"
+
+
+class BodyLimitMiddleware:
+    """Refuse request bodies above a limit before the application parses them.
+
+    ``Content-Length`` is checked first; a body sent without it (chunked) is counted as it
+    is read, so a client cannot make the server buffer more than the limit. Paths ending
+    with one of ``large_suffixes`` (the import endpoints) get ``large_limit`` instead.
+    Answers 413.
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        limit: int,
+        large_limit: int = 0,
+        large_suffixes: tuple[str, ...] = (),
+    ) -> None:
+        self.app = app
+        self.limit = limit
+        self.large_limit = max(large_limit, limit)
+        self.large_suffixes = large_suffixes
+
+    def _limit_for(self, path: str) -> int:
+        return self.large_limit if path.endswith(self.large_suffixes) else self.limit
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        limit = self._limit_for(str(scope.get("path", "")))
+        for name, value in scope["headers"]:
+            if name == b"content-length" and value.isdigit() and int(value) > limit:
+                response = JSONResponse(error_body("too_large", TOO_LARGE), status_code=413)
+                await response(scope, receive, send)
+                return
+        received = 0
+
+        async def counted() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit:
+                    # An HTTPException is passed on by FastAPI's body parsing (any other
+                    # exception would become a 400) and answered by the error handlers.
+                    raise HTTPException(413, TOO_LARGE)
+            return message
+
+        await self.app(scope, counted, send)
+
+
+def install_body_limit(app: FastAPI, settings: ApiSettings) -> None:
+    """Add :class:`BodyLimitMiddleware` (install it before :func:`install_middleware`, so
+    that the 413 still gets the request id and the security headers)."""
+    app.add_middleware(
+        BodyLimitMiddleware,
+        limit=settings.max_body_bytes,
+        large_limit=settings.max_import_body_bytes,
+        large_suffixes=tuple(settings.import_paths),
+    )
 
 
 def install_middleware(app: FastAPI) -> None:

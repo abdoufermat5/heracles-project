@@ -19,6 +19,7 @@ _STATUS_CODES = {
     403: "forbidden",
     404: "not_found",
     409: "conflict",
+    413: "too_large",
     429: "rate_limited",
     501: "not_implemented",
     502: "ldap_error",

@@ -87,6 +87,15 @@ class ApiSettings(BaseModel):
     #: (``cas_service_name``, the invitations ``public_base_url``): the request ``Host``
     #: header is client-chosen. ``*.example.org`` matches subdomains. Set it in production.
     allowed_hosts: list[str] = Field(default_factory=lambda: list(DEFAULT_ALLOWED_HOSTS))
+    #: Largest request body accepted by any endpoint, in bytes (413 above, checked while the
+    #: body is read, chunked bodies included).
+    max_body_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
+    #: Limit of the import endpoints (``import_paths``): their documents are capped in the
+    #: handler (LDIF 10 MiB, CSV 5 MiB) but arrive JSON-escaped.
+    max_import_body_bytes: int = Field(default=32 * 1024 * 1024, gt=0)
+    import_paths: list[str] = Field(
+        default_factory=lambda: ["/ldif/import", "/csv/parse", "/csv/import"]
+    )
     #: Directory holding the built SPA; served when it exists.
     static_dir: Path | None = None
     enable_docs: bool = False

@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 from heracles.api import v1, v2
 from heracles.api.errors import install_error_handlers
-from heracles.api.middleware import install_middleware
+from heracles.api.middleware import install_body_limit, install_middleware
 from heracles.api.settings import ApiSettings
 from heracles.api.state import AdminResolver, AppState, LogoutHook
 from heracles.api.static import mount_spa
@@ -123,6 +123,7 @@ def create_app(
     )
 
     install_error_handlers(app)
+    install_body_limit(app, settings)
     install_middleware(app)
 
     app.include_router(v2.build_router(extra_routers))
