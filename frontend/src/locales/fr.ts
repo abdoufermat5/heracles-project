@@ -177,7 +177,6 @@ const fr: Translation = {
     rawLdif: 'Voir le LDIF brut',
     copyLdif: 'Copier le LDIF',
     ldifTitle: 'LDIF brut',
-    duplicate: 'Dupliquer',
     accountLocked: 'Compte verrouillé',
     lockAccount: 'Verrouiller le compte',
     unlockAccount: 'Déverrouiller le compte',

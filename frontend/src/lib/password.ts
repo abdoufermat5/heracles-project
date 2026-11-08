@@ -16,18 +16,17 @@ export function generatePassword(length = 16): string {
   const symbols = '!@#$%^&*()-_=+'
   const all = upper + lower + digits + symbols
 
-  // Ensure at least one of each class
-  const cryptoObj = typeof window !== 'undefined' ? window.crypto : null
-  const getRandomByte = (): number => {
-    if (cryptoObj?.getRandomValues) {
-      const buf = new Uint8Array(1)
-      cryptoObj.getRandomValues(buf)
-      return buf[0]!
-    }
-    return Math.floor(Math.random() * 256)
+  // Uniform integer in [0, n) from the CSPRNG, rejection sampling avoids modulo bias.
+  const randomBelow = (n: number): number => {
+    const limit = Math.floor(0x1_0000_0000 / n) * n
+    const buf = new Uint32Array(1)
+    do {
+      crypto.getRandomValues(buf)
+    } while (buf[0]! >= limit)
+    return buf[0]! % n
   }
 
-  const pick = (chars: string) => chars[getRandomByte() % chars.length]!
+  const pick = (chars: string) => chars[randomBelow(chars.length)]!
 
   const result = [pick(upper), pick(lower), pick(digits), pick(symbols)]
   while (result.length < length) {
@@ -36,7 +35,7 @@ export function generatePassword(length = 16): string {
 
   // Fisher-Yates shuffle
   for (let i = result.length - 1; i > 0; i--) {
-    const j = getRandomByte() % (i + 1)
+    const j = randomBelow(i + 1)
     const temp = result[i]!
     result[i] = result[j]!
     result[j] = temp

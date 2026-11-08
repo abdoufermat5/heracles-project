@@ -10,7 +10,6 @@ import {
   Save,
   Trash2,
   Unlock,
-  UserCheck,
   X,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -44,7 +43,6 @@ interface Props {
   onCancel: () => void
   onSave: () => void
   onDelete: () => void
-  onDuplicate: () => void
   onViewLdif: () => void
   onToggleAccountLock?: () => void
 }
@@ -65,7 +63,6 @@ export function EditorHeader({
   onCancel,
   onSave,
   onDelete,
-  onDuplicate,
   onViewLdif,
   onToggleAccountLock,
 }: Props) {
@@ -148,7 +145,7 @@ export function EditorHeader({
 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
-          {/* Actions dropdown for extra operations (view LDIF, duplicate, lock account, delete) */}
+          {/* Actions dropdown for extra operations (view LDIF, lock account, delete) */}
           {!isCreate && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -178,10 +175,6 @@ export function EditorHeader({
                     )}
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem onClick={onDuplicate}>
-                  <UserCheck className="size-4" />
-                  <span>{t('editor.duplicate')}</span>
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={onViewLdif}>
                   <FileCode2 className="size-4" />
                   <span>{t('editor.rawLdif')}</span>

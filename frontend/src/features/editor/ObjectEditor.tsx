@@ -343,13 +343,6 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
     }
   }
 
-  const duplicateObject = () => {
-    void navigate({
-      to: '/types/$type/new',
-      params: { type },
-    })
-  }
-
   const currentTabObj = desc.tabs.find((tb) => tb.name === tab) ?? desc.tabs[0]
   const isCurrentTabActive = currentTabObj ? (active[currentTabObj.name] ?? false) : false
   const currentTabAcl = currentTabObj ? detail?.acl[currentTabObj.name] : undefined
@@ -374,7 +367,6 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
         onCancel={() => void cancel()}
         onSave={() => void save()}
         onDelete={() => setConfirmDelete(true)}
-        onDuplicate={duplicateObject}
         onViewLdif={() => setLdifOpen(true)}
         onToggleAccountLock={type === 'user' ? () => void toggleAccountLock() : undefined}
       />

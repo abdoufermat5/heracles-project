@@ -175,7 +175,6 @@ const en = {
     rawLdif: 'View raw LDIF',
     copyLdif: 'Copy LDIF',
     ldifTitle: 'Raw LDIF',
-    duplicate: 'Duplicate',
     accountLocked: 'Account locked',
     lockAccount: 'Lock account',
     unlockAccount: 'Unlock account',
