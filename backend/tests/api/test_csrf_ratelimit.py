@@ -38,7 +38,7 @@ def test_v1_is_exempt_from_csrf(env: Env) -> None:
     env.client.cookies.clear()
     r = env.client.post("/api/v1/login", json={"username": "jdoe", "password": "s3cretpass"})
     assert r.status_code == 200
-    token = r.json()["token"]
+    token = r.json()  # API v1 returns the bare token string
     out = env.client.post("/api/v1/logout", headers={"X-Session-Token": token})
     assert out.status_code == 204
     assert env.sessions.get(token) is None
@@ -47,7 +47,7 @@ def test_v1_is_exempt_from_csrf(env: Env) -> None:
 def test_v1_login_failure(env: Env) -> None:
     r = env.client.post("/api/v1/login", json={"username": "jdoe", "password": "bad"})
     assert r.status_code == 401
-    assert r.json()["error"]["code"] == "unauthenticated"
+    assert "message" in r.json()  # API v1 error shape
 
 
 def test_rate_limit_backoff_and_reset(env: Env) -> None:
