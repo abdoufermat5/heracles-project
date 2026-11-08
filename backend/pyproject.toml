@@ -74,6 +74,8 @@ quota = "heracles_plugins.quota:plugin"
 freeradius = "heracles_plugins.freeradius:plugin"
 # --- P3 objects ---
 macro = "heracles_plugins.macro:plugin"
+# --- P3 admin ---
+acl_admin = "heracles_plugins.acl_admin:plugin"
 
 [dependency-groups]
 dev = [

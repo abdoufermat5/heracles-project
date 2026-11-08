@@ -6,6 +6,8 @@ import argparse
 import sys
 from collections.abc import Sequence
 
+from heracles.cli import admin as admin_commands
+
 
 def _serve(args: argparse.Namespace) -> int:
     import uvicorn
@@ -17,7 +19,11 @@ def _serve(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    directories: admin_commands.DirectoryFactory | None = None,
+) -> int:
     """Run the Heracles CLI."""
     parser = argparse.ArgumentParser(prog="heracles", description="Heracles directory console")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -29,6 +35,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8420)
     serve.set_defaults(func=_serve)
+
+    # --- P3 admin ---
+    admin_commands.register(sub, directories or admin_commands.load_directories)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

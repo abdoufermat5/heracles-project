@@ -1,8 +1,17 @@
 import { Link } from '@tanstack/react-router'
-import { LayoutDashboard } from 'lucide-react'
+import {
+  HeartPulse,
+  LayoutDashboard,
+  ListChecks,
+  Puzzle,
+  ShieldCheck,
+  SlidersHorizontal,
+  type LucideIcon,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useDashboard, useTypes } from '@/api/hooks'
 import { CATEGORIES } from '@/api/types'
+import { useCapabilities } from '@/features/admin/hooks'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { TypeIcon } from '@/lib/icons'
@@ -26,7 +35,7 @@ function NavLink({
   label: string
   count?: number | null
   children: React.ReactNode
-  to: '/' | '/types/$type'
+  to: '/' | '/types/$type' | AdminPath
   params?: { type: string }
   exact?: boolean
 }) {
@@ -130,6 +139,47 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
           </div>
         )
       })}
+      <AdminNavGroup collapsed={collapsed} />
     </nav>
+  )
+}
+
+// --- P3 admin ---
+type AdminPath =
+  | '/admin/access'
+  | '/admin/config'
+  | '/admin/health'
+  | '/admin/plugins'
+  | '/admin/tasks'
+
+/** "Administration" group: only the entries the user has rights for. */
+function AdminNavGroup({ collapsed }: { collapsed: boolean }) {
+  const { t } = useTranslation()
+  const { data: caps } = useCapabilities()
+  if (!caps) return null
+  const items: { to: AdminPath; label: string; Icon: LucideIcon; show: boolean }[] = [
+    { to: '/admin/access', label: t('admin.nav.access'), Icon: ShieldCheck, show: caps.acl },
+    { to: '/admin/config', label: t('admin.nav.config'), Icon: SlidersHorizontal, show: caps.config },
+    { to: '/admin/health', label: t('admin.nav.health'), Icon: HeartPulse, show: caps.health },
+    { to: '/admin/plugins', label: t('admin.nav.plugins'), Icon: Puzzle, show: caps.plugins },
+    { to: '/admin/tasks', label: t('admin.nav.tasks'), Icon: ListChecks, show: caps.tasks },
+  ]
+  const visible = items.filter((i) => i.show)
+  if (visible.length === 0) return null
+  return (
+    <div className="space-y-0.5" data-testid="admin-nav">
+      {!collapsed ? (
+        <h2 className="label-caps px-3 pt-4 pb-1.5 text-sidebar-muted select-none">
+          {t('admin.nav.group')}
+        </h2>
+      ) : (
+        <div className="mx-1.5 my-1.5 h-px bg-sidebar-border" role="separator" />
+      )}
+      {visible.map(({ to, label, Icon }) => (
+        <NavLink key={to} to={to} collapsed={collapsed} label={label}>
+          <Icon className="size-4 shrink-0" aria-hidden />
+        </NavLink>
+      ))}
+    </div>
   )
 }

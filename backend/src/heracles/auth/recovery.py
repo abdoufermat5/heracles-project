@@ -113,6 +113,15 @@ class RecoveryService:
         self._config = config or RecoveryConfig()
         self._clock = clock
 
+    @property
+    def login_config(self) -> LoginConfig:
+        return self._login
+
+    @login_config.setter
+    def login_config(self, value: LoginConfig) -> None:
+        """Follow a login-attribute change made at runtime."""
+        self._login = value
+
     def _find_by_mail(self, directory: DirectoryClient, email: str) -> tuple[str, str] | None:
         """(dn, login) of the single user having this address, else ``None``."""
         attr = self._config.mail_attribute
