@@ -72,6 +72,8 @@ nextcloud = "heracles_plugins.nextcloud:plugin"
 pureftpd = "heracles_plugins.pureftpd:plugin"
 quota = "heracles_plugins.quota:plugin"
 freeradius = "heracles_plugins.freeradius:plugin"
+# --- P3 compat ---
+ldapmanager = "heracles_plugins.ldapmanager:plugin"
 
 [dependency-groups]
 dev = [

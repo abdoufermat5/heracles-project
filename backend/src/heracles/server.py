@@ -81,7 +81,8 @@ def create_full_app(
         directories,
         is_admin=is_admin,
         logout_hooks=[release_locks],
-        extra_routers=[object_routes.router, directory_routes.router, *plugin_api],
+        # plugin routers first: their specific paths must win over the catch-all object routes
+        extra_routers=[*plugin_api, object_routes.router, directory_routes.router],
         public_routers=public,
     )
     install_domain(app, domain)
