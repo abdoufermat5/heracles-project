@@ -90,13 +90,9 @@ export function SnapshotsPanel({ type, dn, onRestored }: Props) {
         <p className="text-xs text-muted-foreground">{t('snapshots.help')}</p>
       </div>
 
-      <form
-        className="flex flex-wrap items-end gap-2 border-b px-4 py-3"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void take()
-        }}
-      >
+      {/* Not a <form>: this panel renders inside the editor's own form, and nested
+          forms make the browser submit the outer one (a full page reload). */}
+      <div className="flex flex-wrap items-end gap-2 border-b px-4 py-3">
         <div className="min-w-56 flex-1 space-y-1.5">
           <Label htmlFor="snapshot-description" className="text-xs font-medium text-muted-foreground">
             {t('snapshots.descriptionLabel')}
@@ -105,15 +101,21 @@ export function SnapshotsPanel({ type, dn, onRestored }: Props) {
             id="snapshot-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void take()
+              }
+            }}
             placeholder={t('snapshots.descriptionPlaceholder')}
             className="h-8 text-[13px]"
           />
         </div>
-        <Button type="submit" size="sm" disabled={create.isPending}>
+        <Button type="button" size="sm" onClick={() => void take()} disabled={create.isPending}>
           <Camera aria-hidden />
           {t('snapshots.take')}
         </Button>
-      </form>
+      </div>
 
       {snaps.isError ? (
         <div className="p-4">

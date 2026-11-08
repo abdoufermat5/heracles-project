@@ -50,6 +50,15 @@ describe('references panel', () => {
 })
 
 describe('snapshots panel', () => {
+  it('adds no form of its own inside the editor form', async () => {
+    // Nested forms make the browser submit the outer form: the page reloads and
+    // the snapshot is never taken.
+    await openEditor()
+    await userEvent.click(screen.getByRole('tab', { name: 'Snapshots' }))
+    await screen.findByText('No snapshots yet.')
+    expect(document.querySelectorAll('form')).toHaveLength(1)
+  })
+
   it('takes, restores and deletes snapshots with confirmation', async () => {
     await openEditor()
     await userEvent.click(screen.getByRole('tab', { name: 'Snapshots' }))
