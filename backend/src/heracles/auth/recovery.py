@@ -159,6 +159,24 @@ class RecoveryService:
         except (DirectoryError, OSError) as exc:
             log.warning("recovery_request_failed", error=type(exc).__name__)
 
+    def issue(self, directory: DirectoryClient, email: str) -> tuple[str, str] | None:
+        """Create a token for the user owning ``email`` and return ``(token, login)``.
+
+        Unlike :meth:`request` nothing is mailed: the caller (a trusted API client) receives
+        the token. ``None`` when no single user matches or the account is locked.
+        """
+        match = self._find_by_mail(directory, email.strip())
+        if match is None:
+            return None
+        user_dn, login = match
+        current = directory.get(user_dn, ["userPassword"])
+        current_pw = current.text("userPassword") if current else None
+        if current_pw and is_locked(current_pw):
+            return None
+        token = secrets.token_urlsafe(32)
+        self._store.put(TokenRecord(user_dn, hash_token(token), self._clock(), TOKEN_TYPE_RECOVERY))
+        return token, login
+
     def confirm(self, directory: DirectoryClient, login: str, token: str, password: str) -> None:
         """Set a new password. Raises :class:`RecoveryError` / :class:`PasswordPolicyError`."""
         user_dn = find_user_dn(directory, self._login, login)
