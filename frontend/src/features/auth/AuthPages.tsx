@@ -19,6 +19,7 @@ import { api } from '@/api/endpoints'
 import { qk, useDirectories } from '@/api/hooks'
 import type { SecondFactorMethod } from '@/api/types'
 import { Logo } from '@/components/Logo'
+import { useBranding } from './branding'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,6 +29,23 @@ import { SsoEntry } from './SsoEntry'
 
 const APP_VERSION = '0.1.0'
 
+function BrandMark({ tone }: { tone: 'default' | 'onPrimary' }) {
+  const { data: brand } = useBranding()
+  if (brand?.logo_url)
+    return (
+      <img
+        src={brand.logo_url}
+        alt={brand.organization || 'Heracles'}
+        className="h-8 w-auto max-w-48 object-contain"
+      />
+    )
+  return <Logo tone={tone} />
+}
+
+/**
+ * Sign-in pages: the organisation on one side, the form on the other. On small
+ * screens the brand panel folds into a header above the form.
+ */
 function AuthLayout({
   title,
   subtitle,
@@ -37,31 +55,54 @@ function AuthLayout({
   subtitle?: string
   children: React.ReactNode
 }) {
+  const { t } = useTranslation()
+  const { data: brand } = useBranding()
+  const organization = brand?.organization || ''
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <header className="flex h-14 shrink-0 items-center px-6">
-        <Logo />
-      </header>
-
-      <main className="flex flex-1 items-center justify-center px-6 py-10">
-        <div className="w-full max-w-[360px]">
-          <div className="rounded-md border bg-card p-6">
-            <div className="space-y-1">
-              <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
-              {subtitle && (
-                <p className="text-body leading-snug text-muted-foreground">{subtitle}</p>
-              )}
-            </div>
-            <div className="mt-5">{children}</div>
-          </div>
+    <div className="grid min-h-dvh bg-background lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+      <aside className="relative hidden overflow-hidden bg-brand-panel text-brand-panel-foreground lg:flex lg:flex-col lg:justify-between lg:p-12">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:radial-gradient(currentColor_1px,transparent_1px)] [background-size:22px_22px]"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-24 -bottom-24 size-96 rounded-full bg-brand-panel-foreground/10 blur-3xl"
+        />
+        <div className="relative">
+          <BrandMark tone="onPrimary" />
         </div>
-      </main>
+        <div className="relative max-w-md space-y-4">
+          <h2 className="text-display font-semibold tracking-tight">
+            {organization || t('auth.brandHeadline')}
+          </h2>
+          <p className="text-lead text-brand-panel-foreground/80">
+            {brand?.tagline || t('auth.brandTagline')}
+          </p>
+        </div>
+        <div className="relative flex items-center justify-between text-small text-brand-panel-foreground/70">
+          <span>{organization ? t('auth.poweredBy') : t('auth.brandFooter')}</span>
+          <span className="font-mono">v{APP_VERSION}</span>
+        </div>
+      </aside>
 
-      <footer className="flex h-10 shrink-0 items-center px-6">
-        <span className="font-mono text-xs text-muted-foreground">
-          Heracles v{APP_VERSION}
-        </span>
-      </footer>
+      <div className="flex min-h-dvh flex-col">
+        <header className="flex h-16 shrink-0 items-center px-6 lg:hidden">
+          <BrandMark tone="default" />
+        </header>
+        <main className="flex flex-1 items-center justify-center px-6 py-10">
+          <div className="w-full max-w-[380px]">
+            <div className="space-y-1.5">
+              <h1 className="text-title font-semibold tracking-tight text-foreground">{title}</h1>
+              {subtitle && <p className="text-body text-muted-foreground">{subtitle}</p>}
+            </div>
+            <div className="mt-7">{children}</div>
+          </div>
+        </main>
+        <footer className="flex h-12 shrink-0 items-center justify-center px-6 lg:hidden">
+          <span className="font-mono text-caption text-muted-foreground">Heracles v{APP_VERSION}</span>
+        </footer>
+      </div>
     </div>
   )
 }

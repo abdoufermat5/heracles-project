@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 type LogoProps = {
   collapsed?: boolean
   className?: string
-  tone?: 'default' | 'inverse'
+  tone?: 'default' | 'inverse' | 'onPrimary'
 }
 
 /** Heracles mark: a hexagon (the club's strength) split by an H-shaped bridge. */
@@ -12,7 +12,7 @@ export function LogoMark({
   tone = 'default',
 }: {
   className?: string
-  tone?: 'default' | 'inverse'
+  tone?: 'default' | 'inverse' | 'onPrimary'
 }) {
   return (
     <svg
@@ -24,11 +24,23 @@ export function LogoMark({
     >
       <path
         d="M16 2.5 27.7 9.25v13.5L16 29.5 4.3 22.75V9.25L16 2.5Z"
-        className={tone === 'inverse' ? 'fill-sidebar-accent-foreground' : 'fill-primary'}
+        className={
+          tone === 'inverse'
+            ? 'fill-sidebar-accent-foreground'
+            : tone === 'onPrimary'
+              ? 'fill-brand-panel-foreground'
+              : 'fill-primary'
+        }
       />
       <path
         d="M11.5 10v12M20.5 10v12M11.5 16h9"
-        className={tone === 'inverse' ? 'stroke-sidebar' : 'stroke-primary-foreground'}
+        className={
+          tone === 'inverse'
+            ? 'stroke-sidebar'
+            : tone === 'onPrimary'
+              ? 'stroke-brand-panel'
+              : 'stroke-primary-foreground'
+        }
         strokeWidth="2.6"
         strokeLinecap="round"
       />
@@ -45,6 +57,7 @@ export function Logo({ collapsed = false, className, tone = 'default' }: LogoPro
           className={cn(
             'text-lead font-semibold tracking-tight',
             tone === 'inverse' && 'text-sidebar-accent-foreground',
+            tone === 'onPrimary' && 'text-brand-panel-foreground',
           )}
         >
           Heracles

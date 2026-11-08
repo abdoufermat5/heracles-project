@@ -69,6 +69,9 @@ function inScope(dn: string, base: string, scope: string): boolean {
 export const handlers: HttpHandler[] = [
   http.get(`${B}/auth/csrf`, () => HttpResponse.json({ token: db.csrf })),
   http.get(`${B}/directories`, () => HttpResponse.json(db.directories())),
+  http.get(`${B}/branding`, () =>
+    HttpResponse.json({ organization: '', logo_url: null, tagline: '' }),
+  ),
 
   http.post(`${B}/auth/login`, async ({ request }) => {
     if (!csrfOk(request)) return err(403, 'forbidden', 'Invalid CSRF token')

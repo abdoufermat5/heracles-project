@@ -48,7 +48,7 @@ describe('full flow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     await userEvent.type(await screen.findByLabelText('Verification code'), '123456')
     await userEvent.click(screen.getByRole('button', { name: 'Verify' }))
-    expect(await screen.findByRole('heading', { name: 'Overview' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening)/ })).toBeInTheDocument()
   })
 
   it('rejects wrong credentials', async () => {
