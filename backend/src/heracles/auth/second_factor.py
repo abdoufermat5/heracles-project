@@ -171,6 +171,34 @@ class SecondFactorService:
         )
         return secret, uri
 
+    def begin_totp(self, account_name: str) -> tuple[str, str]:
+        """A fresh secret and its ``otpauth`` URI; nothing is stored until it is confirmed."""
+        secret = pyotp.random_base32()
+        uri = str(
+            pyotp.TOTP(secret).provisioning_uri(  # pyright: ignore[reportUnknownMemberType]
+                name=account_name, issuer_name=self.issuer
+            )
+        )
+        return secret, uri
+
+    def activate_totp(self, user_dn: str, secret: str, code: str) -> bool:
+        """Store ``secret`` as the user's TOTP secret if ``code`` is valid for it.
+
+        The accepted step is recorded so that the same code cannot be replayed at login.
+        """
+        code = code.strip().replace(" ", "")
+        if not code.isdigit():
+            return False
+        totp = pyotp.TOTP(secret, interval=TOTP_STEP_SECONDS)
+        now = self._clock()
+        for offset in (0, -1, 1):
+            at = now + offset * TOTP_STEP_SECONDS
+            if secrets.compare_digest(totp.at(int(at)), code):
+                self.store.set_totp_secret(user_dn, secret)
+                self.store.set_last_totp_step(user_dn, int(at // TOTP_STEP_SECONDS))
+                return True
+        return False
+
     def verify_totp(self, user_dn: str, code: str) -> bool:
         """Accept the current step +-1; a step is accepted only once."""
         secret = self.store.totp_secret(user_dn)

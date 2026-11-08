@@ -106,6 +106,26 @@ class WebAuthnCredentialInfo(BaseModel):
     sign_count: int
 
 
+class TotpStatus(BaseModel):
+    enabled: bool
+    recovery_codes_remaining: int
+    security_keys: int
+
+
+class TotpEnrolment(BaseModel):
+    secret: str
+    uri: str
+    expires_in: int
+
+
+class TotpConfirmBody(BaseModel):
+    code: Annotated[str, Field(min_length=1, max_length=16)]
+
+
+class RecoveryCodes(BaseModel):
+    codes: list[str]
+
+
 class RecoveryBody(BaseModel):
     email: Annotated[str, Field(max_length=320)]
     directory: str | None = None
@@ -393,6 +413,90 @@ def webauthn_delete(
     if not state.webauthn.remove_credential(user.dn, raw):
         raise not_found()
     log.info("webauthn_removed", user=user.dn)
+
+
+# -- TOTP and recovery codes (self-service) ------------------------------------------------------
+#: Seconds a freshly generated TOTP secret waits for its confirmation code.
+TOTP_PENDING_TTL_SECONDS = 5 * 60
+_TOTP_PENDING_KEY = "totp_pending"
+
+
+def _real_factors(state: AppState, user_dn: str) -> list[str]:
+    return [m for m in state.second_factor.methods_for(user_dn) if m != "recovery"]
+
+
+@router.get("/totp")
+def totp_status(user: CurrentUserDep, state: StateDep) -> TotpStatus:
+    store = state.second_factor.store
+    return TotpStatus(
+        enabled=bool(store.totp_secret(user.dn)),
+        recovery_codes_remaining=len(store.recovery_hashes(user.dn)),
+        security_keys=len(state.webauthn.credentials(user.dn)),
+    )
+
+
+@router.post("/totp/begin")
+def totp_begin(user: CurrentUserDep, state: StateDep) -> TotpEnrolment:
+    """Issue a secret for the authenticator app; it only counts once confirmed."""
+    _require_recent_auth(state, user.session)
+    entry = user.directory.get(user.dn, ["uid", "cn"])
+    if entry is None:
+        raise unauthenticated("Account no longer exists")
+    account = entry.text("uid") or entry.text("cn") or user.dn
+    secret, uri = state.second_factor.begin_totp(account)
+    user.session.cache[_TOTP_PENDING_KEY] = (secret, state.clock() + TOTP_PENDING_TTL_SECONDS)
+    return TotpEnrolment(secret=secret, uri=uri, expires_in=TOTP_PENDING_TTL_SECONDS)
+
+
+@router.post("/totp/confirm")
+def totp_confirm(body: TotpConfirmBody, user: CurrentUserDep, state: StateDep) -> StatusResponse:
+    """Activate TOTP if the code matches the pending secret (kept for retries on a typo)."""
+    _require_recent_auth(state, user.session)
+    cache = user.session.cache
+    pending = cache.get(_TOTP_PENDING_KEY)
+    if pending is None or state.clock() > pending[1]:
+        cache.pop(_TOTP_PENDING_KEY, None)
+        raise validation("Start the setup again", {"code": "Setup expired, start again"})
+    if not state.second_factor.activate_totp(user.dn, str(pending[0]), body.code):
+        log.info("totp_confirmation_failed", user=user.dn)
+        raise validation("Wrong code", {"code": "Wrong code"})
+    cache.pop(_TOTP_PENDING_KEY, None)
+    log.info("totp_enabled", user=user.dn)
+    return StatusResponse()
+
+
+@router.delete("/totp", status_code=204)
+def totp_disable(user: CurrentUserDep, state: StateDep, confirm_disable: bool = False) -> None:
+    _require_recent_auth(state, user.session)
+    store = state.second_factor.store
+    if not store.totp_secret(user.dn):
+        raise not_found()
+    if _real_factors(state, user.dn) == ["totp"] and not confirm_disable:
+        raise ApiError(
+            409,
+            "last_second_factor",
+            "Disabling this turns off the second factor for your account",
+        )
+    store.set_totp_secret(user.dn, None)
+    if not _real_factors(state, user.dn):
+        store.set_recovery_hashes(user.dn, [])  # unusable now; do not revive them later
+    user.session.cache.pop(_TOTP_PENDING_KEY, None)
+    log.info("totp_disabled", user=user.dn)
+
+
+@router.post("/recovery-codes")
+def recovery_codes_generate(user: CurrentUserDep, state: StateDep) -> RecoveryCodes:
+    """(Re)generate the single-use codes; the clear values are returned only here."""
+    _require_recent_auth(state, user.session)
+    if not _real_factors(state, user.dn):
+        raise ApiError(
+            409,
+            "second_factor_required",
+            "Set up an authenticator app or a security key first",
+        )
+    codes = state.second_factor.regenerate_recovery_codes(user.dn)
+    log.info("recovery_codes_generated", user=user.dn)
+    return RecoveryCodes(codes=codes)
 
 
 @router.post("/logout", status_code=204)
