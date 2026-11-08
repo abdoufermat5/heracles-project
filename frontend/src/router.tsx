@@ -122,9 +122,13 @@ const listRoute = createRoute({
 const newRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/types/$type/new',
+  validateSearch: (s: Record<string, unknown>): { copy?: string } => ({
+    copy: typeof s.copy === 'string' && s.copy !== '' ? s.copy : undefined,
+  }),
   component: function NewRoute() {
     const { type } = newRoute.useParams()
-    return <ObjectEditor key={type} type={type} dn={null} />
+    const { copy } = newRoute.useSearch()
+    return <ObjectEditor key={`${type}:${copy ?? ''}`} type={type} dn={null} copyFrom={copy ?? null} />
   },
 })
 

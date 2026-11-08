@@ -11,6 +11,8 @@ interface Props {
   active: Record<string, boolean>
   errorsByTab: Record<string, number>
   dirtyTabs: Set<string>
+  /** Extra panels listed after the object tabs (references, snapshots, ...). */
+  extras?: Array<{ name: string; label: string }>
 }
 
 export function EditorTabNav({
@@ -20,6 +22,7 @@ export function EditorTabNav({
   active,
   errorsByTab,
   dirtyTabs,
+  extras = [],
 }: Props) {
   const { t } = useTranslation()
 
@@ -91,6 +94,29 @@ export function EditorTabNav({
                   </Badge>
                 )}
               </div>
+            </button>
+          )
+        })}
+        {extras.map((x) => {
+          const isSelected = currentTab === x.name
+          return (
+            <button
+              key={x.name}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              aria-controls={`panel-${x.name}`}
+              id={`tab-${x.name}`}
+              onClick={() => onSelectTab(x.name)}
+              className={cn(
+                'relative flex h-8 items-center gap-2 whitespace-nowrap rounded-sm border border-transparent px-3 text-left text-[13px] transition-colors',
+                isSelected
+                  ? 'border-border bg-card font-medium text-foreground'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+              )}
+            >
+              {isSelected && <span className="absolute inset-y-0 left-0 w-0.5 bg-signal" aria-hidden />}
+              <span className="truncate">{x.label}</span>
             </button>
           )
         })}

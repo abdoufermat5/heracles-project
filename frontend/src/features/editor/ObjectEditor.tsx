@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useBlocker, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -12,7 +13,9 @@ import {
   useObject,
   useObjectAccountLocked,
   usePatchObject,
+  qk,
   useTypeDescriptor,
+  useTypes,
 } from '@/api/hooks'
 import type { LockInfo, ObjectDetail, TypeDescriptor } from '@/api/types'
 import {
@@ -38,36 +41,50 @@ import {
   listFieldDiffs,
   nameValue,
   objectToLdif,
+  prefillFromSource,
   splitFieldKey,
   valuesFromDetail,
   type FormValues,
 } from '@/lib/objects'
 import { useScope } from '@/lib/scope'
 import { makeResolver } from '@/lib/validation'
+import { useObjectLdif } from './api'
 import { EditorHeader } from './EditorHeader'
 import { EditorSaveBar } from './EditorSaveBar'
 import { EditorSection } from './EditorSection'
 import { EditorTabNav } from './EditorTabNav'
 import { LdifDialog } from './LdifDialog'
 import { LockedDialog } from './LockedDialog'
+import { ReferencesPanel } from './ReferencesPanel'
+import { SnapshotsPanel } from './SnapshotsPanel'
+import { TemplateFillForm } from './TemplateFillForm'
 import { TemplatePicker } from './TemplatePicker'
 
 const BASE_KEY = 'main.base'
+/** Pseudo tab names of the extra panels (they are not part of the type descriptor). */
+const REFERENCES_TAB = '@references'
+const SNAPSHOTS_TAB = '@snapshots'
 
 interface Props {
   type: string
   /** null => create mode */
   dn: string | null
+  /** Create mode only: DN of an object of the same type to prefill the form from. */
+  copyFrom?: string | null
 }
 
-export function ObjectEditor({ type, dn }: Props) {
+export function ObjectEditor({ type, dn, copyFrom = null }: Props) {
   const desc = useTypeDescriptor(type)
   const obj = useObject(type, dn)
+  const source = useObject(type, dn === null ? copyFrom : null)
   const { t } = useTranslation()
 
   if (desc.isError) return <ErrorState error={desc.error} onRetry={() => void desc.refetch()} />
   if (dn !== null && obj.isError) return <ErrorState error={obj.error} onRetry={() => void obj.refetch()} />
-  if (!desc.data || (dn !== null && !obj.data)) {
+  if (copyFrom !== null && source.isError) {
+    return <ErrorState error={source.error} onRetry={() => void source.refetch()} />
+  }
+  if (!desc.data || (dn !== null && !obj.data) || (dn === null && copyFrom !== null && !source.data)) {
     return (
       <div className="space-y-4" aria-busy="true" aria-label={t('common.loading')}>
         <div className="flex items-center gap-4">
@@ -81,23 +98,50 @@ export function ObjectEditor({ type, dn }: Props) {
       </div>
     )
   }
-  return <EditorInner key={dn ?? 'new'} desc={desc.data} detail={obj.data ?? null} />
+  return (
+    <EditorInner
+      key={dn ?? `new:${copyFrom ?? ''}`}
+      desc={desc.data}
+      detail={obj.data ?? null}
+      source={dn === null ? (source.data ?? null) : null}
+    />
+  )
 }
 
-function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDetail | null }) {
+interface InnerProps {
+  desc: TypeDescriptor
+  detail: ObjectDetail | null
+  /** Create mode: the object this one is copied from. */
+  source: ObjectDetail | null
+}
+
+function EditorInner({ desc, detail, source }: InnerProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const scope = useScope()
   const isCreate = detail === null
   const type = desc.name
 
-  const initial = useMemo(() => {
+  const blank = useMemo(() => {
     const v = valuesFromDetail(desc, detail)
     if (isCreate && v.main && !v.main.base) v.main.base = scope.base
     return v
   }, [desc, detail, isCreate, scope.base])
 
-  const initialActive = useMemo(() => activeFromDetail(desc, detail), [desc, detail])
+  // A copy starts from the source object's values; it still counts as unsaved
+  // (the baseline is the blank form).
+  const initial = useMemo(() => {
+    if (!source) return blank
+    const v = prefillFromSource(desc, source)
+    if (v.main && !v.main.base) v.main.base = scope.base
+    return v
+  }, [blank, desc, source, scope.base])
+
+  const blankActive = useMemo(() => activeFromDetail(desc, detail), [desc, detail])
+  const initialActive = useMemo(
+    () => (source ? activeFromDetail(desc, source) : blankActive),
+    [blankActive, desc, source],
+  )
 
   const [active, setActive] = useState(initialActive)
   const activeRef = useRef(active)
@@ -109,10 +153,11 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [ldifOpen, setLdifOpen] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
   const locked = useRef(false)
   const bypassGuard = useRef(false)
-  const baseline = useRef({ values: initial, active: initialActive })
+  const baseline = useRef({ values: blank, active: blankActive })
 
   const resolver = useMemo(() => makeResolver(desc, () => activeRef.current), [desc])
   const form = useForm<FormValues>({
@@ -182,6 +227,9 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
   const del = useDeleteObjects(type)
   const accountLock = useAccountLock(type)
   const accountLockedQuery = useObjectAccountLocked(type, detail?.dn ?? null)
+  const types = useTypes()
+  const canCopy = types.data?.find((x) => x.name === type)?.can_create ?? false
+  const ldifQuery = useObjectLdif(type, detail?.dn ?? null, ldifOpen)
 
   const readOnlyMode = !editing
   const objectRights = detail?.acl[desc.tabs[0]?.name ?? 'main']?.object ?? 'rwcdm'
@@ -198,9 +246,12 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
     return null
   }, [current])
 
-  const ldifText = useMemo(() => {
+  // The server builds the LDIF; the form values are only a fallback while the
+  // endpoint is unavailable.
+  const localLdif = useMemo(() => {
     return objectToLdif(desc, detail?.dn ?? 'new', current, active)
   }, [desc, detail, current, active])
+  const ldifText = ldifQuery.data ?? localLdif
 
   const applyServerErrors = (fields: Record<string, string>) => {
     let firstTab: string | null = null
@@ -239,6 +290,18 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
     form.reset(v)
   }
 
+  /** A snapshot was restored: load the stored object again. */
+  const reloadAfterRestore = async () => {
+    if (!detail) return
+    try {
+      const fresh = await api.getObject(type, detail.dn)
+      queryClient.setQueryData(qk.object(type, detail.dn), fresh)
+      resetTo(fresh)
+    } catch {
+      toast.error(t('common.error'))
+    }
+  }
+
   const cancel = async () => {
     if (isCreate) {
       void navigate({ to: '/types/$type', params: { type } })
@@ -262,7 +325,6 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
           const base = (values.main?.base as string | null) ?? scope.base ?? ''
           const res = await create.mutateAsync({
             base,
-            template: selectedTemplate,
             tabs: buildCreateTabs(desc, values, active),
           })
           toast.success(t('editor.created', { type: desc.label }))
@@ -343,11 +405,28 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
     }
   }
 
-  const currentTabObj = desc.tabs.find((tb) => tb.name === tab) ?? desc.tabs[0]
+  const extraPanel = tab === REFERENCES_TAB || tab === SNAPSHOTS_TAB ? tab : null
+  const extras = isCreate
+    ? []
+    : [
+        { name: REFERENCES_TAB, label: t('references.tab') },
+        { name: SNAPSHOTS_TAB, label: t('snapshots.tab') },
+      ]
+  const currentTabObj = extraPanel ? undefined : (desc.tabs.find((tb) => tb.name === tab) ?? desc.tabs[0])
   const isCurrentTabActive = currentTabObj ? (active[currentTabObj.name] ?? false) : false
   const currentTabAcl = currentTabObj ? detail?.acl[currentTabObj.name] : undefined
   const canToggleCurrentTab =
     editing && currentTabObj && (isCreate || !currentTabAcl || currentTabAcl.object.includes('m'))
+
+  if (isCreate && selectedTemplate) {
+    return (
+      <TemplateFillForm
+        desc={desc}
+        templateDn={selectedTemplate}
+        onTemplateChange={setSelectedTemplate}
+      />
+    )
+  }
 
   return (
     <form onSubmit={(e) => void save(e)} noValidate className="flex flex-1 flex-col space-y-4">
@@ -368,15 +447,26 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
         onSave={() => void save()}
         onDelete={() => setConfirmDelete(true)}
         onViewLdif={() => setLdifOpen(true)}
+        onCopy={
+          canCopy && detail
+            ? () => void navigate({ to: '/types/$type/new', params: { type }, search: { copy: detail.dn } })
+            : undefined
+        }
         onToggleAccountLock={type === 'user' ? () => void toggleAccountLock() : undefined}
       />
 
       {isCreate && (
         <TemplatePicker
+          type={type}
           selected={selectedTemplate}
           onChange={setSelectedTemplate}
           disabled={!editing}
         />
+      )}
+      {source && (
+        <p className="rounded-md border bg-card p-3 text-[13px] text-muted-foreground">
+          {t('copy.prefilled', { name: nameValue(desc, source) })}
+        </p>
       )}
 
       {/* Main tabbed layout */}
@@ -388,14 +478,20 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
           active={active}
           errorsByTab={errorsByTab}
           dirtyTabs={dirtyTabs}
+          extras={extras}
         />
 
         <div
           role="tabpanel"
-          id={`panel-${currentTabObj?.name}`}
-          aria-labelledby={`tab-${currentTabObj?.name}`}
+          id={`panel-${currentTabObj?.name ?? extraPanel}`}
+          aria-labelledby={`tab-${currentTabObj?.name ?? extraPanel}`}
           className="w-full min-w-0 flex-1 space-y-4"
         >
+          {extraPanel === REFERENCES_TAB && detail && <ReferencesPanel type={type} dn={detail.dn} />}
+          {extraPanel === SNAPSHOTS_TAB && detail && (
+            <SnapshotsPanel type={type} dn={detail.dn} onRestored={() => void reloadAfterRestore()} />
+          )}
+
           {currentTabObj?.optional && (
             <div className="flex items-center justify-between rounded-md border bg-card p-4">
               <div>
@@ -459,6 +555,7 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
         onOpenChange={setLdifOpen}
         ldif={ldifText}
         title={title}
+        loading={ldifQuery.isPending && ldifOpen}
       />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
