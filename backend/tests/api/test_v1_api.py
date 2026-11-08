@@ -107,7 +107,11 @@ def test_second_factor_accounts_are_refused(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     state = app_state(client)
-    monkeypatch.setattr(state.second_factor, "methods_for", lambda _dn: ["totp"]  # pyright: ignore[reportUnknownLambdaType])
+
+    def methods_for(_dn: str) -> list[str]:
+        return ["totp"]
+
+    monkeypatch.setattr(state.second_factor, "methods_for", methods_for)
     r = client.post("/api/v1/login", json={"user": "admin", "password": "heracles"})
     assert r.status_code == 401
     assert "Second factor" in r.json()["message"]
