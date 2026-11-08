@@ -76,6 +76,8 @@ class Db {
   // --- end P3 objects ---
   /** Registered WebAuthn keys of the signed-in mock user. */
   securityKeys: { id: string; label: string; sign_count: number }[] = []
+  /** False once the mock session needs a password confirmation for key changes. */
+  reauthFresh = true
   csrf = 'mock-csrf-token'
   nextId = 1000
   recoveryTokens = new Set<string>(['valid-token'])
@@ -91,6 +93,7 @@ class Db {
     this.templates.clear()
     this.snapshotTabs.clear()
     this.securityKeys = []
+    this.reauthFresh = true
     this.session = { user: null, pending: null }
     this.seed()
   }

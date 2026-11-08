@@ -128,14 +128,16 @@ export const handlers: HttpHandler[] = [
     `${B}/auth/webauthn/credentials/options`,
     guarded(
       () =>
-        HttpResponse.json({
-          options: {
-            challenge: 'Y2hhbGxlbmdl',
-            rp: { id: 'localhost', name: 'Heracles' },
-            user: { id: 'dXNlcg', name: 'admin', displayName: 'Admin' },
-            pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
-          },
-        }),
+        !db.reauthFresh
+          ? err(403, 'reauth_required', 'Confirm your password to continue')
+          : HttpResponse.json({
+              options: {
+                challenge: 'Y2hhbGxlbmdl',
+                rp: { id: 'localhost', name: 'Heracles' },
+                user: { id: 'dXNlcg', name: 'admin', displayName: 'Admin' },
+                pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+              },
+            }),
       { mutation: true },
     ),
   ),
@@ -156,12 +158,31 @@ export const handlers: HttpHandler[] = [
   http.delete(
     `${B}/auth/webauthn/credentials/:id`,
     guarded(
-      ({ params }) => {
+      ({ params, request }) => {
+        if (!db.reauthFresh) return err(403, 'reauth_required', 'Confirm your password to continue')
+        const confirm = new URL(request.url).searchParams.get('confirm_disable') === 'true'
+        const only = db.securityKeys.length === 1 ? db.securityKeys[0] : undefined
+        if (only?.id === params.id && !confirm)
+          return err(409, 'last_second_factor', 'Removing this key turns off the second factor')
         const before = db.securityKeys.length
         db.securityKeys = db.securityKeys.filter((k) => k.id !== params.id)
         return db.securityKeys.length === before
           ? err(404, 'not_found', 'Not found')
           : new HttpResponse(null, { status: 204 })
+      },
+      { mutation: true },
+    ),
+  ),
+
+  http.post(
+    `${B}/auth/reauth`,
+    guarded(
+      async ({ request }) => {
+        const body = (await request.json()) as { password: string }
+        if (body.password === 'wrong')
+          return err(422, 'validation', 'Wrong password', { fields: { password: 'Wrong password' } })
+        db.reauthFresh = true
+        return HttpResponse.json({ status: 'ok' })
       },
       { mutation: true },
     ),

@@ -48,10 +48,14 @@ export const api = {
     }),
   registerSecurityKey: (body: WebAuthnRegisterRequest) =>
     request<WebAuthnCredentialInfo>('/auth/webauthn/credentials', { method: 'POST', body }),
-  deleteSecurityKey: (id: string) =>
-    request<undefined>(`/auth/webauthn/credentials/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    }),
+  deleteSecurityKey: (id: string, confirmDisable = false) =>
+    request<undefined>(
+      `/auth/webauthn/credentials/${encodeURIComponent(id)}${confirmDisable ? '?confirm_disable=true' : ''}`,
+      { method: 'DELETE' },
+    ),
+  /** Confirm the password before a sensitive account change (security keys). */
+  reauth: (password: string) =>
+    request<{ status: 'ok' }>('/auth/reauth', { method: 'POST', body: { password } }),
   logout: async () => {
     if (hasSsoCookie()) {
       // opened through CAS: the server ends our session and the CAS one, then returns to /login

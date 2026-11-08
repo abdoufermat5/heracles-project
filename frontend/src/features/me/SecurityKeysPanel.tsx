@@ -5,8 +5,26 @@ import { useTranslation } from 'react-i18next'
 import { isApiError } from '@/api/client'
 import { api } from '@/api/endpoints'
 import { qk } from '@/api/hooks'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { createCredential, WebAuthnClientError, webauthnSupported } from '@/lib/webauthn'
 
@@ -19,6 +37,12 @@ export function SecurityKeysPanel() {
   const supported = webauthnSupported()
   const [label, setLabel] = useState('')
   const [error, setError] = useState<string | null>(null)
+  /** Action to retry once the password is confirmed (the server asked for step-up). */
+  const [retry, setRetry] = useState<(() => void) | null>(null)
+  /** Key whose removal would turn the second factor off, awaiting confirmation. */
+  const [lastKey, setLastKey] = useState<string | null>(null)
+
+  const needsReauth = (e: unknown) => isApiError(e) && e.code === 'reauth_required'
 
   const keys = useQuery({ queryKey: qk.securityKeys, queryFn: api.listSecurityKeys })
 
@@ -33,7 +57,11 @@ export function SecurityKeysPanel() {
       setError(null)
       await qc.invalidateQueries({ queryKey: qk.securityKeys })
     },
-    onError: (e) => {
+    onError: (e, name) => {
+      if (needsReauth(e)) {
+        setRetry(() => () => add.mutate(name))
+        return
+      }
       if (e instanceof WebAuthnClientError) {
         if (e.reason === 'cancelled') setError(t('security.cancelled'))
         else if (e.reason === 'unsupported') setError(t('security.unsupported'))
@@ -45,12 +73,17 @@ export function SecurityKeysPanel() {
   })
 
   const remove = useMutation({
-    mutationFn: (id: string) => api.deleteSecurityKey(id),
+    mutationFn: (v: { id: string; confirmDisable?: boolean }) =>
+      api.deleteSecurityKey(v.id, v.confirmDisable),
     onSuccess: async () => {
       setError(null)
       await qc.invalidateQueries({ queryKey: qk.securityKeys })
     },
-    onError: (e) => setError(isApiError(e) ? e.message : t('security.failed')),
+    onError: (e, v) => {
+      if (needsReauth(e)) setRetry(() => () => remove.mutate(v))
+      else if (isApiError(e) && e.code === 'last_second_factor') setLastKey(v.id)
+      else setError(isApiError(e) ? e.message : t('security.failed'))
+    },
   })
 
   return (
@@ -82,7 +115,7 @@ export function SecurityKeysPanel() {
                   variant="ghost"
                   size="icon-xs"
                   disabled={remove.isPending}
-                  onClick={() => remove.mutate(k.id)}
+                  onClick={() => remove.mutate({ id: k.id })}
                   aria-label={t('security.remove', { name: k.label || t('security.unnamed') })}
                   className="text-destructive hover:bg-destructive-soft hover:text-destructive"
                 >
@@ -127,6 +160,113 @@ export function SecurityKeysPanel() {
           )}
         </div>
       </CardContent>
+
+      <ReauthDialog
+        open={retry !== null}
+        onCancel={() => setRetry(null)}
+        onConfirmed={() => {
+          const again = retry
+          setRetry(null)
+          again?.()
+        }}
+      />
+
+      <AlertDialog open={lastKey !== null} onOpenChange={(o) => !o && setLastKey(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[15px]">{t('security.lastTitle')}</AlertDialogTitle>
+            <AlertDialogDescription className="text-[13px]">
+              {t('security.lastBody')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('security.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (lastKey) remove.mutate({ id: lastKey, confirmDisable: true })
+                setLastKey(null)
+              }}
+            >
+              {t('security.lastConfirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
+  )
+}
+
+/** Asks for the current password, then lets the caller retry the refused action. */
+function ReauthDialog({
+  open,
+  onCancel,
+  onConfirmed,
+}: {
+  open: boolean
+  onCancel: () => void
+  onConfirmed: () => void
+}) {
+  const { t } = useTranslation()
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const confirm = useMutation({
+    mutationFn: (pw: string) => api.reauth(pw),
+    onSuccess: () => {
+      setPassword('')
+      setError(null)
+      onConfirmed()
+    },
+    onError: (e) => setError(isApiError(e) ? e.message : t('security.failed')),
+  })
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) {
+          setPassword('')
+          setError(null)
+          onCancel()
+        }
+      }}
+    >
+      <DialogContent>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            confirm.mutate(password)
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-[15px]">{t('security.reauthTitle')}</DialogTitle>
+            <DialogDescription className="text-[13px]">{t('security.reauthBody')}</DialogDescription>
+          </DialogHeader>
+          <Input
+            type="password"
+            autoComplete="current-password"
+            autoFocus
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            aria-label={t('security.password')}
+            className="h-8 text-[13px]"
+          />
+          {error && (
+            <p role="alert" className="text-[13px] text-destructive">
+              {error}
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+              {t('security.cancel')}
+            </Button>
+            <Button type="submit" size="sm" disabled={!password || confirm.isPending}>
+              {t('security.confirm')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

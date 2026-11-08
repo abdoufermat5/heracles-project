@@ -121,4 +121,46 @@ describe('second factor with a security key', () => {
     expect(button).toBeDisabled()
     expect(screen.getByText('This browser cannot use security keys.')).toBeInTheDocument()
   })
+
+  it('asks for the password again when the server requires it, then retries', async () => {
+    db.securityKeys = [
+      { id: 'key-0', label: 'Desk key', sign_count: 1 },
+      { id: 'key-1', label: 'Spare key', sign_count: 0 },
+    ]
+    db.reauthFresh = false
+    signIn()
+    fakeKeys()
+    const user = userEvent.setup()
+    renderApp('/me')
+
+    await user.click(await screen.findByRole('button', { name: 'Remove Desk key' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('Confirm your password')
+
+    await user.type(screen.getByLabelText('Password'), 'wrong')
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    expect(await screen.findByText('Wrong password')).toBeInTheDocument()
+    expect(db.securityKeys).toHaveLength(2)
+
+    await user.clear(screen.getByLabelText('Password'))
+    await user.type(screen.getByLabelText('Password'), 's3cret')
+    await user.click(screen.getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(db.securityKeys.map((k) => k.label)).toEqual(['Spare key']))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('confirms before removing the last key', async () => {
+    db.securityKeys = [{ id: 'key-0', label: 'Desk key', sign_count: 1 }]
+    signIn()
+    fakeKeys()
+    const user = userEvent.setup()
+    renderApp('/me')
+
+    await user.click(await screen.findByRole('button', { name: 'Remove Desk key' }))
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Turn off the second factor?')
+    expect(db.securityKeys).toHaveLength(1)
+
+    await user.click(screen.getByRole('button', { name: 'Remove and turn off' }))
+    await waitFor(() => expect(db.securityKeys).toHaveLength(0))
+  })
 })

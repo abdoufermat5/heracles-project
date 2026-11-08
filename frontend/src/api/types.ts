@@ -14,6 +14,8 @@ export type ErrorCode =
   | 'locked'
   | 'conflict'
   | 'ldap_error'
+  | 'reauth_required'
+  | 'last_second_factor'
   | 'internal'
 
 export interface LockInfo {
