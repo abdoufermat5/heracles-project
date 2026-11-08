@@ -25,12 +25,14 @@ class RateLimiter:
         base_delay: float = 2.0,
         max_delay: float = 900.0,
         forget_after: float = 3600.0,
+        max_entries: int = 10_000,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._free = free_attempts
         self._base = base_delay
         self._max = max_delay
         self._forget = forget_after
+        self._max_entries = max_entries
         self._clock = clock
         self._entries: dict[str, _Entry] = {}
         self._lock = threading.Lock()
@@ -54,8 +56,8 @@ class RateLimiter:
     def record_failure(self, key: str) -> None:
         now = self._clock()
         with self._lock:
-            if len(self._entries) > 10_000:
-                self._purge(now)
+            if key not in self._entries and len(self._entries) >= self._max_entries:
+                self._make_room(now)
             entry = self._entries.setdefault(key, _Entry())
             entry.failures += 1
             entry.last_failure = now
@@ -67,7 +69,16 @@ class RateLimiter:
         with self._lock:
             self._entries.pop(key, None)
 
-    def _purge(self, now: float) -> None:
+    def _make_room(self, now: float) -> None:
+        """Drop the expired entries, then the oldest tenth when the table is still full.
+
+        Keys are chosen by the client (an address and a login name), so the table must not
+        grow with the attacker's imagination.
+        """
         stale = [k for k, e in self._entries.items() if now - e.last_failure > self._forget]
         for k in stale:
             del self._entries[k]
+        if len(self._entries) >= self._max_entries:
+            oldest = sorted(self._entries, key=lambda k: self._entries[k].last_failure)
+            for k in oldest[: max(1, self._max_entries // 10)]:
+                del self._entries[k]

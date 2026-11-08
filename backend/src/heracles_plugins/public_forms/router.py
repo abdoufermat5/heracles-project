@@ -92,8 +92,11 @@ def _limited_route(limit: int) -> type[APIRoute]:
 class SubmissionWindow:
     """At most ``limit`` events per key in a sliding window."""
 
-    def __init__(self, limit: int, window: float, clock: Callable[[], float]) -> None:
+    def __init__(
+        self, limit: int, window: float, clock: Callable[[], float], max_keys: int = 10_000
+    ) -> None:
         self._limit = limit
+        self._max_keys = max_keys
         self._window = window
         self._clock = clock
         self._events: dict[str, deque[float]] = defaultdict(deque)
@@ -118,8 +121,19 @@ class SubmissionWindow:
     def record(self, key: str) -> None:
         now = self._clock()
         with self._lock:
+            if key not in self._events and len(self._events) >= self._max_keys:
+                self._make_room(now)
             self._prune(key, now)
             self._events[key].append(now)
+
+    def _make_room(self, now: float) -> None:
+        """Drop the expired keys, then the least recently used tenth when still full."""
+        for key in list(self._events):
+            self._prune(key, now)
+        if len(self._events) >= self._max_keys:
+            oldest = sorted(self._events, key=lambda k: self._events[k][-1])
+            for key in oldest[: max(1, self._max_keys // 10)]:
+                del self._events[key]
 
 
 def _error(

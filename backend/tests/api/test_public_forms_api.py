@@ -23,6 +23,7 @@ from heracles.objects import ObjectService, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
 from heracles.server import create_full_app
 from heracles_plugins.public_forms import Captcha, PublicFormsSettings, build_public_router
+from heracles_plugins.public_forms.router import SubmissionWindow
 
 CLASSES = ["fdPublicForm", "fdInvitation", "fdRegistration", "fdUserRegistration"]
 PATH = "/api/v2/public/forms"
@@ -438,6 +439,22 @@ def test_invitation_flow_on_the_full_application(full_client: TestClient) -> Non
     helpdesk = Api(full_client).login("helpdesk")
     denied = helpdesk.post("/invitations/send", {"invitation": invitation, "emails": ["a@b.co"]})
     assert denied.status_code == 403
+
+
+def test_submission_window_table_is_bounded() -> None:
+    now = [0.0]
+    window = SubmissionWindow(2, 3600.0, lambda: now[0], max_keys=20)
+    for i in range(500):
+        window.record(f"198.51.100.{i}")
+        now[0] += 1.0
+        assert len(window._events) <= 20  # pyright: ignore[reportPrivateUsage]
+    assert window.retry_after("198.51.100.499") == 0  # below the limit: still counted
+    window.record("198.51.100.499")
+    assert window.retry_after("198.51.100.499") > 0  # the newest key keeps its history
+    assert window.retry_after("198.51.100.0") == 0  # evicted
+    now[0] += 7200.0
+    window.record("late")
+    assert len(window._events) == 1  # pyright: ignore[reportPrivateUsage]
 
 
 def test_registry_is_built_from_the_plugins_when_the_app_has_none(env: Env) -> None:

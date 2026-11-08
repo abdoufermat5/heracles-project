@@ -155,6 +155,25 @@ def test_rate_limiter_exponential_backoff() -> None:
     assert rl.retry_after(key) == 0
 
 
+def test_rate_limiter_table_is_bounded() -> None:
+    """Attacker-chosen keys must not grow the table: expired entries go, then the oldest."""
+    clock = Clock()
+    rl = RateLimiter(free_attempts=0, base_delay=60.0, max_entries=20, clock=clock)
+    for i in range(20):
+        rl.record_failure(f"k{i}")
+        clock.now += 1.0
+    assert rl.retry_after("k19") > 0
+    for i in range(20, 500):
+        rl.record_failure(f"k{i}")
+        clock.now += 1.0
+        assert len(rl._entries) <= 20  # pyright: ignore[reportPrivateUsage]
+    assert rl.retry_after("k499") > 0  # the newest key is kept
+    assert rl.retry_after("k0") == 0  # the oldest was evicted
+    clock.now += 4000
+    rl.record_failure("late")
+    assert len(rl._entries) == 1  # pyright: ignore[reportPrivateUsage]
+
+
 def test_totp_service_window() -> None:
     clock = Clock()
     clock.now = 1_700_000_000.0
