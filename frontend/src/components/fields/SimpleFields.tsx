@@ -27,7 +27,7 @@ export function TextInputField({
 
   return (
     <div className="relative flex w-full items-center">
-      {icon && (
+      {icon && !p.readOnly && (
         <span className="pointer-events-none absolute left-2.5 text-muted-foreground">
           {icon}
         </span>
@@ -44,7 +44,7 @@ export function TextInputField({
         aria-describedby={p.error ? `${p.id}-error` : undefined}
         className={cn(
           'h-8',
-          icon && 'pl-8',
+          icon && !p.readOnly && 'pl-8',
           mono && 'font-dn',
           p.readOnly &&
             'border-transparent bg-transparent shadow-none px-0 py-1 text-foreground cursor-default select-text disabled:opacity-100 disabled:cursor-default font-normal',
@@ -89,7 +89,7 @@ export function TextAreaField({
 
   return (
     <div className="relative">
-      {icon && (
+      {icon && !p.readOnly && (
         <span className="pointer-events-none absolute left-2.5 top-2.5 text-muted-foreground">
           {icon}
         </span>
@@ -104,7 +104,7 @@ export function TextAreaField({
         aria-invalid={p.invalid || undefined}
         aria-describedby={p.error ? `${p.id}-error` : undefined}
         className={cn(
-          icon && 'pl-8',
+          icon && !p.readOnly && 'pl-8',
           p.readOnly &&
             'border-transparent bg-transparent shadow-none px-0 py-1 text-foreground cursor-default select-text disabled:opacity-100 disabled:cursor-default font-normal resize-none whitespace-pre-wrap',
         )}
