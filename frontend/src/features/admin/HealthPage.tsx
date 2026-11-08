@@ -69,8 +69,8 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
   const showDns = check.dns.length > 0 && !needsUser
 
   const explanation =
-    t(`settingsUI.health.checkExpl.${check.id}`, { defaultValue: '' }) || check.message
-  const howToFix = t(`settingsUI.health.checkFix.${check.id}`, { defaultValue: '' })
+    t(`settingsUI.health.checkExpl.${check.id}`) || check.message
+  const howToFix = t(`settingsUI.health.checkFix.${check.id}`)
 
   const apply = async () => {
     try {
@@ -106,7 +106,7 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-body font-semibold tracking-tight text-foreground">
-              {t(`setup.check.${check.id}`, { defaultValue: check.id })}
+              {t(`setup.check.${check.id}`)}
             </h3>
             <Badge variant={variant} className="gap-1">
               <Icon className="size-3" aria-hidden />
@@ -134,13 +134,15 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
         )}
       </div>
 
-      {/* "How to fix" guidance */}
-      {howToFix && (
+      {/* "How to fix" guidance - warning/error checks only */}
+      {howToFix && check.status !== 'ok' && (
         <div className="mt-3 flex items-start gap-2 rounded-sm border bg-muted/40 p-2.5 text-small text-muted-foreground">
           <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
           <div className="space-y-0.5">
             <span className="font-medium text-foreground">
-              {check.fixable ? 'Remediation:' : 'Resolution:'}{' '}
+              {check.fixable
+                ? t('settingsUI.health.summary.remediation')
+                : t('settingsUI.health.summary.resolution')}{' '}
             </span>
             <span>{howToFix}</span>
           </div>

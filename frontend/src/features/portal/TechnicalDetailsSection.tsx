@@ -17,13 +17,13 @@ export function TechnicalDetailsSection({ me }: { me: Me }) {
   }
 
   const permissions = [
-    t('me.permBrowse', { defaultValue: 'Directory search and browse' }),
-    t('me.permAttributes', { defaultValue: 'View directory entry attributes' }),
+    t('me.permBrowse'),
+    t('me.permAttributes'),
     ...(me.is_admin
       ? [
-          t('me.permModify', { defaultValue: 'Create and modify directory entries' }),
-          t('me.permLocks', { defaultValue: 'Lock and unlock accounts' }),
-          t('me.permScope', { defaultValue: 'Manage directory subtree configurations' }),
+          t('me.permModify'),
+          t('me.permLocks'),
+          t('me.permScope'),
         ]
       : []),
   ]
@@ -42,19 +42,19 @@ export function TechnicalDetailsSection({ me }: { me: Me }) {
       <FactList
         items={[
           {
-            label: t('me.login', { defaultValue: 'Login attribute' }),
+            label: t('me.login'),
             value: <span className="font-mono text-xs">{me.uid}</span>,
           },
           {
-            label: t('me.directory', { defaultValue: 'Directory instance' }),
+            label: t('me.directory'),
             value: <span className="font-mono text-xs">{me.directory}</span>,
           },
           {
-            label: t('me.base', { defaultValue: 'Base entry' }),
+            label: t('me.base'),
             value: <span className="font-mono text-xs">{me.base}</span>,
           },
           {
-            label: t('me.dn', { defaultValue: 'Distinguished name (DN)' }),
+            label: t('me.dn'),
             value: (
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="truncate font-mono text-xs text-muted-foreground">{me.dn}</span>
@@ -62,8 +62,8 @@ export function TechnicalDetailsSection({ me }: { me: Me }) {
                   type="button"
                   onClick={copyDn}
                   className="shrink-0 p-1 text-muted-foreground hover:text-foreground"
-                  aria-label={t('me.copyDn', { defaultValue: 'Copy DN' })}
-                  title={copied ? t('me.copied', { defaultValue: 'Copied' }) : t('me.copyDn', { defaultValue: 'Copy DN' })}
+                  aria-label={t('me.copyDn')}
+                  title={copied ? t('me.copied') : t('me.copyDn')}
                 >
                   {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
                 </button>
@@ -75,7 +75,7 @@ export function TechnicalDetailsSection({ me }: { me: Me }) {
 
       <div className="mt-4 border-t pt-3">
         <span className="text-caption font-medium text-muted-foreground">
-          {t('me.permissions', { defaultValue: 'Assigned capabilities' })}:
+          {t('me.rights')}:
         </span>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {permissions.map((p) => (

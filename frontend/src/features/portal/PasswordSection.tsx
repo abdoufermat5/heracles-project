@@ -12,7 +12,13 @@ import { generatePassword, passwordStrength } from '@/lib/password'
 import { cn } from '@/lib/utils'
 
 const STRENGTH_COLORS = ['bg-muted', 'bg-destructive', 'bg-warning', 'bg-primary', 'bg-success']
-const STRENGTH_LABELS = ['Very weak', 'Weak', 'Fair', 'Good', 'Strong']
+const STRENGTH_KEYS = [
+  'settingsUI.portal.strengthVeryWeak',
+  'settingsUI.portal.strengthWeak',
+  'settingsUI.portal.strengthFair',
+  'settingsUI.portal.strengthGood',
+  'settingsUI.portal.strengthStrong',
+] as const
 
 export function PasswordSection({ userDn }: { userDn: string }) {
   const { t } = useTranslation()
@@ -23,11 +29,10 @@ export function PasswordSection({ userDn }: { userDn: string }) {
   const [error, setError] = useState<string | null>(null)
 
   const score = passwordStrength(newPassword)
-  const isMinLength = newPassword.length >= 8
   const isMatching = newPassword !== '' && confirmPassword !== '' && newPassword === confirmPassword
   const isMismatch = confirmPassword !== '' && newPassword !== confirmPassword
 
-  const canSubmit = isMinLength && isMatching && !patch.isPending
+  const canSubmit = newPassword !== '' && isMatching && !patch.isPending
 
   const onGenerate = () => {
     const pw = generatePassword(16)
@@ -38,17 +43,12 @@ export function PasswordSection({ userDn }: { userDn: string }) {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(pw).catch(() => undefined)
     }
-    toast.success(t('fields.passwordGenerated', { defaultValue: 'Secure password generated and copied.' }))
+    toast.success(t('fields.passwordGenerated'))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-
-    if (!isMinLength) {
-      setError(t('settingsUI.portal.passwordPolicyHint', { min: 8 }))
-      return
-    }
 
     if (!isMatching) {
       setError(t('settingsUI.portal.passwordsDoNotMatch'))
@@ -93,7 +93,7 @@ export function PasswordSection({ userDn }: { userDn: string }) {
               onClick={onGenerate}
             >
               <Sparkles className="size-3 text-primary" aria-hidden />
-              <span>Generate</span>
+              <span>{t('settingsUI.portal.generatePassword')}</span>
             </Button>
           </div>
           <div className="relative flex items-center">
@@ -113,7 +113,7 @@ export function PasswordSection({ userDn }: { userDn: string }) {
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-2.5 text-muted-foreground hover:text-foreground outline-none"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={showPassword ? t('settingsUI.portal.hidePassword') : t('settingsUI.portal.showPassword')}
             >
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
@@ -135,7 +135,7 @@ export function PasswordSection({ userDn }: { userDn: string }) {
               ))}
             </div>
             <p className="text-micro text-muted-foreground">
-              Strength: <span className="font-medium text-foreground">{STRENGTH_LABELS[score]}</span>
+              {t('settingsUI.portal.strength')}: <span className="font-medium text-foreground">{t(STRENGTH_KEYS[score] ?? 'settingsUI.portal.strengthFair')}</span>
             </p>
           </div>
         )}
@@ -157,19 +157,8 @@ export function PasswordSection({ userDn }: { userDn: string }) {
           />
         </div>
 
-        {/* Live policy checklist */}
+        {/* Live policy check: passwords match */}
         <div className="space-y-1.5 rounded-md border bg-muted/20 p-3 text-caption text-muted-foreground">
-          <div className="flex items-center gap-2">
-            {isMinLength ? (
-              <Check className="size-3.5 text-success" />
-            ) : (
-              <span className="size-3.5 rounded-full border border-muted-foreground/40" />
-            )}
-            <span className={cn(isMinLength && 'text-foreground font-medium')}>
-              {t('settingsUI.portal.passwordPolicyHint', { min: 8 })}
-            </span>
-          </div>
-
           <div className="flex items-center gap-2">
             {isMatching ? (
               <Check className="size-3.5 text-success" />
@@ -181,7 +170,7 @@ export function PasswordSection({ userDn }: { userDn: string }) {
             <span className={cn(isMatching && 'text-foreground font-medium', isMismatch && 'text-destructive')}>
               {isMismatch
                 ? t('settingsUI.portal.passwordsDoNotMatch')
-                : 'Passwords must match'}
+                : t('settingsUI.portal.passwordsMustMatch')}
             </span>
           </div>
         </div>

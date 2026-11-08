@@ -163,7 +163,7 @@ export function TasksPage() {
           <div className="flex flex-wrap items-end gap-3 rounded-md border bg-card p-3 shadow-2xs">
             <div className="space-y-1">
               <Label htmlFor="tasks-search" className="text-caption font-medium">
-                {t('common.search', { defaultValue: 'Search' })}
+                {t('shell.search')}
               </Label>
               <div className="relative w-56">
                 <Search
@@ -281,7 +281,7 @@ export function TasksPage() {
                     <TableHead>{t('tasks.lastRun')}</TableHead>
                     <TableHead>{t('tasks.nextRun')}</TableHead>
                     <TableHead>{t('tasks.subtasks')}</TableHead>
-                    <TableHead className="w-28 text-right">Actions</TableHead>
+                    <TableHead className="w-28 text-right" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>

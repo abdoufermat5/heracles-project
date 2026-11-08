@@ -1,4 +1,4 @@
-import { Building2, KeyRound, Mail, Phone, ShieldCheck, UserCheck, Users } from 'lucide-react'
+import { KeyRound, Mail, Phone, ShieldCheck, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Me } from '@/api/types'
 import { OrgPath } from '@/components/patterns/OrgPath'
@@ -43,13 +43,8 @@ export function ProfileCard({
               <h1 className="text-title font-semibold tracking-tight text-foreground">
                 {t('settingsUI.portal.greeting', { name: firstName })}
               </h1>
-              {me.is_admin ? (
-                <Badge variant="neutral">{t('me.admin', { defaultValue: 'Administrator' })}</Badge>
-              ) : (
-                <Badge variant="secondary" className="gap-1">
-                  <UserCheck className="size-3 text-primary" aria-hidden />
-                  {t('me.operator', { defaultValue: 'Employee' })}
-                </Badge>
+              {me.is_admin && (
+                <Badge variant="neutral">{t('me.admin')}</Badge>
               )}
             </div>
 
@@ -61,10 +56,7 @@ export function ProfileCard({
                   {title}
                 </span>
               )}
-              <span className="inline-flex items-center gap-1.5">
-                <Building2 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                <OrgPath dn={me.dn} baseDn={me.base} includeSelf={false} />
-              </span>
+              <OrgPath dn={me.dn} baseDn={me.base} includeSelf={false} />
             </div>
           </div>
         </div>

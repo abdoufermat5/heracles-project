@@ -53,13 +53,13 @@ export function GroupsSection({ userDn }: { userDn: string }) {
                     {group.label}
                   </p>
                   <p className="text-micro text-muted-foreground uppercase tracking-wide">
-                    Team member
+                    {t('settingsUI.portal.groupMember')}
                   </p>
                 </div>
               </div>
               <Badge variant="secondary" className="shrink-0 gap-1 text-micro">
                 <Shield className="size-3" aria-hidden />
-                Member
+                {t('settingsUI.portal.memberBadge')}
               </Badge>
             </div>
           ))}

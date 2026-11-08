@@ -133,16 +133,16 @@ export function groupFields(fields: ConfigField[], group: ConfigGroupId): Config
 export function searchFields(
   fields: ConfigField[],
   query: string,
-  translate: (key: string, opts?: { defaultValue?: string }) => string,
+  translate: (key: string) => string,
 ): ConfigField[] {
   const q = query.trim().toLowerCase()
   if (!q) return fields
   return fields.filter((f) => {
     if (f.section === 'triggers') return false
     const keyMatch = f.key.toLowerCase().includes(q)
-    const labelMatch = translate(`config.field.${f.key}`, { defaultValue: f.key }).toLowerCase().includes(q)
-    const helpMatch = translate(`settingsUI.config.help.${f.key}`, { defaultValue: '' }).toLowerCase().includes(q)
-    const sectionMatch = translate(`config.section.${f.section}`, { defaultValue: f.section }).toLowerCase().includes(q)
+    const labelMatch = translate(`config.field.${f.key}`).toLowerCase().includes(q)
+    const helpMatch = translate(`settingsUI.config.help.${f.key}`).toLowerCase().includes(q)
+    const sectionMatch = translate(`config.section.${f.section}`).toLowerCase().includes(q)
     return keyMatch || labelMatch || helpMatch || sectionMatch
   })
 }

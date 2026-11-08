@@ -75,8 +75,8 @@ function FieldControl({
   const { t } = useTranslation()
   const technical = useTechnicalDetails()
   const id = useId()
-  const label = t(`config.field.${field.key}`, { defaultValue: field.key })
-  const helpText = t(`settingsUI.config.help.${field.key}`, { defaultValue: '' })
+  const label = t(`config.field.${field.key}`)
+  const helpText = t(`settingsUI.config.help.${field.key}`)
   const disabled = readOnly || field.hidden
 
   let control: React.ReactNode
@@ -123,7 +123,7 @@ function FieldControl({
             <SelectItem value={UNSET}>{t('config.unset')}</SelectItem>
             {field.options.map((o) => (
               <SelectItem key={o} value={o}>
-                {t(`config.option.${o}`, { defaultValue: o })}
+                {t(`config.option.${o}`)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -389,7 +389,7 @@ function ConfigEditor({ view }: { view: ConfigView }) {
                       : 'bg-card text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {t(`config.section.${sec}`, { defaultValue: sec })}
+                  {t(`config.section.${sec}`)}
                 </button>
               ))}
             </div>

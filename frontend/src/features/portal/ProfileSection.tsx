@@ -122,7 +122,7 @@ export function ProfileSection({
                 id="profile-title"
                 value={titleDraft}
                 onChange={(e) => setTitleDraft(e.target.value)}
-                placeholder="Software Engineer, Product Manager, etc."
+                placeholder={t('settingsUI.portal.titlePlaceholder')}
               />
             </div>
           )}
@@ -179,7 +179,7 @@ export function ProfileSection({
               value: currentLang === 'fr' ? 'Français' : 'English',
             },
             {
-              label: 'Employee ID',
+              label: t('settingsUI.portal.employeeId'),
               value: (
                 <span className="font-mono text-xs text-muted-foreground">
                   {(mainValues.internalId as string | undefined) ?? 'EMP-0042'}

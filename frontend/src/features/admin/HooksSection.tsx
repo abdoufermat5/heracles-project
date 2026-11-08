@@ -90,7 +90,7 @@ function HookDialog({
                 <SelectContent>
                   {view.modes.map((mode) => (
                     <SelectItem key={mode} value={mode}>
-                      {t(`hooks.modes.${mode}`, { defaultValue: mode })}
+                      {t(`hooks.modes.${mode}`)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -230,7 +230,7 @@ function HooksEditor({ view }: { view: HooksView }) {
                 <TableRow key={`${h.tab}|${h.mode}|${i}`}>
                   <TableCell className="font-mono text-xs">{h.tab}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{t(`hooks.modes.${h.mode}`, { defaultValue: h.mode })}</Badge>
+                    <Badge variant="outline">{t(`hooks.modes.${h.mode}`)}</Badge>
                   </TableCell>
                   <TableCell>
                     <Switch

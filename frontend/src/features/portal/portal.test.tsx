@@ -73,17 +73,15 @@ describe('employee self-service portal', () => {
     // Initially button is disabled
     expect(submitBtn).toBeDisabled()
 
-    // Type short password: min length policy fails
-    await user.type(newPwdInput, 'short')
-    await user.type(confirmPwdInput, 'short')
-    expect(submitBtn).toBeDisabled()
-
-    // Type matching password meeting policy (>= 8 chars)
-    await user.clear(newPwdInput)
-    await user.clear(confirmPwdInput)
+    // Mismatching passwords: button disabled and mismatch alert shown
     await user.type(newPwdInput, 'SuperSecret123!')
-    await user.type(confirmPwdInput, 'SuperSecret123!')
+    await user.type(confirmPwdInput, 'DifferentSecret456!')
+    expect(submitBtn).toBeDisabled()
+    expect(within(pwdSection).getByText('Passwords do not match.')).toBeInTheDocument()
 
+    // Matching passwords: submit enabled
+    await user.clear(confirmPwdInput)
+    await user.type(confirmPwdInput, 'SuperSecret123!')
     expect(submitBtn).toBeEnabled()
     await user.click(submitBtn)
 
