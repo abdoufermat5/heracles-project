@@ -21,6 +21,7 @@ from heracles.core.locks import Lock, LockedError
 from heracles.core.snapshots import Snapshot, SnapshotError, SnapshotService
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import NoSuchObjectError, Scope
+from heracles.ldap.filter import escape_filter_value
 from heracles.objects import (
     ObjectConflictError,
     ObjectNotFoundError,
@@ -33,6 +34,7 @@ from heracles.objects import (
     templates,
     transfer,
 )
+from heracles.objects.service import encode_cursor
 from heracles.schema import legacy
 
 log = structlog.get_logger(__name__)
@@ -254,8 +256,6 @@ def list_objects(
 ) -> dict[str, JSON]:
     with object_errors():
         if offset > 0 and cursor is None:
-            from heracles.objects.service import encode_cursor
-
             cursor = encode_cursor(offset)
         service, _policy = domain.service(user, type_name)
         page = service.list(
@@ -271,28 +271,17 @@ def list_objects(
     body = page.to_json()
     if type_name == "user":
         _mark_locked_accounts(user, body)
+        _count_groups(user, domain, body)
     return body
 
 
 def _mark_locked_accounts(user: CurrentUserDep, body: dict[str, JSON]) -> None:
-    """Fill ``locked`` (account lock) and ``groups_count`` on user rows."""
+    """Fill ``locked`` (account lock) on user rows."""
     from heracles.auth.passwords import is_locked
 
     items = body.get("items")
     if not isinstance(items, list):
         return
-    try:
-        group_entries = user.directory.search(
-            user.directory.base_dn, "(objectClass=groupOfNames)", Scope.SUBTREE, ["member"]
-        )
-        group_counts: dict[str, int] = {}
-        for g in group_entries:
-            for member_dn in g.texts("member"):
-                norm = dnlib.normalize(member_dn)
-                group_counts[norm] = group_counts.get(norm, 0) + 1
-    except Exception:
-        group_counts = {}
-
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -302,11 +291,44 @@ def _mark_locked_accounts(user: CurrentUserDep, body: dict[str, JSON]) -> None:
         entry = user.directory.get(dn, ["userPassword"])
         stored = entry.text("userPassword") if entry is not None else None
         item["locked"] = bool(stored) and is_locked(stored or "")
-        g_count = group_counts.get(dnlib.normalize(dn), 0)
-        item["groups_count"] = g_count
-        values = item.get("values")
-        if isinstance(values, dict):
-            values["groups_count"] = g_count
+
+
+def _count_groups(user: CurrentUserDep, domain: DomainDep, body: dict[str, JSON]) -> None:
+    """Fill ``groups_count`` on user rows: groups of the page's users the caller may read.
+
+    One search bounded by the page (``member`` equal to one of its DNs); groups the
+    caller has no read right on are not counted, so the number reveals nothing more
+    than the group list itself would.
+    """
+    raw = body.get("items")
+    if not isinstance(raw, list):
+        return
+    items = [cast(dict[str, JSON], i) for i in raw if isinstance(i, dict)]
+    dns = [dn for i in items if isinstance(dn := i.get("dn"), str)]
+    if not dns:
+        return
+    info = domain.registry.get("group")
+    acl_object = info.acl_object(info.main_tab)
+    evaluator = domain.evaluator(user)
+    members = "".join(f"(member={escape_filter_value(dn)})" for dn in dns)
+    wanted = {dnlib.normalize(dn) for dn in dns}
+    counts: dict[str, int] = {}
+    for group in user.directory.search(
+        user.directory.base_dn,
+        f"(&(objectClass=groupOfNames)(|{members}))",
+        Scope.SUBTREE,
+        ["member"],
+    ):
+        if not evaluator.permissions(group.dn, acl_object).read:
+            continue
+        for member in group.texts("member"):
+            key = dnlib.normalize(member)
+            if key in wanted:
+                counts[key] = counts.get(key, 0) + 1
+    for item in items:
+        dn = item.get("dn")
+        if isinstance(dn, str):
+            item["groups_count"] = counts.get(dnlib.normalize(dn), 0)
 
 
 # --------------------------------------------------------------------- CRUD

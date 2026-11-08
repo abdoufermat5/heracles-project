@@ -440,3 +440,19 @@ def test_task_retry_requeues_failed_subtasks(client: TestClient, admin: Api) -> 
     untouched = directory.get(done_dn)
     assert untouched is not None and untouched.text("fdTasksGranularStatus") == "Done"
     assert admin.get("/tasks").json()["tasks"][0]["subtasks"]["failed"] == 0
+
+
+def test_user_list_counts_only_groups_the_caller_may_read() -> None:
+    def counts(username: str) -> dict[str, int]:
+        client = TestClient(build_demo_app(), base_url="http://testserver")
+        Api(client).login(username)
+        page = client.get(
+            "/api/v2/objects/user", params={"base": BASE, "scope": "sub", "limit": 500}
+        ).json()
+        return {i["dn"]: i["groups_count"] for i in page["items"]}
+
+    admin_view = counts("admin")
+    assert any(n > 0 for n in admin_view.values())
+    # helpdesk reads users but no groups: memberships must not leak through the count
+    helpdesk_view = counts("helpdesk")
+    assert helpdesk_view and all(n == 0 for n in helpdesk_view.values())
