@@ -83,8 +83,11 @@ class ListPage:
         }
 
 
-def _encode_cursor(offset: int) -> str:
+def encode_cursor(offset: int) -> str:
     return base64.urlsafe_b64encode(str(offset).encode()).decode()
+
+
+_encode_cursor = encode_cursor
 
 
 def _decode_cursor(cursor: str | None) -> int:

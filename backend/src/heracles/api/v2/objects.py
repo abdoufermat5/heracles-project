@@ -248,10 +248,15 @@ def list_objects(
     q: str | None = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
     cursor: str | None = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
     sort: str | None = None,
     order: Literal["asc", "desc"] = "asc",
 ) -> dict[str, JSON]:
     with object_errors():
+        if offset > 0 and cursor is None:
+            from heracles.objects.service import encode_cursor
+
+            cursor = encode_cursor(offset)
         service, _policy = domain.service(user, type_name)
         page = service.list(
             type_name,
@@ -270,12 +275,24 @@ def list_objects(
 
 
 def _mark_locked_accounts(user: CurrentUserDep, body: dict[str, JSON]) -> None:
-    """Fill ``locked`` (account lock) on user rows."""
+    """Fill ``locked`` (account lock) and ``groups_count`` on user rows."""
     from heracles.auth.passwords import is_locked
 
     items = body.get("items")
     if not isinstance(items, list):
         return
+    try:
+        group_entries = user.directory.search(
+            user.directory.base_dn, "(objectClass=groupOfNames)", Scope.SUBTREE, ["member"]
+        )
+        group_counts: dict[str, int] = {}
+        for g in group_entries:
+            for member_dn in g.texts("member"):
+                norm = dnlib.normalize(member_dn)
+                group_counts[norm] = group_counts.get(norm, 0) + 1
+    except Exception:
+        group_counts = {}
+
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -285,6 +302,11 @@ def _mark_locked_accounts(user: CurrentUserDep, body: dict[str, JSON]) -> None:
         entry = user.directory.get(dn, ["userPassword"])
         stored = entry.text("userPassword") if entry is not None else None
         item["locked"] = bool(stored) and is_locked(stored or "")
+        g_count = group_counts.get(dnlib.normalize(dn), 0)
+        item["groups_count"] = g_count
+        values = item.get("values")
+        if isinstance(values, dict):
+            values["groups_count"] = g_count
 
 
 # --------------------------------------------------------------------- CRUD

@@ -96,6 +96,11 @@ def test_listing_and_search(app_client: TestClient) -> None:
     assert page["total"] == 7
     assert len(page["items"]) == 3
     assert page["next_cursor"]
+    assert "groups_count" in page["items"][0]
+    # Test offset parameter for pagination
+    page2 = a.get("/objects/user", base=BASE, scope="sub", limit=3, offset=3).json()
+    assert len(page2["items"]) == 3
+    assert page2["items"][0]["dn"] != page["items"][0]["dn"]
     found = a.get("/objects/user", base=BASE, scope="sub", q="dupont").json()
     assert [i["dn"] for i in found["items"]] == [CDUPONT]
 
