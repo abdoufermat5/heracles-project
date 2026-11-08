@@ -104,7 +104,7 @@ def create_app(
             max_delay=settings.login.max_delay_seconds,
         ),
         second_factor=SecondFactorService(sf_store, issuer=settings.totp_issuer, clock=clock),
-        webauthn=WebAuthnService(sf_store, settings.webauthn),
+        webauthn=WebAuthnService(sf_store, settings.webauthn, clock=clock),
         recovery=RecoveryService(
             store=token_store if token_store is not None else InMemoryTokenStore(),
             mailer=mail,

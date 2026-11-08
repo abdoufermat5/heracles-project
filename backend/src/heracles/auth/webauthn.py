@@ -7,6 +7,8 @@ Credentials are persisted through :class:`~heracles.auth.second_factor.SecondFac
 from __future__ import annotations
 
 import json
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -22,6 +24,13 @@ from webauthn import (
 from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 
 from heracles.auth.second_factor import SecondFactorStore, WebAuthnCredential
+
+#: Seconds a challenge stays valid after its options were issued.
+CHALLENGE_TTL_SECONDS = 120
+#: Registered authenticators allowed per user.
+MAX_CREDENTIALS = 10
+REGISTRATION_KEY = "webauthn_registration"
+ASSERTION_KEY = "webauthn_assertion"
 
 
 class WebAuthnError(Exception):
@@ -43,9 +52,37 @@ class WebAuthnChallenge:
 
 
 class WebAuthnService:
-    def __init__(self, store: SecondFactorStore, settings: WebAuthnSettings) -> None:
+    def __init__(
+        self,
+        store: SecondFactorStore,
+        settings: WebAuthnSettings,
+        *,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
         self._store = store
         self._settings = settings
+        self._clock = clock
+
+    # -- challenge bookkeeping (kept in the server-side session cache) ----------
+    def remember(self, cache: dict[str, Any], key: str, challenge: bytes) -> None:
+        """Store ``challenge`` for ``key``, replacing any earlier one."""
+        cache[key] = (challenge, self._clock() + CHALLENGE_TTL_SECONDS)
+
+    def take(self, cache: dict[str, Any], key: str) -> bytes:
+        """Pop the challenge for ``key``: single use; fails if absent or expired."""
+        entry = cache.pop(key, None)
+        if entry is None:
+            raise WebAuthnError("no pending challenge")
+        challenge, expires = cast(tuple[bytes, float], entry)
+        if self._clock() > expires:
+            raise WebAuthnError("challenge expired")
+        return challenge
+
+    def credentials(self, user_dn: str) -> list[WebAuthnCredential]:
+        return self._store.webauthn_credentials(user_dn)
+
+    def remove_credential(self, user_dn: str, credential_id: bytes) -> bool:
+        return self._store.remove_webauthn_credential(user_dn, credential_id)
 
     def _descriptors(self, user_dn: str) -> list[PublicKeyCredentialDescriptor]:
         return [
@@ -69,6 +106,8 @@ class WebAuthnService:
     def finish_registration(
         self, user_dn: str, credential: dict[str, Any], challenge: bytes, label: str = ""
     ) -> WebAuthnCredential:
+        if len(self._store.webauthn_credentials(user_dn)) >= MAX_CREDENTIALS:
+            raise WebAuthnError("too many security keys registered")
         try:
             verified = verify_registration_response(
                 credential=credential,
@@ -78,6 +117,11 @@ class WebAuthnService:
             )
         except Exception as exc:
             raise WebAuthnError(str(exc)) from exc
+        if any(
+            c.credential_id == verified.credential_id
+            for c in self._store.webauthn_credentials(user_dn)
+        ):
+            raise WebAuthnError("credential already registered")
         stored = WebAuthnCredential(
             verified.credential_id,
             verified.credential_public_key,

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import math
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 from pydantic import BaseModel, Field
+from webauthn import base64url_to_bytes
+from webauthn.helpers import bytes_to_base64url
 
 from heracles.api.deps import (
     CurrentUserDep,
@@ -16,7 +18,7 @@ from heracles.api.deps import (
     client_ip,
     session_from_cookie,
 )
-from heracles.api.errors import ApiError, unauthenticated, validation
+from heracles.api.errors import ApiError, not_found, unauthenticated, validation
 from heracles.api.state import AppState
 from heracles.auth import csrf
 from heracles.auth.login import (
@@ -26,7 +28,9 @@ from heracles.auth.login import (
 )
 from heracles.auth.passwords import PasswordPolicyError
 from heracles.auth.recovery import RecoveryError
+from heracles.auth.second_factor import WebAuthnCredential
 from heracles.auth.sessions import Session
+from heracles.auth.webauthn import ASSERTION_KEY, REGISTRATION_KEY, WebAuthnError
 from heracles.ldap.client import DirectoryClient
 
 log = structlog.get_logger(__name__)
@@ -64,7 +68,9 @@ class LoginResponse(BaseModel):
 
 class SecondFactorBody(BaseModel):
     method: Literal["totp", "webauthn", "recovery"]
-    code: Annotated[str, Field(max_length=2048)]
+    code: Annotated[str, Field(max_length=2048)] = ""
+    #: The browser's assertion (``PublicKeyCredential`` as JSON) for method ``webauthn``.
+    credential: dict[str, Any] | None = None
 
 
 class StatusResponse(BaseModel):
@@ -79,6 +85,21 @@ class Me(BaseModel):
     is_admin: bool
     directory: str
     base: str
+
+
+class WebAuthnOptions(BaseModel):
+    options: dict[str, Any]
+
+
+class WebAuthnRegisterBody(BaseModel):
+    label: Annotated[str, Field(max_length=64)] = ""
+    credential: dict[str, Any]
+
+
+class WebAuthnCredentialInfo(BaseModel):
+    id: str
+    label: str
+    sign_count: int
 
 
 class RecoveryBody(BaseModel):
@@ -220,8 +241,10 @@ def second_factor(
     if body.method not in session.second_factor_methods:
         raise validation("Method not available", {"method": "Method not available"})
     if body.method == "webauthn":
-        raise ApiError(501, "not_implemented", "WebAuthn is not available yet")
-    if not state.second_factor.verify(session.user_dn, body.method, body.code):
+        verified = _verify_webauthn(state, session, body.credential)
+    else:
+        verified = state.second_factor.verify(session.user_dn, body.method, body.code)
+    if not verified:
         session.second_factor_failures += 1
         if session.second_factor_failures >= state.settings.login.max_second_factor_failures:
             state.sessions.delete(session.id)
@@ -233,6 +256,80 @@ def second_factor(
     rotated.second_factor_failures = 0
     _set_session_cookie(response, state, rotated)
     return StatusResponse()
+
+
+def _verify_webauthn(state: AppState, session: Session, credential: dict[str, Any] | None) -> bool:
+    """Check an assertion against the (single-use) challenge held by the session."""
+    try:
+        challenge = state.webauthn.take(session.cache, ASSERTION_KEY)
+        if credential is None:
+            return False
+        return state.webauthn.finish_assertion(session.user_dn, credential, challenge)
+    except WebAuthnError:
+        return False
+
+
+@router.post("/webauthn/options")
+def webauthn_options(state: StateDep, session: PendingSessionDep) -> WebAuthnOptions:
+    """Assertion options for the pending second factor; the challenge lives in the session."""
+    if not session.second_factor_pending or "webauthn" not in session.second_factor_methods:
+        raise validation("Method not available", {"method": "Method not available"})
+    challenge = state.webauthn.begin_assertion(session.user_dn)
+    state.webauthn.remember(session.cache, ASSERTION_KEY, challenge.challenge)
+    return WebAuthnOptions(options=challenge.options)
+
+
+def _credential_info(c: WebAuthnCredential) -> WebAuthnCredentialInfo:
+    return WebAuthnCredentialInfo(
+        id=bytes_to_base64url(c.credential_id),
+        label=c.label,
+        sign_count=c.sign_count,
+    )
+
+
+@router.get("/webauthn/credentials")
+def webauthn_list(user: CurrentUserDep, state: StateDep) -> list[WebAuthnCredentialInfo]:
+    return [_credential_info(c) for c in state.webauthn.credentials(user.dn)]
+
+
+@router.post("/webauthn/credentials/options")
+def webauthn_register_options(user: CurrentUserDep, state: StateDep) -> WebAuthnOptions:
+    entry = user.directory.get(user.dn, ["uid", "displayName", "cn"])
+    if entry is None:
+        raise unauthenticated("Account no longer exists")
+    uid = entry.text("uid") or user.dn
+    display = entry.text("displayName") or entry.text("cn") or uid
+    challenge = state.webauthn.begin_registration(user.dn, uid, display)
+    state.webauthn.remember(user.session.cache, REGISTRATION_KEY, challenge.challenge)
+    return WebAuthnOptions(options=challenge.options)
+
+
+@router.post("/webauthn/credentials", status_code=201)
+def webauthn_register(
+    body: WebAuthnRegisterBody, user: CurrentUserDep, state: StateDep
+) -> WebAuthnCredentialInfo:
+    label = body.label.strip()
+    try:
+        challenge = state.webauthn.take(user.session.cache, REGISTRATION_KEY)
+        stored = state.webauthn.finish_registration(user.dn, body.credential, challenge, label)
+    except WebAuthnError as exc:
+        log.info("webauthn_registration_failed", user=user.dn, reason=str(exc))
+        raise validation(
+            "Security key registration failed", {"credential": "Registration failed"}
+        ) from None
+    log.info("webauthn_registered", user=user.dn)
+    return _credential_info(stored)
+
+
+@router.delete("/webauthn/credentials/{credential_id}", status_code=204)
+def webauthn_delete(credential_id: str, user: CurrentUserDep, state: StateDep) -> None:
+    try:
+        raw = base64url_to_bytes(credential_id)
+    except ValueError:
+        raise not_found() from None
+    if not state.webauthn.remove_credential(user.dn, raw):
+        raise not_found()
+    log.info("webauthn_removed", user=user.dn)
 
 
 @router.post("/logout", status_code=204)

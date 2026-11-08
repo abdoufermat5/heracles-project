@@ -44,6 +44,9 @@ class SecondFactorStore(Protocol):
     def webauthn_credentials(self, user_dn: str) -> list[WebAuthnCredential]: ...
     def add_webauthn_credential(self, user_dn: str, credential: WebAuthnCredential) -> None: ...
     def update_sign_count(self, user_dn: str, credential_id: bytes, sign_count: int) -> None: ...
+    def remove_webauthn_credential(self, user_dn: str, credential_id: bytes) -> bool:
+        """Remove one credential; True if it existed."""
+        ...
 
 
 class InMemorySecondFactorStore:
@@ -107,6 +110,13 @@ class InMemorySecondFactorStore:
                     creds[i] = WebAuthnCredential(
                         c.credential_id, c.public_key, sign_count, c.label
                     )
+
+    def remove_webauthn_credential(self, user_dn: str, credential_id: bytes) -> bool:
+        with self._lock:
+            creds = self._webauthn.get(self._k(user_dn), [])
+            kept = [c for c in creds if c.credential_id != credential_id]
+            self._webauthn[self._k(user_dn)] = kept
+            return len(kept) != len(creds)
 
 
 def hash_recovery_code(code: str) -> str:
