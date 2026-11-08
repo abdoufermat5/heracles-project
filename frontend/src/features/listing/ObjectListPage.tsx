@@ -15,7 +15,11 @@ import {
 } from '@/api/hooks'
 import type { ObjectListItem, TreeNode } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { supportsTemplates } from '@/features/editor/api'
 import { useScope } from '@/lib/scope'
+import { BulkEditDialog } from './BulkEditDialog'
+import { CopyMoveDialog, type CopyMoveMode } from './CopyMoveDialog'
 import { exportToCsv } from './csv'
 import { ListingBulkBar } from './ListingBulkBar'
 import { ListingDeleteDialog } from './ListingDeleteDialog'
@@ -26,6 +30,8 @@ import { ListingPreviewPanel } from './ListingPreviewPanel'
 import { ListingSkeleton } from './ListingSkeleton'
 import { ListingTable } from './ListingTable'
 import { ListingToolbar } from './ListingToolbar'
+import { RestoreDeletedDialog } from './RestoreDeletedDialog'
+import { TemplatesView } from './TemplatesView'
 import {
   loadColumnVisibility,
   loadDensity,
@@ -54,7 +60,13 @@ function findDepartmentLabel(nodes: TreeNode[] | undefined, dn: string | null): 
   return null
 }
 
-export function ObjectListPage({ type }: { type: string }) {
+export function ObjectListPage({
+  type,
+  view = 'objects',
+}: {
+  type: string
+  view?: 'objects' | 'templates'
+}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
@@ -78,6 +90,9 @@ export function ObjectListPage({ type }: { type: string }) {
   const [previewDn, setPreviewDn] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [singleDeleteTarget, setSingleDeleteTarget] = useState<ObjectListItem | null>(null)
+  const [copyMove, setCopyMove] = useState<{ mode: CopyMoveMode; dns: string[] } | null>(null)
+  const [bulkEditOpen, setBulkEditOpen] = useState(false)
+  const [restoreOpen, setRestoreOpen] = useState(false)
 
   // Handlers for persistence
   const handleDensityChange = (newDensity: Density) => {
@@ -188,6 +203,16 @@ export function ObjectListPage({ type }: { type: string }) {
     toast.success(t('listing.exportCsv'))
   }
 
+  const canCreate = summary?.can_create ?? false
+  const hasTemplates = supportsTemplates(desc.data)
+  const showTemplates = view === 'templates' && hasTemplates
+  const copyMoveItems = copyMove
+    ? copyMove.dns.flatMap((dn) => {
+        const item = itemsMap.get(dn)
+        return item ? [item] : []
+      })
+    : []
+
   const currentDepartmentName = findDepartmentLabel(tree.data, currentBase ?? null)
   const hasFilterActive = Boolean(debouncedQuery || statusFilter !== 'all')
 
@@ -228,9 +253,32 @@ export function ObjectListPage({ type }: { type: string }) {
         isFetching={list.isFetching && !list.isFetchingNextPage}
         onRefresh={() => void list.refetch()}
         onExportCsv={handleExportCsv}
+        onRestoreDeleted={canCreate ? () => setRestoreOpen(true) : undefined}
       />
 
-      {/* 2. Toolbar attached to the table frame, with optional preview panel */}
+      {hasTemplates && (
+        <ToggleGroup
+          type="single"
+          value={showTemplates ? 'templates' : 'objects'}
+          onValueChange={(v) => {
+            if (v === 'objects' || v === 'templates')
+              void navigate({
+                to: '/types/$type',
+                params: { type },
+                search: { view: v === 'templates' ? 'templates' : undefined },
+              })
+          }}
+          aria-label={t('templates.views')}
+          className="w-fit"
+        >
+          <ToggleGroupItem value="objects">{t('templates.viewObjects')}</ToggleGroupItem>
+          <ToggleGroupItem value="templates">{t('templates.viewTemplates')}</ToggleGroupItem>
+        </ToggleGroup>
+      )}
+
+      {showTemplates ? (
+        <TemplatesView type={type} typeLabel={desc.data?.label ?? type} canCreate={canCreate} />
+      ) : (
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1">
           <ListingToolbar
@@ -282,6 +330,9 @@ export function ObjectListPage({ type }: { type: string }) {
                     : undefined
                 }
                 onDelete={() => setConfirmDelete(true)}
+                onEdit={() => setBulkEditOpen(true)}
+                onCopy={canCreate ? () => setCopyMove({ mode: 'copy', dns: selectedDns }) : undefined}
+                onMove={canCreate ? () => setCopyMove({ mode: 'move', dns: selectedDns }) : undefined}
                 onClearSelection={() => setSelection({})}
                 isLocking={lock.isPending}
                 isDeleting={del.isPending}
@@ -313,6 +364,8 @@ export function ObjectListPage({ type }: { type: string }) {
                     }
                   }}
                   onDeleteSingle={(item) => setSingleDeleteTarget(item)}
+                  onCopyTo={canCreate ? (item) => setCopyMove({ mode: 'copy', dns: [item.dn] }) : undefined}
+                  onMoveTo={canCreate ? (item) => setCopyMove({ mode: 'move', dns: [item.dn] }) : undefined}
                   selectedRowDn={showPreview ? (previewDn ?? rows[0]?.dn ?? null) : null}
                 />
               )}
@@ -338,6 +391,7 @@ export function ObjectListPage({ type }: { type: string }) {
           />
         )}
       </div>
+      )}
 
       {/* 3. Delete Confirmation Dialog (bulk) */}
       <ListingDeleteDialog
@@ -362,6 +416,31 @@ export function ObjectListPage({ type }: { type: string }) {
           isDeleting={del.isPending}
         />
       )}
+
+      <CopyMoveDialog
+        open={copyMove !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setCopyMove(null)
+            setSelection({})
+          }
+        }}
+        mode={copyMove?.mode ?? 'copy'}
+        type={type}
+        descriptor={desc.data}
+        items={copyMoveItems}
+      />
+      <BulkEditDialog
+        open={bulkEditOpen}
+        onOpenChange={(o) => {
+          setBulkEditOpen(o)
+          if (!o) setSelection({})
+        }}
+        type={type}
+        descriptor={desc.data}
+        dns={selectedDns}
+      />
+      <RestoreDeletedDialog open={restoreOpen} onOpenChange={setRestoreOpen} type={type} />
     </div>
   )
 }

@@ -23,6 +23,7 @@ import {
 } from '@/features/auth/AuthPages'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { ObjectEditor } from '@/features/editor/ObjectEditor'
+import { TemplateEditorPage } from '@/features/editor/TemplateEditor'
 import { ObjectListPage } from '@/features/listing/ObjectListPage'
 import { MePage } from '@/features/me/MePage'
 
@@ -113,9 +114,13 @@ const meRoute = createRoute({ getParentRoute: () => appRoute, path: '/me', compo
 const listRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/types/$type',
+  validateSearch: (s: Record<string, unknown>): { view?: 'templates' } => ({
+    view: s.view === 'templates' ? 'templates' : undefined,
+  }),
   component: function ListRoute() {
     const { type } = listRoute.useParams()
-    return <ObjectListPage key={type} type={type} />
+    const { view } = listRoute.useSearch()
+    return <ObjectListPage key={type} type={type} view={view === 'templates' ? 'templates' : 'objects'} />
   },
 })
 
@@ -132,6 +137,26 @@ const newRoute = createRoute({
   },
 })
 
+// --- P3 objects ---
+const templateNewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/types/$type/templates/new',
+  component: function TemplateNewRoute() {
+    const { type } = templateNewRoute.useParams()
+    return <TemplateEditorPage key={type} type={type} dn={null} />
+  },
+})
+
+const templateEditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/types/$type/templates/$dn',
+  component: function TemplateEditRoute() {
+    const { type, dn } = templateEditRoute.useParams()
+    return <TemplateEditorPage key={`${type}:${dn}`} type={type} dn={dn} />
+  },
+})
+// --- end P3 objects ---
+
 const editRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/types/$type/$dn',
@@ -146,7 +171,15 @@ const routeTree = rootRoute.addChildren([
   secondFactorRoute,
   recoveryRoute,
   recoveryConfirmRoute,
-  appRoute.addChildren([dashboardRoute, meRoute, listRoute, newRoute, editRoute]),
+  appRoute.addChildren([
+      dashboardRoute,
+      meRoute,
+      listRoute,
+      newRoute,
+      templateNewRoute,
+      templateEditRoute,
+      editRoute,
+    ]),
 ])
 
 export function createAppRouter(queryClient: QueryClient, history?: RouterHistory) {

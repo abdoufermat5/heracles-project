@@ -14,7 +14,9 @@ import {
   ArrowUpDown,
   Copy,
   ExternalLink,
+  FolderInput,
   Lock,
+  MoreHorizontal,
   Trash2,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -24,6 +26,12 @@ import type { ObjectListItem, TypeDescriptor } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { formatCellValue, isMonospaceKey, type Density } from './types'
@@ -44,6 +52,9 @@ interface ListingTableProps {
   onFetchNextPage: () => void
   onRowClick?: (item: ObjectListItem) => void
   onDeleteSingle?: (item: ObjectListItem) => void
+  /** Row menu: copy / move one object to another department. */
+  onCopyTo?: (item: ObjectListItem) => void
+  onMoveTo?: (item: ObjectListItem) => void
   selectedRowDn?: string | null
 }
 
@@ -63,6 +74,8 @@ export function ListingTable({
   onFetchNextPage,
   onRowClick,
   onDeleteSingle,
+  onCopyTo,
+  onMoveTo,
   selectedRowDn,
 }: ListingTableProps) {
   const { t } = useTranslation()
@@ -231,6 +244,35 @@ export function ListingTable({
               <TooltipContent>{t('listing.open')}</TooltipContent>
             </Tooltip>
 
+            {(onCopyTo || onMoveTo) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={t('copy.rowMenu')}
+                  >
+                    <MoreHorizontal aria-hidden />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  {onCopyTo && (
+                    <DropdownMenuItem onClick={() => onCopyTo(row.original)} className="gap-2">
+                      <Copy className="size-3.5 text-muted-foreground" aria-hidden />
+                      <span>{t('copy.copyTo')}</span>
+                    </DropdownMenuItem>
+                  )}
+                  {onMoveTo && (
+                    <DropdownMenuItem onClick={() => onMoveTo(row.original)} className="gap-2">
+                      <FolderInput className="size-3.5 text-muted-foreground" aria-hidden />
+                      <span>{t('copy.moveTo')}</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
             {onDeleteSingle && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -259,7 +301,9 @@ export function ListingTable({
     descriptor,
     handleCopyDn,
     linkKey,
+    onCopyTo,
     onDeleteSingle,
+    onMoveTo,
     onSelectionChange,
     rows,
     selection,
