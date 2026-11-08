@@ -8,7 +8,6 @@ import {
   Eye,
   EyeOff,
   Loader2,
-  ShieldCheck,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
@@ -24,6 +23,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
+const APP_VERSION = '0.1.0'
+
 function AuthLayout({
   title,
   subtitle,
@@ -33,78 +34,31 @@ function AuthLayout({
   subtitle?: string
   children: React.ReactNode
 }) {
-  const { t } = useTranslation()
-
   return (
-    <div className="flex min-h-dvh flex-col lg:grid lg:grid-cols-[45%_55%]">
-      {/* Quiet Brand Panel on Wide Screens */}
-      <div className="bg-sidebar hidden flex-col justify-between border-r border-sidebar-border p-10 lg:flex xl:p-14 relative overflow-hidden select-none">
-        {/* Subtle decorative background pattern */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.04]"
-          style={{
-            backgroundImage: `radial-gradient(currentColor 1px, transparent 1px)`,
-            backgroundSize: '24px 24px',
-          }}
-        />
+    <div className="flex min-h-dvh flex-col bg-background">
+      <header className="flex h-14 shrink-0 items-center px-6">
+        <Logo />
+      </header>
 
-        <div className="relative z-10">
-          <Logo />
-        </div>
-
-        <div className="relative z-10 max-w-sm space-y-6">
-          <div className="space-y-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background/50 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground shadow-xs">
-              <ShieldCheck className="size-3 text-primary" />
-              <span>{t('auth.brandTagline')}</span>
-            </span>
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-              Heracles
-            </h2>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {t('auth.brandDescription')}
-            </p>
-          </div>
-
-          <div className="space-y-2.5 border-t border-border/60 pt-5">
-            <div className="flex items-center gap-2.5 text-xs text-foreground/80">
-              <CheckCircle2 className="size-3.5 text-primary shrink-0" />
-              <span>{t('auth.brandPillar1')}</span>
-            </div>
-            <div className="flex items-center gap-2.5 text-xs text-foreground/80">
-              <CheckCircle2 className="size-3.5 text-primary shrink-0" />
-              <span>{t('auth.brandPillar2')}</span>
-            </div>
-            <div className="flex items-center gap-2.5 text-xs text-foreground/80">
-              <CheckCircle2 className="size-3.5 text-primary shrink-0" />
-              <span>{t('auth.brandPillar3')}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="relative z-10 flex items-center justify-between text-[11px] text-muted-foreground/80">
-          <span>Heracles Directory Console</span>
-          <span>v0.1.0</span>
-        </div>
-      </div>
-
-      {/* Form Container */}
-      <div className="flex flex-1 flex-col items-center justify-center p-6 md:p-10">
-        <div className="w-full max-w-sm space-y-6">
-          <div className="lg:hidden flex justify-center">
-            <Logo />
-          </div>
-
-          <div className="bg-card space-y-5 rounded-lg border border-border p-6 shadow-xs">
+      <main className="flex flex-1 items-center justify-center px-6 py-10">
+        <div className="w-full max-w-[360px]">
+          <div className="rounded-md border bg-card p-6">
             <div className="space-y-1">
               <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
-              {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+              {subtitle && (
+                <p className="text-[13px] leading-snug text-muted-foreground">{subtitle}</p>
+              )}
             </div>
-            {children}
+            <div className="mt-5">{children}</div>
           </div>
         </div>
-      </div>
+      </main>
+
+      <footer className="flex h-10 shrink-0 items-center px-6">
+        <span className="font-mono text-xs text-muted-foreground">
+          Heracles v{APP_VERSION}
+        </span>
+      </footer>
     </div>
   )
 }
@@ -122,12 +76,12 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-xs font-medium text-foreground">
+      <Label htmlFor={id} className="text-[13px] font-medium text-foreground">
         {label}
       </Label>
       {children}
       {error && (
-        <p id={`${id}-error`} role="alert" className="text-destructive text-xs font-medium">
+        <p id={`${id}-error`} role="alert" className="mt-1 text-[13px] font-medium text-destructive">
           {error}
         </p>
       )}
@@ -140,9 +94,9 @@ function FormError({ message }: { message: string | null }) {
   return (
     <div
       role="alert"
-      className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive"
+      className="flex items-start gap-2 rounded-sm border border-destructive/30 bg-destructive-soft p-2.5 text-[13px] text-destructive"
     >
-      <AlertCircle className="size-4 shrink-0 mt-0.5" aria-hidden />
+      <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
       <span className="leading-snug">{message}</span>
     </div>
   )
@@ -290,7 +244,7 @@ function OtpInput({
             handlePaste(e.clipboardData.getData('text'))
           }}
           aria-label={i === 0 ? undefined : `Digit ${i + 1}`}
-          className="size-10 rounded-md border border-input bg-background/50 text-center font-mono text-base font-semibold shadow-xs outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background dark:bg-card/40"
+          className="size-10 rounded-md border border-input bg-card text-center font-mono text-base font-semibold outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
         />
       ))}
     </div>
@@ -299,7 +253,7 @@ function OtpInput({
 
 function Submit({ pending, children }: { pending: boolean; children: React.ReactNode }) {
   return (
-    <Button type="submit" className="w-full h-8" disabled={pending}>
+    <Button type="submit" className="h-9 w-full" disabled={pending}>
       {pending && <Loader2 className="size-3.5 animate-spin mr-1.5" aria-hidden />}
       {children}
     </Button>
@@ -362,7 +316,7 @@ export function LoginPage() {
           <select
             id="directory"
             {...form.register('directory')}
-            className="border-input bg-background/50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-1 h-8 w-full rounded-md border px-2.5 text-xs shadow-xs outline-none dark:bg-card/40"
+            className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             {dirs.data?.map((d) => (
               <option key={d.id} value={d.id}>
@@ -383,8 +337,8 @@ export function LoginPage() {
           />
         </Field>
         <Submit pending={form.formState.isSubmitting}>{t('auth.signIn')}</Submit>
-        <p className="text-center text-xs text-muted-foreground pt-1">
-          <Link to="/recovery" className="text-primary hover:underline font-medium">
+        <p className="pt-1 text-center text-[13px] text-muted-foreground">
+          <Link to="/recovery" className="text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
             {t('auth.forgotPassword')}
           </Link>
         </p>
@@ -432,7 +386,7 @@ export function SecondFactorPage() {
       <form onSubmit={(e) => void submit(e)} className="space-y-4" noValidate>
         <FormError message={error} />
         {methods.length > 1 && (
-          <div role="group" aria-label={t('auth.method')} className="bg-muted grid grid-cols-2 gap-1 rounded-md p-1">
+          <div role="group" aria-label={t('auth.method')} className="grid grid-cols-2 gap-1 rounded-md border bg-card p-0.5">
             {methods.map((m) => (
               <button
                 key={m}
@@ -444,9 +398,9 @@ export function SecondFactorPage() {
                   setError(null)
                 }}
                 className={cn(
-                  'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                  'h-7 rounded-sm text-[13px] font-medium transition-colors',
                   method === m
-                    ? 'bg-card text-foreground shadow-xs font-semibold'
+                    ? 'bg-primary-soft font-semibold text-foreground'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -473,8 +427,8 @@ export function SecondFactorPage() {
         </Field>
 
         <Submit pending={pending}>{t('auth.verify')}</Submit>
-        <p className="text-center text-xs text-muted-foreground pt-1">
-          <Link to="/login" className="text-primary hover:underline font-medium">
+        <p className="pt-1 text-center text-[13px] text-muted-foreground">
+          <Link to="/login" className="text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
             {t('auth.backToLogin')}
           </Link>
         </p>
@@ -507,12 +461,12 @@ export function RecoveryRequestPage() {
         <div className="space-y-4">
           <div
             role="status"
-            className="flex items-start gap-2.5 rounded-md border border-success/30 bg-success/10 p-3 text-xs text-success"
+            className="flex items-start gap-2 rounded-sm border border-success/30 bg-success-soft p-3 text-[13px] text-success"
           >
-            <CheckCircle2 className="size-4 shrink-0 mt-0.5" />
+            <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
             <span className="leading-snug">{t('auth.recoverySent')}</span>
           </div>
-          <Button asChild variant="outline" className="w-full h-8 text-xs">
+          <Button asChild variant="outline" className="h-9 w-full text-[13px]">
             <Link to="/login">{t('auth.backToLogin')}</Link>
           </Button>
         </div>
@@ -523,8 +477,8 @@ export function RecoveryRequestPage() {
             <Input id="email" type="email" autoComplete="email" autoFocus {...form.register('email')} />
           </Field>
           <Submit pending={form.formState.isSubmitting}>{t('auth.sendLink')}</Submit>
-          <p className="text-center text-xs text-muted-foreground pt-1">
-            <Link to="/login" className="text-primary hover:underline font-medium">
+          <p className="pt-1 text-center text-[13px] text-muted-foreground">
+            <Link to="/login" className="text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
               {t('auth.backToLogin')}
             </Link>
           </p>
