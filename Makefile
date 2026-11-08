@@ -15,7 +15,7 @@ CONFIG ?= $(HERACLES_CONFIG)
 .PHONY: help install install-backend install-frontend \
         dev dev-mock backend frontend demo build serve \
         test test-backend test-frontend lint lint-backend lint-frontend \
-        format typecheck check ldap-up ldap-down ldap-logs test-integration clean
+        format typecheck check ldap-up ldap-down ldap-logs test-integration e2e e2e-down compat-schema clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "; printf "\nUsage: make \033[36m<target>\033[0m\n\n"} \
@@ -107,9 +107,21 @@ ldap-down: ## Stop the test OpenLDAP server
 ldap-logs: ## Follow the test OpenLDAP logs
 	$(COMPOSE) logs -f
 
-test-integration: ## Integration tests against the test LDAP (needs python-ldap)
-	cd $(BACKEND) && HERACLES_TEST_LDAP_URI=ldap://localhost:1389 \
-	  uv run --extra ldap pytest -q -m integration
+test-integration: ## python-ldap integration tests (in a container, against the test LDAP)
+	$(COMPOSE) --profile e2e run --rm --build integration
+
+e2e: ## Build and start OpenLDAP + Heracles containers, run the end-to-end tests
+	$(COMPOSE) --profile e2e up -d --build --wait heracles
+	cd $(BACKEND) && HERACLES_E2E_URL=http://localhost:8420 uv run pytest -q -m e2e tests/e2e
+	$(COMPOSE) --profile e2e run --rm integration
+
+e2e-down: ## Stop the end-to-end stack and drop its LDAP data
+	$(COMPOSE) --profile e2e down -v
+
+compat-schema: ## Convert .schema files to LDIF for the test LDAP (SCHEMAS="a.schema b.schema")
+	@test -n "$(SCHEMAS)" || { echo 'Usage: make compat-schema SCHEMAS="path/core.schema ..."'; exit 1; }
+	i=0; for s in $(SCHEMAS); do i=$$((i+1)); \
+	  python3 deploy/ldap/schema2ldif.py "$$s" -o deploy/ldap/compat-schema --prefix "$$(printf '%02d' $$i)-"; done
 
 # ----------------------------------------------------------------- clean
 

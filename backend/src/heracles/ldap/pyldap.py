@@ -13,7 +13,7 @@ import importlib
 import threading
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from types import ModuleType
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import (
@@ -130,15 +130,16 @@ class PyLdapDirectory:
 
     def _translate(self, exc: Exception) -> DirectoryError:
         ldap = self._ldap
+        message = _describe(exc)
         if isinstance(exc, ldap.NO_SUCH_OBJECT):
-            return NoSuchObjectError(str(exc))
+            return NoSuchObjectError(message)
         if isinstance(exc, ldap.ALREADY_EXISTS):
-            return AlreadyExistsError(str(exc))
+            return AlreadyExistsError(message)
         if isinstance(exc, ldap.INVALID_CREDENTIALS):
-            return InvalidCredentialsError(str(exc))
+            return InvalidCredentialsError(message)
         if isinstance(exc, ldap.SIZELIMIT_EXCEEDED):
-            return SizeLimitExceededError(str(exc))
-        return DirectoryError(str(exc))
+            return SizeLimitExceededError(message)
+        return DirectoryError(message)
 
     # -- DirectoryClient -----------------------------------------------------------
 
@@ -258,3 +259,17 @@ class PyLdapDirectory:
 
 def _to_attrs(raw: Mapping[str, Sequence[bytes]]) -> Attributes:
     return {name: [bytes(v) for v in values] for name, values in raw.items()}
+
+
+def _describe(exc: Exception) -> str:
+    """Readable message from a python-ldap exception (its args hold a result dict)."""
+    info: object = exc.args[0] if exc.args else None
+    if isinstance(info, dict):
+        details = cast("dict[str, object]", info)
+        parts = [str(details.get("desc") or type(exc).__name__)]
+        if details.get("info"):
+            parts.append(str(details["info"]))
+        if details.get("matched"):
+            parts.append(f"(matched: {details['matched']})")
+        return " ".join(parts)
+    return str(exc)

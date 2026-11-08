@@ -1,8 +1,9 @@
 # Development / integration-test LDAP server.
 #
-# Image choice: bitnami/openldap:2.6 is a widely used, well-documented
-# OpenLDAP 2.6 image that loads *.ldif files from /ldifs at first start and
-# runs unprivileged on port 1389. It is used for tests only.
+# Image choice: bitnamilegacy/openldap:2.6 is the former bitnami/openldap
+# OpenLDAP 2.6 image (now frozen): it loads *.ldif data from /ldifs and schema
+# LDIFs from /schemas at first start and runs unprivileged on port 1389.
+# It is used for tests only.
 #
 #   docker compose -f deploy/docker-compose.yml up -d
 #   export HERACLES_TEST_LDAP_URI=ldap://localhost:1389
@@ -13,7 +14,7 @@
 
 services:
   ldap:
-    image: bitnami/openldap:2.6
+    image: bitnamilegacy/openldap:2.6
     ports:
       - "1389:1389"
     environment:
@@ -34,6 +35,31 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # End-to-end stack: docker compose -f deploy/docker-compose.yml --profile e2e up -d --build
+  heracles:
+    profiles: [e2e]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8420:8420"
+    volumes:
+      - ./e2e/heracles.yaml:/etc/heracles/heracles.yaml:ro
+    depends_on:
+      ldap:
+        condition: service_healthy
+
+  # python-ldap integration tests: docker compose ... --profile e2e run --rm integration
+  integration:
+    profiles: [e2e]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: test
+    depends_on:
+      ldap:
+        condition: service_healthy
 
 volumes:
   ldap-data:

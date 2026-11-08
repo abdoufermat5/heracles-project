@@ -18,6 +18,7 @@ from heracles.attributes import (
     ObjectRefAttr,
     ValidationError,
 )
+from heracles.core.containers import ensure_container
 from heracles.i18n import _
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import (
@@ -328,6 +329,9 @@ class ObjectService:
         after = ObjectState.build(dn, type_name, new, attrs, classes)
         ctx = EventContext(type_name, dn, None, after)
         self.events.pre_create(ctx)
+        if info.type.rdn:
+            # departments do not necessarily have the type's container yet
+            ensure_container(self.directory, dnlib.join(info.type.rdn, base))
         try:
             self.directory.add(dn, attrs)
         except AlreadyExistsError:

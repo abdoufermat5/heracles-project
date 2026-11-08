@@ -16,3 +16,16 @@ The directory is mounted read-only at `/schemas` in the test container
 (`LDAP_CUSTOM_SCHEMA_DIR`). Its contents are git-ignored; only this README is
 tracked. Without the files the test server still works, but compatibility
 objectClasses will be rejected by the server.
+
+## Converting `.schema` files
+
+The test server reads `cn=config` LDIF schema entries. Convert classic
+OpenLDAP `.schema` files (dependencies first, the order is kept through a
+numeric prefix):
+
+```
+make compat-schema SCHEMAS="/path/core.schema /path/core-conf.schema /path/sudo.schema ..."
+```
+
+The data volume keeps the schema of the first start: run `make e2e-down`
+(drops the volume) after changing the files.

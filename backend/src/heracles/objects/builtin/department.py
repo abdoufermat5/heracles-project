@@ -7,7 +7,11 @@ from typing import Any, cast
 
 from heracles.attributes import ObjectRefAttr, StringAttr, TextAttr
 from heracles.i18n import _
+from heracles.ldap import dn as dnlib
+from heracles.ldap.client import Entry, Scope
 from heracles.objects._compat import DEPARTMENT_MARKER
+from heracles.objects.errors import ObjectConflictError
+from heracles.objects.hooks import TabContext
 from heracles.objects.model import ObjectType, Reference, Section, Tab
 
 
@@ -35,8 +39,35 @@ def _department_tab(
             StringAttr("businessCategory", _("Category")),
             ObjectRefAttr("manager", _("Manager"), ref_type="user"),
         ),
+        "before_delete": classmethod(_remove_empty_containers),
     }
     return cast("type[Tab]", type("Main", (Tab,), namespace))
+
+
+def _is_plain_container(entry: Entry) -> bool:
+    """An organizational unit used only as a container (not a department)."""
+    classes = {c.lower() for c in entry.texts("objectClass")} - {"top"}
+    return classes == {"organizationalunit"}
+
+
+def _remove_empty_containers(cls: type[Tab], ctx: TabContext) -> None:
+    """Allow deleting a department that only holds empty type containers.
+
+    Containers (``ou=people``, ``ou=groups``, ...) are created on demand; they are removed
+    with the department. A department that still holds objects is not deleted.
+    """
+    del cls
+    if ctx.dn is None:
+        return
+    below = [
+        e
+        for e in ctx.directory.search(ctx.dn, "(objectClass=*)", Scope.SUBTREE, ["objectClass"])
+        if dnlib.normalize(e.dn) != dnlib.normalize(ctx.dn)
+    ]
+    if any(not _is_plain_container(e) for e in below):
+        raise ObjectConflictError(_("The department is not empty."))
+    for entry in sorted(below, key=lambda e: -dnlib.depth(e.dn)):
+        ctx.directory.delete(entry.dn)
 
 
 class DepartmentType(ObjectType):

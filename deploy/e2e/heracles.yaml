@@ -1,0 +1,15 @@
+# Configuration of the end-to-end test stack (docker compose --profile e2e).
+directories:
+  - id: main
+    label: Test directory
+    uri: ldap://ldap:1389
+    bind_dn: cn=admin,dc=heracles,dc=test
+    bind_password: admin
+    base_dn: dc=heracles,dc=test
+api:
+  # bootstrap administrator (ACLs ignored for this account)
+  admin_dns: ["uid=alice,ou=people,dc=heracles,dc=test"]
+  static_dir: /app/static
+  enable_docs: true
+  session:
+    cookie_secure: false

@@ -1,19 +1,15 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build: frontend assets, Python dependencies, slim runtime.
 
-# --- frontend build (placeholder until the SPA lands) -------------------------
+# --- frontend build -------------------------------------------------------------
 FROM node:22-slim AS frontend
 WORKDIR /app/frontend
 COPY frontend/ ./
-RUN if [ -f package.json ]; then \
-      corepack enable && pnpm install --frozen-lockfile && pnpm build; \
-    else \
-      mkdir -p dist; \
-    fi
+RUN npm install -g pnpm@11.22.0 && pnpm install --frozen-lockfile && pnpm build
 
 # --- python build ---------------------------------------------------------------
 FROM python:3.12-slim AS build
-COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.10 /uv /usr/local/bin/uv
 RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential libldap2-dev libsasl2-dev \
  && rm -rf /var/lib/apt/lists/*
@@ -22,7 +18,14 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 COPY backend/pyproject.toml backend/uv.lock backend/.python-version ./
 RUN uv sync --frozen --no-dev --extra ldap --no-install-project
 COPY backend/src ./src
-RUN uv sync --frozen --no-dev --extra ldap
+RUN uv sync --frozen --no-dev --extra ldap --no-editable
+
+# --- tests (python-ldap integration tests against the compose LDAP server) --------
+FROM build AS test
+RUN uv sync --frozen --extra ldap
+COPY backend/tests ./tests
+ENV HERACLES_TEST_LDAP_URI=ldap://ldap:1389
+CMD ["uv", "run", "--frozen", "--extra", "ldap", "pytest", "-q", "-m", "integration", "-p", "no:cacheprovider"]
 
 # --- runtime --------------------------------------------------------------------
 FROM python:3.12-slim
@@ -31,9 +34,11 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --create-home heracles
 WORKDIR /app
-COPY --from=build /app/backend/.venv /app/.venv
+COPY --from=build /app/backend/.venv /app/backend/.venv
 COPY --from=frontend /app/frontend/dist /app/static
-ENV PATH="/app/.venv/bin:$PATH" HERACLES_STATIC_DIR=/app/static
+ENV PATH="/app/backend/.venv/bin:$PATH" HERACLES_CONFIG=/etc/heracles/heracles.yaml
 USER heracles
-EXPOSE 8000
-CMD ["uvicorn", "heracles.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8420
+HEALTHCHECK --interval=5s --timeout=3s --retries=20 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8420/readyz')"
+CMD ["heracles", "serve", "--host", "0.0.0.0", "--port", "8420"]

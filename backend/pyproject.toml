@@ -17,6 +17,7 @@ dependencies = [
   "authlib>=1.9.5",
   "itsdangerous>=2.2.0",
   "bcrypt>=5.0.0",
+  "httpx2>=2.16.0",
 ]
 
 [project.optional-dependencies]
@@ -102,6 +103,7 @@ ignore = ["S101"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S", "N802"]
+"tests/e2e/**" = ["S", "N802", "E501"]
 
 [tool.pyright]
 include = ["src", "tests"]
@@ -111,4 +113,7 @@ pythonVersion = "3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-markers = ["integration: needs a real LDAP server (set HERACLES_TEST_LDAP_URI)"]
+markers = [
+  "integration: needs a real LDAP server (set HERACLES_TEST_LDAP_URI)",
+  "e2e: needs the running container stack (set HERACLES_E2E_URL)",
+]
