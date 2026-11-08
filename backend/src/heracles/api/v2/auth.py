@@ -31,7 +31,7 @@ from heracles.auth.recovery import RecoveryError
 from heracles.auth.second_factor import WebAuthnCredential
 from heracles.auth.sessions import Session
 from heracles.auth.webauthn import ASSERTION_KEY, REGISTRATION_KEY, WebAuthnError
-from heracles.ldap.client import DirectoryClient
+from heracles.ldap.client import DirectoryClient, DirectoryError
 
 log = structlog.get_logger(__name__)
 
@@ -85,6 +85,10 @@ class Me(BaseModel):
     is_admin: bool
     directory: str
     base: str
+
+
+class ReauthBody(BaseModel):
+    password: Annotated[str, Field(min_length=1, max_length=1024)]
 
 
 class WebAuthnOptions(BaseModel):
@@ -258,6 +262,51 @@ def second_factor(
     return StatusResponse()
 
 
+#: How long a login or a password confirmation allows sensitive account changes.
+REAUTH_WINDOW_SECONDS = 5 * 60
+_REAUTH_KEY = "reauth_at"
+
+
+def _require_recent_auth(state: AppState, session: Session) -> None:
+    """Refuse a sensitive change unless the user proved their password recently.
+
+    A fresh login counts; otherwise the client confirms the password through
+    ``POST /auth/reauth`` and retries. A stolen session cookie alone is not enough.
+    """
+    last = float(session.cache.get(_REAUTH_KEY, session.created_at))
+    if state.clock() - last > REAUTH_WINDOW_SECONDS:
+        raise ApiError(403, "reauth_required", "Confirm your password to continue")
+
+
+@router.post("/reauth")
+def reauth(
+    body: ReauthBody, request: Request, user: CurrentUserDep, state: StateDep
+) -> StatusResponse:
+    """Confirm the current password, allowing sensitive changes for a short while."""
+    key = state.limiter.key(client_ip(request, state), user.dn)
+    wait = state.limiter.retry_after(key)
+    if wait > 0:
+        raise ApiError(
+            429,
+            "rate_limited",
+            "Too many attempts, try again later",
+            extra={"retry_after": math.ceil(wait)},
+            headers={"Retry-After": str(math.ceil(wait))},
+        )
+    try:
+        ok = user.directory.check_password(user.dn, body.password)
+    except DirectoryError:
+        ok = False
+    if not ok:
+        state.limiter.record_failure(key)
+        log.info("reauth_failed", user=user.dn)
+        # 422, not 401: a wrong confirmation must not end the session.
+        raise validation("Wrong password", {"password": "Wrong password"})
+    state.limiter.record_success(key)
+    user.session.cache[_REAUTH_KEY] = state.clock()
+    return StatusResponse()
+
+
 def _verify_webauthn(state: AppState, session: Session, credential: dict[str, Any] | None) -> bool:
     """Check an assertion against the (single-use) challenge held by the session."""
     try:
@@ -294,6 +343,7 @@ def webauthn_list(user: CurrentUserDep, state: StateDep) -> list[WebAuthnCredent
 
 @router.post("/webauthn/credentials/options")
 def webauthn_register_options(user: CurrentUserDep, state: StateDep) -> WebAuthnOptions:
+    _require_recent_auth(state, user.session)
     entry = user.directory.get(user.dn, ["uid", "displayName", "cn"])
     if entry is None:
         raise unauthenticated("Account no longer exists")
@@ -322,11 +372,24 @@ def webauthn_register(
 
 
 @router.delete("/webauthn/credentials/{credential_id}", status_code=204)
-def webauthn_delete(credential_id: str, user: CurrentUserDep, state: StateDep) -> None:
+def webauthn_delete(
+    credential_id: str, user: CurrentUserDep, state: StateDep, confirm_disable: bool = False
+) -> None:
+    _require_recent_auth(state, user.session)
     try:
         raw = base64url_to_bytes(credential_id)
     except ValueError:
         raise not_found() from None
+    remaining = [c for c in state.webauthn.credentials(user.dn) if c.credential_id != raw]
+    owned = len(remaining) < len(state.webauthn.credentials(user.dn))
+    if owned and not confirm_disable:
+        left = [m for m in state.second_factor.methods_for(user.dn) if m != "recovery"]
+        if left == ["webauthn"] and not remaining:
+            raise ApiError(
+                409,
+                "last_second_factor",
+                "Removing this key turns off the second factor for your account",
+            )
     if not state.webauthn.remove_credential(user.dn, raw):
         raise not_found()
     log.info("webauthn_removed", user=user.dn)

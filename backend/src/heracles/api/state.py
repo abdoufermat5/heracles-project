@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -35,3 +36,5 @@ class AppState:
     trusted_proxies: list[IPNetwork]
     is_admin: AdminResolver
     logout_hooks: list[LogoutHook] = field(default_factory=lambda: [])
+    #: Wall clock shared with the session store (injectable in tests).
+    clock: Callable[[], float] = time.time

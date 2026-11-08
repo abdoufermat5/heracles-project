@@ -176,7 +176,11 @@ def test_register_list_delete(env: Env) -> None:
     again = env.post(base + "/options").json()["options"]
     assert again["excludeCredentials"][0]["id"] == bytes_to_base64url(new_id)
 
-    d = env.client.delete(f"{base}/{bytes_to_base64url(new_id)}", headers=env.headers())
+    url = f"{base}/{bytes_to_base64url(new_id)}"
+    d = env.client.delete(url, headers=env.headers())
+    assert d.status_code == 409
+    assert d.json()["error"]["code"] == "last_second_factor"
+    d = env.client.delete(url + "?confirm_disable=true", headers=env.headers())
     assert d.status_code == 204
     assert env.client.get(base).json() == []
     d = env.client.delete(f"{base}/{bytes_to_base64url(new_id)}", headers=env.headers())
@@ -226,3 +230,58 @@ def test_users_cannot_touch_other_users_credentials(env: Env) -> None:
     d = env.client.delete(f"{base}/{bytes_to_base64url(b'theirs')}", headers=env.headers())
     assert d.status_code == 404
     assert len(env.second_factor.webauthn_credentials(other_dn)) == 1
+
+
+# -- step-up re-authentication -------------------------------------------------------------------
+BASE = "/api/v2/auth/webauthn/credentials"
+
+
+def test_enrolment_and_removal_need_a_recent_password(env: Env) -> None:
+    _add_key(env)
+    _add_key(env, cred_id=b"second")
+    env.login()
+    with _verify_ok():
+        env.post("/api/v2/auth/webauthn/options")
+        env.post(SF, {"method": "webauthn", "credential": ASSERTION})
+    env.clock.advance(301)
+    r = env.post(BASE + "/options")
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "reauth_required"
+    url = f"{BASE}/{bytes_to_base64url(b'second')}"
+    assert env.client.delete(url, headers=env.headers()).status_code == 403
+
+    assert env.post("/api/v2/auth/reauth", {"password": "s3cretpass"}).status_code == 200
+    assert env.post(BASE + "/options").status_code == 200
+    assert env.client.delete(url, headers=env.headers()).status_code == 204
+
+    env.clock.advance(301)
+    assert env.post(BASE + "/options").status_code == 403
+
+
+def test_wrong_reauth_password_keeps_the_session(env: Env) -> None:
+    env.login()
+    env.clock.advance(301)
+    r = env.post("/api/v2/auth/reauth", {"password": "wrong"})
+    assert r.status_code == 422
+    assert env.client.get("/api/v2/auth/me").status_code == 200
+    assert env.post(BASE + "/options").status_code == 403
+
+
+def test_reauth_is_rate_limited(env: Env) -> None:
+    env.login()
+    codes = [env.post("/api/v2/auth/reauth", {"password": "wrong"}).status_code for _ in range(5)]
+    assert 429 in codes
+
+
+def test_reauth_requires_full_login(env: Env) -> None:
+    assert env.post("/api/v2/auth/reauth", {"password": "s3cretpass"}).status_code == 401
+
+
+def test_removing_last_key_is_allowed_when_totp_remains(env: Env) -> None:
+    _add_key(env)
+    env.second_factor.set_totp_secret(env.user_dn, "JBSWY3DPEHPK3PXP")
+    env.login()
+    with patch("heracles.auth.second_factor.SecondFactorService.verify", return_value=True):
+        env.post(SF, {"method": "totp", "code": "123456"})
+    d = env.client.delete(f"{BASE}/{CRED_B64}", headers=env.headers())
+    assert d.status_code == 204

@@ -119,6 +119,7 @@ def create_app(
         trusted_proxies=parse_networks(settings.login.trusted_proxies),
         is_admin=is_admin or _default_admin_resolver(settings.admin_dns),
         logout_hooks=list(logout_hooks),
+        clock=clock,
     )
 
     install_error_handlers(app)
