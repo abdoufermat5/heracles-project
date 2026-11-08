@@ -43,9 +43,19 @@ def test_parse_rejects_malformed(value: str) -> None:
 
 def test_render_quotes_values() -> None:
     attrs = {"uid": ["jdoe; rm -rf /"], "cn": ["John Doe"]}
-    assert (
-        render_command("echo %uid% %CN% %missing%", attrs) == "echo 'jdoe; rm -rf /' 'John Doe' ''"
-    )
+    assert render_command("echo %uid% %CN%", attrs) == "echo 'jdoe; rm -rf /' 'John Doe'"
+
+
+def test_render_keeps_unusable_percent_text() -> None:
+    attrs = {"uid": ["jdoe"]}
+    # A name the object does not have is shell text, not a placeholder.
+    assert render_command("echo %missing%", attrs) == "echo %missing%"
+    assert render_command("date +%Y-%m-%d", attrs) == "date +%Y-%m-%d"
+    assert render_command("date +%s", attrs) == "date +%s"
+    # The mask modifiers are available, so a decorated placeholder still resolves.
+    assert render_command("echo %u|uid%", attrs) == "echo JDOE"
+    # A value never breaks out of its argument.
+    assert render_command("echo %uid%", {"uid": ["a' b"]}) == "echo 'a'\"'\"' b'"
 
 
 def test_mask_attrs_hides_passwords() -> None:

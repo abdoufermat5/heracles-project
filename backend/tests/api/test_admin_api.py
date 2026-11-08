@@ -294,6 +294,62 @@ def test_hook_runs_on_object_events(client: TestClient, admin: Api, tmp_path: An
     assert after["tabs"]["main"]["values"]["sn"] == "Martin"
 
 
+def test_hook_output_reaches_the_user(client: TestClient, admin: Api, tmp_path: Any) -> None:
+    marker = tmp_path / "marker"
+    admin.put(
+        "/hooks",
+        {
+            "hooks": [
+                {"tab": "user", "mode": "postmodify", "command": f"touch {marker}; echo saved"},
+                {"tab": "user", "mode": "postmodify", "command": "echo oops >&2; exit 2"},
+            ],
+            "display_output": True,
+        },
+    )
+    r = client.patch(
+        f"/api/v2/objects/user/{dnp(BMARTIN)}",
+        json={"tabs": {"main": {"active": True, "values": {"sn": "Changed"}}}},
+        headers=admin.headers,
+    )
+    assert r.status_code == 200, r.text
+    assert marker.exists()
+    assert r.json()["messages"] == ["saved"]
+    assert any("oops" in w for w in r.json()["warnings"])
+
+
+def test_lock_triggers_run_on_lock_and_unlock(
+    client: TestClient, admin: Api, tmp_path: Any
+) -> None:
+    seen = tmp_path / "seen"
+    admin.put(
+        "/hooks",
+        {
+            "hooks": [
+                {"tab": "user", "mode": "prelock", "command": f"echo pre >>{seen}"},
+                {"tab": "user", "mode": "postlock", "command": f"echo post >>{seen}"},
+                {"tab": "user", "mode": "preunlock", "command": f"echo upre >>{seen}"},
+                {"tab": "user", "mode": "postunlock", "command": f"echo upost >>{seen}"},
+            ]
+        },
+    )
+    locked = client.post(f"/api/v2/users/{dnp(BMARTIN)}/lock", headers=admin.headers)
+    assert locked.status_code == 200, locked.text
+    assert locked.json()["locked"] is True
+    unlocked = client.post(f"/api/v2/users/{dnp(BMARTIN)}/unlock", headers=admin.headers)
+    assert unlocked.json()["locked"] is False
+    assert seen.read_text().split() == ["pre", "post", "upre", "upost"]
+
+
+def test_failing_prelock_trigger_aborts_the_lock(client: TestClient, admin: Api) -> None:
+    admin.put(
+        "/hooks",
+        {"hooks": [{"tab": "user", "mode": "prelock", "command": "echo refused >&2; exit 1"}]},
+    )
+    r = client.post(f"/api/v2/users/{dnp(BMARTIN)}/lock", headers=admin.headers)
+    assert r.status_code == 422, r.text
+    assert "refused" in r.text
+
+
 def test_health_checks_and_fix(admin: Api) -> None:
     results = {r["id"]: r for r in admin.get("/checks").json()}
     assert results["default_roles"]["status"] == "warning"

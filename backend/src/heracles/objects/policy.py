@@ -74,6 +74,14 @@ class ObjectEvents(Protocol):
 
     def post_delete(self, ctx: EventContext) -> None: ...
 
+    def pre_lock(self, ctx: EventContext) -> None: ...
+
+    def post_lock(self, ctx: EventContext) -> None: ...
+
+    def pre_unlock(self, ctx: EventContext) -> None: ...
+
+    def post_unlock(self, ctx: EventContext) -> None: ...
+
 
 class NullEvents:
     """No-op events; subclass and override what is needed."""
@@ -94,6 +102,18 @@ class NullEvents:
         pass
 
     def post_delete(self, ctx: EventContext) -> None:
+        pass
+
+    def pre_lock(self, ctx: EventContext) -> None:
+        pass
+
+    def post_lock(self, ctx: EventContext) -> None:
+        pass
+
+    def pre_unlock(self, ctx: EventContext) -> None:
+        pass
+
+    def post_unlock(self, ctx: EventContext) -> None:
         pass
 
 
@@ -126,3 +146,35 @@ class CompositeEvents:
     def post_delete(self, ctx: EventContext) -> None:
         for e in self.events:
             e.post_delete(ctx)
+
+    def pre_lock(self, ctx: EventContext) -> None:
+        for e in self.events:
+            _call(e, "pre_lock", ctx)
+
+    def post_lock(self, ctx: EventContext) -> None:
+        for e in self.events:
+            _call(e, "post_lock", ctx)
+
+    def pre_unlock(self, ctx: EventContext) -> None:
+        for e in self.events:
+            _call(e, "pre_unlock", ctx)
+
+    def post_unlock(self, ctx: EventContext) -> None:
+        for e in self.events:
+            _call(e, "post_unlock", ctx)
+
+    def collected(self) -> tuple[list[str], list[str]]:
+        """Warnings and messages collected by the events of this request."""
+        warnings: list[str] = []
+        messages: list[str] = []
+        for e in self.events:
+            warnings.extend(getattr(e, "warnings", ()) or ())
+            messages.extend(getattr(e, "messages", ()) or ())
+        return warnings, messages
+
+
+def _call(events: object, name: str, ctx: EventContext) -> None:
+    """Call a lifecycle hook that third-party events may not implement."""
+    hook = getattr(events, name, None)
+    if hook is not None:
+        hook(ctx)

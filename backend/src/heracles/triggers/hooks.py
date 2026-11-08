@@ -16,6 +16,15 @@ from typing import Final
 
 import structlog
 
+from heracles.objects.masks import (
+    Literal,
+    MaskEnv,
+    MaskError,
+    Placeholder,
+    evaluate_placeholder,
+    parse_mask,
+)
+
 log = structlog.get_logger(__name__)
 
 HOOK_MODES: Final = (
@@ -74,26 +83,57 @@ def parse_hooks(values: Sequence[str]) -> list[TabHook]:
     return [h for h in (parse_hook(v) for v in values) if h is not None]
 
 
-def _first(value: Sequence[str] | str | None) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value
-    return value[0] if value else ""
-
-
 def render_command(cmd: str, attrs: Mapping[str, Sequence[str] | str]) -> str:
-    """Replace ``%attr%`` by the shell-quoted first value of ``attr``.
+    """Render a trigger command, shell-quoting every substituted value.
 
-    Names are matched case-insensitively; an unknown placeholder becomes an empty
-    quoted string, so it can never inject text into the command line.
+    Placeholders use the syntax of the template masks
+    (:mod:`heracles.objects.masks`), so ``%attr%`` and ``%modifiers|attr%`` mean the
+    same thing here and in templates, and values are shell-quoted. A placeholder
+    naming an attribute the object does not have is left verbatim, so shell text
+    such as ``date +%s`` keeps working. An invalid mask or a failed modifier becomes
+    an empty quoted string; a value can never inject text into the command line.
     """
     lowered = {k.lower(): v for k, v in attrs.items()}
 
-    def substitute(match: re.Match[str]) -> str:
-        return shlex.quote(_first(lowered.get(match.group(1).lower())))
+    def quote(text: str) -> str:
+        return shlex.quote(text)
 
-    return _PLACEHOLDER.sub(substitute, cmd)
+    def first_of(name: str) -> str:
+        value = lowered.get(name.lower())
+        if value is None:
+            return ""
+        return value if isinstance(value, str) else (value[0] if value else "")
+
+    if "%" not in cmd:
+        return cmd
+    try:
+        segments = parse_mask(cmd)
+    except MaskError:
+        return _PLACEHOLDER.sub(
+            lambda m: quote(first_of(m.group(1))) if m.group(1).lower() in lowered else m.group(0),
+            cmd,
+        )
+    if not any(
+        isinstance(s, Placeholder) and (s.modifiers or s.attr.lower() in lowered) for s in segments
+    ):
+        return cmd
+    env = MaskEnv()
+    parts: list[str] = []
+    for segment in segments:
+        if isinstance(segment, Literal):
+            parts.append(segment.text)
+            continue
+        value = lowered.get(segment.attr.lower())
+        if value is None and not segment.modifiers:
+            parts.append(f"%{segment.attr}%")
+            continue
+        values = [] if value is None else ([value] if isinstance(value, str) else list(value))
+        try:
+            resolved = evaluate_placeholder(segment, values, env)
+        except (MaskError, ValueError):
+            resolved = []
+        parts.append(quote(resolved[0] if resolved else ""))
+    return "".join(parts)
 
 
 def mask_attrs(attrs: Mapping[str, Sequence[str] | str]) -> dict[str, Sequence[str] | str]:

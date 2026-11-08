@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import Depends, FastAPI, Request
 
@@ -148,16 +148,30 @@ class Domain:
         return ObjectService(user.directory, self.registry, policy=policy, events=events), policy
 
     def events(self, user: CurrentUser) -> ObjectEvents:
-        """Object event hooks contributed by the plugins, for one request."""
-        hooks = [
-            factory(
-                EventsContext(
-                    user.directory, user.dn, user.client_ip, self.registry.settings.get(name)
+        """Object event hooks contributed by the plugins, for one request.
+
+        The same instance is reused for the whole request, so the output triggers and
+        hooks collected during a write can be read back with :meth:`collected`.
+        """
+        if user.events is None:
+            hooks = [
+                factory(
+                    EventsContext(
+                        user.directory, user.dn, user.client_ip, self.registry.settings.get(name)
+                    )
                 )
-            )
-            for name, factory in self.registry.events_factories
-        ]
-        return CompositeEvents(hooks)
+                for name, factory in self.registry.events_factories
+            ]
+            # ``CurrentUser`` is frozen: the memo lives in a field only this method writes.
+            object.__setattr__(user, "events", CompositeEvents(hooks))
+        return cast("ObjectEvents", user.events)
+
+    def collected(self, user: CurrentUser) -> tuple[list[str], list[str]]:
+        """Warnings and messages the events of this request collected."""
+        events = user.events
+        if isinstance(events, CompositeEvents):
+            return events.collected()
+        return [], []
 
 
 def _cached_resolution(session: Session) -> ResolvedAcl | None:

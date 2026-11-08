@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager  # pyright: ignore[reportDeprecated]
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
+import structlog
 from fastapi import APIRouter, Body, Query, Response, status
 from pydantic import BaseModel, Field
 
@@ -15,8 +16,9 @@ from heracles.api.domain import DomainDep, TypeAclPolicy
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.attributes import JSON
 from heracles.core import references
+from heracles.core.config_store import effective_settings
 from heracles.core.locks import Lock, LockedError
-from heracles.core.snapshots import Snapshot, SnapshotError
+from heracles.core.snapshots import Snapshot, SnapshotError, SnapshotService
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import NoSuchObjectError, Scope
 from heracles.objects import (
@@ -31,6 +33,9 @@ from heracles.objects import (
     templates,
     transfer,
 )
+from heracles.schema import legacy
+
+log = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["objects"])
 
@@ -311,14 +316,45 @@ def _tabs_json(tabs: dict[str, TabPayload]) -> dict[str, Any]:
 @router.post("/objects/{type_name}", status_code=status.HTTP_201_CREATED)
 def create_object(
     type_name: str, body: CreateBody, user: CurrentUserDep, domain: DomainDep
-) -> dict[str, str]:
+) -> dict[str, JSON]:
     with object_errors():
         service, _policy = domain.service(user, type_name)
         tabs = _tabs_json(body.tabs)
         if body.template is not None:
             tabs = _tabs_from_template(service, type_name, body.template, body.tabs)
         new_dn = service.create(type_name, body.base, tabs)
-    return {"dn": new_dn}
+    return _with_event_output(user, domain, {"dn": new_dn})
+
+
+def _snapshot_service(user: CurrentUserDep, domain: DomainDep) -> SnapshotService:
+    """Snapshot service honouring the directory-stored snapshot settings."""
+    config = effective_settings(user.directory)
+    service = domain.snapshots(user.directory_id, user.directory)
+    service.snapshot_base = config.snapshot_base or dnlib.join(
+        legacy.RDN.SNAPSHOTS, user.directory.base_dn
+    )
+    return service
+
+
+def _prune_snapshots(user: CurrentUserDep, service: SnapshotService) -> None:
+    """Apply the configured retention after a new snapshot was taken."""
+    config = effective_settings(user.directory)
+    try:
+        service.prune(config.snapshot_retention_days or 0, config.snapshot_min_retention or 0)
+    except (NoSuchObjectError, SnapshotError):
+        log.warning("snapshot_prune_failed", exc_info=True)
+
+
+def _with_event_output(
+    user: CurrentUserDep, domain: DomainDep, payload: dict[str, JSON]
+) -> dict[str, JSON]:
+    """Add the trigger output the events of this request collected ("show hook output")."""
+    warnings, messages = domain.collected(user)
+    if warnings:
+        payload["warnings"] = cast(JSON, warnings)
+    if messages:
+        payload["messages"] = cast(JSON, messages)
+    return payload
 
 
 class BulkBody(BaseModel):
@@ -486,9 +522,14 @@ def create_snapshot(
         service.load(type_name, dn)
         if not domain.evaluator(user).can_snapshot_create(dn, info.acl_object(info.main_tab)):
             raise PermissionDeniedError(f"cannot snapshot {dn}")
-    snap = domain.snapshots(user.directory_id, user.directory).create(
+    config = effective_settings(user.directory)
+    if not config.snapshots_enabled:
+        raise forbidden("Snapshots are disabled in the configuration")
+    snapshots = _snapshot_service(user, domain)
+    snap = snapshots.create(
         dn, object_type=type_name, description=(body.description if body else "") or None
     )
+    _prune_snapshots(user, snapshots)
     return snapshot_json(snap)
 
 
@@ -585,7 +626,7 @@ def patch_object(
         if dnlib.normalize(state.dn) != dnlib.normalize(dn):
             locks = domain.locks(user.directory_id, user.directory)
             locks.release(dn, user.dn)
-        return object_json(service, policy, state)
+        return _with_event_output(user, domain, object_json(service, policy, state))
 
 
 @router.delete("/objects/{type_name}/{dn:path}", status_code=status.HTTP_204_NO_CONTENT)

@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import cast
+
 from fastapi import APIRouter
 
 from heracles.api.deps import CurrentUserDep
 from heracles.api.domain import DomainDep
-from heracles.api.errors import forbidden, not_found
+from heracles.api.errors import forbidden, not_found, validation
 from heracles.attributes import JSON
 from heracles.auth.passwords import is_locked, lock, unlock
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Modification, NoSuchObjectError, Scope
-from heracles.objects import UnknownTypeError
+from heracles.objects import ObjectValidationError, UnknownTypeError
+from heracles.objects.policy import EventContext
 from heracles.schema.legacy import OC
 
 router = APIRouter(tags=["directory"])
@@ -96,6 +101,15 @@ def _kind(rdn: str) -> str:
 # ----------------------------------------------------------- account lock
 
 
+@contextmanager  # pyright: ignore[reportDeprecated]
+def _trigger_errors() -> Iterator[None]:
+    """A failing ``pre*`` trigger aborts the operation with its output."""
+    try:
+        yield
+    except ObjectValidationError as exc:
+        raise validation("The change was refused", exc.fields) from exc
+
+
 def _set_account_lock(
     user: CurrentUserDep, domain: DomainDep, dn: str, locked: bool
 ) -> dict[str, JSON]:
@@ -116,9 +130,24 @@ def _set_account_lock(
             changes.append(Modification("delete", "userPassword"))
     for hook in domain.registry.account_lock_hooks:
         changes.extend(hook(entry, locked))
+    service, _policy = domain.service(user, "user")
+    events = domain.events(user)
+    before = service.load("user", dn)
+    pre = EventContext(type_name="user", dn=dn, before=before, after=before, changes=changes)
+    with _trigger_errors():
+        (events.pre_lock if locked else events.pre_unlock)(pre)
     if changes:
         user.directory.modify(dn, changes)
-    return {"dn": dn, "locked": is_locked(new)}
+    after = service.load("user", dn)
+    post = EventContext(type_name="user", dn=dn, before=before, after=after, changes=changes)
+    (events.post_lock if locked else events.post_unlock)(post)
+    warnings, messages = domain.collected(user)
+    result: dict[str, JSON] = {"dn": dn, "locked": is_locked(new)}
+    if warnings:
+        result["warnings"] = cast(JSON, warnings)
+    if messages:
+        result["messages"] = cast(JSON, messages)
+    return result
 
 
 @router.post("/users/{dn:path}/lock")

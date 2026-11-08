@@ -9,8 +9,8 @@ Routers use :data:`CurrentUserDep` to require an authenticated session::
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Annotated
+from dataclasses import dataclass, field
+from typing import Annotated, Any
 
 from fastapi import Depends, Request
 
@@ -64,6 +64,8 @@ class CurrentUser:
     directory_id: str
     directory: DirectoryClient
     client_ip: str = ""
+    #: Object events of this request (created on first use by the domain).
+    events: Any = field(default=None, compare=False, repr=False)
 
     @property
     def dn(self) -> str:
