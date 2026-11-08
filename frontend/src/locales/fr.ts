@@ -19,7 +19,7 @@ const fr: Translation = {
     yes: 'Oui',
     no: 'Non',
   },
-  nav: { main: 'Navigation principale', dashboard: 'Tableau de bord' },
+  nav: { main: 'Navigation principale', dashboard: 'Tableau de bord', people: 'Personnes', organization: 'Organisation' },
   // --- P3 objects ---
   ...objectsFr,
   // --- end P3 objects ---
@@ -449,6 +449,9 @@ const fr: Translation = {
     },
     or: 'ou',
     failed: 'L’authentification unique a échoué. Réessayez ou utilisez votre compte d’annuaire.',
+  },
+  portal: {
+    title: 'Mon compte',
   },
   status: {
     active: 'Actif',

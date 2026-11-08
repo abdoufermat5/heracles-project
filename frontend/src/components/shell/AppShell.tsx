@@ -26,6 +26,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -38,6 +39,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { setTechnicalDetails, useTechnicalDetails } from '@/lib/preferences'
 import { useScope } from '@/lib/scope'
 import { useTheme, type ThemeChoice } from '@/lib/theme'
 import { cn } from '@/lib/utils'
@@ -134,8 +136,10 @@ function DepartmentSwitcher() {
   )
 }
 
-function UserMenu() {
+/** Account menu; the portal variant leaves out console-only settings. */
+export function UserMenu({ portal = false }: { portal?: boolean }) {
   const { t, i18n } = useTranslation()
+  const technical = useTechnicalDetails()
   const { data: me } = useMe()
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
@@ -209,6 +213,18 @@ function UserMenu() {
             {t('user.themeDark')}
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
+        {!portal && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem
+              checked={technical}
+              onSelect={(e) => e.preventDefault()}
+              onCheckedChange={(on) => setTechnicalDetails(on === true)}
+            >
+              {t('patterns.technicalDetails')}
+            </DropdownMenuCheckboxItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="flex items-center gap-1.5 px-2 py-1.5 text-caption font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           <Languages className="size-3" />

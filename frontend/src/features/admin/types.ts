@@ -2,6 +2,8 @@
 
 export interface Capabilities {
   is_admin: boolean
+  /** Administration console (otherwise the self-service portal). */
+  console: boolean
   acl: boolean
   config: boolean
   config_write: boolean

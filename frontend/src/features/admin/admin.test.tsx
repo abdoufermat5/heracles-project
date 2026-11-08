@@ -89,8 +89,11 @@ describe('administration navigation', () => {
     signIn()
     renderApp('/')
     const nav = await screen.findByTestId('admin-nav')
-    for (const name of ['Access control', 'Configuration', 'Directory health', 'Plugins', 'Tasks'])
+    for (const name of ['Configuration', 'Directory health', 'Plugins', 'Tasks'])
       expect(within(nav).getByRole('link', { name })).toBeInTheDocument()
+    // permissions live with the other access entries
+    expect(screen.getByRole('link', { name: 'Access control' })).toBeInTheDocument()
+    expect(within(nav).queryByRole('link', { name: 'Access control' })).not.toBeInTheDocument()
   })
 
   it('hides the entries the user has no rights for', async () => {

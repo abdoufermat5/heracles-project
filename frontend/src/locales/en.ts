@@ -18,7 +18,7 @@ const en = {
     yes: 'Yes',
     no: 'No',
   },
-  nav: { main: 'Main navigation', dashboard: 'Dashboard' },
+  nav: { main: 'Main navigation', dashboard: 'Dashboard', people: 'People', organization: 'Organization' },
   // --- P3 objects ---
   ...objectsEn,
   // --- end P3 objects ---
@@ -448,6 +448,9 @@ const en = {
     },
     or: 'or',
     failed: 'Single sign-on failed. Try again or use your directory account.',
+  },
+  portal: {
+    title: 'My account',
   },
   status: {
     active: 'Active',

@@ -13,7 +13,9 @@ import { Compass } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/endpoints'
 import { qk } from '@/api/hooks'
-import { AppShell } from '@/components/shell/AppShell'
+import { WorkspaceShell } from '@/components/shell/WorkspaceShell'
+import { adminApi } from '@/features/admin/api'
+import { ak } from '@/features/admin/hooks'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
@@ -114,8 +116,18 @@ const appRoute = createRoute({
     } catch {
       throw redirect({ to: '/login', search: { redirect: location.href } })
     }
+    // decides between the administration console and the self-service portal
+    try {
+      await context.queryClient.ensureQueryData({
+        queryKey: ak.caps,
+        queryFn: adminApi.capabilities,
+        staleTime: 60_000,
+      })
+    } catch {
+      /* the shell falls back to the console; pages enforce their own rights */
+    }
   },
-  component: AppShell,
+  component: WorkspaceShell,
 })
 
 const dashboardRoute = createRoute({ getParentRoute: () => appRoute, path: '/', component: DashboardPage })

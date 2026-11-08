@@ -289,9 +289,22 @@ export const adminMock = {
 
 function capabilities(): Capabilities {
   const user = db.session.user
+  if (user === 'employee')
+    return {
+      is_admin: false,
+      console: false,
+      acl: false,
+      config: false,
+      config_write: false,
+      hooks: false,
+      health: false,
+      plugins: false,
+      tasks: false,
+    }
   if (user === 'viewer')
     return {
       is_admin: false,
+      console: true,
       acl: false,
       config: true,
       config_write: false,
@@ -302,6 +315,7 @@ function capabilities(): Capabilities {
     }
   return {
     is_admin: true,
+    console: true,
     acl: true,
     config: true,
     config_write: true,
