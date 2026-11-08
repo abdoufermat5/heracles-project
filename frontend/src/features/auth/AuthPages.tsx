@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  KeyRound,
   Loader2,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -22,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { getAssertion, WebAuthnClientError, webauthnSupported } from '@/lib/webauthn'
 import { SsoEntry } from './SsoEntry'
 
 const APP_VERSION = '0.1.0'
@@ -356,15 +358,25 @@ export function SecondFactorPage() {
   const qc = useQueryClient()
   const search = useSearch({ from: '/login/second-factor' })
   const methods = (search.methods?.split(',') ?? ['totp']).filter(
-    (m): m is SecondFactorMethod => m === 'totp' || m === 'recovery',
+    (m): m is SecondFactorMethod => m === 'totp' || m === 'recovery' || m === 'webauthn',
   )
   const [method, setMethod] = useState<SecondFactorMethod>(methods[0] ?? 'totp')
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
+  const finish = async () => {
+    await qc.invalidateQueries({ queryKey: qk.me })
+    if (search.redirect) router.history.push(search.redirect)
+    else await navigate({ to: '/' })
+  }
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (method === 'webauthn') {
+      await signInWithKey()
+      return
+    }
     if (!code.trim()) {
       setError(t('validation.required'))
       return
@@ -373,11 +385,28 @@ export function SecondFactorPage() {
     setError(null)
     try {
       await api.secondFactor({ method, code: code.trim() })
-      await qc.invalidateQueries({ queryKey: qk.me })
-      if (search.redirect) router.history.push(search.redirect)
-      else await navigate({ to: '/' })
+      await finish()
     } catch (err) {
       setError(isApiError(err) && err.status !== 401 ? err.message : t('auth.invalidCode'))
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function signInWithKey() {
+    setPending(true)
+    setError(null)
+    try {
+      const { options } = await api.webauthnOptions()
+      const credential = await getAssertion(options)
+      await api.secondFactor({ method: 'webauthn', credential })
+      await finish()
+    } catch (err) {
+      if (err instanceof WebAuthnClientError) {
+        setError(t(`auth.webauthn_${err.reason}`))
+      } else {
+        setError(isApiError(err) && err.status !== 401 ? err.message : t('auth.webauthn_failed'))
+      }
     } finally {
       setPending(false)
     }
@@ -412,6 +441,21 @@ export function SecondFactorPage() {
           </div>
         )}
 
+        {method === 'webauthn' ? (
+          <>
+            {!webauthnSupported() && (
+              <p className="text-[13px] text-muted-foreground">{t('auth.webauthn_unsupported')}</p>
+            )}
+            <Button
+              type="submit"
+              className="h-9 w-full text-[13px]"
+              disabled={pending || !webauthnSupported()}
+            >
+              {pending ? <Loader2 className="size-3.5 animate-spin" /> : <KeyRound className="size-3.5" />}
+              {t('auth.useSecurityKey')}
+            </Button>
+          </>
+        ) : (
         <Field id="code" label={t(`auth.code_${method}`)}>
           {method === 'totp' ? (
             <OtpInput value={code} onChange={setCode} id="code" />
@@ -427,8 +471,9 @@ export function SecondFactorPage() {
             />
           )}
         </Field>
+        )}
 
-        <Submit pending={pending}>{t('auth.verify')}</Submit>
+        {method !== 'webauthn' && <Submit pending={pending}>{t('auth.verify')}</Submit>}
         <p className="pt-1 text-center text-[13px] text-muted-foreground">
           <Link to="/login" className="text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
             {t('auth.backToLogin')}

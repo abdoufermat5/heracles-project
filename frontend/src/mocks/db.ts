@@ -74,6 +74,8 @@ class Db {
   /** Stored tab values of each snapshot (so a deleted object can be restored). */
   snapshotTabs = new Map<string, Record<string, TabState>>()
   // --- end P3 objects ---
+  /** Registered WebAuthn keys of the signed-in mock user. */
+  securityKeys: { id: string; label: string; sign_count: number }[] = []
   csrf = 'mock-csrf-token'
   nextId = 1000
   recoveryTokens = new Set<string>(['valid-token'])
@@ -88,6 +90,7 @@ class Db {
     this.snapshots.clear()
     this.templates.clear()
     this.snapshotTabs.clear()
+    this.securityKeys = []
     this.session = { user: null, pending: null }
     this.seed()
   }

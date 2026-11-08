@@ -76,6 +76,11 @@ export const handlers: HttpHandler[] = [
     await delay(150)
     if (!body.username || !body.password || body.password === 'wrong')
       return err(401, 'unauthenticated', 'Invalid credentials')
+    if (body.username === 'mfakey') {
+      db.session = { user: null, pending: 'mfa' }
+      persist()
+      return HttpResponse.json({ status: 'second_factor', methods: ['webauthn', 'totp'] })
+    }
     if (body.username === 'mfa') {
       db.session = { user: null, pending: 'mfa' }
       persist()
@@ -89,13 +94,78 @@ export const handlers: HttpHandler[] = [
   http.post(`${B}/auth/second-factor`, async ({ request }) => {
     if (!csrfOk(request)) return err(403, 'forbidden', 'Invalid CSRF token')
     if (!db.session.pending) return unauth()
-    const body = (await request.json()) as { method: string; code: string }
-    const good = body.method === 'totp' ? '123456' : 'RECOVERY-0001'
-    if (body.code !== good) return err(401, 'unauthenticated', 'Invalid code')
+    const body = (await request.json()) as {
+      method: string
+      code?: string
+      credential?: { id?: string }
+    }
+    if (body.method === 'webauthn') {
+      if (body.credential?.id !== 'mock-assertion') return err(401, 'unauthenticated', 'Invalid code')
+    } else {
+      const good = body.method === 'totp' ? '123456' : 'RECOVERY-0001'
+      if (body.code !== good) return err(401, 'unauthenticated', 'Invalid code')
+    }
     db.session = { user: 'mfa', pending: null }
     persist()
     return HttpResponse.json({ status: 'ok' })
   }),
+
+  http.post(`${B}/auth/webauthn/options`, ({ request }) => {
+    if (!csrfOk(request)) return err(403, 'forbidden', 'Invalid CSRF token')
+    if (!db.session.pending) return unauth()
+    return HttpResponse.json({
+      options: {
+        challenge: 'Y2hhbGxlbmdl',
+        rpId: 'localhost',
+        allowCredentials: [{ id: 'a2V5', type: 'public-key' }],
+      },
+    })
+  }),
+
+  http.get(`${B}/auth/webauthn/credentials`, guarded(() => HttpResponse.json(db.securityKeys))),
+
+  http.post(
+    `${B}/auth/webauthn/credentials/options`,
+    guarded(
+      () =>
+        HttpResponse.json({
+          options: {
+            challenge: 'Y2hhbGxlbmdl',
+            rp: { id: 'localhost', name: 'Heracles' },
+            user: { id: 'dXNlcg', name: 'admin', displayName: 'Admin' },
+            pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+          },
+        }),
+      { mutation: true },
+    ),
+  ),
+
+  http.post(
+    `${B}/auth/webauthn/credentials`,
+    guarded(
+      async ({ request }) => {
+        const body = (await request.json()) as { label: string }
+        const key = { id: `key-${db.securityKeys.length + 1}`, label: body.label, sign_count: 0 }
+        db.securityKeys.push(key)
+        return HttpResponse.json(key, { status: 201 })
+      },
+      { mutation: true },
+    ),
+  ),
+
+  http.delete(
+    `${B}/auth/webauthn/credentials/:id`,
+    guarded(
+      ({ params }) => {
+        const before = db.securityKeys.length
+        db.securityKeys = db.securityKeys.filter((k) => k.id !== params.id)
+        return db.securityKeys.length === before
+          ? err(404, 'not_found', 'Not found')
+          : new HttpResponse(null, { status: 204 })
+      },
+      { mutation: true },
+    ),
+  ),
 
   http.post(`${B}/auth/logout`, ({ request }) => {
     if (!csrfOk(request)) return err(403, 'forbidden', 'Invalid CSRF token')

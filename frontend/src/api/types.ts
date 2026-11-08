@@ -57,7 +57,27 @@ export interface LoginResponse {
 
 export interface SecondFactorRequest {
   method: SecondFactorMethod
-  code: string
+  /** TOTP / recovery code. */
+  code?: string
+  /** Browser assertion (JSON form) for method `webauthn`. */
+  credential?: Record<string, unknown>
+}
+
+/** WebAuthn options as returned by the API (JSON form of the browser option objects). */
+export interface WebAuthnOptionsResponse<T = Record<string, unknown>> {
+  options: T
+}
+
+export interface WebAuthnCredentialInfo {
+  /** base64url credential id */
+  id: string
+  label: string
+  sign_count: number
+}
+
+export interface WebAuthnRegisterRequest {
+  label: string
+  credential: Record<string, unknown>
 }
 
 export interface Me {

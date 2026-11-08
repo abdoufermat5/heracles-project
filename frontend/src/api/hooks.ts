@@ -19,6 +19,7 @@ export const qk = {
   object: (type: string, dn: string) => ['objects', type, 'detail', dn] as const,
   refSearch: (type: string, q: string) => ['objects', type, 'ref', q] as const,
   dashboard: ['dashboard'] as const,
+  securityKeys: ['security-keys'] as const,
   snapshots: (type: string, dn: string) => ['snapshots', type, dn] as const,
 }
 

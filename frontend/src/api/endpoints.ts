@@ -20,7 +20,11 @@ import type {
   TreeNode,
   TypeDescriptor,
   TypeSummary,
+  WebAuthnCredentialInfo,
+  WebAuthnOptionsResponse,
+  WebAuthnRegisterRequest,
 } from './types'
+import type { CreationOptionsJson, RequestOptionsJson } from '@/lib/webauthn'
 
 export const api = {
   // auth
@@ -32,6 +36,22 @@ export const api = {
   },
   secondFactor: (body: SecondFactorRequest) =>
     request<{ status: 'ok' }>('/auth/second-factor', { method: 'POST', body, silent401: true }),
+  webauthnOptions: () =>
+    request<WebAuthnOptionsResponse<RequestOptionsJson>>('/auth/webauthn/options', {
+      method: 'POST',
+      silent401: true,
+    }),
+  listSecurityKeys: () => request<WebAuthnCredentialInfo[]>('/auth/webauthn/credentials'),
+  securityKeyOptions: () =>
+    request<WebAuthnOptionsResponse<CreationOptionsJson>>('/auth/webauthn/credentials/options', {
+      method: 'POST',
+    }),
+  registerSecurityKey: (body: WebAuthnRegisterRequest) =>
+    request<WebAuthnCredentialInfo>('/auth/webauthn/credentials', { method: 'POST', body }),
+  deleteSecurityKey: (id: string) =>
+    request<undefined>(`/auth/webauthn/credentials/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
   logout: async () => {
     if (hasSsoCookie()) {
       // opened through CAS: the server ends our session and the CAS one, then returns to /login
