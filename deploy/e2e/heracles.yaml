@@ -13,6 +13,10 @@ api:
   enable_docs: true
   session:
     cookie_secure: false
+  # Application database (second-factor registrations, ...); default
+  # $HERACLES_DATA_DIR/heracles.db, i.e. /var/lib/heracles/heracles.db in the image.
+  # database:
+  #   path: /var/lib/heracles/heracles.db
   # Host names the server may build links from (CAS service URL, invitation links) when no public
   # address is configured (cas_service_name, the invitations public_base_url). Defaults to the
   # local addresses; set it to the console's public host name in production.

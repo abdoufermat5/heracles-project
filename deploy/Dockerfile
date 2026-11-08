@@ -32,11 +32,15 @@ FROM python:3.12-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libldap2 libsasl2-2 \
  && rm -rf /var/lib/apt/lists/* \
- && useradd --system --create-home heracles
+ && useradd --system --create-home heracles \
+ && install -d -o heracles -g heracles -m 0700 /var/lib/heracles
 WORKDIR /app
 COPY --from=build /app/backend/.venv /app/backend/.venv
 COPY --from=frontend /app/frontend/dist /app/static
-ENV PATH="/app/backend/.venv/bin:$PATH" HERACLES_CONFIG=/etc/heracles/heracles.yaml
+ENV PATH="/app/backend/.venv/bin:$PATH" HERACLES_CONFIG=/etc/heracles/heracles.yaml \
+    HERACLES_DATA_DIR=/var/lib/heracles
+# application database (second-factor registrations, ...): keep it on a volume
+VOLUME ["/var/lib/heracles"]
 USER heracles
 EXPOSE 8420
 HEALTHCHECK --interval=5s --timeout=3s --retries=20 \

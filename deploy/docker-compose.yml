@@ -47,6 +47,7 @@ services:
       - "8420:8420"
     volumes:
       - ./e2e/heracles.yaml:/etc/heracles/heracles.yaml:ro
+      - heracles-data:/var/lib/heracles
     depends_on:
       ldap:
         condition: service_healthy
@@ -64,3 +65,4 @@ services:
 
 volumes:
   ldap-data:
+  heracles-data:
