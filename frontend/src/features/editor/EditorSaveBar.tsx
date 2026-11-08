@@ -44,51 +44,47 @@ export function EditorSaveBar({
   return (
     <aside
       aria-label={t('editor.unsaved')}
-      className="sticky bottom-4 z-30 mx-auto w-full max-w-5xl rounded-lg border border-border bg-card/95 p-3 shadow-lg backdrop-blur-md transition-all animate-in fade-in slide-in-from-bottom-2"
+      className="sticky bottom-0 z-30 flex h-14 items-center justify-between gap-3 border-t bg-card px-6"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="bg-primary size-2 rounded-full animate-pulse" />
-          <span
-            data-testid="dirty-indicator"
-            className="text-xs font-medium text-foreground"
-          >
-            {t('editor.unsavedCount', {
-              count: changesCount || diffs.length || 1,
-              defaultValue: t('editor.unsaved'),
-            })}
-          </span>
-        </div>
+      <div className="flex items-center gap-2">
+        <span className="size-1.5 rounded-full bg-signal" />
+        <span
+          data-testid="dirty-indicator"
+          className="text-[13px] font-medium text-foreground"
+        >
+          {t('editor.unsavedCount', {
+            count: changesCount || diffs.length || 1,
+            defaultValue: t('editor.unsaved'),
+          })}
+        </span>
+      </div>
 
-        <div className="flex items-center gap-2">
-          {diffs.length > 0 && <ReviewChangesPopover diffs={diffs} />}
+      <div className="flex items-center gap-2">
+        {diffs.length > 0 && <ReviewChangesPopover diffs={diffs} />}
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onDiscard}
-            disabled={isSubmitting}
-            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <Undo2 className="size-3.5" />
-            {t('editor.discard')}
-          </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onDiscard}
+          disabled={isSubmitting}
+        >
+          <Undo2 aria-hidden />
+          {t('editor.discard')}
+        </Button>
 
-          <Button
-            type="submit"
-            size="sm"
-            disabled={isSubmitting}
-            className="h-8 gap-1.5 text-xs font-medium"
-            title={t('editor.saveShortcut')}
-          >
-            <Save className="size-3.5" />
-            <span>{isCreate ? t('common.create') : t('common.save')}</span>
-            <kbd className="ml-1 hidden sm:inline-block rounded border border-primary-foreground/30 px-1 py-0.5 text-[10px] font-mono leading-none">
-              ⌘S
-            </kbd>
-          </Button>
-        </div>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={isSubmitting}
+          title={t('editor.saveShortcut')}
+        >
+          <Save aria-hidden />
+          <span>{isCreate ? t('common.create') : t('common.save')}</span>
+          <kbd className="ml-1 hidden rounded-sm border border-primary-foreground/30 px-1 py-0.5 font-mono text-[10px] leading-none sm:inline-block">
+            ⌘S
+          </kbd>
+        </Button>
       </div>
     </aside>
   )

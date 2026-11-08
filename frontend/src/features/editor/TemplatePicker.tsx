@@ -26,15 +26,16 @@ export function TemplatePicker({
   if (templates.length === 0) return null
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 shadow-xs">
-      <FileText className="size-4 text-muted-foreground shrink-0" />
+    <div className="flex items-center gap-3 rounded-md border bg-card p-3">
+      <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <div className="min-w-0 flex-1">
-        <label htmlFor="template-picker" className="text-xs font-medium text-foreground block">
+        <label
+          htmlFor="template-picker"
+          className="block text-[13px] font-medium text-foreground"
+        >
           {t('editor.template')}
         </label>
-        <p className="text-[11px] text-muted-foreground">
-          {t('editor.selectTemplate')}
-        </p>
+        <p className="text-[12px] text-muted-foreground">{t('editor.selectTemplate')}</p>
       </div>
       <div className="w-56">
         <Select
@@ -42,7 +43,7 @@ export function TemplatePicker({
           onValueChange={(v) => onChange(v === '' ? null : v)}
           disabled={disabled}
         >
-          <SelectTrigger id="template-picker" className="h-8 text-xs">
+          <SelectTrigger id="template-picker" className="h-8 text-[13px]">
             <SelectValue placeholder={t('editor.selectTemplate')} />
           </SelectTrigger>
           <SelectContent>

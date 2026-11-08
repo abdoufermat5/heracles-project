@@ -16,7 +16,7 @@ export function ListingSkeleton({
 }: ListingSkeletonProps) {
   const { t } = useTranslation()
   const rowCount = 8
-  const rowHeight = density === 'compact' ? 'h-8' : 'h-10'
+  const rowHeight = density === 'compact' ? 'h-[30px]' : 'h-9'
 
   const colWidths = ['w-28', 'w-36', 'w-24', 'w-40', 'w-20']
 
@@ -24,49 +24,44 @@ export function ListingSkeleton({
     <div
       aria-busy="true"
       aria-label={t('common.loading')}
-      className="bg-card overflow-hidden rounded-xl border border-border shadow-xs"
+      className="overflow-hidden rounded-b-md border bg-card"
     >
       <div className="overflow-x-auto">
-        <table className="w-full caption-bottom text-sm">
-          <thead className="bg-muted/40 border-b border-border">
+        <table className="w-full text-[13px]">
+          <thead className="border-b bg-muted/50">
             <tr>
-              <th className="w-10 px-3 py-2">
-                <Skeleton className="size-4 rounded" />
+              <th className="h-8 w-10 px-3">
+                <Skeleton className="mx-auto size-3.5 rounded-sm" />
               </th>
               {columns.map((col) => (
-                <th key={col.key} className="px-3 py-2 text-left">
-                  <Skeleton className="h-4 w-20" />
+                <th key={col.key} className="h-8 px-3 text-left">
+                  <Skeleton className="h-3 w-20" />
                 </th>
               ))}
-              <th className="w-24 px-3 py-2 text-right">
-                <Skeleton className="ml-auto h-4 w-12" />
+              <th className="h-8 w-20 px-3 text-right">
+                <Skeleton className="ml-auto h-3 w-10" />
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border/60">
+          <tbody>
             {Array.from({ length: rowCount }, (_, i) => (
-              <tr key={i} className={rowHeight}>
+              <tr key={i} className={`${rowHeight} border-b last:border-b-0`}>
                 <td className="w-10 px-3">
-                  <Skeleton className="size-4 rounded" />
+                  <Skeleton className="mx-auto size-3.5 rounded-sm" />
                 </td>
                 {columns.map((col, cIdx) => (
                   <td key={col.key} className="px-3">
                     {cIdx === 0 && isPersonType ? (
-                      <div className="flex items-center gap-2.5">
-                        <Skeleton className="size-7 rounded-full shrink-0" />
-                        <Skeleton
-                          className={`h-4 ${colWidths[cIdx % colWidths.length]}`}
-                        />
-                      </div>
+                      <Skeleton className="h-3.5 w-36" />
                     ) : (
                       <Skeleton
-                        className={`h-4 ${colWidths[cIdx % colWidths.length]}`}
+                        className={`h-3.5 ${colWidths[cIdx % colWidths.length]}`}
                       />
                     )}
                   </td>
                 ))}
-                <td className="w-24 px-3 text-right">
-                  <Skeleton className="ml-auto h-6 w-14 rounded" />
+                <td className="w-20 px-3 text-right">
+                  <Skeleton className="ml-auto h-5 w-12 rounded-sm" />
                 </td>
               </tr>
             ))}

@@ -16,19 +16,6 @@ export function formatCellValue(v: unknown, yes: string, no: string): string {
   return String(v)
 }
 
-export function getInitials(name?: string | null): string {
-  if (!name) return '?'
-  const clean = name.trim()
-  if (!clean) return '?'
-  const parts = clean.split(/\s+/).filter(Boolean)
-  if (parts.length >= 2) {
-    const first = parts[0]?.[0] ?? ''
-    const last = parts[parts.length - 1]?.[0] ?? ''
-    return (first + last).toUpperCase()
-  }
-  return clean.slice(0, 2).toUpperCase()
-}
-
 export function isMonospaceKey(key: string): boolean {
   const k = key.toLowerCase()
   return (

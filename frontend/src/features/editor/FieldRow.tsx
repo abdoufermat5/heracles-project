@@ -23,17 +23,21 @@ export function FieldRow({ control, tab, attr, readOnly }: Props) {
 
   return (
     <div className={cn('space-y-1.5', isWide(attr) && 'md:col-span-2')} data-field={name}>
-      <div className="flex items-center justify-between">
-        <Label htmlFor={id} id={`${id}-label`} className="flex items-center gap-1 text-xs font-medium text-foreground">
+      <div className="flex items-center justify-between gap-2">
+        <Label
+          htmlFor={id}
+          id={`${id}-label`}
+          className="flex items-center gap-1 text-xs font-medium text-muted-foreground"
+        >
           <span>{attr.label}</span>
           {attr.required && attr.kind !== 'password' && (
-            <span aria-hidden className="text-destructive font-medium">
+            <span aria-hidden className="font-medium text-destructive">
               *
             </span>
           )}
         </Label>
         {attr.readonly && !readOnly && (
-          <span className="text-[10px] text-muted-foreground font-mono">readonly</span>
+          <span className="font-mono text-[10px] text-muted-foreground">readonly</span>
         )}
       </div>
 
@@ -62,11 +66,11 @@ export function FieldRow({ control, tab, attr, readOnly }: Props) {
       )}
 
       {attr.description && !message && (
-        <p className="text-muted-foreground text-xs leading-normal">{attr.description}</p>
+        <p className="text-xs leading-normal text-muted-foreground">{attr.description}</p>
       )}
 
       {message && (
-        <p id={`${id}-error`} role="alert" className="text-destructive text-xs font-medium">
+        <p id={`${id}-error`} role="alert" className="text-xs font-medium text-destructive">
           {message}
         </p>
       )}

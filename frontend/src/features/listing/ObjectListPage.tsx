@@ -230,112 +230,116 @@ export function ObjectListPage({ type }: { type: string }) {
         onExportCsv={handleExportCsv}
       />
 
-      {/* 2. Toolbar */}
-      <ListingToolbar
-        type={type}
-        label={label}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        currentDepartmentName={currentDepartmentName}
-        scope={scope}
-        onScopeChange={setScope}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        availableColumns={desc.data?.columns ?? []}
-        columnVisibility={columnVisibility}
-        onToggleColumn={handleToggleColumn}
-        onResetColumns={handleResetColumns}
-        density={density}
-        onDensityChange={handleDensityChange}
-        showPreview={showPreview}
-        onTogglePreview={() => setShowPreview((p) => !p)}
-        supportsStatusFilter={type === 'user'}
-      />
+      {/* 2. Toolbar attached to the table frame, with optional preview panel */}
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <ListingToolbar
+            type={type}
+            label={label}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            currentDepartmentName={currentDepartmentName}
+            scope={scope}
+            onScopeChange={setScope}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            availableColumns={desc.data?.columns ?? []}
+            columnVisibility={columnVisibility}
+            onToggleColumn={handleToggleColumn}
+            onResetColumns={handleResetColumns}
+            density={density}
+            onDensityChange={handleDensityChange}
+            showPreview={showPreview}
+            onTogglePreview={() => setShowPreview((p) => !p)}
+            supportsStatusFilter={type === 'user'}
+          />
 
-      {/* 3. Main content area: Table + optional Preview side panel */}
-      {list.isPending ? (
-        <ListingSkeleton
-          columns={desc.data?.columns ?? []}
-          density={density}
-          isPersonType={type === 'user'}
-        />
-      ) : rows.length === 0 ? (
-        <ListingEmptyState
-          type={type}
-          typeLabel={desc.data?.label}
-          isFiltered={hasFilterActive}
-          canCreate={summary?.can_create}
-          onClearFilter={() => {
-            setSearchQuery('')
-            setStatusFilter('all')
-          }}
-        />
-      ) : (
-        <div className="flex items-start gap-4">
-          <div className="flex-1 min-w-0">
-            {desc.data && (
-              <ListingTable
-                type={type}
-                descriptor={desc.data}
-                rows={rows}
-                total={total}
-                sorting={sorting}
-                onSortingChange={setSorting}
-                selection={selection}
-                onSelectionChange={setSelection}
-                columnVisibility={columnVisibility}
-                density={density}
-                hasNextPage={list.hasNextPage}
-                isFetchingNextPage={list.isFetchingNextPage}
-                onFetchNextPage={() => void list.fetchNextPage()}
-                onRowClick={(item) => {
-                  if (showPreview) {
-                    setPreviewDn(item.dn)
-                  } else {
-                    void navigate({
-                      to: '/types/$type/$dn',
-                      params: { type, dn: item.dn },
-                    })
-                  }
-                }}
-                onDeleteSingle={(item) => setSingleDeleteTarget(item)}
-                selectedRowDn={showPreview ? (previewDn ?? rows[0]?.dn ?? null) : null}
-              />
-            )}
-          </div>
-
-          {showPreview && (
-            <ListingPreviewPanel
-              type={type}
-              item={previewItem ?? rows[0] ?? null}
-              descriptor={desc.data}
-              summary={summary}
-              onClose={() => setShowPreview(false)}
-              onCopyDn={(dn) => {
-                void navigator.clipboard.writeText(dn)
-                toast.success(t('listing.dnCopied'))
-              }}
-              onLockToggle={
-                type === 'user' ? (dn, doLock) => void runLock([dn], doLock) : undefined
-              }
-              onDeleteSingle={(item) => setSingleDeleteTarget(item)}
+          {list.isPending ? (
+            <ListingSkeleton
+              columns={desc.data?.columns ?? []}
+              density={density}
+              isPersonType={type === 'user'}
             />
+          ) : rows.length === 0 ? (
+            <ListingEmptyState
+              type={type}
+              typeLabel={desc.data?.label}
+              isFiltered={hasFilterActive}
+              canCreate={summary?.can_create}
+              onClearFilter={() => {
+                setSearchQuery('')
+                setStatusFilter('all')
+              }}
+            />
+          ) : (
+            <>
+              <ListingBulkBar
+                type={type}
+                selectedCount={selectedDns.length}
+                onLock={
+                  type === 'user'
+                    ? (doLock) => void runLock(selectedDns, doLock)
+                    : undefined
+                }
+                onDelete={() => setConfirmDelete(true)}
+                onClearSelection={() => setSelection({})}
+                isLocking={lock.isPending}
+                isDeleting={del.isPending}
+              />
+
+              {desc.data && (
+                <ListingTable
+                  type={type}
+                  descriptor={desc.data}
+                  rows={rows}
+                  total={total}
+                  sorting={sorting}
+                  onSortingChange={setSorting}
+                  selection={selection}
+                  onSelectionChange={setSelection}
+                  columnVisibility={columnVisibility}
+                  density={density}
+                  hasNextPage={list.hasNextPage}
+                  isFetchingNextPage={list.isFetchingNextPage}
+                  onFetchNextPage={() => void list.fetchNextPage()}
+                  onRowClick={(item) => {
+                    if (showPreview) {
+                      setPreviewDn(item.dn)
+                    } else {
+                      void navigate({
+                        to: '/types/$type/$dn',
+                        params: { type, dn: item.dn },
+                      })
+                    }
+                  }}
+                  onDeleteSingle={(item) => setSingleDeleteTarget(item)}
+                  selectedRowDn={showPreview ? (previewDn ?? rows[0]?.dn ?? null) : null}
+                />
+              )}
+            </>
           )}
         </div>
-      )}
 
-      {/* 4. Bulk Actions Bar */}
-      <ListingBulkBar
-        type={type}
-        selectedCount={selectedDns.length}
-        onLock={type === 'user' ? (doLock) => void runLock(selectedDns, doLock) : undefined}
-        onDelete={() => setConfirmDelete(true)}
-        onClearSelection={() => setSelection({})}
-        isLocking={lock.isPending}
-        isDeleting={del.isPending}
-      />
+        {showPreview && (
+          <ListingPreviewPanel
+            type={type}
+            item={previewItem ?? rows[0] ?? null}
+            descriptor={desc.data}
+            summary={summary}
+            onClose={() => setShowPreview(false)}
+            onCopyDn={(dn) => {
+              void navigator.clipboard.writeText(dn)
+              toast.success(t('listing.dnCopied'))
+            }}
+            onLockToggle={
+              type === 'user' ? (dn, doLock) => void runLock([dn], doLock) : undefined
+            }
+            onDeleteSingle={(item) => setSingleDeleteTarget(item)}
+          />
+        )}
+      </div>
 
-      {/* 5. Delete Confirmation Dialog (bulk) */}
+      {/* 3. Delete Confirmation Dialog (bulk) */}
       <ListingDeleteDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
@@ -346,7 +350,7 @@ export function ObjectListPage({ type }: { type: string }) {
         isDeleting={del.isPending}
       />
 
-      {/* 6. Single Item Delete Dialog */}
+      {/* 4. Single Item Delete Dialog */}
       {singleDeleteTarget && (
         <ListingDeleteDialog
           open={Boolean(singleDeleteTarget)}

@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import type { FieldInputProps } from './types'
 
 const nativeSelectClass =
-  'h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-sm shadow-xs outline-none focus-visible:ring-[2px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-destructive'
+  'h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-destructive'
 
 export function TextInputField({
   p,
@@ -43,11 +43,11 @@ export function TextInputField({
         aria-invalid={p.invalid || undefined}
         aria-describedby={p.error ? `${p.id}-error` : undefined}
         className={cn(
-          'h-8',
+          'h-8 text-[13px]',
           icon && !p.readOnly && 'pl-8',
           mono && 'font-dn',
           p.readOnly &&
-            'border-transparent bg-transparent shadow-none px-0 py-1 text-foreground cursor-default select-text disabled:opacity-100 disabled:cursor-default font-normal',
+            'cursor-default border-transparent bg-transparent px-0 py-1 text-[13px] font-normal text-foreground shadow-none select-text disabled:cursor-default disabled:opacity-100',
         )}
         autoComplete="off"
         placeholder={p.readOnly && !rawValue ? '—' : undefined}
@@ -104,9 +104,10 @@ export function TextAreaField({
         aria-invalid={p.invalid || undefined}
         aria-describedby={p.error ? `${p.id}-error` : undefined}
         className={cn(
+          'text-[13px]',
           icon && !p.readOnly && 'pl-8',
           p.readOnly &&
-            'border-transparent bg-transparent shadow-none px-0 py-1 text-foreground cursor-default select-text disabled:opacity-100 disabled:cursor-default font-normal resize-none whitespace-pre-wrap',
+            'cursor-default resize-none border-transparent bg-transparent px-0 py-1 text-[13px] font-normal text-foreground shadow-none whitespace-pre-wrap select-text disabled:cursor-default disabled:opacity-100',
         )}
         placeholder={p.readOnly && !rawValue ? '—' : undefined}
       />
@@ -175,9 +176,9 @@ export function NumberField({ p, float }: { p: FieldInputProps; float?: boolean 
       aria-invalid={p.invalid || undefined}
       aria-describedby={p.error ? `${p.id}-error` : undefined}
       className={cn(
-        'h-8',
+        'h-8 text-[13px]',
         p.readOnly &&
-          'border-transparent bg-transparent shadow-none px-0 py-1 text-foreground cursor-default select-text disabled:opacity-100 disabled:cursor-default font-normal',
+          'cursor-default border-transparent bg-transparent px-0 py-1 text-[13px] font-normal text-foreground shadow-none select-text disabled:cursor-default disabled:opacity-100',
       )}
     />
   )
@@ -194,7 +195,7 @@ export function BooleanField({ p }: { p: FieldInputProps }) {
         disabled={p.readOnly}
         aria-describedby={p.error ? `${p.id}-error` : undefined}
       />
-      <span className={cn('text-sm', checked ? 'text-foreground font-medium' : 'text-muted-foreground')}>
+      <span className={cn('text-[13px]', checked ? 'font-medium text-foreground' : 'text-muted-foreground')}>
         {checked ? 'Yes' : 'No'}
       </span>
     </div>
@@ -211,7 +212,7 @@ export function SelectField({ p }: { p: FieldInputProps }) {
       className={cn(
         nativeSelectClass,
         p.readOnly &&
-          'appearance-none border-transparent bg-transparent shadow-none px-0 py-1 text-foreground cursor-default select-text disabled:opacity-100 disabled:cursor-default pointer-events-none font-normal',
+          'pointer-events-none cursor-default appearance-none border-transparent bg-transparent px-0 py-1 text-[13px] font-normal text-foreground shadow-none select-text disabled:cursor-default disabled:opacity-100',
       )}
       value={current}
       onChange={(e) => p.onChange(e.target.value === '' ? null : e.target.value)}
@@ -249,7 +250,7 @@ export function MultiSelectField({ p }: { p: FieldInputProps }) {
             key={o.value}
             htmlFor={cid}
             className={cn(
-              'flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1 text-xs transition-colors',
+              'flex h-6 cursor-pointer items-center gap-2 rounded-sm border px-2 text-xs transition-colors',
               checked
                 ? 'border-primary bg-primary-soft text-foreground font-medium'
                 : 'border-border hover:bg-accent text-muted-foreground',
@@ -270,7 +271,7 @@ export function MultiSelectField({ p }: { p: FieldInputProps }) {
         )
       })}
       {p.readOnly && selected.length === 0 && (
-        <span className="text-muted-foreground text-sm">—</span>
+        <span className="text-[13px] text-muted-foreground">—</span>
       )}
     </div>
   )
@@ -298,9 +299,9 @@ export function DateField({ p }: { p: FieldInputProps }) {
       aria-invalid={p.invalid || undefined}
       aria-describedby={p.error ? `${p.id}-error` : undefined}
       className={cn(
-        'h-8',
+        'h-8 text-[13px]',
         p.readOnly &&
-          'border-transparent bg-transparent shadow-none px-0 py-1 text-foreground cursor-default select-text disabled:opacity-100 disabled:cursor-default font-normal',
+          'cursor-default border-transparent bg-transparent px-0 py-1 text-[13px] font-normal text-foreground shadow-none select-text disabled:cursor-default disabled:opacity-100',
       )}
     />
   )
@@ -325,9 +326,9 @@ export function DateTimeField({ p }: { p: FieldInputProps }) {
       aria-invalid={p.invalid || undefined}
       aria-describedby={p.error ? `${p.id}-error` : undefined}
       className={cn(
-        'h-8',
+        'h-8 text-[13px]',
         p.readOnly &&
-          'border-transparent bg-transparent shadow-none px-0 py-1 text-foreground cursor-default select-text disabled:opacity-100 disabled:cursor-default font-normal',
+          'cursor-default border-transparent bg-transparent px-0 py-1 text-[13px] font-normal text-foreground shadow-none select-text disabled:cursor-default disabled:opacity-100',
       )}
     />
   )
@@ -337,7 +338,7 @@ export function DisplayField({ p }: { p: FieldInputProps }) {
   const v = p.value
   const text = Array.isArray(v) ? v.join(', ') : v === null || v === undefined || v === '' ? '—' : String(v)
   return (
-    <div id={p.id} className="text-foreground min-h-8 flex items-center text-sm font-medium">
+    <div id={p.id} className="flex min-h-8 items-center text-[13px] font-medium text-foreground">
       {text}
     </div>
   )

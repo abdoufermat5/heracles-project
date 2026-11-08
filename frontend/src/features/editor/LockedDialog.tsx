@@ -22,16 +22,16 @@ export function LockedDialog({ lock, onClose }: { lock: LockInfo | null; onClose
     <AlertDialog open={lock !== null} onOpenChange={(o) => !o && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle className="flex items-center gap-2 text-base font-semibold text-foreground">
+          <AlertDialogTitle className="flex items-center gap-2 text-[15px]">
             <Lock className="size-4 text-warning" aria-hidden />
             {t('editor.lockedTitle')}
           </AlertDialogTitle>
-          <AlertDialogDescription className="text-sm text-muted-foreground">
+          <AlertDialogDescription className="text-[13px]">
             {t('editor.lockedBody', { user: lock?.user ?? '', since: when })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogAction onClick={onClose} className="h-8 text-xs">{t('common.ok')}</AlertDialogAction>
+          <AlertDialogAction onClick={onClose}>{t('common.ok')}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

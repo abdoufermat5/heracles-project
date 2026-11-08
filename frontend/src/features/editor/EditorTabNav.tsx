@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleDot } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TabDescriptor } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
@@ -28,7 +28,7 @@ export function EditorTabNav({
       <div
         role="tablist"
         aria-label={t('editor.tabs', 'Tabs')}
-        className="flex lg:flex-col overflow-x-auto lg:overflow-visible border-b lg:border-b-0 border-border pb-1 lg:pb-0 gap-1"
+        className="flex gap-1 overflow-x-auto border-b lg:flex-col lg:overflow-visible lg:border-b-0"
       >
         {tabs.map((tb) => {
           const isSelected = currentTab === tb.name
@@ -47,39 +47,43 @@ export function EditorTabNav({
               id={`tab-${tb.name}`}
               onClick={() => onSelectTab(tb.name)}
               className={cn(
-                'group flex items-center justify-between whitespace-nowrap lg:whitespace-normal rounded-md lg:rounded-lg px-3 py-1.5 lg:py-2 text-left text-xs font-medium transition-colors',
+                'group relative flex h-8 items-center justify-between gap-2 whitespace-nowrap rounded-sm border border-transparent px-3 text-left text-[13px] transition-colors lg:whitespace-normal',
                 isSelected
-                  ? 'bg-primary-soft text-primary font-semibold shadow-xs'
+                  ? 'border-border bg-card font-medium text-foreground'
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                isOptional && !isActive && !isSelected && 'text-muted-foreground/70',
               )}
             >
+              {isSelected && (
+                <span
+                  className="absolute inset-y-0 left-0 w-0.5 bg-signal"
+                  aria-hidden
+                />
+              )}
+
               <div className="flex min-w-0 items-center gap-2">
-                {isOptional ? (
-                  isActive ? (
-                    <CheckCircle2 className="size-3.5 text-success shrink-0" />
-                  ) : (
-                    <CircleDot className="size-3.5 text-muted-foreground shrink-0 opacity-50" />
-                  )
-                ) : null}
                 <span className="truncate">{tb.label}</span>
                 {isOptional && !isActive && (
-                  <span className="text-muted-foreground text-[10px] font-normal shrink-0">
-                    ({t('editor.inactive')})
-                  </span>
+                  <Badge
+                    variant="neutral"
+                    className="h-4 shrink-0 rounded-sm px-1 text-[10px] font-normal"
+                  >
+                    {t('editor.inactive')}
+                  </Badge>
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+              <div className="ml-2 flex shrink-0 items-center gap-1.5">
                 {isDirty && !errorCount && (
                   <span
-                    className="bg-primary size-1.5 lg:size-2 rounded-full"
+                    className="size-1.5 rounded-full bg-signal"
                     title={t('editor.unsaved')}
                   />
                 )}
                 {errorCount > 0 && (
                   <Badge
                     variant="destructive"
-                    className="h-4 min-w-4 px-1 text-[10px] leading-none flex items-center gap-0.5"
+                    className="flex h-4 min-w-4 items-center gap-0.5 rounded-sm px-1 text-[10px] leading-none"
                     aria-label={t('editor.tabHasErrors')}
                   >
                     <AlertTriangle className="size-2.5" />

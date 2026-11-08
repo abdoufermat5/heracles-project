@@ -9,7 +9,6 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ColumnDescriptor } from '@/api/types'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -46,6 +45,11 @@ interface ListingToolbarProps {
   onTogglePreview: () => void
   supportsStatusFilter?: boolean
 }
+
+const segmentClass =
+  'inline-flex h-6 items-center rounded-sm px-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+const segmentOn = 'bg-card text-foreground'
+const segmentOff = 'text-muted-foreground hover:text-foreground'
 
 export function ListingToolbar({
   label,
@@ -90,196 +94,55 @@ export function ListingToolbar({
   }, [])
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Primary toolbar row */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Search input with debounced clear and "/" shortcut hint */}
-        <div className="relative min-w-64 max-w-sm flex-1">
-          <Search
-            className="text-muted-foreground pointer-events-none absolute top-2.5 left-2.5 size-4"
-            aria-hidden
-          />
-          <Input
-            ref={searchInputRef}
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={t('listing.searchPlaceholder', { type: label.toLowerCase() })}
-            aria-label={t('listing.search')}
-            className="h-8 pr-16 pl-8 text-sm"
-            type="search"
-          />
-          {searchQuery ? (
-            <button
-              type="button"
-              onClick={() => {
-                onSearchChange('')
-                searchInputRef.current?.focus()
-              }}
-              className="text-muted-foreground hover:text-foreground absolute top-2 right-2 flex size-4 items-center justify-center rounded-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              aria-label={t('listing.clearSearch')}
-            >
-              <X className="size-3.5" aria-hidden />
-            </button>
-          ) : (
-            <kbd className="text-muted-foreground bg-muted/60 border-border pointer-events-none absolute top-1.5 right-2 hidden h-5 items-center rounded border px-1.5 font-mono text-[10px] font-medium select-none sm:inline-flex">
-              /
-            </kbd>
-          )}
-        </div>
-
-        {/* Right side controls: Scope, Columns, Density, Preview */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Scope indicator and selector */}
-          <div className="flex items-center gap-1.5">
-            {currentDepartmentName && (
-              <Badge
-                variant="outline"
-                className="text-muted-foreground hidden h-8 gap-1.5 border-dashed px-2.5 text-xs font-normal md:inline-flex"
-                title={currentDepartmentName}
-              >
-                <Building2 className="size-3.5 text-muted-foreground" aria-hidden />
-                <span className="max-w-28 truncate">{currentDepartmentName}</span>
-              </Badge>
-            )}
-
-            <div
-              role="group"
-              aria-label={t('listing.scope')}
-              className="bg-muted inline-flex h-8 rounded-md p-0.5"
-            >
-              {(['one', 'sub'] as const).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  aria-pressed={scope === s}
-                  onClick={() => onScopeChange(s)}
-                  className={cn(
-                    'rounded-sm px-2.5 py-1 text-xs font-medium transition-all',
-                    scope === s
-                      ? 'bg-card text-foreground shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {t(`listing.scope_${s}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Column visibility dropdown */}
-          <DropdownMenu>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-1.5 px-2.5 text-xs"
-                    aria-label={t('listing.columns')}
-                  >
-                    <SlidersHorizontal className="size-3.5" aria-hidden />
-                    <span className="hidden lg:inline">{t('listing.columns')}</span>
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent>{t('listing.columns')}</TooltipContent>
-            </Tooltip>
-
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel className="text-xs font-semibold">
-                {t('listing.columns')}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {availableColumns.map((col) => {
-                const isChecked = columnVisibility[col.key] !== false
-                return (
-                  <DropdownMenuCheckboxItem
-                    key={col.key}
-                    checked={isChecked}
-                    onCheckedChange={() => onToggleColumn(col.key)}
-                    className="text-xs"
-                  >
-                    {col.label}
-                  </DropdownMenuCheckboxItem>
-                )
-              })}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={onResetColumns}
-                className="text-xs font-medium text-muted-foreground justify-center"
-              >
-                {t('listing.resetColumns')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Density toggle */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 px-2 text-xs"
-                onClick={() =>
-                  onDensityChange(density === 'comfortable' ? 'compact' : 'comfortable')
-                }
-                aria-label={
-                  density === 'comfortable'
-                    ? t('listing.densityCompact')
-                    : t('listing.densityComfortable')
-                }
-              >
-                <Rows3
-                  className={cn(
-                    'size-3.5 transition-transform',
-                    density === 'compact' && 'scale-y-75',
-                  )}
-                  aria-hidden
-                />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {density === 'comfortable'
-                ? t('listing.densityCompact')
-                : t('listing.densityComfortable')}
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Side preview panel toggle */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={showPreview ? 'secondary' : 'outline'}
-                size="sm"
-                className="h-8 px-2 text-xs"
-                onClick={onTogglePreview}
-                aria-label={t('listing.preview')}
-              >
-                <PanelRight className="size-3.5" aria-hidden />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('listing.preview')}</TooltipContent>
-          </Tooltip>
-        </div>
+    <div className="flex h-11 items-center gap-2 overflow-x-auto rounded-t-md border border-b-0 bg-card px-3">
+      {/* Search input with clear button and "/" shortcut hint */}
+      <div className="relative w-72 max-w-full shrink-0">
+        <Search
+          className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <Input
+          ref={searchInputRef}
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder={t('listing.searchPlaceholder', { type: label.toLowerCase() })}
+          aria-label={t('listing.search')}
+          className="h-8 pr-14 pl-8 text-[13px]"
+          type="search"
+        />
+        {searchQuery ? (
+          <button
+            type="button"
+            onClick={() => {
+              onSearchChange('')
+              searchInputRef.current?.focus()
+            }}
+            className="absolute top-1/2 right-2 flex size-5 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+            aria-label={t('listing.clearSearch')}
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        ) : (
+          <kbd className="pointer-events-none absolute top-1/2 right-2 hidden h-5 -translate-y-1/2 items-center rounded-sm border bg-muted/60 px-1.5 font-mono text-[10px] font-medium text-muted-foreground select-none sm:inline-flex">
+            /
+          </kbd>
+        )}
       </div>
 
-      {/* Filter chips bar (Status: All / Active / Locked) */}
+      {/* Status filter segmented control */}
       {supportsStatusFilter && (
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-muted-foreground font-medium uppercase tracking-wider text-[11px] mr-1">
-            {t('listing.filterStatus')}:
-          </span>
+        <div
+          role="group"
+          aria-label={t('listing.filterStatus')}
+          className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-md border bg-muted/50 p-0.5"
+        >
           {(['all', 'active', 'locked'] as const).map((st) => (
             <button
               key={st}
               type="button"
+              aria-pressed={statusFilter === st}
               onClick={() => onStatusFilterChange(st)}
-              className={cn(
-                'inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-medium transition-colors',
-                statusFilter === st
-                  ? 'bg-primary text-primary-foreground border-transparent'
-                  : 'bg-card text-muted-foreground border-border hover:bg-accent hover:text-foreground',
-              )}
+              className={cn(segmentClass, statusFilter === st ? segmentOn : segmentOff)}
             >
               {st === 'all'
                 ? t('listing.filterAll')
@@ -290,6 +153,128 @@ export function ListingToolbar({
           ))}
         </div>
       )}
+
+      {/* Scope indicator and segmented selector */}
+      <div className="flex shrink-0 items-center gap-2">
+        {currentDepartmentName && (
+          <span
+            className="hidden max-w-32 items-center gap-1 truncate text-xs text-muted-foreground md:inline-flex"
+            title={currentDepartmentName}
+          >
+            <Building2 className="size-3.5 shrink-0" aria-hidden />
+            <span className="truncate">{currentDepartmentName}</span>
+          </span>
+        )}
+        <div
+          role="group"
+          aria-label={t('listing.scope')}
+          className="inline-flex h-7 items-center gap-0.5 rounded-md border bg-muted/50 p-0.5"
+        >
+          {(['one', 'sub'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              aria-pressed={scope === s}
+              onClick={() => onScopeChange(s)}
+              className={cn(segmentClass, scope === s ? segmentOn : segmentOff)}
+            >
+              {t(`listing.scope_${s}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Right side controls: Columns, Density, Preview */}
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label={t('listing.columns')}
+                >
+                  <SlidersHorizontal aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>{t('listing.columns')}</TooltipContent>
+          </Tooltip>
+
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel className="text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">
+              {t('listing.columns')}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {availableColumns.map((col) => {
+              const isChecked = columnVisibility[col.key] !== false
+              return (
+                <DropdownMenuCheckboxItem
+                  key={col.key}
+                  checked={isChecked}
+                  onCheckedChange={() => onToggleColumn(col.key)}
+                >
+                  {col.label}
+                </DropdownMenuCheckboxItem>
+              )
+            })}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={onResetColumns}
+              className="justify-center text-muted-foreground"
+            >
+              {t('listing.resetColumns')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Density toggle */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() =>
+                onDensityChange(density === 'comfortable' ? 'compact' : 'comfortable')
+              }
+              aria-label={
+                density === 'comfortable'
+                  ? t('listing.densityCompact')
+                  : t('listing.densityComfortable')
+              }
+            >
+              <Rows3
+                className={cn(
+                  'transition-transform',
+                  density === 'compact' && 'scale-y-75',
+                )}
+                aria-hidden
+              />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {density === 'comfortable'
+              ? t('listing.densityCompact')
+              : t('listing.densityComfortable')}
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Side preview panel toggle */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={showPreview ? 'secondary' : 'outline'}
+              size="icon-sm"
+              onClick={onTogglePreview}
+              aria-label={t('listing.preview')}
+            >
+              <PanelRight aria-hidden />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('listing.preview')}</TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   )
 }

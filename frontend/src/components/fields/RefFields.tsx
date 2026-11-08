@@ -83,13 +83,13 @@ export function ObjectRefPicker({
           aria-expanded={open}
           aria-invalid={invalid || undefined}
           disabled={disabled}
-          className="h-8 w-full justify-between font-normal text-sm"
+          className="h-8 w-full justify-between text-[13px] font-normal"
         >
           <span className="text-muted-foreground truncate">{label}</span>
           <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-(--radix-popover-trigger-width) min-w-72 p-0 shadow-md" align="start">
+      <PopoverContent className="w-(--radix-popover-trigger-width) min-w-72 p-0" align="start">
         <Command shouldFilter={false}>
           <div className="flex items-center border-b px-2.5 py-1.5">
             <Search className="size-3.5 text-muted-foreground mr-2 shrink-0" />
@@ -99,7 +99,7 @@ export function ObjectRefPicker({
               onChange={(e) => setQ(e.target.value)}
               placeholder={t('fields.searchPlaceholder')}
               aria-label={t('fields.searchPlaceholder')}
-              className="h-7 border-0 p-0 text-sm shadow-none focus-visible:ring-0"
+              className="h-7 border-0 p-0 text-[13px] shadow-none focus-visible:ring-0"
             />
           </div>
           <CommandList className="max-h-64">
@@ -127,7 +127,7 @@ export function ObjectRefPicker({
                     <Check className={cn('size-3.5 shrink-0', isSel ? 'opacity-100 text-primary' : 'opacity-0')} />
                     {getRefIcon(refType)}
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{displayName}</div>
+                      <div className="truncate text-[13px] font-medium">{displayName}</div>
                       <div className="font-dn text-muted-foreground truncate text-xs">{item.dn}</div>
                     </div>
                   </CommandItem>
@@ -157,11 +157,11 @@ function Chip({
   return (
     <Badge
       variant="secondary"
-      className="max-w-full gap-1.5 pl-2 pr-1 py-0.5 font-normal text-xs transition-colors"
+      className="h-6 max-w-full gap-1 rounded-sm border-border bg-muted px-1.5 py-0 font-normal text-xs text-foreground transition-colors"
       title={dn}
     >
       {refType && getRefIcon(refType)}
-      <span className="truncate max-w-[200px]">{display}</span>
+      <span className="max-w-[200px] truncate font-mono">{display}</span>
       {!disabled && (
         <button
           type="button"
@@ -214,7 +214,7 @@ export function ObjectRefField({ p }: { p: FieldInputProps }) {
         />
       )}
       {p.readOnly && values.length === 0 && (
-        <span className="text-muted-foreground text-sm">—</span>
+        <span className="text-[13px] text-muted-foreground">—</span>
       )}
     </div>
   )
@@ -284,8 +284,8 @@ function TreeItem({
     <li role="treeitem" aria-expanded={has ? open : undefined} aria-selected={isSel}>
       <div
         className={cn(
-          'hover:bg-accent flex items-center gap-1 rounded-md pr-2 transition-colors',
-          isSel && 'bg-primary-soft text-foreground font-medium',
+          'flex h-7 items-center gap-1 rounded-sm pr-2 transition-colors hover:bg-accent',
+          isSel && 'bg-primary-soft font-medium text-foreground',
         )}
         style={{ paddingLeft: level * 14 }}
       >
@@ -301,7 +301,7 @@ function TreeItem({
         </button>
         <button
           type="button"
-          className="flex-1 truncate py-1.5 text-left text-sm"
+          className="flex-1 truncate py-1 text-left text-[13px]"
           onClick={() => onSelect(node)}
           title={node.dn}
         >
@@ -339,7 +339,7 @@ export function DepartmentPicker({
 
   if (disabled) {
     return (
-      <div id={id} className="h-8 flex items-center text-sm font-medium gap-1.5">
+      <div id={id} className="flex h-8 items-center gap-1.5 text-[13px] font-medium">
         <Building2 className="size-3.5 text-muted-foreground" />
         <span className="truncate">{current?.label ?? (value ? rdnValue(value) : '—')}</span>
       </div>
@@ -355,7 +355,7 @@ export function DepartmentPicker({
           variant="outline"
           disabled={disabled}
           aria-invalid={invalid || undefined}
-          className="h-8 w-full justify-between font-normal text-sm"
+          className="h-8 w-full justify-between text-[13px] font-normal"
         >
           <span className={cn('flex items-center gap-1.5 truncate', !value && 'text-muted-foreground')}>
             <Building2 className="size-3.5 text-muted-foreground shrink-0" />
@@ -364,7 +364,7 @@ export function DepartmentPicker({
           <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-2 shadow-md" align="start">
+      <PopoverContent className="w-80 p-2" align="start">
         <div className="mb-2 border-b pb-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2 top-2 size-3.5 text-muted-foreground" />

@@ -35,32 +35,26 @@ export function LdifDialog({ open, onOpenChange, ldif, title }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl sm:max-h-[85vh] flex flex-col">
+      <DialogContent className="flex max-w-2xl flex-col sm:max-h-[85vh]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-            <FileCode2 className="size-4 text-primary" />
+          <DialogTitle className="flex items-center gap-2 text-[15px]">
+            <FileCode2 className="size-4 text-muted-foreground" aria-hidden />
             {t('editor.ldifTitle')} — {title}
           </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
+          <DialogDescription className="text-[13px]">
             {t('editor.rawLdif')}
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="h-96 w-full rounded-md border border-border bg-muted/40 p-3">
-          <pre className="font-dn text-xs text-foreground whitespace-pre-wrap select-text leading-relaxed">
+        <ScrollArea className="h-96 w-full rounded-sm border bg-muted/40 p-3">
+          <pre className="font-dn text-xs leading-relaxed whitespace-pre-wrap text-foreground select-text">
             {ldif}
           </pre>
         </ScrollArea>
 
         <DialogFooter className="flex items-center justify-between sm:justify-between">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onCopy}
-            className="h-8 gap-1.5"
-          >
-            {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
+          <Button type="button" variant="outline" size="sm" onClick={onCopy}>
+            {copied ? <Check className="text-success" /> : <Copy />}
             {t('editor.copyLdif')}
           </Button>
           <Button
@@ -68,7 +62,6 @@ export function LdifDialog({ open, onOpenChange, ldif, title }: Props) {
             variant="secondary"
             size="sm"
             onClick={() => onOpenChange(false)}
-            className="h-8"
           >
             {t('common.close', 'Close')}
           </Button>

@@ -9,7 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { TypeIcon } from '@/lib/icons'
 
 interface ListingHeaderProps {
   type: string
@@ -35,34 +34,30 @@ export function ListingHeader({
   onExportCsv,
 }: ListingHeaderProps) {
   const { t } = useTranslation()
-  const iconName = summary?.icon ?? descriptor?.icon ?? type
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-4">
-      <div className="flex items-center gap-3">
-        <div className="bg-primary-soft text-primary flex size-10 items-center justify-center rounded-lg border border-border/80 shadow-xs">
-          <TypeIcon name={iconName} className="size-5" />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">{label}</h1>
-          <p className="text-muted-foreground text-sm" aria-live="polite">
-            {isSuccess && total !== null
-              ? t('listing.count', { count: total })
-              : '\u00a0'}
-          </p>
-        </div>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex min-w-0 items-baseline gap-3">
+        <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">
+          {label}
+        </h1>
+        <span
+          className="font-mono text-[13px] text-muted-foreground tabular-nums"
+          aria-live="polite"
+        >
+          {isSuccess && total !== null ? t('listing.count', { count: total }) : '\u00a0'}
+        </span>
       </div>
 
       <div className="flex items-center gap-2">
         <Button
           variant="outline"
           size="sm"
-          className="h-8 gap-1.5"
           onClick={onRefresh}
           disabled={isFetching}
           aria-label={t('listing.refresh')}
         >
-          <RefreshCw className={`size-3.5 ${isFetching ? 'animate-spin' : ''}`} aria-hidden />
+          <RefreshCw className={isFetching ? 'animate-spin' : undefined} aria-hidden />
           <span className="hidden sm:inline">{t('listing.refresh')}</span>
         </Button>
 
@@ -70,25 +65,24 @@ export function ListingHeader({
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              size="sm"
-              className="h-8 px-2.5"
+              size="icon-sm"
               aria-label={t('listing.actions')}
             >
-              <MoreHorizontal className="size-4" aria-hidden />
+              <MoreHorizontal aria-hidden />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuItem onClick={onExportCsv} className="gap-2">
-              <Download className="size-4 text-muted-foreground" aria-hidden />
+              <Download className="size-3.5 text-muted-foreground" aria-hidden />
               <span>{t('listing.exportCsv')}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
         {summary?.can_create && (
-          <Button asChild size="sm" className="h-8 gap-1.5 shadow-xs">
+          <Button asChild size="sm">
             <Link to="/types/$type/new" params={{ type }}>
-              <Plus className="size-4" aria-hidden />
+              <Plus aria-hidden />
               {t('listing.create', { type: descriptor?.label ?? type })}
             </Link>
           </Button>

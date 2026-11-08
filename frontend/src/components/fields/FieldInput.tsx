@@ -47,7 +47,7 @@ function ListLike({
   return (
     <div className="space-y-2" id={p.id} role="group" aria-labelledby={`${p.id}-label`}>
       {items.length === 0 && (
-        <p className="text-muted-foreground text-sm">{t('fields.listEmpty')}</p>
+        <p className="text-[13px] text-muted-foreground">{t('fields.listEmpty')}</p>
       )}
       <ul className="space-y-2">
         {items.map((it, i) => {
@@ -73,12 +73,12 @@ function ListLike({
                 )}
               </div>
               {!p.readOnly && (
-                <div className="flex shrink-0 gap-0.5 pt-0.5">
+                <div className="flex shrink-0 gap-0.5">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="size-8"
+                    className="size-7"
                     disabled={i === 0}
                     onClick={() => move(i, -1)}
                     aria-label={t('fields.moveUp')}
@@ -90,7 +90,7 @@ function ListLike({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="size-8"
+                    className="size-7"
                     disabled={i === items.length - 1}
                     onClick={() => move(i, 1)}
                     aria-label={t('fields.moveDown')}
@@ -102,7 +102,7 @@ function ListLike({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="text-destructive hover:text-destructive size-8"
+                    className="size-7 text-destructive hover:text-destructive"
                     onClick={() => set(items.filter((_, k) => k !== i))}
                     aria-label={t('fields.removeItem', { name: String(i + 1) })}
                     title={t('fields.removeItem', { name: String(i + 1) })}
@@ -141,14 +141,14 @@ function CompositeField({ p }: { p: FieldInputProps }) {
       id={p.id}
       role="group"
       aria-labelledby={`${p.id}-label`}
-      className="bg-muted/30 grid gap-3 rounded-lg border border-border p-3.5 sm:grid-cols-2"
+      className="grid gap-3 rounded-md border bg-muted/30 p-3 sm:grid-cols-2"
     >
       {(p.descriptor.fields ?? []).map((f) => {
         const fid = `${p.id}-${f.name}`
         const err = errorAt(p.errorTree, f.name)
         return (
           <div key={f.name} className="space-y-1.5">
-            <label htmlFor={fid} id={`${fid}-label`} className="text-xs font-medium text-foreground">
+            <label htmlFor={fid} id={`${fid}-label`} className="text-xs font-medium text-muted-foreground">
               {f.label}
               {f.required && <span aria-hidden className="text-destructive font-medium"> *</span>}
             </label>

@@ -31,19 +31,18 @@ export function EditorSection({
   return (
     <section
       aria-labelledby={`sec-${tabName}-${section.name}`}
-      className="bg-card rounded-lg border border-border p-5 shadow-xs space-y-4"
+      className="rounded-md border bg-card"
     >
-      <div>
+      <div className="flex h-10 items-center justify-between border-b px-4">
         <h2
           id={`sec-${tabName}-${section.name}`}
-          className="text-sm font-semibold text-foreground tracking-tight"
+          className="text-[13px] font-semibold text-foreground"
         >
           {section.label}
         </h2>
-        {/* If section description exists in future descriptors */}
       </div>
 
-      <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-8 gap-y-4 p-4 md:grid-cols-2">
         {visible.map((a: AttributeDescriptor) => {
           const right = attrRight(acl, tabName, a)
           const ro = readOnlyMode || right !== 'rw' || (a.readonly === true && !isCreate)

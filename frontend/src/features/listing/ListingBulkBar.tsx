@@ -12,6 +12,9 @@ interface ListingBulkBarProps {
   isDeleting?: boolean
 }
 
+const darkGhost =
+  'text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground'
+
 export function ListingBulkBar({
   type,
   selectedCount,
@@ -29,24 +32,19 @@ export function ListingBulkBar({
     <div
       role="region"
       aria-label={t('listing.bulkActions')}
-      className="bg-card border-border shadow-md animate-in fade-in-0 slide-in-from-bottom-2 duration-200 sticky bottom-3 z-30 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5"
+      className="flex h-11 items-center justify-between gap-3 border-x border-primary bg-primary px-3 text-primary-foreground"
     >
-      <div className="flex items-center gap-2">
-        <span className="bg-primary/10 text-primary flex size-6 items-center justify-center rounded-full text-xs font-semibold">
-          {selectedCount}
-        </span>
-        <span className="text-sm font-medium">
-          {t('listing.selected', { count: selectedCount })}
-        </span>
-      </div>
+      <span className="text-[13px] font-medium tabular-nums">
+        {t('listing.selected', { count: selectedCount })}
+      </span>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         {type === 'user' && onLock && (
           <>
             <Button
               size="sm"
-              variant="outline"
-              className="h-8 gap-1.5 text-xs"
+              variant="ghost"
+              className={darkGhost}
               onClick={() => onLock(true)}
               disabled={isLocking}
             >
@@ -55,8 +53,8 @@ export function ListingBulkBar({
             </Button>
             <Button
               size="sm"
-              variant="outline"
-              className="h-8 gap-1.5 text-xs"
+              variant="ghost"
+              className={darkGhost}
               onClick={() => onLock(false)}
               disabled={isLocking}
             >
@@ -68,8 +66,8 @@ export function ListingBulkBar({
 
         <Button
           size="sm"
-          variant="destructive"
-          className="h-8 gap-1.5 text-xs"
+          variant="ghost"
+          className="text-primary-foreground/80 hover:bg-destructive/30 hover:text-primary-foreground"
           onClick={onDelete}
           disabled={isDeleting}
         >
@@ -78,13 +76,13 @@ export function ListingBulkBar({
         </Button>
 
         <Button
-          size="sm"
+          size="icon-sm"
           variant="ghost"
-          className="h-8 px-2 text-muted-foreground hover:text-foreground"
+          className={darkGhost}
           onClick={onClearSelection}
           aria-label={t('listing.clearSelection')}
         >
-          <X className="size-4" aria-hidden />
+          <X aria-hidden />
         </Button>
       </div>
     </div>

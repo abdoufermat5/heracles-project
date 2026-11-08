@@ -65,26 +65,26 @@ export function ImageField({ p }: { p: FieldInputProps }) {
   if (p.readOnly) {
     return (
       <div className="flex items-center gap-3">
-        <div className="bg-muted flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border">
+        <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
           {src ? (
             <img src={src} alt={p.descriptor.label} className="size-full object-cover" />
           ) : (
             <User className="text-muted-foreground size-6" aria-hidden />
           )}
         </div>
-        {!src && <span className="text-muted-foreground text-sm">—</span>}
+        {!src && <span className="text-[13px] text-muted-foreground">—</span>}
       </div>
     )
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-4">
+    <div className="flex flex-wrap items-center gap-3">
       <div
         className={cn(
-          'bg-muted/30 relative flex size-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed transition-colors',
+          'relative flex size-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md border border-dashed bg-muted/30 transition-colors',
           isDragOver
-            ? 'border-primary bg-primary-soft/40'
-            : 'border-border hover:border-primary/50',
+            ? 'border-signal bg-primary-soft/40'
+            : 'border-border hover:border-signal/50',
         )}
         onDragOver={(e) => {
           e.preventDefault()
@@ -100,7 +100,7 @@ export function ImageField({ p }: { p: FieldInputProps }) {
         ) : (
           <div className="flex flex-col items-center gap-1 text-center">
             {isDragOver ? (
-              <UploadCloud className="size-6 text-primary animate-pulse" />
+              <UploadCloud className="size-5 text-signal" />
             ) : (
               <User className="text-muted-foreground size-6" aria-hidden />
             )}
@@ -142,7 +142,7 @@ export function ImageField({ p }: { p: FieldInputProps }) {
             </Button>
           )}
         </div>
-        <p className="text-muted-foreground text-xs">
+        <p className="text-[12px] text-muted-foreground">
           {t('fields.dragDropImage', 'Drag and drop an image or click to browse.')}
         </p>
       </div>
@@ -173,7 +173,7 @@ export function FileField({ p }: { p: FieldInputProps }) {
 
   if (p.readOnly) {
     return (
-      <div className="flex h-8 items-center gap-2 text-sm">
+      <div className="flex h-8 items-center gap-2 text-[13px]">
         {has ? (
           <>
             <FileText className="size-4 text-muted-foreground" />
@@ -191,10 +191,10 @@ export function FileField({ p }: { p: FieldInputProps }) {
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center gap-3 rounded-lg border p-2.5 transition-colors',
+        'flex flex-wrap items-center gap-3 rounded-md border p-2.5 transition-colors',
         isDragOver
-          ? 'border-primary bg-primary-soft/30'
-          : 'border-border bg-card',
+          ? 'border-signal bg-primary-soft/30'
+          : 'border-border bg-muted/20',
       )}
       onDragOver={(e) => {
         e.preventDefault()
@@ -213,7 +213,7 @@ export function FileField({ p }: { p: FieldInputProps }) {
       />
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <FileText className="text-muted-foreground size-4 shrink-0" />
-        <span className="text-muted-foreground truncate text-sm">
+        <span className="truncate text-[13px] text-muted-foreground">
           {has ? t('fields.fileStored', { size }) : t('fields.noFile')}
         </span>
       </div>

@@ -21,18 +21,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { ObjectListItem, TypeDescriptor } from '@/api/types'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import {
-  formatCellValue,
-  getInitials,
-  isMonospaceKey,
-  type Density,
-} from './types'
+import { formatCellValue, isMonospaceKey, type Density } from './types'
 
 interface ListingTableProps {
   type: string
@@ -77,9 +71,8 @@ export function ListingTable({
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
 
-  const isPerson = type === 'user'
   const linkKey = descriptor.main_attr ?? descriptor.columns[0]?.key
-  const rowHeight = density === 'compact' ? 34 : 42
+  const rowHeight = density === 'compact' ? 30 : 36
 
   const handleCopyDn = useCallback(
     (e: React.MouseEvent, dn: string) => {
@@ -160,8 +153,8 @@ export function ListingTable({
             return (
               <span
                 className={cn(
-                  'text-muted-foreground block truncate',
-                  mono && 'font-mono text-xs text-foreground/80',
+                  'block truncate text-muted-foreground',
+                  mono && 'font-mono text-[13px] text-foreground/80',
                 )}
                 title={text}
               >
@@ -170,28 +163,14 @@ export function ListingTable({
             )
           }
 
-          // Main primary attribute column
-          const displayName = String(
-            row.original.values[descriptor.name_attr] ??
-              row.original.values[descriptor.main_attr] ??
-              text,
-          )
-
           return (
-            <div className="flex items-center gap-2.5 min-w-0">
-              {isPerson && (
-                <Avatar className="size-6 shrink-0 ring-1 ring-border">
-                  <AvatarFallback className="text-[10px] font-semibold bg-muted text-muted-foreground">
-                    {getInitials(displayName)}
-                  </AvatarFallback>
-                </Avatar>
-              )}
+            <div className="flex min-w-0 items-center gap-2">
               <Link
                 to="/types/$type/$dn"
                 params={{ type, dn: row.original.dn }}
                 className={cn(
-                  'hover:text-primary truncate font-medium text-foreground focus-visible:underline focus-visible:outline-none',
-                  mono && 'font-mono text-xs',
+                  'truncate text-[13px] font-medium text-foreground hover:text-signal focus-visible:underline focus-visible:outline-none',
+                  mono && 'font-mono',
                 )}
                 onClick={(e) => e.stopPropagation()}
                 title={text}
@@ -200,10 +179,10 @@ export function ListingTable({
               </Link>
               {row.original.locked && (
                 <Badge
-                  variant="outline"
-                  className="text-warning border-warning/40 h-4.5 gap-1 px-1.5 text-[10px] shrink-0"
+                  variant="warning"
+                  className="h-5 shrink-0 gap-1 rounded-sm px-1.5 text-[11px]"
                 >
-                  <Lock className="size-2.5" aria-hidden />
+                  <Lock className="size-3" aria-hidden />
                   {t('listing.locked')}
                 </Badge>
               )}
@@ -217,7 +196,7 @@ export function ListingTable({
         header: () => <span className="sr-only">{t('listing.actions')}</span>,
         cell: ({ row }) => (
           <div
-            className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+            className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
             onClick={(e) => e.stopPropagation()}
           >
             <Tooltip>
@@ -225,11 +204,11 @@ export function ListingTable({
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  className="size-7 text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground"
                   onClick={(e) => handleCopyDn(e, row.original.dn)}
                   aria-label={t('listing.copyDn')}
                 >
-                  <Copy className="size-3.5" aria-hidden />
+                  <Copy aria-hidden />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{t('listing.copyDn')}</TooltipContent>
@@ -241,11 +220,11 @@ export function ListingTable({
                   asChild
                   variant="ghost"
                   size="icon-xs"
-                  className="size-7 text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground"
                   aria-label={t('listing.open')}
                 >
                   <Link to="/types/$type/$dn" params={{ type, dn: row.original.dn }}>
-                    <ExternalLink className="size-3.5" aria-hidden />
+                    <ExternalLink aria-hidden />
                   </Link>
                 </Button>
               </TooltipTrigger>
@@ -258,14 +237,14 @@ export function ListingTable({
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    className="size-7 text-muted-foreground hover:text-destructive"
+                    className="text-muted-foreground hover:text-destructive"
                     onClick={(e) => {
                       e.stopPropagation()
                       onDeleteSingle(row.original)
                     }}
                     aria-label={t('common.delete')}
                   >
-                    <Trash2 className="size-3.5" aria-hidden />
+                    <Trash2 aria-hidden />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('common.delete')}</TooltipContent>
@@ -279,7 +258,6 @@ export function ListingTable({
   }, [
     descriptor,
     handleCopyDn,
-    isPerson,
     linkKey,
     onDeleteSingle,
     onSelectionChange,
@@ -384,7 +362,7 @@ export function ListingTable({
 
   return (
     <div
-      className="bg-card overflow-hidden rounded-xl border border-border shadow-xs outline-none"
+      className="overflow-hidden rounded-b-md border bg-card outline-none"
       tabIndex={0}
       onKeyDown={handleTableKeyDown}
       role="region"
@@ -392,12 +370,12 @@ export function ListingTable({
     >
       <div
         ref={scrollerRef}
-        className="max-h-[calc(100vh-18rem)] min-h-56 overflow-auto"
+        className="min-h-56 max-h-[calc(100vh-18rem)] overflow-auto"
       >
-        <table className="w-full caption-bottom text-sm border-collapse">
-          <thead className="bg-muted/40 sticky top-0 z-10 border-b border-border shadow-xs backdrop-blur-xs">
+        <table className="w-full border-collapse text-[13px]">
+          <thead className="sticky top-0 z-10 bg-muted/50">
             {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id}>
+              <tr key={hg.id} className="border-b">
                 {hg.headers.map((h) => {
                   const sorted = h.column.getIsSorted()
                   const canSort = h.column.getCanSort()
@@ -413,24 +391,27 @@ export function ListingTable({
                             : undefined
                       }
                       className={cn(
-                        'text-muted-foreground h-9 px-3 text-left text-xs font-semibold select-none',
+                        'h-8 px-3 text-left select-none',
                         h.id === 'select' && 'w-10 text-center',
-                        h.id === 'actions' && 'w-24 text-right',
+                        h.id === 'actions' && 'w-20 text-right',
                       )}
                     >
                       {canSort ? (
                         <button
                           type="button"
-                          className="hover:text-foreground inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm py-0.5"
+                          className={cn(
+                            'label-caps inline-flex items-center gap-1 rounded-sm py-0.5 transition-colors hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none',
+                            sorted ? 'text-foreground' : 'text-muted-foreground',
+                          )}
                           onClick={h.column.getToggleSortingHandler()}
                         >
                           <span>{String(h.column.columnDef.header)}</span>
                           {sorted === 'asc' ? (
-                            <ArrowUp className="size-3 text-primary" aria-hidden />
+                            <ArrowUp className="size-3" aria-hidden />
                           ) : sorted === 'desc' ? (
-                            <ArrowDown className="size-3 text-primary" aria-hidden />
+                            <ArrowDown className="size-3" aria-hidden />
                           ) : (
-                            <ArrowUpDown className="size-3 opacity-30" aria-hidden />
+                            <ArrowUpDown className="size-3 opacity-40" aria-hidden />
                           )}
                         </button>
                       ) : h.isPlaceholder ? null : (
@@ -442,7 +423,7 @@ export function ListingTable({
               </tr>
             ))}
           </thead>
-          <tbody className="divide-y divide-border/60">
+          <tbody>
             {padTop > 0 && (
               <tr aria-hidden style={{ height: padTop }}>
                 <td colSpan={columns.length} />
@@ -461,10 +442,10 @@ export function ListingTable({
                   data-state={isSelected ? 'selected' : undefined}
                   style={{ height: rowHeight }}
                   className={cn(
-                    'group hover:bg-accent/50 cursor-pointer transition-colors',
-                    isSelected && 'bg-primary-soft/60 hover:bg-primary-soft',
-                    isPreviewSelected && 'bg-accent/80 ring-1 ring-inset ring-primary/40',
-                    isFocused && 'ring-2 ring-inset ring-primary/60',
+                    'group cursor-pointer border-b transition-colors last:border-b-0 hover:bg-accent/50',
+                    isSelected && 'bg-primary-soft hover:bg-primary-soft',
+                    isPreviewSelected && 'bg-accent/70',
+                    isFocused && 'ring-1 ring-inset ring-signal/50',
                   )}
                   onClick={() => {
                     setFocusedIndex(vi.index)
@@ -481,9 +462,9 @@ export function ListingTable({
                     <td
                       key={cell.id}
                       className={cn(
-                        'truncate px-3 text-xs',
+                        'truncate px-3',
                         cell.column.id === 'select' && 'w-10 text-center',
-                        cell.column.id === 'actions' && 'w-24 text-right',
+                        cell.column.id === 'actions' && 'w-20 text-right',
                       )}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -502,8 +483,8 @@ export function ListingTable({
       </div>
 
       {/* Table Footer */}
-      <div className="bg-card text-muted-foreground flex items-center justify-between border-t border-border px-3.5 py-2 text-xs">
-        <div className="flex items-center gap-2">
+      <div className="flex h-10 items-center justify-between border-t px-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 tabular-nums">
           <span>
             {t('listing.showing', {
               shown: rows.length,
@@ -511,7 +492,7 @@ export function ListingTable({
             })}
           </span>
           {Object.keys(selection).length > 0 && (
-            <span className="text-primary font-medium">
+            <span className="font-medium text-foreground">
               ({t('listing.selected', { count: Object.keys(selection).length })})
             </span>
           )}
@@ -519,10 +500,9 @@ export function ListingTable({
         {hasNextPage && (
           <Button
             size="sm"
-            variant="ghost"
+            variant="outline"
             disabled={isFetchingNextPage}
             onClick={onFetchNextPage}
-            className="h-7 text-xs"
           >
             {isFetchingNextPage ? t('common.loading') : t('listing.loadMore')}
           </Button>

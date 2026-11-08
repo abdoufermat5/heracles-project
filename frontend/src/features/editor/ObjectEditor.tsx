@@ -69,15 +69,15 @@ export function ObjectEditor({ type, dn }: Props) {
   if (dn !== null && obj.isError) return <ErrorState error={obj.error} onRetry={() => void obj.refetch()} />
   if (!desc.data || (dn !== null && !obj.data)) {
     return (
-      <div className="space-y-6" aria-busy="true" aria-label={t('common.loading')}>
+      <div className="space-y-4" aria-busy="true" aria-label={t('common.loading')}>
         <div className="flex items-center gap-4">
-          <Skeleton className="size-12 rounded-xl" />
+          <Skeleton className="size-10 rounded-md" />
           <div className="space-y-2">
             <Skeleton className="h-6 w-48" />
             <Skeleton className="h-4 w-72" />
           </div>
         </div>
-        <Skeleton className="h-96 w-full rounded-lg" />
+        <Skeleton className="h-96 w-full rounded-md" />
       </div>
     )
   }
@@ -350,7 +350,7 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
     editing && currentTabObj && (isCreate || !currentTabAcl || currentTabAcl.object.includes('m'))
 
   return (
-    <form onSubmit={(e) => void save(e)} noValidate className="space-y-6">
+    <form onSubmit={(e) => void save(e)} noValidate className="space-y-4">
       <EditorHeader
         desc={desc}
         dn={detail?.dn ?? null}
@@ -380,7 +380,7 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
       )}
 
       {/* Main tabbed layout */}
-      <div className="flex flex-col lg:flex-row items-start gap-6 pt-1">
+      <div className="flex flex-col items-start gap-4 pt-1 lg:flex-row">
         <EditorTabNav
           tabs={desc.tabs}
           currentTab={tab}
@@ -394,12 +394,12 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
           role="tabpanel"
           id={`panel-${currentTabObj?.name}`}
           aria-labelledby={`tab-${currentTabObj?.name}`}
-          className="w-full flex-1 min-w-0 space-y-6"
+          className="w-full min-w-0 flex-1 space-y-4"
         >
           {currentTabObj?.optional && (
-            <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4 shadow-xs">
+            <div className="flex items-center justify-between rounded-md border bg-card p-4">
               <div>
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-[13px] font-medium text-foreground">
                   {t('editor.enableTab', { tab: currentTabObj.label })}
                 </p>
                 <p className="text-muted-foreground text-xs">{t('editor.enableTabHelp')}</p>
@@ -464,17 +464,17 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base font-semibold">
+            <AlertDialogTitle className="text-[15px] font-semibold">
               {t('editor.deleteTitle', { name: title })}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-muted-foreground">
+            <AlertDialogDescription className="text-[13px] text-muted-foreground">
               {t('editor.deleteBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-8 text-xs">{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 h-8 text-xs"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => void doDelete()}
             >
               {t('common.delete')}
@@ -486,23 +486,21 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
       <AlertDialog open={blocker.status === 'blocked'}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base font-semibold">
+            <AlertDialogTitle className="text-[15px] font-semibold">
               {t('editor.leaveTitle')}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-muted-foreground">
+            <AlertDialogDescription className="text-[13px] text-muted-foreground">
               {t('editor.leaveBody')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel
               onClick={() => blocker.status === 'blocked' && blocker.reset()}
-              className="h-8 text-xs"
             >
               {t('editor.stay')}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => blocker.status === 'blocked' && blocker.proceed()}
-              className="h-8 text-xs"
             >
               {t('editor.leave')}
             </AlertDialogAction>

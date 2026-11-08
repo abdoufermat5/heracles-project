@@ -40,12 +40,12 @@ export function ListingDeleteDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-md">
         <AlertDialogHeader>
-          <AlertDialogTitle>
+          <AlertDialogTitle className="text-[15px]">
             {t('listing.deleteTitle', { count })}
           </AlertDialogTitle>
-          <AlertDialogDescription className="space-y-2 text-left">
+          <AlertDialogDescription className="space-y-2 text-left text-[13px]">
             <span>{t('listing.deleteConfirmDesc')}</span>
-            <div className="bg-muted/50 border-border max-h-48 overflow-y-auto rounded-md border p-2 text-xs">
+            <div className="max-h-48 overflow-y-auto rounded-sm border bg-muted/40 p-2">
               <ul className="space-y-1">
                 {previewDns.map((dn) => {
                   const item = itemsMap?.get(dn)
@@ -53,19 +53,19 @@ export function ListingDeleteDialog({
                     ? String(item.values[nameAttr])
                     : dn
                   return (
-                    <li key={dn} className="truncate font-mono text-[11px] text-foreground">
+                    <li key={dn} className="truncate font-mono text-[12px] text-foreground">
                       {displayName}
                     </li>
                   )
                 })}
               </ul>
               {remainingCount > 0 && (
-                <p className="text-muted-foreground mt-2 font-sans italic">
+                <p className="mt-2 text-muted-foreground">
                   {t('listing.andMore', { count: remainingCount })}
                 </p>
               )}
             </div>
-            <p className="text-destructive font-medium text-xs pt-1">
+            <p className="pt-1 text-[12px] font-medium text-destructive">
               {t('editor.deleteBody')}
             </p>
           </AlertDialogDescription>
@@ -75,7 +75,7 @@ export function ListingDeleteDialog({
             {t('common.cancel')}
           </AlertDialogCancel>
           <AlertDialogAction
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            variant="destructive"
             onClick={onConfirm}
             disabled={isDeleting}
           >
