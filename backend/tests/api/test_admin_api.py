@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from heracles.api.state import AppState
 from heracles.demo import BASE
 from heracles.server import build_demo_app
 
@@ -242,7 +244,8 @@ def test_config_get_and_put(client: TestClient, admin: Api) -> None:
     assert saved.status_code == 200, saved.text
     fields = {f["key"]: f for f in saved.json()["fields"]}
     assert fields["password_min_length"]["source"] == "directory"
-    state = client.app.state.heracles  # type: ignore[attr-defined]
+    app = cast("FastAPI", client.app)
+    state = cast("AppState", app.state.heracles)
     assert state.policy.min_length == 14  # applied without restart
     assert state.login_config.login_attribute == "mail"
 
