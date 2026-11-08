@@ -16,6 +16,7 @@ export type ErrorCode =
   | 'ldap_error'
   | 'reauth_required'
   | 'last_second_factor'
+  | 'second_factor_required'
   | 'internal'
 
 export interface LockInfo {
@@ -80,6 +81,24 @@ export interface WebAuthnCredentialInfo {
 export interface WebAuthnRegisterRequest {
   label: string
   credential: Record<string, unknown>
+}
+
+export interface TotpStatus {
+  enabled: boolean
+  recovery_codes_remaining: number
+  security_keys: number
+}
+
+/** A TOTP secret awaiting its first valid code. */
+export interface TotpEnrolment {
+  secret: string
+  /** `otpauth://` URI, shown as a QR code. */
+  uri: string
+  expires_in: number
+}
+
+export interface RecoveryCodes {
+  codes: string[]
 }
 
 export interface Me {

@@ -20,6 +20,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { SecurityKeysPanel } from './SecurityKeysPanel'
+import { TwoFactorPanel } from './TwoFactorPanel'
 
 const PANEL_HEADER = 'flex h-10 flex-row items-center justify-between border-b px-4 py-0'
 
@@ -256,6 +257,7 @@ export function MePage() {
           </CardContent>
         </Card>
 
+        <TwoFactorPanel />
         <SecurityKeysPanel />
       </div>
     </div>

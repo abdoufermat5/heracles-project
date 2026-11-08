@@ -174,6 +174,83 @@ export const handlers: HttpHandler[] = [
     ),
   ),
 
+  http.get(
+    `${B}/auth/totp`,
+    guarded(() =>
+      HttpResponse.json({
+        enabled: db.totp.enabled,
+        recovery_codes_remaining: db.totp.recoveryCodes,
+        security_keys: db.securityKeys.length,
+      }),
+    ),
+  ),
+
+  http.post(
+    `${B}/auth/totp/begin`,
+    guarded(
+      () => {
+        if (!db.reauthFresh) return err(403, 'reauth_required', 'Confirm your password to continue')
+        db.totp.pending = true
+        return HttpResponse.json({
+          secret: 'JBSWY3DPEHPK3PXP',
+          uri: 'otpauth://totp/Heracles:admin?secret=JBSWY3DPEHPK3PXP&issuer=Heracles',
+          expires_in: 300,
+        })
+      },
+      { mutation: true },
+    ),
+  ),
+
+  http.post(
+    `${B}/auth/totp/confirm`,
+    guarded(
+      async ({ request }) => {
+        if (!db.reauthFresh) return err(403, 'reauth_required', 'Confirm your password to continue')
+        const body = (await request.json()) as { code: string }
+        if (!db.totp.pending || body.code !== '123456')
+          return err(422, 'validation', 'Wrong code', { fields: { code: 'Wrong code' } })
+        db.totp.pending = false
+        db.totp.enabled = true
+        return HttpResponse.json({ status: 'ok' })
+      },
+      { mutation: true },
+    ),
+  ),
+
+  http.delete(
+    `${B}/auth/totp`,
+    guarded(
+      ({ request }) => {
+        if (!db.reauthFresh) return err(403, 'reauth_required', 'Confirm your password to continue')
+        if (!db.totp.enabled) return err(404, 'not_found', 'Not found')
+        const confirm = new URL(request.url).searchParams.get('confirm_disable') === 'true'
+        const last = db.securityKeys.length === 0
+        if (last && !confirm)
+          return err(409, 'last_second_factor', 'Disabling this turns off the second factor')
+        db.totp.enabled = false
+        if (last) db.totp.recoveryCodes = 0
+        return new HttpResponse(null, { status: 204 })
+      },
+      { mutation: true },
+    ),
+  ),
+
+  http.post(
+    `${B}/auth/recovery-codes`,
+    guarded(
+      () => {
+        if (!db.reauthFresh) return err(403, 'reauth_required', 'Confirm your password to continue')
+        if (!db.totp.enabled && db.securityKeys.length === 0)
+          return err(409, 'second_factor_required', 'Set up a second factor first')
+        db.totp.recoveryCodes = 10
+        return HttpResponse.json({
+          codes: Array.from({ length: 10 }, (_, i) => `MOCKA-0000${i}`),
+        })
+      },
+      { mutation: true },
+    ),
+  ),
+
   http.post(
     `${B}/auth/reauth`,
     guarded(

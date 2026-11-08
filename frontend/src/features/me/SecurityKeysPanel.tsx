@@ -17,16 +17,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { createCredential, WebAuthnClientError, webauthnSupported } from '@/lib/webauthn'
+import { ReauthDialog } from './ReauthDialog'
 
 const PANEL_HEADER = 'flex h-10 flex-row items-center justify-between border-b px-4 py-0'
 
@@ -56,6 +49,7 @@ export function SecurityKeysPanel() {
       setLabel('')
       setError(null)
       await qc.invalidateQueries({ queryKey: qk.securityKeys })
+      await qc.invalidateQueries({ queryKey: qk.totp })
     },
     onError: (e, name) => {
       if (needsReauth(e)) {
@@ -78,6 +72,7 @@ export function SecurityKeysPanel() {
     onSuccess: async () => {
       setError(null)
       await qc.invalidateQueries({ queryKey: qk.securityKeys })
+      await qc.invalidateQueries({ queryKey: qk.totp })
     },
     onError: (e, v) => {
       if (needsReauth(e)) setRetry(() => () => remove.mutate(v))
@@ -194,79 +189,5 @@ export function SecurityKeysPanel() {
         </AlertDialogContent>
       </AlertDialog>
     </Card>
-  )
-}
-
-/** Asks for the current password, then lets the caller retry the refused action. */
-function ReauthDialog({
-  open,
-  onCancel,
-  onConfirmed,
-}: {
-  open: boolean
-  onCancel: () => void
-  onConfirmed: () => void
-}) {
-  const { t } = useTranslation()
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const confirm = useMutation({
-    mutationFn: (pw: string) => api.reauth(pw),
-    onSuccess: () => {
-      setPassword('')
-      setError(null)
-      onConfirmed()
-    },
-    onError: (e) => setError(isApiError(e) ? e.message : t('security.failed')),
-  })
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) {
-          setPassword('')
-          setError(null)
-          onCancel()
-        }
-      }}
-    >
-      <DialogContent>
-        <form
-          className="grid gap-4"
-          onSubmit={(e) => {
-            e.preventDefault()
-            confirm.mutate(password)
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle className="text-[15px]">{t('security.reauthTitle')}</DialogTitle>
-            <DialogDescription className="text-[13px]">{t('security.reauthBody')}</DialogDescription>
-          </DialogHeader>
-          <Input
-            type="password"
-            autoComplete="current-password"
-            autoFocus
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            aria-label={t('security.password')}
-            className="h-8 text-[13px]"
-          />
-          {error && (
-            <p role="alert" className="text-[13px] text-destructive">
-              {error}
-            </p>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-              {t('security.cancel')}
-            </Button>
-            <Button type="submit" size="sm" disabled={!password || confirm.isPending}>
-              {t('security.confirm')}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   )
 }

@@ -12,10 +12,13 @@ import type {
   ObjectDetail,
   ObjectList,
   PatchObjectRequest,
+  RecoveryCodes,
   RecoveryConfirm,
   RecoveryRequest,
   SecondFactorRequest,
   Snapshot,
+  TotpEnrolment,
+  TotpStatus,
   TriggerOutput,
   TreeNode,
   TypeDescriptor,
@@ -53,7 +56,16 @@ export const api = {
       `/auth/webauthn/credentials/${encodeURIComponent(id)}${confirmDisable ? '?confirm_disable=true' : ''}`,
       { method: 'DELETE' },
     ),
-  /** Confirm the password before a sensitive account change (security keys). */
+  totpStatus: () => request<TotpStatus>('/auth/totp'),
+  totpBegin: () => request<TotpEnrolment>('/auth/totp/begin', { method: 'POST' }),
+  totpConfirm: (code: string) =>
+    request<{ status: 'ok' }>('/auth/totp/confirm', { method: 'POST', body: { code } }),
+  totpDisable: (confirmDisable = false) =>
+    request<undefined>(`/auth/totp${confirmDisable ? '?confirm_disable=true' : ''}`, {
+      method: 'DELETE',
+    }),
+  generateRecoveryCodes: () => request<RecoveryCodes>('/auth/recovery-codes', { method: 'POST' }),
+  /** Confirm the password before a sensitive account change (second factors). */
   reauth: (password: string) =>
     request<{ status: 'ok' }>('/auth/reauth', { method: 'POST', body: { password } }),
   logout: async () => {
