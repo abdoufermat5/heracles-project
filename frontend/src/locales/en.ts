@@ -1,3 +1,5 @@
+import { objectsEn } from './objects'
+
 const en = {
   common: {
     loading: 'Loading…',
@@ -16,6 +18,9 @@ const en = {
     no: 'No',
   },
   nav: { main: 'Main navigation', dashboard: 'Dashboard' },
+  // --- P3 objects ---
+  ...objectsEn,
+  // --- end P3 objects ---
   categories: {
     directory: 'Directory',
     access: 'Access',
@@ -177,9 +182,6 @@ const en = {
     accountUnlockedSuccess: 'Account unlocked.',
     actions: 'Actions',
     backToList: 'Back to {{type}}',
-    template: 'Template',
-    selectTemplate: 'Select a template…',
-    noTemplate: 'Blank (default)',
     saveShortcut: 'Save changes (⌘S)',
     saving: 'Saving…',
   },

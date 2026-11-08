@@ -1,4 +1,6 @@
 import { setupServer } from 'msw/node'
 import { handlers } from './handlers'
+import { objectsHandlers } from './objectsHandlers'
 
-export const server = setupServer(...handlers)
+// The object extras go first: `/objects/:type/_bulk` must win over `/objects/:type/:dn`.
+export const server = setupServer(...objectsHandlers, ...handlers)

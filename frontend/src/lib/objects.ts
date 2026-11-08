@@ -287,3 +287,49 @@ export function objectToLdif(
   }
   return lines.join('\n') + '\n'
 }
+
+/** Localised date and time of an ISO timestamp (`—` when absent or invalid). */
+export function formatDateTime(iso: string | null | undefined, locale: string): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+/** Attributes that identify one object: a copy never inherits them (mirrors the server). */
+export const UNIQUE_ATTRIBUTES: ReadonlySet<string> = new Set([
+  'uid',
+  'uidnumber',
+  'gidnumber',
+  'mail',
+  'employeenumber',
+  'macaddress',
+  'iphostnumber',
+])
+
+/**
+ * Create-form values prefilled from an existing object: the naming attribute, the
+ * unique attributes, passwords and computed or virtual attributes are left empty
+ * so the user supplies them; everything else is copied.
+ */
+export function prefillFromSource(desc: TypeDescriptor, source: ObjectDetail): FormValues {
+  const values = valuesFromDetail(desc, source)
+  const main = desc.main_attr.toLowerCase()
+  for (const tab of desc.tabs) {
+    for (const a of allAttributes(tab)) {
+      const lname = a.name.toLowerCase()
+      const virtual = 'stored' in a && a.stored === false
+      if (
+        a.kind === 'password' ||
+        a.kind === 'display' ||
+        virtual ||
+        lname === main ||
+        UNIQUE_ATTRIBUTES.has(lname)
+      ) {
+        const target = values[tab.name]
+        if (target) target[a.name] = defaultValue(a)
+      }
+    }
+  }
+  return values
+}
