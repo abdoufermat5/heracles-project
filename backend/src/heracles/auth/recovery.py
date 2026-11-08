@@ -139,6 +139,10 @@ class RecoveryService:
         login = found[0].text(self._login.login_attribute)
         return (found[0].dn, login) if login else None
 
+    def find(self, directory: DirectoryClient, email: str) -> tuple[str, str] | None:
+        """(dn, login) of the single user owning ``email``, else ``None``."""
+        return self._find_by_mail(directory, email.strip())
+
     def request(self, directory: DirectoryClient, email: str) -> None:
         """Create a token and mail the link. Never raises for unknown addresses."""
         email = email.strip()

@@ -130,9 +130,20 @@ def get_recovery_token(
     email: Annotated[str, Query(description="The email address of the user")],
     user: V1UserDep,
     state: StateDep,
+    domain: DomainDep,
 ) -> RecoveryResponse:
     if not state.settings.recovery.enabled:
         raise not_found("Password recovery is disabled")
+    match = state.recovery.find(user.directory, email)
+    if match is None:
+        raise not_found("No account matches this email address")
+    # A token lets its bearer choose the account password: only callers who may set the
+    # password of this very account are allowed to mint one.
+    info = domain.registry.get("user")
+    _service, policy = domain.service(user, info.name)
+    tab = next((t for t in info.tabs if t.attribute("userPassword") is not None), info.main_tab)
+    if not policy.can_write(match[0], tab.name, "userPassword"):
+        raise forbidden("You cannot reset the password of this account")
     issued = state.recovery.issue(user.directory, email)
     if issued is None:
         raise not_found("No account matches this email address")

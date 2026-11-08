@@ -385,6 +385,14 @@ def test_recovery(client: TestClient, v1: V1) -> None:
     assert v1.get("/recovery").status_code == 400
 
 
+def test_recovery_token_requires_password_rights(client: TestClient) -> None:
+    """A user who cannot set the password of an account cannot mint a reset token for it."""
+    api = V1(client).login("bmartin")
+    r = api.get("/recovery", params={"email": "asmith@heracles.test"})
+    assert r.status_code == 403
+    assert "token" not in r.json()
+
+
 # -- the OpenAPI contract -----------------------------------------------------------------------
 CONTRACT = [
     ("post", "/login"),
