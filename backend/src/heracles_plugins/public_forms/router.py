@@ -14,12 +14,13 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict, deque
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 
 from heracles.api.errors import error_body
@@ -56,6 +57,36 @@ class SubmitBody(BaseModel):
     captcha_token: str | None = Field(default=None, max_length=1024)
     captcha_answer: str | None = Field(default=None, max_length=32)
     accept_terms: bool = False
+
+
+def _limited_route(limit: int) -> type[APIRoute]:
+    """Route class refusing request bodies above ``limit`` bytes, before they are parsed.
+
+    The ``Content-Length`` header is checked first; a body sent without it (chunked) is
+    counted while it is read, so an anonymous client cannot make the server buffer more.
+    """
+
+    class LimitedRoute(APIRoute):
+        def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
+            original = super().get_route_handler()
+
+            async def handler(request: Request) -> Response:
+                length = request.headers.get("content-length", "")
+                if length.isdigit() and int(length) > limit:
+                    return _error(413, "too_large", "The submission is too large")
+                chunks: list[bytes] = []
+                size = 0
+                async for chunk in request.stream():
+                    size += len(chunk)
+                    if size > limit:
+                        return _error(413, "too_large", "The submission is too large")
+                    chunks.append(chunk)
+                request._body = b"".join(chunks)  # pyright: ignore[reportPrivateUsage]
+                return await original(request)
+
+            return handler
+
+    return LimitedRoute
 
 
 class SubmissionWindow:
@@ -143,14 +174,14 @@ def build_public_router(
     captcha: Captcha | None = None,
 ) -> APIRouter:
     """Router for the public form endpoints (mount it on the application root)."""
-    router = APIRouter(prefix=PATH, tags=["public forms"])
+    max_body = int(getattr(settings, "max_body_bytes", 1_048_576))
+    router = APIRouter(prefix=PATH, tags=["public forms"], route_class=_limited_route(max_body))
     guard = limiter if limiter is not None else RateLimiter()
     secret = str(getattr(settings, "captcha_secret", "") or "").encode() or None
     challenges = captcha or Captcha(
         secret, ttl=float(getattr(settings, "captcha_ttl_seconds", 600)), clock=clock
     )
     successes = SubmissionWindow(int(getattr(settings, "submissions_per_hour", 20)), HOUR, clock)
-    max_body = int(getattr(settings, "max_body_bytes", 1_048_576))
     allow_private_view = bool(getattr(settings, "allow_private_without_invitations", False))
 
     def registry_of(request: Request) -> TypeRegistry:
@@ -212,9 +243,6 @@ def build_public_router(
 
     @router.post("/{name}", response_model=None)
     def submit(name: str, body: SubmitBody, request: Request) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-        length = request.headers.get("content-length", "")
-        if length.isdigit() and int(length) > max_body:
-            return _error(413, "too_large", "The submission is too large")
         ip = _client_ip(request)
         key = RateLimiter.key(ip, name)
         wait = max(guard.retry_after(key), successes.retry_after(ip))

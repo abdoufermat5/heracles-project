@@ -256,6 +256,20 @@ def test_successful_submissions_are_limited_per_hour(hasher: None) -> None:
     assert env.post({"values": person(**{"main.uid": "c"})}).status_code == 201
 
 
+def test_chunked_bodies_above_the_limit_are_refused(hasher: None) -> None:
+    """No Content-Length header: the size is enforced while the body is read."""
+    env = Env(PublicFormsSettings(max_body_bytes=50))
+
+    def chunks() -> Iterator[bytes]:
+        yield b'{"values": {"x": "' + b"a" * 40
+        yield b"b" * 400 + b'"}}'
+
+    r = env.client.post(
+        f"{PATH}/signup", content=chunks(), headers={"content-type": "application/json"}
+    )
+    assert r.status_code == 413
+
+
 def test_large_bodies_are_refused(hasher: None) -> None:
     env = Env(PublicFormsSettings(max_body_bytes=50))
     env.form()
