@@ -1,5 +1,15 @@
 import { useNavigate } from '@tanstack/react-router'
 import type { RowSelectionState, SortingState } from '@tanstack/react-table'
+import {
+  Copy,
+  Download,
+  FolderInput,
+  Lock,
+  LockOpen,
+  Pencil,
+  Trash2,
+  Users,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -8,20 +18,24 @@ import {
   useAccountLock,
   useDeleteObjects,
   useMe,
-  useObjectList,
+  usePaginatedObjectList,
   useTree,
   useTypeDescriptor,
   useTypes,
 } from '@/api/hooks'
 import type { ObjectListItem, TreeNode } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
+import { BulkActionBar, Pagination } from '@/components/patterns/DataControls'
+import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { supportsTemplates } from '@/features/editor/api'
+import { AddToGroupDialog } from '@/features/people/AddToGroupDialog'
+import { getUserStatus } from '@/features/people/utils'
+import type { Scope } from '@/lib/scope'
 import { useScope } from '@/lib/scope'
 import { BulkEditDialog } from './BulkEditDialog'
 import { CopyMoveDialog, type CopyMoveMode } from './CopyMoveDialog'
 import { exportToCsv } from './csv'
-import { ListingBulkBar } from './ListingBulkBar'
 import { ListingDeleteDialog } from './ListingDeleteDialog'
 import { ListingEmptyState } from './ListingEmptyState'
 import { ListingHeader } from './ListingHeader'
@@ -60,6 +74,8 @@ function findDepartmentLabel(nodes: TreeNode[] | undefined, dn: string | null): 
   return null
 }
 
+const VIEW_STORAGE_PREFIX = 'heracles.listing.view.'
+
 export function ObjectListPage({
   type,
   view = 'objects',
@@ -74,25 +90,58 @@ export function ObjectListPage({
   const types = useTypes()
   const me = useMe()
   const tree = useTree()
-  const { base, scope, setScope } = useScope()
+  const { base: globalBase, scope: globalScope } = useScope()
+
+  // Saved view (for user list)
+  const [savedView, setSavedView] = useState<string>(() => {
+    try {
+      return localStorage.getItem(`${VIEW_STORAGE_PREFIX}${type}`) || 'all'
+    } catch {
+      return 'all'
+    }
+  })
 
   // State
   const [searchQuery, setSearchQuery] = useState('')
   const debouncedQuery = useDebounced(searchQuery)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [employeeTypes, setEmployeeTypes] = useState<string[]>([])
+  const [filterBase, setFilterBase] = useState<string | null>(null)
+  const [filterScope, setFilterScope] = useState<Scope>(globalScope)
   const [sorting, setSorting] = useState<SortingState>([])
   const [selection, setSelection] = useState<RowSelectionState>({})
   const [density, setDensity] = useState<Density>(loadDensity)
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() =>
     loadColumnVisibility(type),
   )
+
+  // Pagination
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+
   const [showPreview, setShowPreview] = useState(false)
   const [previewDn, setPreviewDn] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [singleDeleteTarget, setSingleDeleteTarget] = useState<ObjectListItem | null>(null)
   const [copyMove, setCopyMove] = useState<{ mode: CopyMoveMode; dns: string[] } | null>(null)
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
+  const [addToGroupOpen, setAddToGroupOpen] = useState(false)
   const [restoreOpen, setRestoreOpen] = useState(false)
+
+  // Sync saved view change
+  const handleSavedViewChange = (v: string) => {
+    setSavedView(v)
+    try {
+      localStorage.setItem(`${VIEW_STORAGE_PREFIX}${type}`, v)
+    } catch {
+      /* ignore */
+    }
+    setPage(1)
+    if (v === 'active') setStatusFilter('active')
+    else if (v === 'locked') setStatusFilter('locked')
+    else if (v === 'expiring') setStatusFilter('expired')
+    else setStatusFilter('all')
+  }
 
   // Handlers for persistence
   const handleDensityChange = (newDensity: Density) => {
@@ -113,34 +162,50 @@ export function ObjectListPage({
     saveColumnVisibility(type, {})
   }
 
+  // Reset page when search or filters change
+  const filterKey = `${debouncedQuery}:${statusFilter}:${filterBase}:${filterScope}:${employeeTypes.join(',')}`
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey)
+    setPage(1)
+  }
+
   // Active query parameters
-  const currentBase = base ?? me.data?.base
+  const currentBase = filterBase ?? globalBase ?? me.data?.base
   const sort = sorting[0]
-  const list = useObjectList(type, {
+  const list = usePaginatedObjectList(type, {
     base: currentBase,
-    scope,
+    scope: filterScope,
     q: debouncedQuery || undefined,
     sort: sort?.id,
     order: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
-    limit: 50,
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+    cursor: btoa(String((page - 1) * pageSize)),
   })
 
   // Rows and summary
-  const rawRows: ObjectListItem[] = useMemo(
-    () => list.data?.pages.flatMap((p) => p.items) ?? [],
-    [list.data],
-  )
-  const total = list.data?.pages[0]?.total ?? null
+  const rawRows: ObjectListItem[] = useMemo(() => list.data?.items ?? [], [list.data])
+  const total = list.data?.total ?? null
   const summary = types.data?.find((x) => x.name === type)
   const label = summary?.label_plural ?? desc.data?.label ?? type
 
-  // Filter rows by status if active
+  // Filter rows by status / employee type if active
   const rows = useMemo(() => {
-    if (statusFilter === 'all') return rawRows
-    if (statusFilter === 'locked') return rawRows.filter((r) => r.locked)
-    if (statusFilter === 'active') return rawRows.filter((r) => !r.locked)
-    return rawRows
-  }, [rawRows, statusFilter])
+    let r = rawRows
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'locked') r = r.filter((item) => item.locked)
+      else if (statusFilter === 'active') {
+        r = r.filter((item) => !item.locked && getUserStatus(item) === 'active')
+      } else if (statusFilter === 'expired') {
+        r = r.filter((item) => getUserStatus(item) === 'expired')
+      }
+    }
+    if (employeeTypes.length > 0) {
+      r = r.filter((item) => employeeTypes.includes(String(item.values.employeeType ?? '')))
+    }
+    return r
+  }, [rawRows, statusFilter, employeeTypes])
 
   // Items map for easy lookup
   const itemsMap = useMemo(() => {
@@ -149,8 +214,8 @@ export function ObjectListPage({
     return map
   }, [rawRows])
 
-  // Reset selection and preview on query/filter changes
-  const queryKey = `${type}:${base}:${scope}:${debouncedQuery}:${statusFilter}`
+  // Reset selection on major query/filter changes
+  const queryKey = `${type}:${currentBase}:${filterScope}:${debouncedQuery}:${statusFilter}:${page}`
   const [prevQueryKey, setPrevQueryKey] = useState(queryKey)
   if (prevQueryKey !== queryKey) {
     setPrevQueryKey(queryKey)
@@ -196,9 +261,13 @@ export function ObjectListPage({
     }
   }
 
-  const handleExportCsv = () => {
+  const handleExportCsv = (selectedOnly = false) => {
     if (!desc.data) return
-    const exportRows = rows.length > 0 ? rows : rawRows
+    const exportRows = selectedOnly && selectedDns.length > 0
+      ? rawRows.filter((r) => selection[r.dn])
+      : rows.length > 0
+        ? rows
+        : rawRows
     exportToCsv(`${type}-export-${new Date().toISOString().slice(0, 10)}`, desc.data.columns, exportRows)
     toast.success(t('listing.exportCsv'))
   }
@@ -214,7 +283,7 @@ export function ObjectListPage({
     : []
 
   const currentDepartmentName = findDepartmentLabel(tree.data, currentBase ?? null)
-  const hasFilterActive = Boolean(debouncedQuery || statusFilter !== 'all')
+  const hasFilterActive = Boolean(debouncedQuery || statusFilter !== 'all' || employeeTypes.length > 0 || filterBase)
 
   // Error and permission checks
   const primaryError = desc.error ?? list.error
@@ -250,9 +319,9 @@ export function ObjectListPage({
         descriptor={desc.data}
         total={total}
         isSuccess={list.isSuccess}
-        isFetching={list.isFetching && !list.isFetchingNextPage}
+        isFetching={list.isFetching}
         onRefresh={() => void list.refetch()}
-        onExportCsv={handleExportCsv}
+        onExportCsv={() => handleExportCsv(false)}
         onRestoreDeleted={canCreate ? () => setRestoreOpen(true) : undefined}
       />
 
@@ -279,121 +348,209 @@ export function ObjectListPage({
       {showTemplates ? (
         <TemplatesView type={type} typeLabel={desc.data?.label ?? type} canCreate={canCreate} />
       ) : (
-      <div className="flex items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <ListingToolbar
-            type={type}
-            label={label}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            currentDepartmentName={currentDepartmentName}
-            scope={scope}
-            onScopeChange={setScope}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
-            availableColumns={desc.data?.columns ?? []}
-            columnVisibility={columnVisibility}
-            onToggleColumn={handleToggleColumn}
-            onResetColumns={handleResetColumns}
-            density={density}
-            onDensityChange={handleDensityChange}
-            showPreview={showPreview}
-            onTogglePreview={() => setShowPreview((p) => !p)}
-            supportsStatusFilter={type === 'user'}
-          />
-
-          {list.isPending ? (
-            <ListingSkeleton
-              columns={desc.data?.columns ?? []}
-              density={density}
-              isPersonType={type === 'user'}
-            />
-          ) : rows.length === 0 ? (
-            <ListingEmptyState
+        <div className="flex items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <ListingToolbar
               type={type}
-              typeLabel={desc.data?.label}
-              isFiltered={hasFilterActive}
-              canCreate={summary?.can_create}
-              onClearFilter={() => {
-                setSearchQuery('')
-                setStatusFilter('all')
-              }}
+              label={label}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              currentDepartmentName={currentDepartmentName}
+              base={filterBase}
+              onBaseChange={setFilterBase}
+              scope={filterScope}
+              onScopeChange={setFilterScope}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              employeeTypeFilter={employeeTypes}
+              onEmployeeTypeFilterChange={setEmployeeTypes}
+              savedView={savedView}
+              onSavedViewChange={handleSavedViewChange}
+              availableColumns={desc.data?.columns ?? []}
+              columnVisibility={columnVisibility}
+              onToggleColumn={handleToggleColumn}
+              onResetColumns={handleResetColumns}
+              density={density}
+              onDensityChange={handleDensityChange}
+              showPreview={showPreview}
+              onTogglePreview={() => setShowPreview((p) => !p)}
+              supportsStatusFilter={type === 'user'}
             />
-          ) : (
-            <>
-              <ListingBulkBar
-                type={type}
-                selectedCount={selectedDns.length}
-                onLock={
-                  type === 'user'
-                    ? (doLock) => void runLock(selectedDns, doLock)
-                    : undefined
-                }
-                onDelete={() => setConfirmDelete(true)}
-                onEdit={() => setBulkEditOpen(true)}
-                onCopy={canCreate ? () => setCopyMove({ mode: 'copy', dns: selectedDns }) : undefined}
-                onMove={canCreate ? () => setCopyMove({ mode: 'move', dns: selectedDns }) : undefined}
-                onClearSelection={() => setSelection({})}
-                isLocking={lock.isPending}
-                isDeleting={del.isPending}
-              />
 
-              {desc.data && (
-                <ListingTable
-                  type={type}
-                  descriptor={desc.data}
-                  rows={rows}
-                  total={total}
-                  sorting={sorting}
-                  onSortingChange={setSorting}
-                  selection={selection}
-                  onSelectionChange={setSelection}
-                  columnVisibility={columnVisibility}
-                  density={density}
-                  hasNextPage={list.hasNextPage}
-                  isFetchingNextPage={list.isFetchingNextPage}
-                  onFetchNextPage={() => void list.fetchNextPage()}
-                  onRowClick={(item) => {
-                    if (showPreview) {
-                      setPreviewDn(item.dn)
-                    } else {
-                      void navigate({
-                        to: '/types/$type/$dn',
-                        params: { type, dn: item.dn },
-                      })
-                    }
-                  }}
-                  onDeleteSingle={(item) => setSingleDeleteTarget(item)}
-                  onCopyTo={canCreate ? (item) => setCopyMove({ mode: 'copy', dns: [item.dn] }) : undefined}
-                  onMoveTo={canCreate ? (item) => setCopyMove({ mode: 'move', dns: [item.dn] }) : undefined}
-                  selectedRowDn={showPreview ? (previewDn ?? rows[0]?.dn ?? null) : null}
-                />
-              )}
-            </>
+            {list.isPending ? (
+              <ListingSkeleton
+                columns={desc.data?.columns ?? []}
+                density={density}
+                isPersonType={type === 'user'}
+              />
+            ) : rows.length === 0 ? (
+              <ListingEmptyState
+                type={type}
+                typeLabel={desc.data?.label}
+                isFiltered={hasFilterActive}
+                canCreate={summary?.can_create}
+                onClearFilter={() => {
+                  setSearchQuery('')
+                  setStatusFilter('all')
+                  setEmployeeTypes([])
+                  setFilterBase(null)
+                  setSavedView('all')
+                }}
+              />
+            ) : (
+              <>
+                <BulkActionBar
+                  count={selectedDns.length}
+                  onClear={() => setSelection({})}
+                >
+                  {type === 'user' && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={lock.isPending}
+                        onClick={() => void runLock(selectedDns, true)}
+                      >
+                        <Lock className="size-4" />
+                        {t('listing.lock')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={lock.isPending}
+                        onClick={() => void runLock(selectedDns, false)}
+                      >
+                        <LockOpen className="size-4" />
+                        {t('listing.unlock')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAddToGroupOpen(true)}
+                      >
+                        <Users className="size-4" />
+                        {t('peopleUI.bulk.addToGroup')}
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setBulkEditOpen(true)}
+                  >
+                    <Pencil className="size-4" />
+                    {t('bulkEdit.action')}
+                  </Button>
+                  {canCreate && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCopyMove({ mode: 'copy', dns: selectedDns })}
+                      >
+                        <Copy className="size-4" />
+                        {t('copy.copyTo')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setCopyMove({ mode: 'move', dns: selectedDns })}
+                      >
+                        <FolderInput className="size-4" />
+                        {t('copy.moveTo')}
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleExportCsv(true)}
+                  >
+                    <Download className="size-4" />
+                    {t('peopleUI.bulk.exportCsv')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    disabled={del.isPending}
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    <Trash2 className="size-4" />
+                    {t('common.delete')}
+                  </Button>
+                </BulkActionBar>
+
+                {desc.data && (
+                  <div className="overflow-hidden rounded-md border bg-card">
+                    <ListingTable
+                      type={type}
+                      descriptor={desc.data}
+                      rows={rows}
+                      total={total}
+                      sorting={sorting}
+                      onSortingChange={setSorting}
+                      selection={selection}
+                      onSelectionChange={setSelection}
+                      columnVisibility={columnVisibility}
+                      density={density}
+                      onRowClick={(item) => {
+                        if (showPreview) {
+                          setPreviewDn(item.dn)
+                        } else {
+                          void navigate({
+                            to: '/types/$type/$dn',
+                            params: { type, dn: item.dn },
+                          })
+                        }
+                      }}
+                      onDeleteSingle={(item) => setSingleDeleteTarget(item)}
+                      onCopyTo={canCreate ? (item) => setCopyMove({ mode: 'copy', dns: [item.dn] }) : undefined}
+                      onMoveTo={canCreate ? (item) => setCopyMove({ mode: 'move', dns: [item.dn] }) : undefined}
+                      selectedRowDn={showPreview ? (previewDn ?? rows[0]?.dn ?? null) : null}
+                    />
+
+                    {/* Real Pagination bar */}
+                    <div className="border-t border-border bg-card p-3">
+                      <Pagination
+                        page={page}
+                        pageSize={pageSize}
+                        total={total ?? rows.length}
+                        onPage={setPage}
+                        onPageSize={(size) => {
+                          setPageSize(size)
+                          setPage(1)
+                        }}
+                        pageSizes={[25, 50, 100]}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {showPreview && (
+            <ListingPreviewPanel
+              type={type}
+              item={previewItem ?? rows[0] ?? null}
+              descriptor={desc.data}
+              summary={summary}
+              onClose={() => setShowPreview(false)}
+              onCopyDn={(dn) => {
+                void navigator.clipboard.writeText(dn)
+                toast.success(t('listing.dnCopied'))
+              }}
+              onLockToggle={
+                type === 'user' ? (dn, doLock) => void runLock([dn], doLock) : undefined
+              }
+              onDeleteSingle={(item) => setSingleDeleteTarget(item)}
+            />
           )}
         </div>
-
-        {showPreview && (
-          <ListingPreviewPanel
-            type={type}
-            item={previewItem ?? rows[0] ?? null}
-            descriptor={desc.data}
-            summary={summary}
-            onClose={() => setShowPreview(false)}
-            onCopyDn={(dn) => {
-              void navigator.clipboard.writeText(dn)
-              toast.success(t('listing.dnCopied'))
-            }}
-            onLockToggle={
-              type === 'user' ? (dn, doLock) => void runLock([dn], doLock) : undefined
-            }
-            onDeleteSingle={(item) => setSingleDeleteTarget(item)}
-          />
-        )}
-      </div>
       )}
 
-      {/* 3. Delete Confirmation Dialog (bulk) */}
+      {/* Delete Confirmation Dialog (bulk) */}
       <ListingDeleteDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
@@ -404,7 +561,7 @@ export function ObjectListPage({
         isDeleting={del.isPending}
       />
 
-      {/* 4. Single Item Delete Dialog */}
+      {/* Single Item Delete Dialog */}
       {singleDeleteTarget && (
         <ListingDeleteDialog
           open={Boolean(singleDeleteTarget)}
@@ -430,6 +587,7 @@ export function ObjectListPage({
         descriptor={desc.data}
         items={copyMoveItems}
       />
+
       <BulkEditDialog
         open={bulkEditOpen}
         onOpenChange={(o) => {
@@ -440,6 +598,14 @@ export function ObjectListPage({
         descriptor={desc.data}
         dns={selectedDns}
       />
+
+      <AddToGroupDialog
+        open={addToGroupOpen}
+        onOpenChange={setAddToGroupOpen}
+        userDns={selectedDns}
+        onSuccess={() => setSelection({})}
+      />
+
       <RestoreDeletedDialog open={restoreOpen} onOpenChange={setRestoreOpen} type={type} />
     </div>
   )

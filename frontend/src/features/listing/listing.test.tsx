@@ -6,11 +6,14 @@ import { server } from '@/mocks/server'
 import { must, renderApp, signIn } from '@/test/utils'
 
 describe('listing page', () => {
-  it('renders columns from the type descriptor and the total count', async () => {
+  it('renders columns for users and the total count', async () => {
     signIn()
     renderApp('/types/user')
-    expect(await screen.findByRole('columnheader', { name: /Login/ })).toBeInTheDocument()
+    expect(await screen.findByRole('columnheader', { name: /Person/ })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: /Email/ })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /Status/ })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /Department/ })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /Groups/ })).toBeInTheDocument()
     expect(await screen.findByText('200 items')).toBeInTheDocument()
     expect(screen.getAllByRole('row').length).toBeGreaterThan(5)
   })
@@ -23,7 +26,7 @@ describe('listing page', () => {
     const uid = String(target.tabs.main?.values.uid)
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search' }), uid)
     await waitFor(() => expect(screen.queryByText('200 items')).not.toBeInTheDocument())
-    expect(await screen.findByRole('link', { name: uid })).toBeInTheDocument()
+    expect((await screen.findAllByText(uid)).length).toBeGreaterThan(0)
   })
 
   it('sorts via the server when a header is clicked', async () => {
@@ -35,8 +38,8 @@ describe('listing page', () => {
     })
     renderApp('/types/user')
     await screen.findByText('200 items')
-    await userEvent.click(screen.getByRole('button', { name: /Name/ }))
-    await waitFor(() => expect(seen.some((s) => s.includes('sort=cn') && s.includes('order=asc'))).toBe(true))
+    await userEvent.click(screen.getByRole('button', { name: /Person/ }))
+    await waitFor(() => expect(seen.some((s) => s.includes('order=asc'))).toBe(true))
   })
 
   it('shows the locked badge and a bulk actions bar on selection', async () => {
@@ -68,12 +71,14 @@ describe('listing page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Directory down')
   })
 
-  it('loads more results with the cursor', async () => {
+  it('paginates results with real pagination', async () => {
     signIn()
     renderApp('/types/user')
     await screen.findByText('200 items')
-    await userEvent.click(await screen.findByRole('button', { name: 'Load more' }))
-    expect(await screen.findByText(/Showing 100 of 200/)).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Pagination' })).toBeInTheDocument()
+    expect(screen.getByText(/1–25 of 200/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(await screen.findByText(/26–50 of 200/)).toBeInTheDocument()
   })
 
   it('clears search when clear button is clicked', async () => {

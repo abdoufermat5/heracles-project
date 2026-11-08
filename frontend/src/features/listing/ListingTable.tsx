@@ -19,10 +19,12 @@ import {
   MoreHorizontal,
   Trash2,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { ObjectListItem, TypeDescriptor } from '@/api/types'
+import { OrgPath, StatusBadge } from '@/components/patterns'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -33,7 +35,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { getUserStatus } from '@/features/people/utils'
+import { cn, initials } from '@/lib/utils'
 import { formatCellValue, isMonospaceKey, type Density } from './types'
 
 interface ListingTableProps {
@@ -47,12 +50,8 @@ interface ListingTableProps {
   onSelectionChange: (selection: RowSelectionState) => void
   columnVisibility: Record<string, boolean>
   density: Density
-  hasNextPage?: boolean
-  isFetchingNextPage?: boolean
-  onFetchNextPage: () => void
   onRowClick?: (item: ObjectListItem) => void
   onDeleteSingle?: (item: ObjectListItem) => void
-  /** Row menu: copy / move one object to another department. */
   onCopyTo?: (item: ObjectListItem) => void
   onMoveTo?: (item: ObjectListItem) => void
   selectedRowDn?: string | null
@@ -62,16 +61,12 @@ export function ListingTable({
   type,
   descriptor,
   rows,
-  total,
   sorting,
   onSortingChange,
   selection,
   onSelectionChange,
   columnVisibility,
   density,
-  hasNextPage,
-  isFetchingNextPage,
-  onFetchNextPage,
   onRowClick,
   onDeleteSingle,
   onCopyTo,
@@ -84,8 +79,8 @@ export function ListingTable({
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
 
-  const linkKey = descriptor.main_attr ?? descriptor.columns[0]?.key
-  const rowHeight = density === 'compact' ? 30 : 36
+  const isUser = type === 'user'
+  const rowHeight = isUser ? (density === 'compact' ? 44 : 52) : density === 'compact' ? 30 : 36
 
   const handleCopyDn = useCallback(
     (e: React.MouseEvent, dn: string) => {
@@ -153,154 +148,264 @@ export function ListingTable({
           </div>
         ),
       },
-      ...descriptor.columns.map<ColumnDef<ObjectListItem>>((c) => ({
-        id: c.key,
-        header: c.label,
-        accessorFn: (r) => r.values[c.key],
-        cell: ({ row, getValue }) => {
-          const rawVal = getValue()
-          const text = formatCellValue(rawVal, t('common.yes'), t('common.no'))
-          const mono = isMonospaceKey(c.key)
+    ]
 
-          if (c.key !== linkKey) {
+    if (isUser) {
+      // 1. Person column (avatar, display name, login underneath)
+      cols.push({
+        id: 'person',
+        header: t('peopleUI.columns.person'),
+        accessorFn: (r) => String(r.values[descriptor.name_attr] ?? r.values[descriptor.main_attr] ?? r.dn),
+        cell: ({ row }) => {
+          const name = String(row.original.values[descriptor.name_attr] ?? row.original.values.cn ?? 'User')
+          const login = String(row.original.values[descriptor.main_attr] ?? row.original.values.uid ?? '')
+          return (
+            <div className="flex items-center gap-3 min-w-0">
+              <Avatar className="size-8 shrink-0">
+                <AvatarFallback className="bg-primary-soft text-caption font-semibold text-primary">
+                  {initials(name)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <Link
+                  to="/types/$type/$dn"
+                  params={{ type, dn: row.original.dn }}
+                  className="truncate font-medium text-foreground hover:text-signal focus-visible:underline focus-visible:outline-none block"
+                  onClick={(e) => e.stopPropagation()}
+                  title={name}
+                >
+                  {name}
+                </Link>
+                {login && (
+                  <span className="truncate text-caption text-muted-foreground block font-mono">
+                    {login}
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        },
+      })
+
+      // 2. Status column
+      cols.push({
+        id: 'status',
+        header: t('peopleUI.columns.status'),
+        accessorFn: (r) => (r.locked ? 'locked' : 'active'),
+        cell: ({ row }) => {
+          const status = getUserStatus(row.original)
+          return <StatusBadge status={status} />
+        },
+      })
+
+      // 3. Department column (OrgPath)
+      cols.push({
+        id: 'department',
+        header: t('peopleUI.columns.department'),
+        cell: ({ row }) => (
+          <OrgPath dn={typeof row.original.values.base === 'string' ? row.original.values.base : row.original.dn} />
+        ),
+      })
+
+      // 4. Email column
+      cols.push({
+        id: 'mail',
+        header: t('peopleUI.columns.email'),
+        accessorFn: (r) => r.values.mail,
+        cell: ({ row }) => {
+          const mail = row.original.values.mail
+          return (
+            <span className="block truncate text-muted-foreground" title={String(mail ?? '')}>
+              {mail ? String(mail) : '—'}
+            </span>
+          )
+        },
+      })
+
+      // 5. Groups count column
+      cols.push({
+        id: 'groups',
+        header: t('peopleUI.columns.groups'),
+        accessorFn: (r) => r.groups_count ?? (r.values.groups_count as number) ?? 0,
+        cell: ({ row }) => {
+          const count = row.original.groups_count ?? (row.original.values.groups_count as number) ?? 0
+          return <span className="tabular-nums font-medium text-foreground">{count}</span>
+        },
+      })
+
+      // 6. Any other columns from descriptor not in the standard set
+      const coreKeys: Record<string, true> = {
+        uid: true,
+        cn: true,
+        mail: true,
+        person: true,
+        status: true,
+        department: true,
+        groups: true,
+      }
+      descriptor.columns.forEach((c) => {
+        if (coreKeys[c.key]) return
+        cols.push({
+          id: c.key,
+          header: c.label,
+          accessorFn: (r) => r.values[c.key],
+          cell: ({ getValue }) => {
+            const rawVal = getValue()
+            const text = formatCellValue(rawVal, t('common.yes'), t('common.no'))
+            const mono = isMonospaceKey(c.key)
             return (
               <span
-                className={cn(
-                  'block truncate text-muted-foreground',
-                  mono && 'font-mono text-body text-foreground/80',
-                )}
+                className={cn('block truncate text-muted-foreground', mono && 'font-mono text-body text-foreground/80')}
                 title={text}
               >
                 {text}
               </span>
             )
-          }
+          },
+        })
+      })
+    } else {
+      // Non-user generic columns
+      const linkKey = descriptor.main_attr ?? descriptor.columns[0]?.key
+      descriptor.columns.forEach((c) => {
+        cols.push({
+          id: c.key,
+          header: c.label,
+          accessorFn: (r) => r.values[c.key],
+          cell: ({ row, getValue }) => {
+            const rawVal = getValue()
+            const text = formatCellValue(rawVal, t('common.yes'), t('common.no'))
+            const mono = isMonospaceKey(c.key)
 
-          return (
-            <div className="flex min-w-0 items-center gap-2">
-              <Link
-                to="/types/$type/$dn"
-                params={{ type, dn: row.original.dn }}
-                className={cn(
-                  'truncate text-body font-medium text-foreground hover:text-signal focus-visible:underline focus-visible:outline-none',
-                  mono && 'font-mono',
+            if (c.key !== linkKey) {
+              return (
+                <span
+                  className={cn(
+                    'block truncate text-muted-foreground',
+                    mono && 'font-mono text-body text-foreground/80',
+                  )}
+                  title={text}
+                >
+                  {text}
+                </span>
+              )
+            }
+
+            return (
+              <div className="flex min-w-0 items-center gap-2">
+                <Link
+                  to="/types/$type/$dn"
+                  params={{ type, dn: row.original.dn }}
+                  className={cn(
+                    'truncate text-body font-medium text-foreground hover:text-signal focus-visible:underline focus-visible:outline-none',
+                    mono && 'font-mono',
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                  title={text}
+                >
+                  {text}
+                </Link>
+                {row.original.locked && (
+                  <Badge variant="warning" className="h-5 shrink-0 gap-1 rounded-sm px-1.5 text-caption">
+                    <Lock className="size-3" aria-hidden />
+                    {t('listing.locked')}
+                  </Badge>
                 )}
-                onClick={(e) => e.stopPropagation()}
-                title={text}
+              </div>
+            )
+          },
+        })
+      })
+    }
+
+    // Actions column
+    cols.push({
+      id: 'actions',
+      enableSorting: false,
+      header: () => <span className="sr-only">{t('listing.actions')}</span>,
+      cell: ({ row }) => (
+        <div
+          className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={(e) => handleCopyDn(e, row.original.dn)}
+                aria-label={t('listing.copyDn')}
               >
-                {text}
-              </Link>
-              {row.original.locked && (
-                <Badge
-                  variant="warning"
-                  className="h-5 shrink-0 gap-1 rounded-sm px-1.5 text-caption"
-                >
-                  <Lock className="size-3" aria-hidden />
-                  {t('listing.locked')}
-                </Badge>
-              )}
-            </div>
-          )
-        },
-      })),
-      {
-        id: 'actions',
-        enableSorting: false,
-        header: () => <span className="sr-only">{t('listing.actions')}</span>,
-        cell: ({ row }) => (
-          <div
-            className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
+                <Copy aria-hidden />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t('listing.copyDn')}</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                asChild
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={t('listing.open')}
+              >
+                <Link to="/types/$type/$dn" params={{ type, dn: row.original.dn }}>
+                  <ExternalLink aria-hidden />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t('listing.open')}</TooltipContent>
+          </Tooltip>
+
+          {(onCopyTo || onMoveTo || onDeleteSingle) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
-                  onClick={(e) => handleCopyDn(e, row.original.dn)}
-                  aria-label={t('listing.copyDn')}
+                  aria-label={t('copyMove.rowMenu', { defaultValue: 'Copy or move' })}
                 >
-                  <Copy aria-hidden />
+                  <MoreHorizontal aria-hidden />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('listing.copyDn')}</TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  asChild
-                  variant="ghost"
-                  size="icon-xs"
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label={t('listing.open')}
-                >
-                  <Link to="/types/$type/$dn" params={{ type, dn: row.original.dn }}>
-                    <ExternalLink aria-hidden />
-                  </Link>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('listing.open')}</TooltipContent>
-            </Tooltip>
-
-            {(onCopyTo || onMoveTo) && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground hover:text-foreground"
-                    aria-label={t('copy.rowMenu')}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {onCopyTo && (
+                  <DropdownMenuItem onClick={() => onCopyTo(row.original)}>
+                    <Copy className="size-4" />
+                    {t('copy.copyTo')}
+                  </DropdownMenuItem>
+                )}
+                {onMoveTo && (
+                  <DropdownMenuItem onClick={() => onMoveTo(row.original)}>
+                    <FolderInput className="size-4" />
+                    {t('copy.moveTo')}
+                  </DropdownMenuItem>
+                )}
+                {onDeleteSingle && (
+                  <DropdownMenuItem
+                    onClick={() => onDeleteSingle(row.original)}
+                    className="text-destructive focus:text-destructive"
                   >
-                    <MoreHorizontal aria-hidden />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
-                  {onCopyTo && (
-                    <DropdownMenuItem onClick={() => onCopyTo(row.original)} className="gap-2">
-                      <Copy className="size-3.5 text-muted-foreground" aria-hidden />
-                      <span>{t('copy.copyTo')}</span>
-                    </DropdownMenuItem>
-                  )}
-                  {onMoveTo && (
-                    <DropdownMenuItem onClick={() => onMoveTo(row.original)} className="gap-2">
-                      <FolderInput className="size-3.5 text-muted-foreground" aria-hidden />
-                      <span>{t('copy.moveTo')}</span>
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+                    <Trash2 className="size-4" />
+                    {t('listing.delete')}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      ),
+    })
 
-            {onDeleteSingle && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDeleteSingle(row.original)
-                    }}
-                    aria-label={t('common.delete')}
-                  >
-                    <Trash2 aria-hidden />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('common.delete')}</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        ),
-      },
-    ]
     return cols
   }, [
     descriptor,
     handleCopyDn,
-    linkKey,
+    isUser,
     onCopyTo,
     onDeleteSingle,
     onMoveTo,
@@ -340,7 +445,7 @@ export function ListingTable({
     count: tableRows.length,
     getScrollElement: () => scrollerRef.current,
     estimateSize: () => rowHeight,
-    overscan: 12,
+    overscan: 10,
     initialRect: { width: 800, height: 600 },
     observeElementRect: (instance, cb) =>
       observeElementRect(instance, (rect) =>
@@ -349,27 +454,12 @@ export function ListingTable({
   })
 
   const virtualItems = virtual.getVirtualItems()
-  const lastIndex = virtualItems.length
-    ? (virtualItems[virtualItems.length - 1]?.index ?? 0)
-    : 0
-
-  useEffect(() => {
-    if (
-      hasNextPage &&
-      !isFetchingNextPage &&
-      tableRows.length > 0 &&
-      lastIndex >= tableRows.length - 8
-    ) {
-      onFetchNextPage()
-    }
-  }, [lastIndex, tableRows.length, hasNextPage, isFetchingNextPage, onFetchNextPage])
 
   const padTop = virtualItems.length ? (virtualItems[0]?.start ?? 0) : 0
   const padBottom = virtualItems.length
     ? virtual.getTotalSize() - (virtualItems[virtualItems.length - 1]?.end ?? 0)
     : 0
 
-  // Keyboard navigation across rows
   const handleTableKeyDown = (e: React.KeyboardEvent) => {
     if (tableRows.length === 0) return
 
@@ -390,76 +480,163 @@ export function ListingTable({
     } else if (e.key === 'Enter') {
       if (focusedIndex !== null && tableRows[focusedIndex]) {
         e.preventDefault()
-        const target = tableRows[focusedIndex]
-        void navigate({
-          to: '/types/$type/$dn',
-          params: { type, dn: target.original.dn },
-        })
-      }
-    } else if (e.key === ' ') {
-      if (focusedIndex !== null && tableRows[focusedIndex]) {
-        e.preventDefault()
-        tableRows[focusedIndex].toggleSelected()
+        const item = tableRows[focusedIndex].original
+        if (onRowClick) onRowClick(item)
+        else void navigate({ to: '/types/$type/$dn', params: { type, dn: item.dn } })
       }
     }
   }
 
   return (
-    <div
-      className="overflow-hidden rounded-b-md border bg-card outline-none"
-      tabIndex={0}
-      onKeyDown={handleTableKeyDown}
-      role="region"
-      aria-label={descriptor.label}
-    >
+    <div>
+      {/* Mobile Card List (under md) */}
+      <div className="grid gap-2 md:hidden">
+        {rows.map((item) => {
+          const name = String(item.values[descriptor.name_attr] ?? item.values.cn ?? item.dn)
+          const login = String(item.values[descriptor.main_attr] ?? item.values.uid ?? '')
+          const isSelected = Boolean(selection[item.dn])
+
+          return (
+            <div
+              key={item.dn}
+              className={cn(
+                'flex flex-col gap-2 rounded-lg border bg-card p-3 shadow-xs transition-colors hover:bg-muted/30 cursor-pointer',
+                isSelected && 'border-primary/50 bg-primary-soft/30',
+              )}
+              onClick={() => onRowClick?.(item)}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={(checked) => {
+                        onSelectionChange({
+                          ...selection,
+                          [item.dn]: checked === true,
+                        })
+                      }}
+                      aria-label={t('listing.selectRow', { name })}
+                    />
+                  </div>
+                  {isUser && (
+                    <Avatar className="size-9 shrink-0">
+                      <AvatarFallback className="bg-primary-soft text-caption font-semibold text-primary">
+                        {initials(name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div className="min-w-0">
+                    <Link
+                      to="/types/$type/$dn"
+                      params={{ type, dn: item.dn }}
+                      className="truncate font-medium text-foreground hover:text-signal block"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {name}
+                    </Link>
+                    {isUser && login && (
+                      <span className="truncate text-caption text-muted-foreground block font-mono">
+                        {login}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  {isUser && <StatusBadge status={getUserStatus(item)} />}
+                  {(onCopyTo || onMoveTo || onDeleteSingle) && (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-xs">
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleCopyDn({ stopPropagation: () => {} } as React.MouseEvent, item.dn)}>
+                            <Copy className="size-4" />
+                            {t('listing.copyDn')}
+                          </DropdownMenuItem>
+                          {onMoveTo && (
+                            <DropdownMenuItem onClick={() => onMoveTo(item)}>
+                              <FolderInput className="size-4" />
+                              {t('listing.moveTo')}
+                            </DropdownMenuItem>
+                          )}
+                          {onDeleteSingle && (
+                            <DropdownMenuItem
+                              onClick={() => onDeleteSingle(item)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="size-4" />
+                              {t('listing.delete')}
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-caption text-muted-foreground">
+                <OrgPath dn={typeof item.values.base === 'string' ? item.values.base : item.dn} />
+                {isUser && (
+                  <span className="tabular-nums">
+                    {t('peopleUI.mobile.groupsCount', {
+                      count: item.groups_count ?? (item.values.groups_count as number) ?? 0,
+                    })}
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Desktop Table (md and up) */}
       <div
         ref={scrollerRef}
-        className="min-h-56 max-h-[calc(100vh-18rem)] overflow-auto"
+        tabIndex={0}
+        onKeyDown={handleTableKeyDown}
+        className="hidden md:block relative max-h-[calc(100vh-220px)] overflow-auto rounded-t-md border border-t-0 bg-card outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
-        <table className="w-full border-collapse text-body">
-          <thead className="sticky top-0 z-10 bg-muted/50">
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id} className="border-b">
-                {hg.headers.map((h) => {
-                  const sorted = h.column.getIsSorted()
-                  const canSort = h.column.getCanSort()
+        <table className="w-full border-collapse text-body" style={{ minWidth: 650 }}>
+          <thead className="sticky top-0 z-10 border-b bg-card">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  const canSort = header.column.getCanSort()
+                  const isSorted = header.column.getIsSorted()
                   return (
                     <th
-                      key={h.id}
-                      scope="col"
-                      aria-sort={
-                        sorted === 'asc'
-                          ? 'ascending'
-                          : sorted === 'desc'
-                            ? 'descending'
-                            : undefined
-                      }
+                      key={header.id}
                       className={cn(
-                        'h-8 px-3 text-left select-none',
-                        h.id === 'select' && 'w-10 text-center',
-                        h.id === 'actions' && 'w-20 text-right',
+                        'h-9 px-3 text-left text-caption font-semibold tracking-[0.06em] uppercase text-muted-foreground select-none',
+                        header.id === 'select' && 'w-10 px-0 text-center',
+                        header.id === 'actions' && 'w-24 text-right',
+                        header.id === 'status' && 'w-32',
+                        header.id === 'groups' && 'w-24 text-right',
                       )}
                     >
-                      {canSort ? (
+                      {header.isPlaceholder ? null : canSort ? (
                         <button
                           type="button"
-                          className={cn(
-                            'label-caps inline-flex items-center gap-1 rounded-sm py-0.5 transition-colors hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none',
-                            sorted ? 'text-foreground' : 'text-muted-foreground',
-                          )}
-                          onClick={h.column.getToggleSortingHandler()}
+                          onClick={header.column.getToggleSortingHandler()}
+                          className="flex items-center gap-1.5 transition-colors hover:text-foreground focus-visible:underline focus-visible:outline-none"
                         >
-                          <span>{String(h.column.columnDef.header)}</span>
-                          {sorted === 'asc' ? (
-                            <ArrowUp className="size-3" aria-hidden />
-                          ) : sorted === 'desc' ? (
-                            <ArrowDown className="size-3" aria-hidden />
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {isSorted === 'asc' ? (
+                            <ArrowUp className="size-3 text-foreground" aria-hidden />
+                          ) : isSorted === 'desc' ? (
+                            <ArrowDown className="size-3 text-foreground" aria-hidden />
                           ) : (
                             <ArrowUpDown className="size-3 opacity-40" aria-hidden />
                           )}
                         </button>
-                      ) : h.isPlaceholder ? null : (
-                        flexRender(h.column.columnDef.header, h.getContext())
+                      ) : (
+                        flexRender(header.column.columnDef.header, header.getContext())
                       )}
                     </th>
                   )
@@ -469,46 +646,40 @@ export function ListingTable({
           </thead>
           <tbody>
             {padTop > 0 && (
-              <tr aria-hidden style={{ height: padTop }}>
-                <td colSpan={columns.length} />
+              <tr>
+                <td style={{ height: `${padTop}px` }} />
               </tr>
             )}
-            {virtualItems.map((vi) => {
-              const row = tableRows[vi.index]
+            {virtualItems.map((virtualRow) => {
+              const row = tableRows[virtualRow.index]
               if (!row) return null
               const isSelected = row.getIsSelected()
-              const isFocused = focusedIndex === vi.index
-              const isPreviewSelected = selectedRowDn === row.original.dn
+              const isFocused = focusedIndex === virtualRow.index
+              const isHighlighted = selectedRowDn === row.original.dn
 
               return (
                 <tr
                   key={row.id}
+                  data-index={virtualRow.index}
                   data-state={isSelected ? 'selected' : undefined}
-                  style={{ height: rowHeight }}
+                  onClick={() => onRowClick?.(row.original)}
                   className={cn(
-                    'group cursor-pointer border-b transition-colors last:border-b-0 hover:bg-accent/50',
-                    isSelected && 'bg-primary-soft hover:bg-primary-soft',
-                    isPreviewSelected && 'bg-accent/70',
-                    isFocused && 'ring-1 ring-inset ring-signal/50',
+                    'group border-b border-border/50 transition-colors cursor-pointer',
+                    density === 'compact' ? 'h-[32px]' : isUser ? 'h-[52px]' : 'h-[36px]',
+                    isSelected && 'bg-primary-soft/40',
+                    isHighlighted && !isSelected && 'bg-muted/60',
+                    !isSelected && !isHighlighted && 'hover:bg-muted/30',
+                    isFocused && 'ring-1 ring-inset ring-ring',
                   )}
-                  onClick={() => {
-                    setFocusedIndex(vi.index)
-                    if (onRowClick) onRowClick(row.original)
-                    else {
-                      void navigate({
-                        to: '/types/$type/$dn',
-                        params: { type, dn: row.original.dn },
-                      })
-                    }
-                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
                       className={cn(
-                        'truncate px-3',
-                        cell.column.id === 'select' && 'w-10 text-center',
-                        cell.column.id === 'actions' && 'w-20 text-right',
+                        'px-3 text-body truncate',
+                        cell.column.id === 'select' && 'w-10 px-0 text-center',
+                        cell.column.id === 'actions' && 'w-24 text-right overflow-visible',
+                        cell.column.id === 'groups' && 'text-right',
                       )}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -518,39 +689,12 @@ export function ListingTable({
               )
             })}
             {padBottom > 0 && (
-              <tr aria-hidden style={{ height: padBottom }}>
-                <td colSpan={columns.length} />
+              <tr>
+                <td style={{ height: `${padBottom}px` }} />
               </tr>
             )}
           </tbody>
         </table>
-      </div>
-
-      {/* Table Footer */}
-      <div className="flex h-10 items-center justify-between border-t px-3 text-xs text-muted-foreground">
-        <div className="flex items-center gap-2 tabular-nums">
-          <span>
-            {t('listing.showing', {
-              shown: rows.length,
-              total: total ?? rows.length,
-            })}
-          </span>
-          {Object.keys(selection).length > 0 && (
-            <span className="font-medium text-foreground">
-              ({t('listing.selected', { count: Object.keys(selection).length })})
-            </span>
-          )}
-        </div>
-        {hasNextPage && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={isFetchingNextPage}
-            onClick={onFetchNextPage}
-          >
-            {isFetchingNextPage ? t('common.loading') : t('listing.loadMore')}
-          </Button>
-        )}
       </div>
     </div>
   )

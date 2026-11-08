@@ -1,6 +1,6 @@
 
 export type Density = 'comfortable' | 'compact'
-export type StatusFilter = 'all' | 'active' | 'locked'
+export type StatusFilter = 'all' | 'active' | 'locked' | 'expired'
 
 export const DENSITY_STORAGE_KEY = 'heracles.listing.density'
 export const COLUMN_VISIBILITY_PREFIX = 'heracles.listing.columns.'
