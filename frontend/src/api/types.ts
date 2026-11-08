@@ -256,6 +256,7 @@ export interface ObjectListItem {
   dn: string
   values: Record<string, unknown>
   locked: boolean
+  groups_count?: number
 }
 
 export interface ObjectList {
@@ -270,6 +271,7 @@ export interface ListParams {
   q?: string
   limit?: number
   cursor?: string | null
+  offset?: number
   sort?: string
   order?: 'asc' | 'desc'
 }

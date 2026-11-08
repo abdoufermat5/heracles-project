@@ -62,6 +62,14 @@ export function useObjectList(type: string, params: Omit<ListParams, 'cursor'>) 
     placeholderData: keepPreviousData,
   })
 }
+export function usePaginatedObjectList(type: string, params: ListParams) {
+  return useQuery({
+    queryKey: qk.list(type, params),
+    queryFn: ({ signal }) => api.listObjects(type, params, signal),
+    placeholderData: keepPreviousData,
+  })
+}
+
 
 /** Async search used by the object_ref combobox. */
 export function useRefSearch(refType: string, q: string, enabled = true) {

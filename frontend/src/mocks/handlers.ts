@@ -337,8 +337,8 @@ export const handlers: HttpHandler[] = [
       const limit = Math.min(Number(u.searchParams.get('limit') ?? 50) || 50, 200)
       const sort = u.searchParams.get('sort')
       const order = u.searchParams.get('order') === 'desc' ? -1 : 1
-      const offset = Number(atob(u.searchParams.get('cursor') ?? btoa('0'))) || 0
-
+      const offsetParam = u.searchParams.get('offset')
+      const offset = offsetParam !== null ? Number(offsetParam) : Number(atob(u.searchParams.get('cursor') ?? btoa('0'))) || 0
       const flat = (r: ReturnType<typeof db.all>[number]): Record<string, unknown> => {
         const v: Record<string, unknown> = {}
         for (const t of Object.values(r.tabs)) Object.assign(v, t.values)
@@ -359,11 +359,30 @@ export const handlers: HttpHandler[] = [
         String(a.v[key] ?? '').localeCompare(String(b.v[key] ?? ''), undefined, { numeric: true }) * order,
       )
       const page = rows.slice(offset, offset + limit)
-      const items: ObjectListItem[] = page.map(({ r, v }) => ({
-        dn: r.dn,
-        values: Object.fromEntries(desc.columns.map((c) => [c.key, v[c.key] ?? null])),
-        locked: r.accountLocked,
-      }))
+      const items: ObjectListItem[] = page.map(({ r, v }) => {
+        let groupsCount = 0
+        if (type === 'user') {
+          const userDn = r.dn.toLowerCase()
+          for (const rec of db.records.values()) {
+            if (rec.type === 'group') {
+              const member = (rec.tabs.main?.values.member as string[] | string | undefined) ?? []
+              const members = Array.isArray(member) ? member : [member]
+              if (members.some((m) => typeof m === 'string' && m.toLowerCase() === userDn)) {
+                groupsCount++
+              }
+            }
+          }
+        }
+        return {
+          dn: r.dn,
+          values: {
+            ...Object.fromEntries(desc.columns.map((c) => [c.key, v[c.key] ?? null])),
+            groups_count: groupsCount,
+          },
+          locked: r.accountLocked,
+          groups_count: groupsCount,
+        }
+      })
       const next = offset + limit < rows.length ? btoa(String(offset + limit)) : null
       await delay(120)
       return HttpResponse.json({ items, next_cursor: next, total: rows.length })

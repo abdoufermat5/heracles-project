@@ -208,10 +208,12 @@ export function Pagination({
 export function BulkActionBar({
   count,
   onClear,
+  label,
   children,
 }: {
   count: number
   onClear: () => void
+  label?: string
   children: React.ReactNode
 }) {
   const { t } = useTranslation()
@@ -219,7 +221,7 @@ export function BulkActionBar({
   return (
     <div
       role="region"
-      aria-label={t('patterns.bulkActions')}
+      aria-label={label ?? t('listing.bulkActions', { defaultValue: t('patterns.bulkActions') })}
       className="sticky bottom-4 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-lg border bg-popover px-3 py-2 shadow-overlay"
     >
       <span className="flex items-center gap-1.5 pr-2 text-body font-medium">
