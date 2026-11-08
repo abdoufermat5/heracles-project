@@ -174,6 +174,11 @@ class AuditEvents(NullEvents):
     def post_delete(self, ctx: EventContext) -> None:
         self._record("delete", ctx, [])
 
+    def post_second_factor_reset(self, ctx: EventContext) -> None:
+        self._record(
+            "modify", ctx, _changed_attributes(ctx.changes, self.settings.hidden_attributes)
+        )
+
 
 def format_event(entry: Entry) -> str:
     """One line summary of an event entry."""

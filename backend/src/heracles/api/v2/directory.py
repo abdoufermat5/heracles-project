@@ -1,4 +1,4 @@
-"""Directory-wide API v2 routes: department tree, account lock, dashboard."""
+"""Directory-wide API v2 routes: department tree, account lock, second factors, dashboard."""
 
 from __future__ import annotations
 
@@ -6,13 +6,17 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import cast
 
+import structlog
 from fastapi import APIRouter
+from webauthn import base64url_to_bytes
+from webauthn.helpers import bytes_to_base64url
 
-from heracles.api.deps import CurrentUserDep
+from heracles.api.deps import CurrentUserDep, StateDep
 from heracles.api.domain import DomainDep
 from heracles.api.errors import forbidden, not_found, validation
 from heracles.attributes import JSON
 from heracles.auth.passwords import is_locked, lock, unlock
+from heracles.auth.second_factor import SecondFactorSummary
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Modification, NoSuchObjectError, Scope
 from heracles.objects import ObjectValidationError, UnknownTypeError
@@ -20,9 +24,13 @@ from heracles.objects.policy import EventContext
 from heracles.schema.legacy import OC
 
 router = APIRouter(tags=["directory"])
+log = structlog.get_logger(__name__)
 
 #: ACL attribute protecting the account lock action (compatibility key).
 USER_LOCK_ACL = "userLock"
+#: ACL attribute protecting the administrators' view and reset of second factors.
+SECOND_FACTOR_ACL = "secondFactor"
+
 
 _KIND_BY_ATTR = {"ou": "ou", "o": "o", "l": "l", "c": "c", "dc": "dc"}
 
@@ -158,6 +166,93 @@ def lock_account(dn: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, 
 @router.post("/users/{dn:path}/unlock")
 def unlock_account(dn: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
     return _set_account_lock(user, domain, dn, False)
+
+
+# ---------------------------------------------------------- second factors
+
+
+def _second_factor_target(user: CurrentUserDep, domain: DomainDep, dn: str, *, write: bool) -> bool:
+    """Check the right on a user's second factors; return whether the caller may reset them.
+
+    Reading needs the read right on the ``secondFactor`` pseudo-attribute, resetting the write
+    right. Nobody resets their own factors here: that skips the step-up of the self-service
+    endpoints.
+    """
+    info = domain.registry.get("user")
+    evaluator = domain.evaluator(user)
+    key = info.acl_object(info.main_tab)
+    can_write = evaluator.can_write_attr(dn, key, SECOND_FACTOR_ACL)
+    if write and not can_write:
+        raise forbidden("You cannot reset the second factors of this account")
+    if not write and not (can_write or evaluator.can_read_attr(dn, key, SECOND_FACTOR_ACL)):
+        raise forbidden("You cannot view the second factors of this account")
+    if write and dnlib.normalize(dn) == dnlib.normalize(user.dn):
+        raise forbidden("Manage your own second factors from your account page")
+    entry = user.directory.get(dn, ["objectClass"])
+    if entry is None or not entry.has_object_class("inetOrgPerson"):
+        raise not_found("User not found")
+    return can_write and dnlib.normalize(dn) != dnlib.normalize(user.dn)
+
+
+def _describe(summary: SecondFactorSummary) -> list[bytes]:
+    items: list[str] = []
+    if summary.totp:
+        items.append("authenticator app")
+    items.extend(f"security key: {c.label or 'unnamed'}" for c in summary.security_keys)
+    if summary.recovery_codes:
+        items.append(f"recovery codes: {summary.recovery_codes}")
+    return [i.encode() for i in items]
+
+
+def _record_reset(
+    user: CurrentUserDep, domain: DomainDep, dn: str, removed: SecondFactorSummary
+) -> None:
+    """Log the reset and hand it to the audit events (when the audit plugin is enabled)."""
+    what = [v.decode() for v in _describe(removed)]
+    log.warning("second_factor_reset", actor=user.dn, target=dn, removed=what)
+    change = Modification("delete", SECOND_FACTOR_ACL, _describe(removed))
+    domain.events(user).post_second_factor_reset(
+        EventContext(type_name="user", dn=dn, changes=[change])
+    )
+
+
+@router.get("/users/{dn:path}/second-factors")
+def second_factors(dn: str, user: CurrentUserDep, domain: DomainDep, state: StateDep) -> JSON:
+    """What a user has registered, never the secrets themselves."""
+    can_reset = _second_factor_target(user, domain, dn, write=False)
+    summary = state.second_factor.summary(dn)
+    return {
+        "totp": summary.totp,
+        "security_keys": [
+            {"id": bytes_to_base64url(c.credential_id), "label": c.label}
+            for c in summary.security_keys
+        ],
+        "recovery_codes": summary.recovery_codes,
+        "can_reset": can_reset,
+    }
+
+
+@router.delete("/users/{dn:path}/second-factors/webauthn/{credential_id}", status_code=204)
+def remove_security_key(
+    dn: str, credential_id: str, user: CurrentUserDep, domain: DomainDep, state: StateDep
+) -> None:
+    _second_factor_target(user, domain, dn, write=True)
+    try:
+        raw = base64url_to_bytes(credential_id)
+    except ValueError:
+        raise not_found() from None
+    found = [c for c in state.webauthn.credentials(dn) if c.credential_id == raw]
+    if not found or not state.webauthn.remove_credential(dn, raw):
+        raise not_found("Security key not found")
+    _record_reset(user, domain, dn, SecondFactorSummary(False, (found[0],), 0))
+
+
+@router.delete("/users/{dn:path}/second-factors", status_code=204)
+def reset_second_factors(dn: str, user: CurrentUserDep, domain: DomainDep, state: StateDep) -> None:
+    """Remove the authenticator, security keys and recovery codes of a user."""
+    _second_factor_target(user, domain, dn, write=True)
+    removed = state.second_factor.reset(dn)
+    _record_reset(user, domain, dn, removed)
 
 
 # -------------------------------------------------------------- dashboard

@@ -82,6 +82,10 @@ class ObjectEvents(Protocol):
 
     def post_unlock(self, ctx: EventContext) -> None: ...
 
+    def post_second_factor_reset(self, ctx: EventContext) -> None:
+        """Second factors of a user were reset (``ctx.changes`` names what was removed)."""
+        ...
+
 
 class NullEvents:
     """No-op events; subclass and override what is needed."""
@@ -114,6 +118,9 @@ class NullEvents:
         pass
 
     def post_unlock(self, ctx: EventContext) -> None:
+        pass
+
+    def post_second_factor_reset(self, ctx: EventContext) -> None:
         pass
 
 
@@ -162,6 +169,11 @@ class CompositeEvents:
     def post_unlock(self, ctx: EventContext) -> None:
         for e in self.events:
             _call(e, "post_unlock", ctx)
+
+    def post_second_factor_reset(self, ctx: EventContext) -> None:
+        """Optional hook (like the lock ones): third-party events need not implement it."""
+        for e in self.events:
+            _call(e, "post_second_factor_reset", ctx)
 
     def collected(self) -> tuple[list[str], list[str]]:
         """Warnings and messages collected by the events of this request."""

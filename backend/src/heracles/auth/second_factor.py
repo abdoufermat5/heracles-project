@@ -48,6 +48,10 @@ class SecondFactorStore(Protocol):
         """Remove one credential; True if it existed."""
         ...
 
+    def clear_all(self, user_dn: str) -> None:
+        """Forget every second factor of the user: TOTP, recovery codes and security keys."""
+        ...
+
 
 class InMemorySecondFactorStore:
     """Process-local store for development and tests."""
@@ -118,6 +122,14 @@ class InMemorySecondFactorStore:
             self._webauthn[self._k(user_dn)] = kept
             return len(kept) != len(creds)
 
+    def clear_all(self, user_dn: str) -> None:
+        key = self._k(user_dn)
+        with self._lock:
+            self._totp.pop(key, None)
+            self._steps.pop(key, None)
+            self._recovery.pop(key, None)
+            self._webauthn.pop(key, None)
+
 
 def hash_recovery_code(code: str) -> str:
     """Hash of a recovery code (codes carry ~50 bits of entropy, so SHA-256 suffices)."""
@@ -132,6 +144,19 @@ def generate_recovery_codes(count: int = 10) -> list[str]:
         raw = "".join(secrets.choice(_RECOVERY_ALPHABET) for _ in range(10))
         codes.append(f"{raw[:5]}-{raw[5:]}")
     return codes
+
+
+@dataclass(frozen=True, slots=True)
+class SecondFactorSummary:
+    """What a user has registered (no secrets)."""
+
+    totp: bool
+    security_keys: tuple[WebAuthnCredential, ...]
+    recovery_codes: int
+
+    @property
+    def empty(self) -> bool:
+        return not (self.totp or self.security_keys or self.recovery_codes)
 
 
 class SecondFactorService:
@@ -158,6 +183,20 @@ class SecondFactorService:
         if methods and self.store.recovery_hashes(user_dn):
             methods.append("recovery")
         return methods
+
+    def summary(self, user_dn: str) -> SecondFactorSummary:
+        """Registrations of a user (administration view, no secrets)."""
+        return SecondFactorSummary(
+            totp=bool(self.store.totp_secret(user_dn)),
+            security_keys=tuple(self.store.webauthn_credentials(user_dn)),
+            recovery_codes=len(self.store.recovery_hashes(user_dn)),
+        )
+
+    def reset(self, user_dn: str) -> SecondFactorSummary:
+        """Remove every second factor of a user; return what was removed."""
+        removed = self.summary(user_dn)
+        self.store.clear_all(user_dn)
+        return removed
 
     # -- TOTP --------------------------------------------------------------
     def enroll_totp(self, user_dn: str, account_name: str) -> tuple[str, str]:

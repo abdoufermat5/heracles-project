@@ -144,7 +144,9 @@ def build_demo_directory() -> MemoryDirectory:
             "0:user/user;cmdrw#userLock;rw,ogroup/ogroup;cmdrw,"
             "role/roleGeneric;r,department/department;r"
         ),
-        "helpdesk": "0:user/user;r#userPassword;rw#userLock;rw,department/department;r",
+        "helpdesk": (
+            "0:user/user;r#userPassword;rw#userLock;rw#secondFactor;rw,department/department;r"
+        ),
         "self-service": (
             "0:user/user;sr#telephoneNumber;srw#mobile;srw#jpegPhoto;srw#userPassword;srw"
         ),
