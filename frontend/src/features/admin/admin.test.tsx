@@ -116,12 +116,12 @@ describe('configuration screen', () => {
   it('saves only the changed attributes', async () => {
     signIn()
     renderApp('/admin/config')
-    await userEvent.click(await screen.findByRole('button', { name: 'Password' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Passwords' }))
     const input = await screen.findByLabelText('Minimum length')
     await userEvent.clear(input)
     await userEvent.type(input, '14')
-    expect(await screen.findByText('Changes to save: 1')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('1 unsaved change')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     await waitFor(() => expect(lastRequest('PUT', '/config')).toBeDefined())
     expect(lastRequest('PUT', '/config')?.body).toEqual({ changes: { password_min_length: 14 } })
     expect(await screen.findByText('No changes.')).toBeInTheDocument()
@@ -130,11 +130,11 @@ describe('configuration screen', () => {
   it('marks the settings that are only stored for compatibility', async () => {
     signIn()
     renderApp('/admin/config')
-    await userEvent.click(await screen.findByRole('button', { name: 'Look & feel' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Advanced' }))
     const row = (await screen.findByText('Time zone')).closest('div.grid')
     expect(row).not.toBeNull()
     expect(within(row as HTMLElement).getByText('Stored for compatibility')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Password' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Passwords' }))
     const honoured = (await screen.findByText('Minimum length')).closest('div.grid')
     expect(within(honoured as HTMLElement).queryByText('Stored for compatibility')).toBeNull()
   })
@@ -142,10 +142,19 @@ describe('configuration screen', () => {
   it('offers the login method and CAS settings in the login section', async () => {
     signIn()
     renderApp('/admin/config')
-    await userEvent.click(await screen.findByRole('button', { name: 'Login & session' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign-in & security' }))
     expect(await screen.findByLabelText('Login method')).toBeInTheDocument()
     expect(screen.getByLabelText('CAS host')).toBeInTheDocument()
     expect(screen.getByLabelText('Session lifetime (seconds)')).toBeInTheDocument()
+  })
+
+  it('filters settings across groups via the search box', async () => {
+    signIn()
+    renderApp('/admin/config')
+    const search = await screen.findByPlaceholderText(/Search settings by name/)
+    await userEvent.type(search, 'CAS host')
+    expect(await screen.findByLabelText('CAS host')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Minimum length')).not.toBeInTheDocument()
   })
 
   it('shows server-side validation errors on the field', async () => {
@@ -165,11 +174,11 @@ describe('configuration screen', () => {
       ),
     )
     renderApp('/admin/config')
-    await userEvent.click(await screen.findByRole('button', { name: 'Password' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Passwords' }))
     const input = await screen.findByLabelText('Minimum length')
     await userEvent.clear(input)
     await userEvent.type(input, '5')
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByText('Must not be negative.')).toBeInTheDocument()
     expect(input).toHaveAttribute('aria-invalid', 'true')
   })
@@ -177,16 +186,16 @@ describe('configuration screen', () => {
   it('is read-only without the right to write', async () => {
     signIn('viewer')
     renderApp('/admin/config')
-    await userEvent.click(await screen.findByRole('button', { name: 'Password' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Passwords' }))
     expect(await screen.findByLabelText('Minimum length')).toBeDisabled()
-    expect(screen.getByText('You can view this configuration but not change it.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getByText('Configuration is view-only for your account.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
   })
 
   it('hides secret values from users who cannot write', async () => {
     signIn('viewer')
     renderApp('/admin/config')
-    await userEvent.click(await screen.findByRole('button', { name: 'Password recovery' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Notifications & mail' }))
     const salt = await screen.findByLabelText('Token salt')
     expect(salt).toHaveValue('')
     expect(salt).toHaveAttribute('placeholder', 'Hidden')
@@ -195,7 +204,7 @@ describe('configuration screen', () => {
   it('edits the triggers table and saves the list', async () => {
     signIn()
     renderApp('/admin/config')
-    await userEvent.click(await screen.findByRole('button', { name: 'Triggers' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Automation & triggers' }))
     expect(await screen.findByText('No triggers')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }))
     const dialog = await screen.findByRole('dialog')
@@ -275,11 +284,11 @@ describe('plugins page', () => {
   it('shows version, state, missing classes and contributions', async () => {
     signIn()
     renderApp('/admin/plugins')
-    const posix = (await screen.findByText('posix')).closest('tr') as HTMLElement
+    const posix = (await screen.findByText('posix')).closest('[data-plugin]') as HTMLElement
     expect(within(posix).getByText('Enabled')).toBeInTheDocument()
     expect(within(posix).getByText('Unix group')).toBeInTheDocument()
     expect(within(posix).getByText('0.1.0')).toBeInTheDocument()
-    const samba = (await screen.findByText('samba')).closest('tr') as HTMLElement
+    const samba = (await screen.findByText('samba')).closest('[data-plugin]') as HTMLElement
     expect(within(samba).getByText('Disabled')).toBeInTheDocument()
     expect(within(samba).getByText('sambaSamAccount')).toBeInTheDocument()
   })

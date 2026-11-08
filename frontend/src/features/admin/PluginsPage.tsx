@@ -1,18 +1,11 @@
-import { Puzzle } from 'lucide-react'
+import { AlertTriangle, Layers, Puzzle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PageHeader } from '@/components/ui/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { usePlugins } from './hooks'
 
 export function PluginsPage() {
@@ -20,69 +13,112 @@ export function PluginsPage() {
   const { data, isPending, isError, error, refetch } = usePlugins()
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader title={t('plugins.title')} description={t('plugins.description')} />
       {isError ? (
         <ErrorState error={error} onRetry={() => void refetch()} />
       ) : isPending ? (
-        <Skeleton className="h-64 w-full" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-48 w-full" />
+        </div>
       ) : data.length === 0 ? (
-        <EmptyState icon={<Puzzle />} title={t('plugins.none')} />
+        <EmptyState
+          icon={<Puzzle className="size-6 text-muted-foreground" aria-hidden />}
+          title={t('plugins.none')}
+        />
       ) : (
-        <div className="rounded-md border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('plugins.name')}</TableHead>
-                <TableHead>{t('plugins.version')}</TableHead>
-                <TableHead>{t('plugins.status')}</TableHead>
-                <TableHead>{t('plugins.types')}</TableHead>
-                <TableHead>{t('plugins.tabs')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((p) => (
-                <TableRow key={p.name} data-plugin={p.name}>
-                  <TableCell className="align-top font-medium">{p.name}</TableCell>
-                  <TableCell className="align-top font-mono text-xs tabular-nums">{p.version}</TableCell>
-                  <TableCell className="align-top">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {data.map((p) => (
+            <Card
+              key={p.name}
+              data-plugin={p.name}
+              className="flex flex-col justify-between border transition-all duration-150 hover:shadow-2xs"
+            >
+              <div>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Puzzle className="size-4 text-primary" aria-hidden />
+                        <h3 className="text-body font-semibold tracking-tight text-foreground">
+                          {p.name}
+                        </h3>
+                      </div>
+                      <p className="font-mono text-xs tabular-nums text-muted-foreground">
+                        {p.version}
+                      </p>
+                    </div>
                     {p.enabled ? (
                       <Badge variant="success">{t('plugins.enabled')}</Badge>
                     ) : (
-                      <div className="space-y-1">
-                        <Badge variant="warning">{t('plugins.disabled')}</Badge>
-                        <p className="text-caption text-muted-foreground">
-                          {t('plugins.missing')}{' '}
-                          <span className="font-mono">{p.missing_object_classes.join(', ')}</span>
+                      <Badge variant="warning">{t('plugins.disabled')}</Badge>
+                    )}
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-3 pt-0">
+                  {!p.enabled && p.missing_object_classes.length > 0 && (
+                    <div className="flex items-start gap-2 rounded-sm border border-warning/30 bg-warning-soft p-2.5 text-caption text-warning">
+                      <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                      <div className="space-y-0.5">
+                        <span className="font-medium">{t('plugins.missing')}</span>
+                        <p className="font-mono text-micro break-all">
+                          {p.missing_object_classes.join(', ')}
                         </p>
                       </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2 border-t pt-3">
+                    <span className="text-caption font-medium text-muted-foreground">
+                      {t('settingsUI.plugins.addsTitle')}
+                    </span>
+
+                    {/* Types added */}
+                    {p.types.length > 0 && (
+                      <div className="space-y-1">
+                        <span className="text-micro uppercase tracking-wide text-muted-foreground">
+                          {t('plugins.types')}:
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {p.types.map((ty) => (
+                            <Badge key={ty.name} variant="secondary" title={ty.category}>
+                              {ty.label}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
                     )}
-                  </TableCell>
-                  <TableCell className="align-top">
-                    <div className="flex flex-wrap gap-1">
-                      {p.types.length === 0 && <span className="text-muted-foreground">—</span>}
-                      {p.types.map((ty) => (
-                        <Badge key={ty.name} variant="secondary" title={ty.category}>
-                          {ty.label}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="align-top">
-                    <div className="flex flex-wrap gap-1">
-                      {p.tabs.length === 0 && <span className="text-muted-foreground">—</span>}
-                      {p.tabs.map((tab) => (
-                        <Badge key={`${tab.type}/${tab.name}`} variant="outline">
-                          {tab.label}
-                          <span className="ml-1 opacity-60">{tab.type}</span>
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+
+                    {/* Tabs added */}
+                    {p.tabs.length > 0 && (
+                      <div className="space-y-1">
+                        <span className="text-micro uppercase tracking-wide text-muted-foreground">
+                          {t('plugins.tabs')}:
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {p.tabs.map((tab) => (
+                            <Badge key={`${tab.type}/${tab.name}`} variant="outline">
+                              <Layers className="size-3 mr-1 opacity-70" aria-hidden />
+                              {tab.label}
+                              <span className="ml-1 opacity-60">({tab.type})</span>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {p.types.length === 0 && p.tabs.length === 0 && (
+                      <p className="text-caption text-muted-foreground">
+                        {t('settingsUI.plugins.addsNothing')}
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </div>
+            </Card>
+          ))}
         </div>
       )}
     </div>
