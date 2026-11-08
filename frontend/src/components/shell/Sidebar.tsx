@@ -9,9 +9,9 @@ import { TypeIcon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 const linkBaseClass =
-  'group relative flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs md:text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+  'group relative flex h-8 items-center gap-2.5 rounded-sm px-3 text-[13px] font-medium text-sidebar-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&_svg]:opacity-80'
 const activeClass =
-  'bg-primary-soft !text-foreground font-semibold shadow-xs ring-1 ring-primary/25 dark:bg-primary-soft/80'
+  'bg-sidebar-accent text-sidebar-accent-foreground! font-medium before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-sidebar-signal'
 
 function NavLink({
   collapsed,
@@ -35,16 +35,16 @@ function NavLink({
       to={to}
       params={params as never}
       activeOptions={{ exact }}
-      className={cn(linkBaseClass, collapsed && 'justify-center px-0 size-8 mx-auto')}
+      className={cn(linkBaseClass, collapsed && 'mx-auto size-8 justify-center px-0')}
       activeProps={{ className: activeClass, 'aria-current': 'page' }}
       aria-label={collapsed ? label : undefined}
     >
       {children}
       {!collapsed && (
         <>
-          <span className="truncate flex-1">{label}</span>
+          <span className="flex-1 truncate">{label}</span>
           {typeof count === 'number' && (
-            <span className="ml-auto rounded-full bg-muted/60 px-1.5 py-0.2 text-[10px] font-mono font-normal tabular-nums text-muted-foreground group-hover:bg-muted group-hover:text-foreground">
+            <span className="ml-auto font-mono text-[11px] tabular-nums text-sidebar-muted group-hover:text-sidebar-accent-foreground">
               {count.toLocaleString()}
             </span>
           )}
@@ -61,7 +61,7 @@ function NavLink({
       <TooltipContent side="right" sideOffset={8} className="flex items-center gap-1.5">
         <span>{label}</span>
         {typeof count === 'number' && (
-          <span className="rounded bg-muted/80 px-1 py-0.2 text-[10px] font-mono tabular-nums text-muted-foreground">
+          <span className="font-mono text-[11px] tabular-nums opacity-70">
             {count.toLocaleString()}
           </span>
         )}
@@ -97,9 +97,9 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
 
       {isPending && (
         <div className="space-y-2 px-1">
-          <Skeleton className="h-7 w-full" />
-          <Skeleton className="h-7 w-full" />
-          <Skeleton className="h-7 w-full" />
+          <Skeleton className="h-7 w-full bg-sidebar-accent" />
+          <Skeleton className="h-7 w-full bg-sidebar-accent" />
+          <Skeleton className="h-7 w-full bg-sidebar-accent" />
         </div>
       )}
 
@@ -109,11 +109,11 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
         return (
           <div key={cat} className="space-y-0.5">
             {!collapsed ? (
-              <h2 className="px-2.5 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase text-muted-foreground/70 select-none">
+              <h2 className="label-caps px-3 pt-4 pb-1.5 text-sidebar-muted select-none">
                 {t(`categories.${cat}`)}
               </h2>
             ) : (
-              <div className="bg-border/60 mx-1.5 my-1.5 h-px" role="separator" />
+              <div className="mx-1.5 my-1.5 h-px bg-sidebar-border" role="separator" />
             )}
             {items.map((ty) => (
               <NavLink

@@ -2,7 +2,6 @@ import { Link, Outlet, useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Building2,
-  ChevronRight,
   Globe,
   Languages,
   LogOut,
@@ -71,31 +70,33 @@ function DepartmentSwitcher() {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className={cn(
-            'h-8 max-w-xs gap-1.5 border-border/80 bg-background/50 px-2.5 font-normal shadow-xs',
-            isCustomScope && 'border-primary/50 bg-primary/5 text-primary',
-          )}
+          className="h-8 max-w-xs gap-1.5 px-2 font-normal"
           aria-label={t('shell.department')}
         >
           <Building2 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <nav aria-label={t('shell.breadcrumb')} className="min-w-0">
-            <ol className="flex items-center gap-1 truncate text-xs">
+            <ol className="flex items-center gap-1 truncate text-[13px]">
+              {isCustomScope && (
+                <li className="flex items-center" aria-hidden>
+                  <span className="size-1.5 rounded-full bg-signal" />
+                </li>
+              )}
               {(path ?? []).map((n, i) => (
                 <li key={n.dn} className="flex items-center gap-1">
-                  {i > 0 && <ChevronRight className="text-muted-foreground/60 size-2.5" aria-hidden />}
+                  {i > 0 && <span className="text-muted-foreground/60">/</span>}
                   <span className={cn(i === (path?.length ?? 0) - 1 ? 'font-medium text-foreground' : 'text-muted-foreground')}>
                     {n.label}
                   </span>
                 </li>
               ))}
-              {!path && <li>{t('shell.department')}</li>}
+              {!path && <li className="text-muted-foreground">{t('shell.department')}</li>}
             </ol>
           </nav>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-2 shadow-lg">
+      <PopoverContent align="start" className="w-80 p-2">
         <div className="flex items-center justify-between border-b border-border/70 px-2 py-1.5 pb-2">
           <div className="flex items-center gap-1.5 text-xs font-semibold tracking-tight text-foreground">
             <Globe className="size-3.5 text-muted-foreground" />
@@ -162,56 +163,63 @@ function UserMenu() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
-          className="size-8 rounded-full ring-offset-background transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-8 gap-2 px-1.5"
           aria-label={t('user.menu')}
         >
-          <Avatar className="size-7.5 border border-border/80">
+          <Avatar className="size-7 border border-border">
             {me?.avatar_url && <AvatarImage src={me.avatar_url} alt="" />}
-            <AvatarFallback className="bg-primary-soft text-[11px] font-semibold text-foreground">{initials}</AvatarFallback>
+            <AvatarFallback className="bg-muted text-[11px] font-semibold text-foreground">{initials}</AvatarFallback>
           </Avatar>
+          <span className="hidden min-w-0 flex-col items-start leading-tight lg:flex">
+            <span className="max-w-36 truncate text-[13px] font-medium text-foreground">
+              {me?.display_name}
+            </span>
+            <span className="max-w-36 truncate font-mono text-[11px] text-muted-foreground">
+              {me?.uid}
+            </span>
+          </span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60 shadow-lg">
-        <DropdownMenuLabel className="font-normal px-2.5 py-2">
-          <p className="text-xs font-semibold text-foreground truncate">{me?.display_name}</p>
-          <p className="text-muted-foreground font-mono text-[11px] truncate">{me?.uid}</p>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel className="px-2 py-2 font-normal">
+          <p className="truncate text-[13px] font-semibold text-foreground">{me?.display_name}</p>
+          <p className="truncate font-mono text-[11px] text-muted-foreground">{me?.uid}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void navigate({ to: '/me' })} className="gap-2 text-xs">
+        <DropdownMenuItem onSelect={() => void navigate({ to: '/me' })} className="gap-2">
           <UserIcon className="size-3.5" />
           <span>{t('user.me')}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-muted-foreground flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-semibold">
+        <DropdownMenuLabel className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           <Sun className="size-3" />
           <span>{t('user.theme')}</span>
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as ThemeChoice)}>
-          <DropdownMenuRadioItem value="system" className="text-xs">
+          <DropdownMenuRadioItem value="system">
             <Monitor className="size-3.5 mr-1" />
             {t('user.themeSystem')}
           </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="light" className="text-xs">
+          <DropdownMenuRadioItem value="light">
             <Sun className="size-3.5 mr-1" />
             {t('user.themeLight')}
           </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="dark" className="text-xs">
+          <DropdownMenuRadioItem value="dark">
             <Moon className="size-3.5 mr-1" />
             {t('user.themeDark')}
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-muted-foreground flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-semibold">
+        <DropdownMenuLabel className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           <Languages className="size-3" />
           <span>{t('user.language')}</span>
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup value={lang} onValueChange={(v) => void i18n.changeLanguage(v)}>
-          <DropdownMenuRadioItem value="en" className="text-xs">English</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="fr" className="text-xs">Français</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="en">English</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="fr">Français</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void logout()} className="gap-2 text-xs text-destructive focus:text-destructive">
+        <DropdownMenuItem onSelect={() => void logout()} className="gap-2 text-destructive focus:text-destructive">
           <LogOut className="size-3.5" />
           <span>{t('user.logout')}</span>
         </DropdownMenuItem>
@@ -257,7 +265,7 @@ export function AppShell() {
       <div className="flex h-dvh overflow-hidden bg-background">
         <a
           href="#main"
-          className="bg-primary text-primary-foreground sr-only z-50 rounded-md px-3 py-2 text-xs font-medium focus:not-sr-only focus:absolute focus:top-2 focus:left-2 shadow-md outline-none focus:ring-2 focus:ring-ring"
+          className="sr-only z-50 rounded-md border border-border bg-card px-3 py-2 text-[13px] font-medium text-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2 outline-none focus:ring-2 focus:ring-ring"
         >
           {t('shell.skip')}
         </a>
@@ -266,12 +274,12 @@ export function AppShell() {
         <aside
           className={cn(
             'bg-sidebar hidden shrink-0 flex-col border-r border-sidebar-border transition-[width] duration-200 ease-in-out md:flex',
-            collapsed ? 'w-14' : 'w-60',
+            collapsed ? 'w-14' : 'w-56',
           )}
         >
-          <div className={cn('flex h-13 items-center border-b border-sidebar-border px-3.5', collapsed && 'justify-center px-0')}>
-            <Link to="/" aria-label="Heracles" className="outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md">
-              <Logo collapsed={collapsed} />
+          <div className={cn('flex h-12 shrink-0 items-center border-b border-sidebar-border px-3.5', collapsed && 'justify-center px-0')}>
+            <Link to="/" aria-label="Heracles" className="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-sidebar">
+              <Logo collapsed={collapsed} tone="inverse" />
             </Link>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -284,20 +292,20 @@ export function AppShell() {
               onClick={() => setCollapsed((c) => !c)}
               aria-label={collapsed ? t('shell.expand') : t('shell.collapse')}
               aria-pressed={collapsed}
-              className={cn('text-muted-foreground hover:text-sidebar-accent-foreground', !collapsed && 'w-full justify-start gap-2')}
+              className={cn('text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-offset-sidebar', !collapsed && 'w-full justify-start gap-2')}
             >
               {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-              {!collapsed && <span className="text-xs font-medium">{t('shell.collapse')}</span>}
+              {!collapsed && <span className="text-[13px] font-medium">{t('shell.collapse')}</span>}
             </Button>
           </div>
         </aside>
 
         {/* Mobile Navigation Sheet */}
         <Sheet open={mobileNav} onOpenChange={setMobileNav}>
-          <SheetContent side="left" className="bg-sidebar w-68 p-0 border-sidebar-border">
+          <SheetContent side="left" className="w-68 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground">
             <SheetHeader className="border-b border-sidebar-border p-4">
               <SheetTitle>
-                <Logo />
+                <Logo tone="inverse" />
               </SheetTitle>
               <SheetDescription className="sr-only">{t('nav.main')}</SheetDescription>
             </SheetHeader>
@@ -310,7 +318,7 @@ export function AppShell() {
         {/* Main Application Container */}
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Top Header Bar */}
-          <header className="bg-background/80 flex h-13 shrink-0 items-center gap-2 border-b border-border/80 px-3 backdrop-blur-sm md:px-5">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card px-3 md:px-5">
             <Button
               variant="ghost"
               size="icon"
@@ -329,10 +337,10 @@ export function AppShell() {
                 variant="outline"
                 size="sm"
                 onClick={() => setPalette(true)}
-                className="text-muted-foreground hidden h-8 w-60 justify-between border-border/80 bg-background/50 font-normal shadow-xs hover:border-input sm:flex"
+                className="hidden h-8 w-64 justify-between border-input bg-background px-2.5 font-normal text-muted-foreground hover:bg-background sm:flex"
                 aria-label={t('shell.search')}
               >
-                <span className="flex items-center gap-2 text-xs">
+                <span className="flex items-center gap-2 text-[13px]">
                   <Search className="size-3.5 text-muted-foreground" aria-hidden />
                   <span>{t('shell.searchPlaceholder')}</span>
                 </span>
@@ -370,6 +378,8 @@ export function AppShell() {
                 {resolved === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
               </Button>
 
+              <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+
               {/* User Profile Menu */}
               <UserMenu />
             </div>
@@ -377,7 +387,7 @@ export function AppShell() {
 
           {/* Main Content Area */}
           <main id="main" tabIndex={-1} className="flex-1 overflow-y-auto outline-none">
-            <div className="mx-auto w-full max-w-7xl p-4 md:p-6 lg:p-8">
+            <div className="mx-auto w-full max-w-[1400px] px-4 py-4 md:px-6 md:py-5">
               <Outlet />
             </div>
           </main>

@@ -86,7 +86,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         <DialogTitle>{t('palette.title')}</DialogTitle>
         <DialogDescription>{t('palette.description')}</DialogDescription>
       </DialogHeader>
-      <DialogContent className="overflow-hidden p-0 max-w-xl gap-0 border-border/80 shadow-lg" showCloseButton={false}>
+      <DialogContent className="max-w-xl gap-0 overflow-hidden p-0" showCloseButton={false}>
         <Command shouldFilter={false} loop>
           <div className="flex items-center border-b border-border px-3">
             <Search className="size-4 shrink-0 text-muted-foreground mr-2" aria-hidden />
@@ -94,13 +94,13 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               value={q}
               onValueChange={setQ}
               placeholder={t('palette.placeholder')}
-              className="h-11 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground focus:ring-0"
+              className="h-11 border-0 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground focus:ring-0"
             />
             {q && (
               <button
                 type="button"
                 onClick={() => setQ('')}
-                className="text-muted-foreground hover:text-foreground text-xs px-1.5 py-0.5 rounded"
+                className="rounded-sm px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
               >
                 Clear
               </button>
@@ -120,7 +120,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                     key={`recent-${item.dn}`}
                     value={`recent-${item.dn}`}
                     onSelect={() => onSelectObject(item.type, item.dn, item.title)}
-                    className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs"
+                    className="flex items-center gap-2 px-2.5"
                   >
                     <Clock className="size-3.5 text-muted-foreground shrink-0" />
                     <span className="font-medium text-foreground truncate">{item.title}</span>
@@ -138,7 +138,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 <CommandItem
                   value="nav-dashboard"
                   onSelect={() => run(() => void navigate({ to: '/' }))}
-                  className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs"
+                  className="flex items-center gap-2 px-2.5"
                 >
                   <LayoutDashboard className="size-3.5 shrink-0" />
                   <span>{t('nav.dashboard')}</span>
@@ -146,7 +146,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 <CommandItem
                   value="nav-me"
                   onSelect={() => run(() => void navigate({ to: '/me' }))}
-                  className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs"
+                  className="flex items-center gap-2 px-2.5"
                 >
                   <User className="size-3.5 shrink-0" />
                   <span>{t('user.me')}</span>
@@ -158,7 +158,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                       key={ty.name}
                       value={`nav-${ty.name}`}
                       onSelect={() => run(() => void navigate({ to: '/types/$type', params: { type: ty.name } }))}
-                      className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs"
+                      className="flex items-center gap-2 px-2.5"
                     >
                       <TypeIcon name={ty.icon} className="size-3.5 shrink-0" />
                       <span>{ty.label_plural}</span>
@@ -176,7 +176,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                     key={ty.name}
                     value={`create-${ty.name}`}
                     onSelect={() => run(() => void navigate({ to: '/types/$type/new', params: { type: ty.name } }))}
-                    className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs"
+                    className="flex items-center gap-2 px-2.5"
                   >
                     <Plus className="size-3.5 shrink-0 text-primary" />
                     <span>{t('palette.create', { type: ty.label })}</span>
@@ -186,7 +186,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 <CommandItem
                   value="toggle-theme"
                   onSelect={() => run(toggle)}
-                  className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs"
+                  className="flex items-center gap-2 px-2.5"
                 >
                   <Moon className="size-3.5 shrink-0" />
                   <span>{t('palette.toggleTheme')}</span>
@@ -196,7 +196,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 <CommandItem
                   value="switch-language"
                   onSelect={() => run(() => void i18n.changeLanguage(i18n.language.startsWith('fr') ? 'en' : 'fr'))}
-                  className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs"
+                  className="flex items-center gap-2 px-2.5"
                 >
                   <Languages className="size-3.5 shrink-0" />
                   <span>{t('palette.switchLanguage')}</span>
@@ -206,7 +206,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 <CommandItem
                   value="logout"
                   onSelect={() => run(() => void logout())}
-                  className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-destructive focus:text-destructive"
+                  className="flex items-center gap-2 px-2.5 text-destructive focus:text-destructive"
                 >
                   <LogOut className="size-3.5 shrink-0" />
                   <span>{t('user.logout')}</span>
@@ -226,7 +226,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                       key={it.dn}
                       value={`obj-${it.dn}`}
                       onSelect={() => onSelectObject(g.type.name, it.dn, label)}
-                      className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs"
+                      className="flex items-center gap-2 px-2.5"
                     >
                       <TypeIcon name={g.type.icon} className="size-3.5 text-muted-foreground shrink-0" />
                       <span className="font-medium text-foreground truncate">{label}</span>
@@ -242,7 +242,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           </CommandList>
 
           {/* Keyboard hints footer */}
-          <div className="flex items-center justify-between border-t border-border/80 bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between border-t border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
                 <Kbd keys={['↑', '↓']} />

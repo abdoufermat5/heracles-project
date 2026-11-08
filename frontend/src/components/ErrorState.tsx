@@ -13,24 +13,24 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   return (
     <div
       role="alert"
-      className="flex flex-col items-center justify-center rounded-lg border border-dashed border-destructive/40 bg-destructive/5 px-6 py-12 text-center"
+      className="rounded-md border border-border bg-card px-4 py-4"
     >
-      <div className="flex size-11 items-center justify-center rounded-full bg-destructive/10 text-destructive shadow-xs ring-1 ring-destructive/20">
-        <AlertCircle className="size-5" aria-hidden />
-      </div>
-      <div className="mt-3.5 max-w-sm space-y-1">
-        <p className="text-sm font-semibold tracking-tight text-foreground">
-          {notFound ? t('common.notFound') : t('common.errorTitle')}
-        </p>
-        <p className="text-xs text-muted-foreground leading-relaxed">{message}</p>
-      </div>
-      {onRetry && !notFound && (
-        <div className="mt-4">
-          <Button variant="outline" size="sm" onClick={onRetry}>
-            {t('common.retry')}
-          </Button>
+      <div className="flex items-start gap-2.5">
+        <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold tracking-tight text-foreground">
+            {notFound ? t('common.notFound') : t('common.errorTitle')}
+          </p>
+          <p className="text-[13px] leading-relaxed text-muted-foreground">{message}</p>
+          {onRetry && !notFound && (
+            <div className="pt-2">
+              <Button variant="outline" size="sm" onClick={onRetry}>
+                {t('common.retry')}
+              </Button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

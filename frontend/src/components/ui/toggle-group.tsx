@@ -23,7 +23,7 @@ function ToggleGroup({
     <ToggleGroupPrimitive.Root
       data-slot="toggle-group"
       className={cn(
-        "inline-flex items-center justify-center gap-1 rounded-md bg-muted p-1 text-muted-foreground",
+        "inline-flex items-center justify-center gap-0.5 rounded-md border border-input bg-card p-0.5 text-muted-foreground",
         className
       )}
       {...props}
@@ -53,7 +53,7 @@ function ToggleGroupItem({
           variant: context.variant || variant || "ghost",
           size: context.size || size || "sm",
         }),
-        "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-xs",
+        "rounded-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-none data-[state=on]:hover:bg-primary/90",
         className
       )}
       {...props}
