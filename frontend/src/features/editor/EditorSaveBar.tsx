@@ -44,7 +44,7 @@ export function EditorSaveBar({
   return (
     <aside
       aria-label={t('editor.unsaved')}
-      className="sticky bottom-0 z-30 flex h-14 items-center justify-between gap-3 border-t bg-card px-6"
+      className="sticky bottom-0 z-30 -mx-4 mt-auto -mb-4 flex h-14 items-center justify-between gap-3 border-t bg-card px-6 md:-mx-6 md:-mb-5"
     >
       <div className="flex items-center gap-2">
         <span className="size-1.5 rounded-full bg-signal" />

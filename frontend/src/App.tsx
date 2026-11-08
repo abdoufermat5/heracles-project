@@ -25,7 +25,7 @@ export function App({ history, client }: { history?: RouterHistory; client?: Que
       <ThemeProvider>
         <ScopeProvider>
           <RouterProvider router={router} />
-          <Toaster position="bottom-right" />
+          <Toaster position="top-right" offset={60} />
         </ScopeProvider>
       </ThemeProvider>
     </QueryClientProvider>

@@ -350,7 +350,7 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
     editing && currentTabObj && (isCreate || !currentTabAcl || currentTabAcl.object.includes('m'))
 
   return (
-    <form onSubmit={(e) => void save(e)} noValidate className="space-y-4">
+    <form onSubmit={(e) => void save(e)} noValidate className="flex flex-1 flex-col space-y-4">
       <EditorHeader
         desc={desc}
         dn={detail?.dn ?? null}
@@ -474,7 +474,7 @@ function EditorInner({ desc, detail }: { desc: TypeDescriptor; detail: ObjectDet
           <AlertDialogFooter>
             <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive"
               onClick={() => void doDelete()}
             >
               {t('common.delete')}

@@ -387,7 +387,7 @@ export function AppShell() {
 
           {/* Main Content Area */}
           <main id="main" tabIndex={-1} className="flex-1 overflow-y-auto outline-none">
-            <div className="mx-auto w-full max-w-[1400px] px-4 py-4 md:px-6 md:py-5">
+            <div className="mx-auto flex min-h-full w-full max-w-[1400px] flex-col px-4 py-4 md:px-6 md:py-5">
               <Outlet />
             </div>
           </main>

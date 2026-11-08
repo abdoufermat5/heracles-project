@@ -118,7 +118,7 @@ export function DashboardPage() {
         <>
           {/* Metrics: one panel, hairline-separated cells */}
           <Card className="overflow-hidden py-0" role="group" aria-label={t('dashboard.overview')}>
-            <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-3 lg:grid-cols-5">
+            <div className="flex flex-wrap gap-px bg-border">
               {data.cards.map((c) => {
                 const targetType = resolveTypeRoute(c.key)
                 return (
@@ -126,7 +126,7 @@ export function DashboardPage() {
                     key={c.key}
                     to="/types/$type"
                     params={{ type: targetType }}
-                    className="group bg-card p-4 transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    className="group min-w-40 flex-1 bg-card p-4 transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   >
                     <span className="label-caps block truncate">{c.label}</span>
                     <span className="mt-2 flex items-baseline justify-between gap-2">

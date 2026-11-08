@@ -316,7 +316,7 @@ export function LoginPage() {
           <select
             id="directory"
             {...form.register('directory')}
-            className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            className="h-9 w-full rounded-md border border-input bg-card px-2.5 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             {dirs.data?.map((d) => (
               <option key={d.id} value={d.id}>

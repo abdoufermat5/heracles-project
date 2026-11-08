@@ -7,7 +7,7 @@ import {
   Moon,
   Languages,
   Plus,
-  Search,
+  X,
   User,
   ExternalLink,
 } from 'lucide-react'
@@ -62,6 +62,12 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
 
   const needle = q.trim().toLowerCase()
   const match = (s: string) => !needle || s.toLowerCase().includes(needle)
+  const creatable = types?.filter((ty) => ty.can_create && match(t('palette.create', { type: ty.label }))) ?? []
+  const actionsVisible =
+    creatable.length > 0 ||
+    match(t('palette.toggleTheme')) ||
+    match(t('palette.switchLanguage')) ||
+    match(t('user.logout'))
 
   const logout = async () => {
     await api.logout()
@@ -88,21 +94,21 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       </DialogHeader>
       <DialogContent className="max-w-xl gap-0 overflow-hidden p-0" showCloseButton={false}>
         <Command shouldFilter={false} loop>
-          <div className="flex items-center border-b border-border px-3">
-            <Search className="size-4 shrink-0 text-muted-foreground mr-2" aria-hidden />
+          <div className="relative">
             <CommandInput
               value={q}
               onValueChange={setQ}
               placeholder={t('palette.placeholder')}
-              className="h-11 border-0 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground focus:ring-0"
+              className="pr-8"
             />
             {q && (
               <button
                 type="button"
                 onClick={() => setQ('')}
-                className="rounded-sm px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+                aria-label={t('listing.clearSearch')}
+                className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
               >
-                Clear
+                <X className="size-3.5" aria-hidden />
               </button>
             )}
           </div>
@@ -168,10 +174,9 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             )}
 
             {/* Actions Group */}
+            {actionsVisible && (
             <CommandGroup heading={t('palette.actions')}>
-              {types
-                ?.filter((ty) => ty.can_create && match(t('palette.create', { type: ty.label })))
-                .map((ty) => (
+              {creatable.map((ty) => (
                   <CommandItem
                     key={ty.name}
                     value={`create-${ty.name}`}
@@ -213,6 +218,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 </CommandItem>
               )}
             </CommandGroup>
+            )}
 
             {/* Search Results */}
             {search.data && search.data.length > 0 && <CommandSeparator className="my-1" />}

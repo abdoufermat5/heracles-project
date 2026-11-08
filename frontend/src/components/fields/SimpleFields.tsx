@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import type { FieldInputProps } from './types'
 
 const nativeSelectClass =
-  'h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-destructive'
+  'h-8 w-full rounded-md border border-input bg-card px-2.5 py-1 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-destructive'
 
 export function TextInputField({
   p,
