@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { SsoEntry } from './SsoEntry'
 
 const APP_VERSION = '0.1.0'
 
@@ -310,6 +311,7 @@ export function LoginPage() {
 
   return (
     <AuthLayout title={t('auth.loginTitle')} subtitle={t('auth.loginSubtitle')}>
+      <SsoEntry next={search.redirect} failed={search.sso_error === '1'} />
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-4" noValidate>
         <FormError message={error} />
         <Field id="directory" label={t('auth.directory')} error={form.formState.errors.directory?.message}>
