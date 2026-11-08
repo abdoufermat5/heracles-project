@@ -26,6 +26,19 @@ function session(request: Request, mutation: boolean): Response | null {
   return null
 }
 
+function factorsOf(dn: string) {
+  return db.secondFactors.get(dn.toLowerCase()) ?? { totp: false, security_keys: [], recovery_codes: 0 }
+}
+
+/** Session, rights (only the non-viewer mock users hold the second-factor right) and target checks. */
+function factorAccess(request: Request, mutation: boolean, dn: string): Response | null {
+  const denied = session(request, mutation)
+  if (denied) return denied
+  if (!db.me()?.is_admin) return err(403, 'forbidden', 'You cannot view the second factors of this account')
+  const rec = db.get(dn)
+  return rec?.type === 'user' ? null : err(404, 'not_found', 'User not found')
+}
+
 // ── masks (a small subset of the real language) ──────────────────────────
 
 const MASK_RE = /%(?:([^%|]*)\|)?([A-Za-z][A-Za-z0-9]*)%/g
@@ -553,5 +566,32 @@ export const objectsHandlers: HttpHandler[] = [
       }
     }
     return new HttpResponse(`${lines.join('\n')}\n`, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+  }),
+
+  // ── second factors of a user (administrator view and reset) ──
+  http.get(`${B}/users/:dn/second-factors`, ({ request, params }) => {
+    const denied = factorAccess(request, false, dnParam(params.dn))
+    if (denied) return denied
+    const { totp, security_keys, recovery_codes } = factorsOf(dnParam(params.dn))
+    return HttpResponse.json({ totp, security_keys, recovery_codes, can_reset: true })
+  }),
+
+  http.delete(`${B}/users/:dn/second-factors`, ({ request, params }) => {
+    const dn = dnParam(params.dn)
+    const denied = factorAccess(request, true, dn)
+    if (denied) return denied
+    db.secondFactors.delete(dn.toLowerCase())
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.delete(`${B}/users/:dn/second-factors/webauthn/:id`, ({ request, params }) => {
+    const dn = dnParam(params.dn)
+    const denied = factorAccess(request, true, dn)
+    if (denied) return denied
+    const current = factorsOf(dn)
+    const keys = current.security_keys.filter((k) => k.id !== params.id)
+    if (keys.length === current.security_keys.length) return err(404, 'not_found', 'Security key not found')
+    db.secondFactors.set(dn.toLowerCase(), { ...current, security_keys: keys })
+    return new HttpResponse(null, { status: 204 })
   }),
 ]

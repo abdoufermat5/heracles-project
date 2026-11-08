@@ -64,6 +64,13 @@ export interface MockTemplate {
   tabs: Record<string, { active: boolean; values: Record<string, string | string[]> }>
 }
 
+/** What the mock API reports as a user's registered second factors. */
+export interface MockSecondFactors {
+  totp: boolean
+  security_keys: { id: string; label: string }[]
+  recovery_codes: number
+}
+
 class Db {
   records = new Map<string, Rec>()
   locks = new Map<string, LockInfo>()
@@ -73,6 +80,8 @@ class Db {
   templates = new Map<string, MockTemplate>()
   /** Stored tab values of each snapshot (so a deleted object can be restored). */
   snapshotTabs = new Map<string, Record<string, TabState>>()
+  /** Second factors per user (lower-cased DN), as the administrator view lists them. */
+  secondFactors = new Map<string, MockSecondFactors>()
   // --- end P3 objects ---
   /** Registered WebAuthn keys of the signed-in mock user. */
   securityKeys: { id: string; label: string; sign_count: number }[] = []
@@ -93,6 +102,7 @@ class Db {
     this.locks.clear()
     this.snapshots.clear()
     this.templates.clear()
+    this.secondFactors.clear()
     this.snapshotTabs.clear()
     this.securityKeys = []
     this.totp = { enabled: false, recoveryCodes: 0, pending: false }
@@ -177,6 +187,19 @@ class Db {
     const lockedDn = userDns[1]
     if (lockedDn) {
       this.locks.set(lockedDn.toLowerCase(), { user: 'bob.admin', since: '2026-01-15T09:30:00Z' })
+    }
+
+    // A user with every kind of second factor (administrator view and reset).
+    const factorDn = userDns[2]
+    if (factorDn) {
+      this.secondFactors.set(factorDn.toLowerCase(), {
+        totp: true,
+        security_keys: [
+          { id: 'key-desk', label: 'Desk key' },
+          { id: 'key-phone', label: '' },
+        ],
+        recovery_codes: 6,
+      })
     }
 
     const groups = ['admins', 'staff', 'developers', 'sales', 'support', 'interns']

@@ -75,6 +75,21 @@ export interface SnapshotEntry {
   source?: string
 }
 
+/** A security key as the administrator view lists it (no key material). */
+export interface SecurityKeyInfo {
+  id: string
+  label: string
+}
+
+/** What a user has registered as second factors, never the secrets. */
+export interface SecondFactors {
+  totp: boolean
+  security_keys: SecurityKeyInfo[]
+  recovery_codes: number
+  /** The caller may remove factors (view-only otherwise). */
+  can_reset: boolean
+}
+
 // ── Endpoints ─────────────────────────────────────────────────────────────
 
 const typePath = (type: string) => encodeURIComponent(type)
@@ -148,6 +163,14 @@ export const objectsApi = {
     }
     return res.text()
   },
+
+  secondFactors: (dn: string) => request<SecondFactors>(`/users/${dnPath(dn)}/second-factors`),
+  resetSecondFactors: (dn: string) =>
+    request<undefined>(`/users/${dnPath(dn)}/second-factors`, { method: 'DELETE' }),
+  removeSecurityKey: (dn: string, id: string) =>
+    request<undefined>(`/users/${dnPath(dn)}/second-factors/webauthn/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
 }
 
 // ── Query keys & hooks ────────────────────────────────────────────────────
@@ -160,6 +183,7 @@ export const objectKeys = {
   snapshots: (type: string, dn: string) => qk.snapshots(type, dn),
   deleted: (type: string) => ['snapshots', 'deleted', type] as const,
   bulkAttributes: (type: string, dns: string[]) => ['bulkAttributes', type, dns] as const,
+  secondFactors: (dn: string) => ['second-factors', dn] as const,
   ldif: (type: string, dn: string) => ['ldif', type, dn] as const,
 }
 
@@ -213,6 +237,31 @@ export function useReferences(type: string, dn: string, enabled = true) {
     queryFn: () => objectsApi.references(type, dn),
     enabled,
   })
+}
+
+/** Second factors of a user; the query fails (403) when the caller may not see them. */
+export function useSecondFactors(dn: string | null) {
+  return useQuery({
+    queryKey: objectKeys.secondFactors(dn ?? ''),
+    queryFn: () => objectsApi.secondFactors(dn ?? ''),
+    enabled: dn !== null,
+    retry: false,
+  })
+}
+
+export function useSecondFactorMutations(dn: string) {
+  const qc = useQueryClient()
+  const invalidate = () => qc.invalidateQueries({ queryKey: objectKeys.secondFactors(dn) })
+  return {
+    reset: useMutation({
+      mutationFn: () => objectsApi.resetSecondFactors(dn),
+      onSuccess: invalidate,
+    }),
+    removeKey: useMutation({
+      mutationFn: (id: string) => objectsApi.removeSecurityKey(dn, id),
+      onSuccess: invalidate,
+    }),
+  }
 }
 
 export function useSnapshots(type: string, dn: string) {

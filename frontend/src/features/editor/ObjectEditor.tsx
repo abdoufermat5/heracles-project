@@ -49,7 +49,7 @@ import {
 } from '@/lib/objects'
 import { useScope } from '@/lib/scope'
 import { makeResolver } from '@/lib/validation'
-import { useObjectLdif } from './api'
+import { useObjectLdif, useSecondFactors } from './api'
 import { EditorHeader } from './EditorHeader'
 import { EditorSaveBar } from './EditorSaveBar'
 import { EditorSection } from './EditorSection'
@@ -57,6 +57,7 @@ import { EditorTabNav } from './EditorTabNav'
 import { LdifDialog } from './LdifDialog'
 import { LockedDialog } from './LockedDialog'
 import { ReferencesPanel } from './ReferencesPanel'
+import { SecondFactorsPanel } from './SecondFactorsPanel'
 import { SnapshotsPanel } from './SnapshotsPanel'
 import { TemplateFillForm } from './TemplateFillForm'
 import { TemplatePicker } from './TemplatePicker'
@@ -65,6 +66,7 @@ const BASE_KEY = 'main.base'
 /** Pseudo tab names of the extra panels (they are not part of the type descriptor). */
 const REFERENCES_TAB = '@references'
 const SNAPSHOTS_TAB = '@snapshots'
+const SECOND_FACTORS_TAB = '@secondFactors'
 
 interface Props {
   type: string
@@ -231,6 +233,9 @@ function EditorInner({ desc, detail, source }: InnerProps) {
   const types = useTypes()
   const canCopy = types.data?.find((x) => x.name === type)?.can_create ?? false
   const ldifQuery = useObjectLdif(type, detail?.dn ?? null, ldifOpen)
+  // Only users have second factors, and only those allowed to see them get the tab (a 403 hides it).
+  const secondFactors = useSecondFactors(type === 'user' && detail ? detail.dn : null)
+  const showSecondFactors = secondFactors.isSuccess
 
   const readOnlyMode = !editing
   const objectRights = detail?.acl[desc.tabs[0]?.name ?? 'main']?.object ?? 'rwcdm'
@@ -408,12 +413,16 @@ function EditorInner({ desc, detail, source }: InnerProps) {
     }
   }
 
-  const extraPanel = tab === REFERENCES_TAB || tab === SNAPSHOTS_TAB ? tab : null
+  const extraPanel =
+    tab === REFERENCES_TAB || tab === SNAPSHOTS_TAB || (tab === SECOND_FACTORS_TAB && showSecondFactors)
+      ? tab
+      : null
   const extras = isCreate
     ? []
     : [
         { name: REFERENCES_TAB, label: t('references.tab') },
         { name: SNAPSHOTS_TAB, label: t('snapshots.tab') },
+        ...(showSecondFactors ? [{ name: SECOND_FACTORS_TAB, label: t('secondFactors.tab') }] : []),
       ]
   const currentTabObj = extraPanel ? undefined : (desc.tabs.find((tb) => tb.name === tab) ?? desc.tabs[0])
   const isCurrentTabActive = currentTabObj ? (active[currentTabObj.name] ?? false) : false
@@ -494,6 +503,7 @@ function EditorInner({ desc, detail, source }: InnerProps) {
           {extraPanel === SNAPSHOTS_TAB && detail && (
             <SnapshotsPanel type={type} dn={detail.dn} onRestored={() => void reloadAfterRestore()} />
           )}
+          {extraPanel === SECOND_FACTORS_TAB && detail && <SecondFactorsPanel dn={detail.dn} />}
 
           {currentTabObj?.optional && (
             <div className="flex items-center justify-between rounded-md border bg-card p-4">
