@@ -55,6 +55,12 @@ const en = {
     create: 'Create {{type}}',
     toggleTheme: 'Toggle light / dark theme',
     switchLanguage: 'Switch language (English / Français)',
+    recent: 'Recent objects',
+    hints: {
+      navigate: 'Navigate',
+      select: 'Select',
+      close: 'Close',
+    },
   },
   auth: {
     loginTitle: 'Sign in to Heracles',

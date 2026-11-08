@@ -57,6 +57,12 @@ const fr: Translation = {
     create: 'Créer : {{type}}',
     toggleTheme: 'Basculer entre thème clair et sombre',
     switchLanguage: 'Changer de langue (English / Français)',
+    recent: 'Objets récents',
+    hints: {
+      navigate: 'Naviguer',
+      select: 'Sélectionner',
+      close: 'Fermer',
+    },
   },
   auth: {
     loginTitle: 'Connexion à Heracles',
