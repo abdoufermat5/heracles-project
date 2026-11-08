@@ -67,6 +67,12 @@ const fr: Translation = {
   auth: {
     loginTitle: 'Connexion à Heracles',
     loginSubtitle: 'Utilisez votre compte d’annuaire.',
+    brandTagline: 'Console d’annuaire et d’identités',
+    brandDescription: 'Gestion d’annuaire à haute densité et gouvernance des accès pour annuaires d’entreprise.',
+    brandPillar1: 'Contrôle rapide et précis de l’annuaire',
+    brandPillar2: 'Gestion fine des attributs et des accès',
+    brandPillar3: 'Conçu pour la fiabilité en entreprise',
+    capsLock: 'Verrouillage majuscule activé',
     directory: 'Annuaire',
     username: 'Identifiant',
     password: 'Mot de passe',

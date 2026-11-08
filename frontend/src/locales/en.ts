@@ -65,6 +65,12 @@ const en = {
   auth: {
     loginTitle: 'Sign in to Heracles',
     loginSubtitle: 'Use your directory account.',
+    brandTagline: 'Identity & Directory Console',
+    brandDescription: 'High-density directory management and access governance for enterprise directories.',
+    brandPillar1: 'Fast, precise directory control',
+    brandPillar2: 'Fine-grained attribute management',
+    brandPillar3: 'Built for enterprise reliability',
+    capsLock: 'Caps Lock is on',
     directory: 'Directory',
     username: 'Username',
     password: 'Password',

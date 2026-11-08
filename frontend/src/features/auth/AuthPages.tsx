@@ -1,8 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useRouter, useSearch } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Loader2,
+  ShieldCheck,
+} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
@@ -14,31 +22,112 @@ import { Logo } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
-function AuthLayout({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+function AuthLayout({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string
+  subtitle?: string
+  children: React.ReactNode
+}) {
+  const { t } = useTranslation()
+
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4 py-10">
-      <div className="w-full max-w-sm space-y-6">
-        <Logo className="justify-center" />
-        <div className="bg-card space-y-5 rounded-xl border p-6 shadow-sm">
-          <div className="space-y-1">
-            <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
-            {subtitle && <p className="text-muted-foreground text-sm">{subtitle}</p>}
+    <div className="flex min-h-dvh flex-col lg:grid lg:grid-cols-[45%_55%]">
+      {/* Quiet Brand Panel on Wide Screens */}
+      <div className="bg-sidebar hidden flex-col justify-between border-r border-sidebar-border p-10 lg:flex xl:p-14 relative overflow-hidden select-none">
+        {/* Subtle decorative background pattern */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.04]"
+          style={{
+            backgroundImage: `radial-gradient(currentColor 1px, transparent 1px)`,
+            backgroundSize: '24px 24px',
+          }}
+        />
+
+        <div className="relative z-10">
+          <Logo />
+        </div>
+
+        <div className="relative z-10 max-w-sm space-y-6">
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background/50 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground shadow-xs">
+              <ShieldCheck className="size-3 text-primary" />
+              <span>{t('auth.brandTagline')}</span>
+            </span>
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+              Heracles
+            </h2>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t('auth.brandDescription')}
+            </p>
           </div>
-          {children}
+
+          <div className="space-y-2.5 border-t border-border/60 pt-5">
+            <div className="flex items-center gap-2.5 text-xs text-foreground/80">
+              <CheckCircle2 className="size-3.5 text-primary shrink-0" />
+              <span>{t('auth.brandPillar1')}</span>
+            </div>
+            <div className="flex items-center gap-2.5 text-xs text-foreground/80">
+              <CheckCircle2 className="size-3.5 text-primary shrink-0" />
+              <span>{t('auth.brandPillar2')}</span>
+            </div>
+            <div className="flex items-center gap-2.5 text-xs text-foreground/80">
+              <CheckCircle2 className="size-3.5 text-primary shrink-0" />
+              <span>{t('auth.brandPillar3')}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative z-10 flex items-center justify-between text-[11px] text-muted-foreground/80">
+          <span>Heracles Directory Console</span>
+          <span>v0.1.0</span>
+        </div>
+      </div>
+
+      {/* Form Container */}
+      <div className="flex flex-1 flex-col items-center justify-center p-6 md:p-10">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="lg:hidden flex justify-center">
+            <Logo />
+          </div>
+
+          <div className="bg-card space-y-5 rounded-lg border border-border p-6 shadow-xs">
+            <div className="space-y-1">
+              <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
+              {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+            </div>
+            {children}
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-function Field({ id, label, error, children }: { id: string; label: string; error?: string; children: React.ReactNode }) {
+function Field({
+  id,
+  label,
+  error,
+  children,
+}: {
+  id: string
+  label: string
+  error?: string
+  children: React.ReactNode
+}) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id} className="text-xs font-medium text-foreground">
+        {label}
+      </Label>
       {children}
       {error && (
-        <p id={`${id}-error`} role="alert" className="text-destructive text-xs">
+        <p id={`${id}-error`} role="alert" className="text-destructive text-xs font-medium">
           {error}
         </p>
       )}
@@ -49,16 +138,169 @@ function Field({ id, label, error, children }: { id: string; label: string; erro
 function FormError({ message }: { message: string | null }) {
   if (!message) return null
   return (
-    <p role="alert" className="bg-destructive/10 text-destructive rounded-md px-3 py-2 text-sm">
-      {message}
-    </p>
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive"
+    >
+      <AlertCircle className="size-4 shrink-0 mt-0.5" aria-hidden />
+      <span className="leading-snug">{message}</span>
+    </div>
+  )
+}
+
+function PasswordInput({
+  id,
+  error,
+  className,
+  onKeyDown,
+  onKeyUp,
+  onBlur,
+  ...props
+}: React.ComponentProps<"input"> & { error?: boolean }) {
+  const { t } = useTranslation()
+  const [show, setShow] = useState(false)
+  const [capsLock, setCapsLock] = useState(false)
+
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    setCapsLock(e.getModifierState('CapsLock'))
+    onKeyDown?.(e)
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="relative flex items-center">
+        <Input
+          id={id}
+          type={show ? 'text' : 'password'}
+          onKeyDown={handleKey}
+          onKeyUp={(e) => {
+            setCapsLock(e.getModifierState('CapsLock'))
+            onKeyUp?.(e)
+          }}
+          onBlur={(e) => {
+            setCapsLock(false)
+            onBlur?.(e)
+          }}
+          className={cn('pr-8 font-mono', error && 'border-destructive', className)}
+          {...props}
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => setShow((s) => !s)}
+          aria-label={show ? t('fields.hidePassword') : t('fields.showPassword')}
+          className="text-muted-foreground hover:text-foreground absolute right-2 size-6 flex items-center justify-center rounded outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          {show ? <EyeOff className="size-3.5" aria-hidden /> : <Eye className="size-3.5" aria-hidden />}
+        </button>
+      </div>
+      {capsLock && (
+        <div className="flex items-center gap-1 text-[11px] text-warning" role="status">
+          <AlertTriangle className="size-3 shrink-0" aria-hidden />
+          <span>{t('auth.capsLock')}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** 6-box OTP verification input with auto-advance and paste support */
+function OtpInput({
+  value,
+  onChange,
+  id = 'code',
+  autoFocus = true,
+}: {
+  value: string
+  onChange: (val: string) => void
+  id?: string
+  autoFocus?: boolean
+}) {
+  const inputs = useRef<(HTMLInputElement | null)[]>([])
+  const chars = Array.from({ length: 6 }, (_, i) => value[i] ?? '')
+
+  const handleChange = (index: number, val: string) => {
+    // If multiple characters typed or pasted directly into input
+    const digits = val.replace(/\D/g, '')
+    if (digits.length > 1) {
+      handlePaste(digits)
+      return
+    }
+
+    const nextChars = [...chars]
+    nextChars[index] = digits.slice(-1)
+    const nextVal = nextChars.join('')
+    onChange(nextVal)
+
+    if (digits && index < 5) {
+      inputs.current[index + 1]?.focus()
+    }
+  }
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (!chars[index] && index > 0) {
+        inputs.current[index - 1]?.focus()
+        const nextChars = [...chars]
+        nextChars[index - 1] = ''
+        onChange(nextChars.join(''))
+      } else {
+        const nextChars = [...chars]
+        nextChars[index] = ''
+        onChange(nextChars.join(''))
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      inputs.current[index - 1]?.focus()
+    } else if (e.key === 'ArrowRight' && index < 5) {
+      inputs.current[index + 1]?.focus()
+    }
+  }
+
+  const handlePaste = (pasted: string) => {
+    const clean = pasted.replace(/\D/g, '').slice(0, 6)
+    if (clean) {
+      onChange(clean)
+      const targetIdx = Math.min(clean.length, 5)
+      inputs.current[targetIdx]?.focus()
+    }
+  }
+
+  return (
+    <div
+      role="group"
+      className="flex items-center justify-between gap-1.5"
+    >
+      {Array.from({ length: 6 }).map((_, i) => (
+        <input
+          key={i}
+          id={i === 0 ? id : undefined}
+          ref={(el) => {
+            inputs.current[i] = el
+          }}
+          type="text"
+          inputMode="numeric"
+          autoComplete={i === 0 ? 'one-time-code' : 'off'}
+          autoFocus={autoFocus && i === 0}
+          maxLength={1}
+          value={chars[i]}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          onPaste={(e) => {
+            e.preventDefault()
+            handlePaste(e.clipboardData.getData('text'))
+          }}
+          aria-label={i === 0 ? undefined : `Digit ${i + 1}`}
+          className="size-10 rounded-md border border-input bg-background/50 text-center font-mono text-base font-semibold shadow-xs outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background dark:bg-card/40"
+        />
+      ))}
+    </div>
   )
 }
 
 function Submit({ pending, children }: { pending: boolean; children: React.ReactNode }) {
   return (
-    <Button type="submit" className="w-full" disabled={pending}>
-      {pending && <Loader2 className="size-4 animate-spin" aria-hidden />}
+    <Button type="submit" className="w-full h-8" disabled={pending}>
+      {pending && <Loader2 className="size-3.5 animate-spin mr-1.5" aria-hidden />}
       {children}
     </Button>
   )
@@ -83,12 +325,20 @@ export function LoginPage() {
     resolver: zodResolver(schema),
     defaultValues: { directory: '', username: '', password: '' },
   })
-  const directory = form.watch('directory') || dirs.data?.[0]?.id || ''
+
+  // Set default directory when dirs data loads
+  const currentDir = dirs.data?.[0]?.id ?? ''
+  useEffect(() => {
+    if (currentDir && !form.getValues('directory')) {
+      form.setValue('directory', currentDir)
+    }
+  }, [currentDir, form])
 
   const onSubmit = form.handleSubmit(async (v) => {
     setError(null)
     try {
-      const res = await api.login({ ...v, directory: v.directory || directory })
+      const selectedDir = v.directory || currentDir
+      const res = await api.login({ ...v, directory: selectedDir })
       if (res.status === 'second_factor') {
         await navigate({
           to: '/login/second-factor',
@@ -112,8 +362,7 @@ export function LoginPage() {
           <select
             id="directory"
             {...form.register('directory')}
-            value={directory}
-            className="border-input bg-background focus-visible:ring-ring/50 h-9 w-full rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+            className="border-input bg-background/50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-1 h-8 w-full rounded-md border px-2.5 text-xs shadow-xs outline-none dark:bg-card/40"
           >
             {dirs.data?.map((d) => (
               <option key={d.id} value={d.id}>
@@ -126,11 +375,16 @@ export function LoginPage() {
           <Input id="username" autoComplete="username" autoFocus {...form.register('username')} />
         </Field>
         <Field id="password" label={t('auth.password')} error={form.formState.errors.password?.message}>
-          <Input id="password" type="password" autoComplete="current-password" {...form.register('password')} />
+          <PasswordInput
+            id="password"
+            autoComplete="current-password"
+            error={Boolean(form.formState.errors.password)}
+            {...form.register('password')}
+          />
         </Field>
         <Submit pending={form.formState.isSubmitting}>{t('auth.signIn')}</Submit>
-        <p className="text-center text-sm">
-          <Link to="/recovery" className="text-primary hover:underline">
+        <p className="text-center text-xs text-muted-foreground pt-1">
+          <Link to="/recovery" className="text-primary hover:underline font-medium">
             {t('auth.forgotPassword')}
           </Link>
         </p>
@@ -178,7 +432,7 @@ export function SecondFactorPage() {
       <form onSubmit={(e) => void submit(e)} className="space-y-4" noValidate>
         <FormError message={error} />
         {methods.length > 1 && (
-          <div role="group" aria-label={t('auth.method')} className="bg-muted grid grid-cols-2 gap-0.5 rounded-lg p-0.5">
+          <div role="group" aria-label={t('auth.method')} className="bg-muted grid grid-cols-2 gap-1 rounded-md p-1">
             {methods.map((m) => (
               <button
                 key={m}
@@ -189,32 +443,38 @@ export function SecondFactorPage() {
                   setCode('')
                   setError(null)
                 }}
-                className={
+                className={cn(
+                  'rounded px-2.5 py-1 text-xs font-medium transition-colors',
                   method === m
-                    ? 'bg-card rounded-md px-3 py-1.5 text-sm font-medium shadow-xs'
-                    : 'text-muted-foreground rounded-md px-3 py-1.5 text-sm'
-                }
+                    ? 'bg-card text-foreground shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
               >
                 {t(`auth.method_${m}`)}
               </button>
             ))}
           </div>
         )}
+
         <Field id="code" label={t(`auth.code_${method}`)}>
-          <Input
-            id="code"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            inputMode={method === 'totp' ? 'numeric' : 'text'}
-            autoComplete="one-time-code"
-            autoFocus
-            className={method === 'totp' ? 'text-center font-mono text-lg tracking-[0.4em]' : 'font-mono'}
-            maxLength={method === 'totp' ? 6 : 64}
-          />
+          {method === 'totp' ? (
+            <OtpInput value={code} onChange={setCode} id="code" />
+          ) : (
+            <Input
+              id="code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              autoComplete="one-time-code"
+              autoFocus
+              className="font-mono text-center text-sm"
+              maxLength={64}
+            />
+          )}
         </Field>
+
         <Submit pending={pending}>{t('auth.verify')}</Submit>
-        <p className="text-center text-sm">
-          <Link to="/login" className="text-primary hover:underline">
+        <p className="text-center text-xs text-muted-foreground pt-1">
+          <Link to="/login" className="text-primary hover:underline font-medium">
             {t('auth.backToLogin')}
           </Link>
         </p>
@@ -245,10 +505,14 @@ export function RecoveryRequestPage() {
     <AuthLayout title={t('auth.recoveryTitle')} subtitle={done ? undefined : t('auth.recoverySubtitle')}>
       {done ? (
         <div className="space-y-4">
-          <p role="status" className="text-sm">
-            {t('auth.recoverySent')}
-          </p>
-          <Button asChild variant="outline" className="w-full">
+          <div
+            role="status"
+            className="flex items-start gap-2.5 rounded-md border border-success/30 bg-success/10 p-3 text-xs text-success"
+          >
+            <CheckCircle2 className="size-4 shrink-0 mt-0.5" />
+            <span className="leading-snug">{t('auth.recoverySent')}</span>
+          </div>
+          <Button asChild variant="outline" className="w-full h-8 text-xs">
             <Link to="/login">{t('auth.backToLogin')}</Link>
           </Button>
         </div>
@@ -259,8 +523,8 @@ export function RecoveryRequestPage() {
             <Input id="email" type="email" autoComplete="email" autoFocus {...form.register('email')} />
           </Field>
           <Submit pending={form.formState.isSubmitting}>{t('auth.sendLink')}</Submit>
-          <p className="text-center text-sm">
-            <Link to="/login" className="text-primary hover:underline">
+          <p className="text-center text-xs text-muted-foreground pt-1">
+            <Link to="/login" className="text-primary hover:underline font-medium">
               {t('auth.backToLogin')}
             </Link>
           </p>
@@ -301,10 +565,21 @@ export function RecoveryConfirmPage() {
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-4" noValidate>
         <FormError message={error} />
         <Field id="password" label={t('auth.newPassword')} error={form.formState.errors.password?.message}>
-          <Input id="password" type="password" autoComplete="new-password" autoFocus {...form.register('password')} />
+          <PasswordInput
+            id="password"
+            autoComplete="new-password"
+            autoFocus
+            error={Boolean(form.formState.errors.password)}
+            {...form.register('password')}
+          />
         </Field>
         <Field id="confirm" label={t('fields.passwordConfirm')} error={form.formState.errors.confirm?.message}>
-          <Input id="confirm" type="password" autoComplete="new-password" {...form.register('confirm')} />
+          <PasswordInput
+            id="confirm"
+            autoComplete="new-password"
+            error={Boolean(form.formState.errors.confirm)}
+            {...form.register('confirm')}
+          />
         </Field>
         <Submit pending={form.formState.isSubmitting}>{t('auth.resetPassword')}</Submit>
       </form>
