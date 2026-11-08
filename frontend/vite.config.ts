@@ -16,6 +16,8 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 900,
+    // Never inline fonts as data: URIs; the server CSP only allows font-src 'self'.
+    assetsInlineLimit: (file) => (/\.(woff2?|ttf|otf)$/.test(file) ? false : undefined),
   },
   test: {
     globals: true,
