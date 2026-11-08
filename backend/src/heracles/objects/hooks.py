@@ -12,8 +12,10 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from heracles.ldap.client import DirectoryClient
+from heracles.objects.policy import TypedPolicy
 
 if TYPE_CHECKING:
+    from heracles.objects.policy import AccessPolicy
     from heracles.objects.registry import TypeInfo, TypeRegistry
     from heracles.objects.state import TabState
 
@@ -43,6 +45,17 @@ class TabContext:
     touched: Sequence[tuple[str, str]] = ()
     #: Field errors (``"tab.attr"`` → message) collected during ``prepare``.
     errors: dict[str, str] = field(default_factory=lambda: {})
+    #: Access policy of the acting user (``None``: everything is allowed).
+    policy: AccessPolicy | None = None
+
+    def can_write_object(self, type_name: str, dn: str, tab: str, attr: str) -> bool:
+        """True if the acting user may write ``tab.attr`` of ``dn``, an object of another type."""
+        policy = self.policy
+        if policy is None:
+            return True
+        if isinstance(policy, TypedPolicy):
+            policy = policy.for_type(type_name)
+        return policy.can_write(dn, tab, attr)
 
     @property
     def settings(self) -> Mapping[str, Any]:

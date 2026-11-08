@@ -14,6 +14,7 @@ from heracles.api.deps import CurrentUserDep
 from heracles.api.domain import DomainDep, TypeAclPolicy
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.attributes import JSON
+from heracles.core import references
 from heracles.core.locks import Lock, LockedError
 from heracles.core.snapshots import Snapshot, SnapshotError
 from heracles.ldap import dn as dnlib
@@ -26,7 +27,9 @@ from heracles.objects import (
     ObjectValidationError,
     PermissionDeniedError,
     UnknownTypeError,
+    bulk,
     templates,
+    transfer,
 )
 
 router = APIRouter(tags=["objects"])
@@ -318,6 +321,43 @@ def create_object(
     return {"dn": new_dn}
 
 
+class BulkBody(BaseModel):
+    dns: list[str]
+    changes: dict[str, dict[str, dict[str, Any]]]
+
+
+class BulkSelection(BaseModel):
+    dns: list[str]
+
+
+@router.post("/objects/{type_name}/_bulk/attributes")
+def bulk_attributes(
+    type_name: str, body: BulkSelection, user: CurrentUserDep, domain: DomainDep
+) -> dict[str, JSON]:
+    """Attributes editable on every selected object, by tab."""
+    with object_errors():
+        service, _policy = domain.service(user, type_name)
+        found = bulk.editable_attributes(service, type_name, body.dns)
+    return {"attributes": {tab: list(names) for tab, names in found.items()}}
+
+
+@router.patch("/objects/{type_name}/_bulk")
+def bulk_edit(
+    type_name: str, body: BulkBody, user: CurrentUserDep, domain: DomainDep
+) -> dict[str, JSON]:
+    """Apply the same change to several objects; failures do not abort the others."""
+    locks = domain.locks(user.directory_id, user.directory)
+
+    def is_locked(dn: str) -> bool:
+        lock = locks.get(dn)
+        return lock is not None and dnlib.normalize(lock.user_dn) != dnlib.normalize(user.dn)
+
+    with object_errors():
+        service, _policy = domain.service(user, type_name)
+        results = bulk.bulk_update(service, type_name, body.dns, body.changes, is_locked=is_locked)
+    return {"results": [r.to_json() for r in results]}
+
+
 def _tabs_from_template(
     service: ObjectService, type_name: str, template: str, given: dict[str, TabPayload]
 ) -> dict[str, Any]:
@@ -365,6 +405,56 @@ def move_object(
         superior = dnlib.join(info.type.rdn, body.base)
         new_dn = user.directory.rename(dn, dnlib.rdn(dn), superior)
     return {"dn": new_dn}
+
+
+class CopyBody(BaseModel):
+    base: str
+    values: dict[str, dict[str, Any]] = Field(default_factory=lambda: {})
+
+
+@router.post("/objects/{type_name}/{dn:path}/copy", status_code=status.HTTP_201_CREATED)
+def copy_object(
+    type_name: str, dn: str, body: CopyBody, user: CurrentUserDep, domain: DomainDep
+) -> dict[str, str]:
+    """Copy an object to another department (read on the source, create on the target)."""
+    with object_errors():
+        service, policy = domain.service(user, type_name)
+        service.load(type_name, dn)
+        if not policy.can_read(dn, domain.registry.get(type_name).main_tab.name, ""):
+            raise PermissionDeniedError(f"cannot read {dn}")
+        new_dn = transfer.copy_object(service, type_name, dn, body.base, body.values)
+    return {"dn": new_dn}
+
+
+@router.get("/objects/{type_name}/{dn:path}/references")
+def object_references(
+    type_name: str, dn: str, user: CurrentUserDep, domain: DomainDep
+) -> list[JSON]:
+    """Objects that refer to this one (membership, manager, ACL assignments, ...)."""
+    with object_errors():
+        service, policy = domain.service(user, type_name)
+        service.load(type_name, dn)
+        if not policy.can_read(dn, domain.registry.get(type_name).main_tab.name, ""):
+            raise PermissionDeniedError(f"cannot read {dn}")
+        hits = references.find_references(user.directory, domain.registry, dn)
+        out: list[JSON] = []
+        policies: dict[str, TypeAclPolicy] = {}
+        for hit in hits:
+            hit_policy = policies.get(hit.type_name)
+            if hit_policy is None:
+                hit_policy = policies[hit.type_name] = domain.service(user, hit.type_name)[1]
+            main = domain.registry.get(hit.type_name)
+            if not hit_policy.can_read(hit.dn, main.main_tab.name, main.type.main_attr):
+                continue
+            out.append(
+                {
+                    "dn": hit.dn,
+                    "type": hit.type_name,
+                    "label": hit.label,
+                    "attribute": hit.attribute,
+                }
+            )
+    return out
 
 
 @router.get("/objects/{type_name}/{dn:path}/snapshots")
@@ -420,6 +510,28 @@ def _snapshot_type_and_key(domain: DomainDep, snap: Snapshot) -> str:
     with object_errors():
         info = domain.registry.get(snap.object_type)
     return info.acl_object(info.main_tab)
+
+
+@router.get("/snapshots/deleted")
+def list_deleted_snapshots(
+    user: CurrentUserDep,
+    domain: DomainDep,
+    type: str | None = None,
+    base: str | None = None,
+) -> list[dict[str, JSON]]:
+    """Latest snapshot of each object that no longer exists (restorable ones only)."""
+    evaluator = domain.evaluator(user)
+    found: list[dict[str, JSON]] = []
+    for snap in domain.snapshots(user.directory_id, user.directory).list_deleted(base):
+        if snap.object_type is None or (type is not None and snap.object_type != type):
+            continue
+        try:
+            info = domain.registry.get(snap.object_type)
+        except UnknownTypeError:
+            continue
+        if evaluator.can_snapshot_restore(snap.object_dn, info.acl_object(info.main_tab)):
+            found.append(snapshot_json(snap))
+    return found
 
 
 @router.post("/snapshots/{snapshot_id:path}/restore")

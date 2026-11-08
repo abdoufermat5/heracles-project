@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from heracles.ldap.client import Modification
 from heracles.objects.state import ObjectState
@@ -23,6 +23,13 @@ class AccessPolicy(Protocol):
     def can_create(self, type_name: str, base: str) -> bool: ...
 
     def can_delete(self, dn: str, type_name: str) -> bool: ...
+
+
+@runtime_checkable
+class TypedPolicy(Protocol):
+    """A policy able to answer for another object type (cross-object side effects)."""
+
+    def for_type(self, type_name: str) -> AccessPolicy: ...
 
 
 class AllowAll:

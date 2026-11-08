@@ -31,9 +31,18 @@ _ACL_CACHE_KEY = "acl.resolved"
 class TypeAclPolicy:
     """Object-layer access policy for one object type, backed by the ACL evaluator."""
 
-    def __init__(self, evaluator: AclEvaluator, info: TypeInfo) -> None:
+    def __init__(
+        self, evaluator: AclEvaluator, info: TypeInfo, registry: TypeRegistry | None = None
+    ) -> None:
         self._ev = evaluator
         self._info = info
+        self._registry = registry
+
+    def for_type(self, type_name: str) -> TypeAclPolicy:
+        """The same user's policy for another object type."""
+        if self._registry is None:
+            return self
+        return TypeAclPolicy(self._ev, self._registry.get(type_name), self._registry)
 
     def _key(self, tab_name: str) -> str | None:
         tab = self._info.tab(tab_name)
@@ -134,7 +143,7 @@ class Domain:
     def service(self, user: CurrentUser, type_name: str) -> tuple[ObjectService, TypeAclPolicy]:
         """Object service for one type, enforcing the user's ACLs."""
         info = self.registry.get(type_name)
-        policy = TypeAclPolicy(self.evaluator(user), info)
+        policy = TypeAclPolicy(self.evaluator(user), info, self.registry)
         events = self.events(user)
         return ObjectService(user.directory, self.registry, policy=policy, events=events), policy
 

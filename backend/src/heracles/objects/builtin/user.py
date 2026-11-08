@@ -9,6 +9,7 @@ from heracles.attributes import (
     DisplayAttr,
     EmailAttr,
     ImageAttr,
+    ListAttr,
     ObjectRefAttr,
     PasswordAttr,
     PhoneAttr,
@@ -19,7 +20,12 @@ from heracles.attributes import (
     UrlAttr,
 )
 from heracles.i18n import _
+from heracles.ldap import dn as dnlib
+from heracles.ldap.client import Modification, NoSuchObjectError, Scope
+from heracles.objects import filters
+from heracles.objects.hooks import TabContext
 from heracles.objects.model import ObjectType, Reference, Section, Tab
+from heracles.schema import legacy
 
 NAME_RE = r"[^\s,=+<>#;\"\\][^,=+<>#;\"\\]*"
 UID_RE = r"[A-Za-z0-9_][A-Za-z0-9._@-]*"
@@ -38,6 +44,29 @@ def _full_name(values: dict[str, Any]) -> str | None:
     parts = [str(values.get(k) or "").strip() for k in ("givenName", "sn")]
     name = " ".join(p for p in parts if p)
     return name or None
+
+
+def _role_item() -> ObjectRefAttr:
+    item = ObjectRefAttr("roles", _("Role"), ref_type="role")
+    item.stored = False  # memberships live on the role entries
+    return item
+
+
+def roles_of(ctx: TabContext, user_dn: str) -> list[str]:
+    """DNs of the roles whose occupants include ``user_dn``."""
+    flt = filters.and_(
+        filters.equals("objectClass", legacy.STD_OC.ORGANIZATIONAL_ROLE),
+        filters.equals(legacy.STD_ATTR.ROLE_OCCUPANT, user_dn),
+    )
+    try:
+        entries = ctx.directory.search(ctx.directory.base_dn, flt, Scope.SUBTREE, ["cn"])
+        return sorted(e.dn for e in entries)
+    except NoSuchObjectError:
+        return []
+
+
+def _dns(value: object) -> list[str]:
+    return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []  # pyright: ignore[reportUnknownVariableType]
 
 
 class User(ObjectType):
@@ -110,6 +139,80 @@ class User(ObjectType):
             StringAttr("employeeType", _("Employee type")),
             ObjectRefAttr("manager", _("Manager"), ref_type="user"),
         )
+
+    class Roles(Tab):
+        """Roles the user occupies; written on the role entries (``roleOccupant``)."""
+
+        name = "roles"
+        acl_key = "user"
+        label = _("Roles")
+        object_classes = ()
+
+        membership = Section(
+            _("Roles"),
+            ListAttr(
+                "roles",
+                _("Roles"),
+                _role_item(),
+                description=_("Roles occupied by this user"),
+            ),
+        )
+
+        @classmethod
+        def on_load(cls, ctx: TabContext) -> None:
+            if ctx.dn is not None:
+                ctx.values["roles"] = roles_of(ctx, ctx.dn) or None
+
+        @classmethod
+        def prepare(cls, ctx: TabContext) -> None:
+            if not ctx.was_touched("roles"):
+                return
+            old = {dnlib.normalize(d) for d in _dns(ctx.original_values().get("roles"))}
+            for role_dn in _dns(ctx.values.get("roles")):
+                changed = dnlib.normalize(role_dn) not in old
+                if not changed:
+                    continue
+                entry = ctx.directory.get(role_dn)
+                if entry is None or not entry.has_object_class(legacy.STD_OC.ORGANIZATIONAL_ROLE):
+                    ctx.error("roles", _("Not a role: {dn}").format(dn=role_dn))
+                elif not ctx.can_write_object(
+                    "role", role_dn, "main", legacy.STD_ATTR.ROLE_OCCUPANT
+                ):
+                    ctx.error("roles", _("Cannot change the occupants of {dn}").format(dn=role_dn))
+            new = {dnlib.normalize(d) for d in _dns(ctx.values.get("roles"))}
+            for role_dn in _dns(ctx.original_values().get("roles")):
+                if dnlib.normalize(role_dn) not in new and not ctx.can_write_object(
+                    "role", role_dn, "main", legacy.STD_ATTR.ROLE_OCCUPANT
+                ):
+                    ctx.error("roles", _("Cannot change the occupants of {dn}").format(dn=role_dn))
+
+        @classmethod
+        def after_save(cls, ctx: TabContext) -> None:
+            if ctx.dn is None or not ctx.was_touched("roles"):
+                return
+            old = {dnlib.normalize(d): d for d in _dns(ctx.original_values().get("roles"))}
+            new = {dnlib.normalize(d): d for d in _dns(ctx.values.get("roles"))}
+            attr = legacy.STD_ATTR.ROLE_OCCUPANT
+            user_key = dnlib.normalize(ctx.dn)
+            for key, role_dn in new.items():
+                if key not in old:
+                    entry = ctx.directory.get(role_dn, [attr])
+                    if entry is not None and user_key not in {
+                        dnlib.normalize(v) for v in entry.texts(attr)
+                    }:
+                        ctx.directory.modify(
+                            role_dn, [Modification("add", attr, [ctx.dn.encode("utf-8")])]
+                        )
+            for key, role_dn in old.items():
+                if key not in new:
+                    entry = ctx.directory.get(role_dn, [attr])
+                    if entry is None:
+                        continue
+                    present = [
+                        v for v in entry.get(attr) if dnlib.normalize(v.decode()) == user_key
+                    ]
+                    if present:
+                        ctx.directory.modify(role_dn, [Modification("delete", attr, present)])
 
 
 __all__ = ["LANGUAGES", "NAME_RE", "UID_RE", "User"]
