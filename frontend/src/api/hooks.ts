@@ -149,3 +149,12 @@ export function useObjectAccountLocked(type: string, dn: string | null) {
     staleTime: 30_000,
   })
 }
+
+export function useObjectReferences(type: string, dn: string | null | undefined) {
+  return useQuery({
+    queryKey: ['objects', type, dn, 'references'],
+    queryFn: () => (dn ? api.references(type, dn) : Promise.resolve([])),
+    enabled: Boolean(dn),
+    staleTime: 60_000,
+  })
+}

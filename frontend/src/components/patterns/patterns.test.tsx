@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import '@/i18n'
 import { setTechnicalDetails } from '@/lib/preferences'
-import { BulkActionBar, ConfirmDialog, FactList, OrgPath, Pagination, StatusBadge } from '.'
+import { BulkActionBar, ConfirmDialog, FactList, OrgPath, Pagination, SectionCard, StatusBadge } from '.'
 
 const DN = 'uid=adurand,ou=people,ou=Sales,ou=Paris,dc=example,dc=com'
 
@@ -83,5 +83,16 @@ describe('patterns', () => {
       </BulkActionBar>,
     )
     expect(screen.getByRole('region')).toHaveTextContent('3 selected')
+  })
+
+  it('renders SectionCard with id and content', () => {
+    render(
+      <SectionCard id="test-card" title="Profile Details">
+        <p>Card content</p>
+      </SectionCard>,
+    )
+    const card = screen.getByText('Profile Details').closest('section')
+    expect(card).toHaveAttribute('id', 'test-card')
+    expect(screen.getByText('Card content')).toBeInTheDocument()
   })
 })

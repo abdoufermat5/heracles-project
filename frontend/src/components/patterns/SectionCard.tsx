@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
  * Cancel so people change one section at a time instead of the whole page.
  */
 export function SectionCard({
+  id,
   title,
   description,
   actions,
@@ -23,6 +24,7 @@ export function SectionCard({
   className,
   bodyClassName,
 }: {
+  id?: string
   title: React.ReactNode
   description?: React.ReactNode
   actions?: React.ReactNode
@@ -41,6 +43,7 @@ export function SectionCard({
   const { t } = useTranslation()
   return (
     <section
+      id={id}
       data-slot="section-card"
       data-editing={editing || undefined}
       className={cn(

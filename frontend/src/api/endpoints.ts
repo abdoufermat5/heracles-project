@@ -11,6 +11,7 @@ import type {
   Me,
   ObjectDetail,
   ObjectList,
+  ObjectReference,
   PatchObjectRequest,
   RecoveryCodes,
   RecoveryConfirm,
@@ -108,6 +109,8 @@ export const api = {
     }),
   deleteObject: (type: string, dn: string) =>
     request<undefined>(`/objects/${encodeURIComponent(type)}/${dnPath(dn)}`, { method: 'DELETE' }),
+  references: (type: string, dn: string) =>
+    request<ObjectReference[]>(`/objects/${encodeURIComponent(type)}/${dnPath(dn)}/references`),
   moveObject: (type: string, dn: string, base: string) =>
     request<{ dn: string }>(`/objects/${encodeURIComponent(type)}/${dnPath(dn)}/move`, {
       method: 'POST',

@@ -133,7 +133,7 @@ class Db {
       })
     }
 
-    for (let i = 0; i < USER_COUNT; i++) {
+    for (let i = 0; i < USER_COUNT - 1; i++) {
       const given = FIRST[Math.floor(rand() * FIRST.length)] ?? 'Alex'
       const sn = LAST[Math.floor(rand() * LAST.length)] ?? 'Doe'
       const uid = `${ascii(given)[0] ?? 'x'}${ascii(sn)}${i < 26 ? '' : i}`
@@ -183,6 +183,49 @@ class Db {
       )
     }
 
+    // Seed dedicated realistic employee user
+    const empDept = departments[2] ?? departments[0]
+    const empDeptDn = empDept ? empDept.dn : BASE_DN
+    const empDn = `uid=employee,ou=people,${empDeptDn}`
+    userDns.push(empDn)
+    this.put(
+      'user',
+      empDn,
+      {
+        main: {
+          active: true,
+          values: {
+            givenName: 'Emma',
+            sn: 'Employee',
+            cn: 'Emma Employee',
+            uid: 'employee',
+            base: empDeptDn,
+            mail: 'emma.employee@example.com',
+            telephoneNumber: ['+33 1 40 50 60 70'],
+            employeeType: 'employee',
+            preferredLanguage: 'en',
+            forcePasswordChange: false,
+            userPassword: null,
+            jpegPhoto: null,
+            description: 'Senior Software Engineer',
+            internalId: 'EMP-0042',
+          },
+        },
+        posix: {
+          active: true,
+          values: {
+            uidNumber: 10500,
+            gidNumber: 10000,
+            homeDirectory: '/home/employee',
+            loginShell: '/bin/bash',
+            diskQuotaGb: 10,
+            groups: ['staff', 'developers'],
+          },
+        },
+      },
+      false,
+    )
+
     // A user whose edit lock is held by somebody else (to exercise the 409 dialog).
     const lockedDn = userDns[1]
     if (lockedDn) {
@@ -206,6 +249,8 @@ class Db {
     groups.forEach((g, i) => {
       const dept = departments[0]
       if (!dept) return
+      const members = userDns.slice(i * 3, i * 3 + 6)
+      if (g === 'staff' || g === 'developers') members.push(empDn)
       this.put('group', `cn=${g},ou=groups,${dept.dn}`, {
         main: {
           active: true,
@@ -213,7 +258,7 @@ class Db {
             base: dept.dn,
             cn: g,
             description: `${g} group`,
-            member: userDns.slice(i * 3, i * 3 + 6),
+            member: members,
           },
         },
       })
@@ -301,6 +346,18 @@ class Db {
   me(): Me | null {
     const u = this.session.user
     if (!u) return null
+    if (u === 'employee') {
+      const deptDn = `ou=Engineering,ou=Paris,${BASE_DN}`
+      return {
+        dn: `uid=employee,ou=people,${deptDn}`,
+        uid: 'employee',
+        display_name: 'Emma Employee',
+        avatar_url: null,
+        is_admin: false,
+        directory: 'main',
+        base: BASE_DN,
+      }
+    }
     const isAdmin = u !== 'viewer'
     return {
       dn: `uid=${u},ou=people,${BASE_DN}`,
@@ -322,19 +379,32 @@ class Db {
   acl(rec: Rec, desc: TypeDescriptor): Record<string, TabAcl> {
     const out: Record<string, TabAcl> = {}
     const ro = this.isReadOnlySession()
+    const myDn = this.me()?.dn.toLowerCase()
+    const isSelf = this.session.user === 'employee' && rec.dn.toLowerCase() === myDn
     for (const tab of desc.tabs) {
       const attrs: Record<string, string> = {}
       for (const sec of tab.sections) {
         for (const a of sec.attributes) {
-          if (a.kind === 'display') attrs[a.name] = 'r'
-          else if (ro) attrs[a.name] = a.name === 'userPassword' ? '' : 'r'
-          else if (a.name === desc.main_attr) attrs[a.name] = 'r' // RDN is fixed after creation
-          else if (tab.name === 'main' && a.name === 'employeeType' && rec.type === 'user')
-            attrs[a.name] = 'r' // demo of a field-level restriction
-          else attrs[a.name] = 'rw'
+          if (a.kind === 'display') {
+            attrs[a.name] = 'r'
+          } else if (isSelf) {
+            if (['telephoneNumber', 'description', 'preferredLanguage', 'jpegPhoto', 'userPassword'].includes(a.name)) {
+              attrs[a.name] = 'rw'
+            } else {
+              attrs[a.name] = 'r'
+            }
+          } else if (ro) {
+            attrs[a.name] = a.name === 'userPassword' ? '' : 'r'
+          } else if (a.name === desc.main_attr) {
+            attrs[a.name] = 'r'
+          } else if (tab.name === 'main' && a.name === 'employeeType' && rec.type === 'user') {
+            attrs[a.name] = 'r'
+          } else {
+            attrs[a.name] = 'rw'
+          }
         }
       }
-      out[tab.name] = { object: ro ? 'r' : 'rwcdm', attributes: attrs }
+      out[tab.name] = { object: isSelf ? 'rw' : ro ? 'r' : 'rwcdm', attributes: attrs }
     }
     return out
   }

@@ -300,6 +300,13 @@ export interface ObjectDetail extends TriggerOutput {
   acl: Record<string, TabAcl>
 }
 
+export interface ObjectReference {
+  dn: string
+  type: string
+  label: string
+  attribute: string
+}
+
 export interface CreateObjectRequest {
   base: string
   template?: string | null
