@@ -13,7 +13,7 @@ UI_PORT ?= 5173
 CONFIG ?= $(HERACLES_CONFIG)
 
 .PHONY: help install install-backend install-frontend \
-        dev dev-mock backend frontend demo build serve \
+        dev dev-demo dev-down dev-mock backend frontend demo build serve \
         test test-backend test-frontend lint lint-backend lint-frontend \
         format typecheck check ldap-up ldap-down ldap-logs test-integration e2e e2e-down compat-schema clean
 
@@ -36,7 +36,16 @@ install-frontend: ## Install frontend dependencies (pnpm)
 
 # ------------------------------------------------------------------- run
 
-dev: ## Demo backend (auto-reload) + Vite dev server on the real API
+dev: ## Whole stack: OpenLDAP + API containers, Vite dev server on the host
+	@echo "→ API http://$(HOST):$(PORT) (container, real LDAP) · UI http://localhost:$(UI_PORT) · login alice / alice-secret"
+	@echo "  the containers stay up after this exits; stop them with \`make dev-down\`"
+	$(COMPOSE) --profile dev up -d --build --wait heracles
+	@trap 'kill 0' INT TERM EXIT; \
+	  (cd $(FRONTEND) && VITE_API_MOCK=false HERACLES_API_URL=http://$(HOST):$(PORT) \
+	      pnpm exec vite --port $(UI_PORT)) & \
+	  wait
+
+dev-demo: ## Demo backend (in-memory directory, auto-reload) + Vite dev server
 	@echo "→ API http://$(HOST):$(PORT)  ·  UI http://localhost:$(UI_PORT)  ·  login admin / heracles"
 	@trap 'kill 0' INT TERM EXIT; \
 	  (cd $(BACKEND) && uv run uvicorn heracles.server:build_demo_app --factory --reload \
@@ -44,6 +53,9 @@ dev: ## Demo backend (auto-reload) + Vite dev server on the real API
 	  (cd $(FRONTEND) && VITE_API_MOCK=false HERACLES_API_URL=http://$(HOST):$(PORT) \
 	      pnpm exec vite --port $(UI_PORT)) & \
 	  wait
+
+dev-down: ## Stop the dev containers (the LDAP data volume is kept)
+	$(COMPOSE) --profile dev down
 
 dev-mock: ## Frontend only, with the in-browser mock API (no backend)
 	cd $(FRONTEND) && VITE_API_MOCK=true pnpm exec vite --port $(UI_PORT)

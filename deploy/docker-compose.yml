@@ -38,7 +38,8 @@ services:
 
   # End-to-end stack: docker compose -f deploy/docker-compose.yml --profile e2e up -d --build
   heracles:
-    profiles: [e2e]
+    # `dev` runs the same container against the test LDAP for `make dev`.
+    profiles: [e2e, dev]
     build:
       context: ..
       dockerfile: deploy/Dockerfile
