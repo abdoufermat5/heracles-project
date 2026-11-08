@@ -1,0 +1,125 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { adminApi } from './api'
+import type { Assignment, ConfigValue, Hook, RoleInput, RoleTemplate } from './types'
+
+export const ak = {
+  caps: ['admin', 'capabilities'] as const,
+  catalog: ['admin', 'catalog'] as const,
+  roles: ['admin', 'roles'] as const,
+  assignments: (dn: string) => ['admin', 'assignments', dn] as const,
+  allAssignments: ['admin', 'assignments'] as const,
+  config: ['admin', 'config'] as const,
+  hooks: ['admin', 'hooks'] as const,
+  checks: ['admin', 'checks'] as const,
+  plugins: ['admin', 'plugins'] as const,
+  tasks: (kind: string, status: string) => ['admin', 'tasks', kind, status] as const,
+}
+
+export function useCapabilities() {
+  return useQuery({ queryKey: ak.caps, queryFn: adminApi.capabilities, staleTime: 60_000 })
+}
+
+export function useCatalog() {
+  return useQuery({ queryKey: ak.catalog, queryFn: adminApi.catalog, staleTime: 5 * 60_000 })
+}
+
+export function useRoles() {
+  return useQuery({ queryKey: ak.roles, queryFn: adminApi.roles })
+}
+
+export function useRoleMutations() {
+  const qc = useQueryClient()
+  const done = () => void qc.invalidateQueries({ queryKey: ak.roles })
+  return {
+    create: useMutation({ mutationFn: (b: RoleInput) => adminApi.createRole(b), onSuccess: done }),
+    update: useMutation({
+      mutationFn: (v: { dn: string; description: string; templates: RoleTemplate[] }) =>
+        adminApi.updateRole(v.dn, { description: v.description, templates: v.templates }),
+      onSuccess: done,
+    }),
+    remove: useMutation({
+      mutationFn: (v: { dn: string; force?: boolean }) => adminApi.deleteRole(v.dn, v.force),
+      onSuccess: () => {
+        done()
+        void qc.invalidateQueries({ queryKey: ak.allAssignments })
+      },
+    }),
+  }
+}
+
+export function useAssignments(dn: string | null) {
+  return useQuery({
+    queryKey: ak.assignments(dn ?? ''),
+    queryFn: () => adminApi.assignments(dn ?? ''),
+    enabled: dn !== null,
+  })
+}
+
+export function useSaveAssignments(dn: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (items: Assignment[]) => adminApi.putAssignments(dn, items),
+    onSuccess: (data) => {
+      qc.setQueryData(ak.assignments(dn), data)
+      void qc.invalidateQueries({ queryKey: ak.roles })
+    },
+  })
+}
+
+export function useConfig() {
+  return useQuery({ queryKey: ak.config, queryFn: adminApi.config })
+}
+
+export function useSaveConfig() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (changes: Record<string, ConfigValue>) => adminApi.putConfig(changes),
+    onSuccess: (data) => qc.setQueryData(ak.config, data),
+  })
+}
+
+export function useHooks() {
+  return useQuery({ queryKey: ak.hooks, queryFn: adminApi.hooks })
+}
+
+export function useSaveHooks() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { hooks: Hook[]; displayOutput?: boolean }) =>
+      adminApi.putHooks(v.hooks, v.displayOutput),
+    onSuccess: (data) => qc.setQueryData(ak.hooks, data),
+  })
+}
+
+export function useChecks() {
+  return useQuery({ queryKey: ak.checks, queryFn: adminApi.checks })
+}
+
+export function useFix() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { id: string; dns: string[]; options?: Record<string, string> }) =>
+      adminApi.fix(v.id, v.dns, v.options),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ak.checks }),
+  })
+}
+
+export function usePlugins() {
+  return useQuery({ queryKey: ak.plugins, queryFn: adminApi.plugins })
+}
+
+export function useTasks(kind: string, status: string) {
+  return useQuery({
+    queryKey: ak.tasks(kind, status),
+    queryFn: () => adminApi.tasks({ kind: kind || undefined, status: status || undefined }),
+  })
+}
+
+export function useTaskActions() {
+  const qc = useQueryClient()
+  const done = () => void qc.invalidateQueries({ queryKey: ['admin', 'tasks'] })
+  return {
+    run: useMutation({ mutationFn: (dn: string) => adminApi.runTask(dn), onSuccess: done }),
+    retry: useMutation({ mutationFn: (dn: string) => adminApi.retryTask(dn), onSuccess: done }),
+  }
+}
