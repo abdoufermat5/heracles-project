@@ -6,7 +6,7 @@ import base64
 import binascii
 import math
 from typing import Annotated
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import httpx2
 import structlog
@@ -277,6 +277,26 @@ def parse_basic(header: str | None) -> tuple[str, str] | None:
     return (login, password) if sep and login else None
 
 
+def _require_same_origin(request: Request) -> None:
+    """Refuse a navigation started by another site.
+
+    The Basic login is a GET (the browser challenge needs a navigation), so any page could
+    send the visitor to ``https://attacker:secret@console/...`` and sign them in as the
+    attacker (login CSRF). Browsers state who started the request: ``Sec-Fetch-Site`` must
+    be ``same-origin`` (a link in the console) or ``none`` (typed address, bookmark). Without
+    it (command-line clients, old browsers) a present ``Origin`` must name this host.
+    """
+    site = request.headers.get("sec-fetch-site")
+    if site is not None:
+        allowed = site in ("same-origin", "none")
+    else:
+        origin = request.headers.get("origin")
+        allowed = origin is None or urlsplit(origin).netloc == request.headers.get("host")
+    if not allowed:
+        log.warning("login_basic_cross_site", site=site, origin=request.headers.get("origin"))
+        raise ApiError(403, "cross_site", "Sign-in must be started from this site")
+
+
 @router.get("/login/basic")
 def login_basic(
     request: Request,
@@ -288,6 +308,7 @@ def login_basic(
     directory_id, client = _directory(state, directory)
     if not _config(state, client).basic_available:
         raise not_found("HTTP Basic login is not enabled")
+    _require_same_origin(request)
     credentials = parse_basic(request.headers.get("authorization"))
     if credentials is None:
         raise _challenge("Authentication required")

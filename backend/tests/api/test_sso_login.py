@@ -227,6 +227,28 @@ def test_basic_validates_by_bind(basic_client: TestClient) -> None:
     assert basic_client.get("/api/v2/auth/me").json()["uid"] == "asmith"
 
 
+def test_basic_refuses_cross_site_navigation(basic_client: TestClient) -> None:
+    """A page of another site must not be able to sign the visitor in (login CSRF)."""
+    creds = basic("asmith", "heracles")
+    for headers in (
+        {"Sec-Fetch-Site": "cross-site"},
+        {"Sec-Fetch-Site": "same-site"},
+        {"Origin": "https://evil.example"},
+    ):
+        r = basic_client.get("/api/v2/auth/login/basic", headers={**creds, **headers})
+        assert r.status_code == 403 and r.json()["error"]["code"] == "cross_site", headers
+        assert basic_client.get("/api/v2/auth/me").status_code == 401
+        assert basic_client.get("/api/v2/auth/login/basic", headers=headers).status_code == 403
+    for headers in (
+        {"Sec-Fetch-Site": "same-origin"},
+        {"Sec-Fetch-Site": "none"},
+        {"Origin": "http://testserver"},
+    ):
+        r = basic_client.get("/api/v2/auth/login/basic", headers={**creds, **headers})
+        assert r.status_code == 302, headers
+        basic_client.cookies.clear()
+
+
 def test_basic_malformed_header(basic_client: TestClient) -> None:
     for header in ("Basic !!!", "Bearer abc", "Basic " + base64.b64encode(b"nocolon").decode()):
         r = basic_client.get("/api/v2/auth/login/basic", headers={"Authorization": header})
