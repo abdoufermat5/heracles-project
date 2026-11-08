@@ -83,7 +83,7 @@ _CONTAINER_NAMES: Final = frozenset(
         "tokens",
         "recovery",
         "snapshots",
-        "fusiondirectory",
+        legacy.APP_OU.split("=", 1)[1],  # application container, e.g. "fusiondirectory"
         "mail",
         "netgroups",
         "automount",

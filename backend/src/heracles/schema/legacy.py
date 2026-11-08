@@ -470,6 +470,7 @@ CONFIG_ENTRY_CLASSES: Final = (
 )
 """Classes the configuration entry may carry (main first)."""
 
+
 # --- P3 compat ---
 @dataclass(frozen=True, slots=True)
 class SsoConfigAttrs:
