@@ -71,7 +71,6 @@ nextcloud = "heracles_plugins.nextcloud:plugin"
 pureftpd = "heracles_plugins.pureftpd:plugin"
 quota = "heracles_plugins.quota:plugin"
 freeradius = "heracles_plugins.freeradius:plugin"
-macro = "heracles_plugins.macro:plugin"
 
 [dependency-groups]
 dev = [

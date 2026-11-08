@@ -100,7 +100,6 @@ def test_gpg_flow_via_api(app_client: TestClient) -> None:
                 "values": {
                     "pgpCertID": "A1B2C3D4E5F67890",
                     "pgpUserID": "Alice API <alice@api.test>",
-                    "pgpFingerprint": "11223344556677889900AABBCCDDEEFFA1B2C3D4",
                 }
             }
         },

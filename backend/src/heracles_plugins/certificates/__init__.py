@@ -114,7 +114,7 @@ def summarize_certificates(values: dict[str, Any]) -> str | None:
 class CertificateAttr(Attribute[bytes]):
     """X.509 certificate stored as DER bytes in LDAP."""
 
-    kind = "certificate"
+    kind = "file"
 
     def from_ldap(self, values: list[bytes]) -> bytes | None:
         return values[0] if values else None

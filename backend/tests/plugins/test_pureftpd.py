@@ -115,7 +115,6 @@ def test_create_user_with_pureftpd_tab(service: ObjectService, directory: Memory
                     "FTPQuotaMBytes": 500,
                     "FTPUploadBandwidth": 100,
                     "FTPDownloadBandwidth": 200,
-                    "FTPIPAddress": "192.168.1.0/24",
                 },
             }
         },
@@ -129,7 +128,6 @@ def test_create_user_with_pureftpd_tab(service: ObjectService, directory: Memory
     assert entry.text("FTPQuotaMBytes") == "500"
     assert entry.text("FTPUploadBandwidth") == "100"
     assert entry.text("FTPDownloadBandwidth") == "200"
-    assert entry.text("FTPIPAddress") == "192.168.1.0/24"
 
     obj = service.load("user", dn)
     tab = obj.tabs["pureftpd"]

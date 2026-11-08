@@ -93,15 +93,38 @@ class GpgAccountTab(Tab):
         for dn_obj in cast("list[object]", raw_keys):
             if not isinstance(dn_obj, str):
                 continue
-            entry = ctx.directory.get(dn_obj, ["pgpCertID", "pgpUserID", "pgpFingerprint"])
+            entry = ctx.directory.get(dn_obj, ["pgpCertID", "pgpUserID", "pgpKey"])
             if entry is not None:
                 cert_id = entry.text("pgpCertID") or ""
                 uid_text = entry.text("pgpUserID") or ""
-                fp = entry.text("pgpFingerprint") or ""
-                lines.append(f"{cert_id} - {uid_text} ({fp})".strip())
+                fp = _fingerprint_of(entry.text("pgpKey"))
+                suffix = f" ({fp})" if fp else ""
+                lines.append(f"{cert_id} - {uid_text}{suffix}".strip())
             else:
                 lines.append(dn_obj)
         ctx.values["gpgSummary"] = "\n".join(lines) if lines else None
+
+
+class ZeroOneAttr(BooleanAttr):
+    """Boolean stored as ``1`` / ``0`` (key server schema convention)."""
+
+    def from_ldap(self, values: list[bytes]) -> bool | None:
+        if not values:
+            return None
+        return values[0].strip() not in (b"", b"0")
+
+    def to_ldap(self, value: bool | None) -> list[bytes]:
+        if value is None:
+            return []
+        return [b"1" if value else b"0"]
+
+
+def _fingerprint_of(armored: object) -> str | None:
+    """Fingerprint computed from the stored public key (not stored itself)."""
+    if not isinstance(armored, str) or not armored.strip():
+        return None
+    parsed = parse_openpgp_key(armored)
+    return parsed.fingerprint if parsed is not None else None
 
 
 class PgpKey(ObjectType):
@@ -117,7 +140,7 @@ class PgpKey(ObjectType):
     main_attr = "pgpCertID"
     rdn = "ou=pgp"
     columns = ("pgpCertID", "pgpUserID", "pgpKeyType")
-    search_attrs = ("pgpCertID", "pgpUserID", "pgpFingerprint", "pgpKeyID")
+    search_attrs = ("pgpCertID", "pgpUserID", "pgpKeyID")
 
     class Main(Tab):
         name = "main"
@@ -137,12 +160,16 @@ class PgpKey(ObjectType):
             ),
             StringAttr("pgpKeyID", _("Secondary key ID")),
             StringAttr("pgpUserID", _("User identity"), required=True),
-            StringAttr("pgpFingerprint", _("Fingerprint")),
+            DisplayAttr(
+                "fingerprint",
+                _("Fingerprint"),
+                compute=lambda values: _fingerprint_of(values.get("pgpKey")),
+            ),
             StringAttr("pgpKeyType", _("Key type")),
             DateTimeAttr("pgpKeyCreateTime", _("Creation time")),
             DateTimeAttr("pgpKeyExpireTime", _("Expiration time")),
-            BooleanAttr("pgpRevoked", _("Revoked"), default=False),
-            BooleanAttr("pgpDisabled", _("Disabled"), default=False),
+            ZeroOneAttr("pgpRevoked", _("Revoked"), default=False),
+            ZeroOneAttr("pgpDisabled", _("Disabled"), default=False),
         )
 
         key_data = Section(
@@ -160,21 +187,12 @@ class PgpKey(ObjectType):
                 if parsed is not None:
                     if not ctx.values.get("pgpCertID"):
                         ctx.values["pgpCertID"] = parsed.cert_id
-                    if not ctx.values.get("pgpFingerprint"):
-                        ctx.values["pgpFingerprint"] = parsed.fingerprint
                     if not ctx.values.get("pgpUserID") and parsed.user_id:
                         ctx.values["pgpUserID"] = parsed.user_id
                     if not ctx.values.get("pgpKeyType") and parsed.key_type:
                         ctx.values["pgpKeyType"] = parsed.key_type
                     if not ctx.values.get("pgpKeyCreateTime") and parsed.created_at:
                         ctx.values["pgpKeyCreateTime"] = parsed.created_at
-
-            fp = ctx.values.get("pgpFingerprint")
-            if isinstance(fp, str) and fp.strip():
-                clean_fp = normalize_hex(fp)
-                ctx.values["pgpFingerprint"] = clean_fp
-                if not ctx.values.get("pgpCertID") and len(clean_fp) >= 16:
-                    ctx.values["pgpCertID"] = clean_fp[-16:]
 
             cert_id = ctx.values.get("pgpCertID")
             if isinstance(cert_id, str):

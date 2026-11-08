@@ -143,7 +143,6 @@ def test_user_gpg_account_tab(service: ObjectService, directory: MemoryDirectory
                 "values": {
                     "pgpCertID": "A1B2C3D4E5F67890",
                     "pgpUserID": "John Doe <john@example.com>",
-                    "pgpFingerprint": "00112233445566778899AABBCCDDEEFFA1B2C3D4",
                 }
             }
         },

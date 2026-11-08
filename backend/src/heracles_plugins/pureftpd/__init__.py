@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from heracles.attributes import BooleanAttr, IntAttr, StringAttr
+from heracles.attributes import BooleanAttr, IntAttr
 from heracles.i18n import _
 from heracles.objects import Plugin, Section, Tab, TabAttachment
 
@@ -52,14 +52,6 @@ class PureFtpdAccountTab(Tab):
         IntAttr("FTPQuotaMBytes", _("Quota (MB)"), min=0),
         IntAttr("FTPUploadBandwidth", _("Upload bandwidth (KB/s)"), min=0),
         IntAttr("FTPDownloadBandwidth", _("Download bandwidth (KB/s)"), min=0),
-    )
-    access = Section(
-        _("Access control"),
-        StringAttr(
-            "FTPIPAddress",
-            _("Allowed IP address"),
-            description=_("Restrict FTP access to this IP address or network"),
-        ),
     )
 
 
