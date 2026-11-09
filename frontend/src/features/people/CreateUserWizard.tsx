@@ -39,8 +39,9 @@ import { showTriggerOutput } from '@/features/editor/triggerOutput'
 import { generatePassword, passwordStrength } from '@/lib/password'
 import { useScope } from '@/lib/scope'
 import { nameValue } from '@/lib/objects'
+import { isApiError } from '@/api/client'
 import { cn, initials } from '@/lib/utils'
-import { suggestEmail, suggestLogin } from './utils'
+import { suggestLogin } from './utils'
 
 function flattenDepts(nodes: TreeNode[]): Array<{ dn: string; label: string }> {
   const out: Array<{ dn: string; label: string }> = []
@@ -76,7 +77,6 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
   const [employeeType, setEmployeeType] = useState('employee')
   const [language, setLanguage] = useState('en')
   const [uidTouched, setUidTouched] = useState(false)
-  const [mailTouched, setMailTouched] = useState(false)
 
   // Step 2: Department & Groups
   const [department, setDepartment] = useState<string>(() => scope.base || '')
@@ -91,6 +91,14 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
 
   // Submitting
   const [submitting, setSubmitting] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+
+  // Attributes the user type really has: send nothing else, offer nothing else
+  const mainTab = desc.data?.tabs[0]
+  const mainTabName = mainTab?.name ?? 'main'
+  const known = new Set(mainTab?.sections.flatMap((s) => s.attributes.map((a) => a.name)) ?? [])
+  const supportsForceChange = known.has('forcePasswordChange')
+  const supportsExpiry = known.has('passwordExpiry')
 
   // Load available groups
   const groupsQuery = useObjectList('group', { scope: 'sub', limit: 100 })
@@ -115,9 +123,6 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
     if (!uidTouched) {
       const suggested = suggestLogin(val, sn)
       setUid(suggested)
-      if (!mailTouched && suggested) {
-        setMail(suggestEmail(suggested))
-      }
     }
   }
 
@@ -126,18 +131,12 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
     if (!uidTouched) {
       const suggested = suggestLogin(givenName, val)
       setUid(suggested)
-      if (!mailTouched && suggested) {
-        setMail(suggestEmail(suggested))
-      }
     }
   }
 
   const handleUidChange = (val: string) => {
     setUid(val)
     setUidTouched(true)
-    if (!mailTouched) {
-      setMail(suggestEmail(val))
-    }
   }
 
   const handleGeneratePassword = () => {
@@ -163,35 +162,36 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
   // Submit and create user
   const handleCreate = async () => {
     setSubmitting(true)
+    setCreateError(null)
     try {
       const fullName = `${givenName.trim()} ${sn.trim()}`.trim()
+      const wanted: Record<string, unknown> = {
+        givenName: givenName.trim(),
+        sn: sn.trim(),
+        cn: fullName,
+        uid: uid.trim(),
+        mail: mail.trim() || undefined,
+        employeeType,
+        preferredLanguage: language,
+        base: effectiveDept,
+        userPassword: password.trim() || null,
+        forcePasswordChange: requirePasswordChange,
+        passwordExpiry: passwordExpiry || null,
+      }
+      const values = Object.fromEntries(
+        Object.entries(wanted).filter(([k, v]) => known.has(k) && v !== undefined),
+      )
       const body = {
         base: effectiveDept,
         template: templateDn,
-        tabs: {
-          main: {
-            active: true,
-            values: {
-              givenName: givenName.trim(),
-              sn: sn.trim(),
-              cn: fullName,
-              uid: uid.trim(),
-              mail: mail.trim() || undefined,
-              employeeType,
-              preferredLanguage: language,
-              base: effectiveDept,
-              userPassword: password.trim() || null,
-              forcePasswordChange: requirePasswordChange,
-              passwordExpiry: passwordExpiry || null,
-            },
-          },
-        },
+        tabs: { [mainTabName]: { active: true, values } },
       }
 
       const res = await api.createObject('user', body)
       const newDn = res.dn
 
       // Add to selected groups
+      const failedGroups: string[] = []
       if (selectedGroups.length > 0) {
         for (const gDn of selectedGroups) {
           try {
@@ -211,17 +211,21 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                 },
               },
             })
-          } catch (e) {
-            console.error(`Failed to assign user to group ${gDn}`, e)
+          } catch {
+            failedGroups.push(gDn)
           }
         }
       }
+      if (failedGroups.length > 0)
+        toast.warning(t('peopleUI.wizard.step4.groupsFailed', { count: failedGroups.length }))
 
       showTriggerOutput(res)
       toast.success(t('peopleUI.wizard.step4.success', { name: fullName }))
       void navigate({ to: '/types/$type/$dn', params: { type: 'user', dn: newDn } })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'User creation failed')
+      const fields = isApiError(err) ? Object.values(err.fields ?? {}) : []
+      const message = err instanceof Error ? err.message : t('peopleUI.wizard.step4.failed')
+      setCreateError([message, ...fields].join(' — '))
     } finally {
       setSubmitting(false)
     }
@@ -387,9 +391,8 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                   value={mail}
                   onChange={(e) => {
                     setMail(e.target.value)
-                    setMailTouched(true)
                   }}
-                  placeholder="e.g. amartin@example.com"
+                  
                 />
               </div>
             </div>
@@ -404,9 +407,9 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="employee">Employee</SelectItem>
-                    <SelectItem value="contractor">Contractor</SelectItem>
-                    <SelectItem value="intern">Intern</SelectItem>
+                    <SelectItem value="employee">{t('peopleUI.text.employee')}</SelectItem>
+                    <SelectItem value="contractor">{t('peopleUI.text.contractor')}</SelectItem>
+                    <SelectItem value="intern">{t('peopleUI.text.intern')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -443,7 +446,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
               </Label>
               <Select value={effectiveDept} onValueChange={setDepartment}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose department…" />
+                  <SelectValue placeholder={t('peopleUI.text.chooseDepartment')} />
                 </SelectTrigger>
                 <SelectContent>
                   {deptList.map((d) => (
@@ -488,18 +491,18 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                     const desc = g.values.description ? String(g.values.description) : null
                     const isChecked = selectedGroups.includes(g.dn)
                     return (
-                      <div
+                      <label
                         key={g.dn}
                         className={cn(
                           'flex items-center justify-between rounded-md p-2 hover:bg-muted/40 cursor-pointer transition-colors',
                           isChecked && 'bg-primary-soft/40',
                         )}
-                        onClick={() => handleToggleGroup(g.dn)}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <Checkbox
                             checked={isChecked}
                             onCheckedChange={() => handleToggleGroup(g.dn)}
+                            aria-label={name}
                           />
                           <div className="min-w-0">
                             <span className="font-medium text-small text-foreground">{name}</span>
@@ -510,8 +513,8 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                             )}
                           </div>
                         </div>
-                        <Users className="size-4 text-muted-foreground/60 shrink-0" />
-                      </div>
+                        <Users className="size-4 text-muted-foreground/60 shrink-0" aria-hidden />
+                      </label>
                     )
                   })}
                 </div>
@@ -548,7 +551,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter or generate initial password"
+                  placeholder={t('peopleUI.text.passwordPlaceholder')}
                   className="font-mono pr-20 text-small"
                   autoComplete="new-password"
                 />
@@ -597,13 +600,14 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                     ))}
                   </div>
                   <span>
-                    {pwStrength <= 2 ? 'Moderate' : 'Strong'}
+                    {pwStrength <= 2 ? t('peopleUI.wizard.step4.strengthModerate') : t('peopleUI.wizard.step4.strengthStrong')}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Force change checkbox */}
+            {/* Force change checkbox (only when the user type supports it) */}
+            {supportsForceChange && (
             <div className="flex items-start gap-2.5 rounded-lg border bg-card p-3">
               <Checkbox
                 id="wiz-force-change"
@@ -616,12 +620,14 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                   {t('peopleUI.wizard.step3.requireChange')}
                 </Label>
                 <p className="text-caption text-muted-foreground">
-                  Forces the user to choose their own personal password upon their first login.
+                  {t('peopleUI.wizard.step3.requireChangeHelp')}
                 </p>
               </div>
             </div>
+            )}
 
-            {/* Optional expiry */}
+            {/* Optional expiry (only when the user type supports it) */}
+            {supportsExpiry && (
             <div className="space-y-1.5">
               <Label htmlFor="wiz-expiry" className="text-small font-medium text-muted-foreground">
                 {t('peopleUI.wizard.step3.passwordExpiry')}
@@ -634,6 +640,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                 className="w-48 text-small"
               />
             </div>
+            )}
           </div>
         </SectionCard>
       )}
@@ -645,39 +652,34 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
             <FactList
               columns={2}
               items={[
-                { label: 'Full name', value: `${givenName} ${sn}` },
-                { label: 'Login (UID)', value: <span className="font-mono font-medium">{uid}</span> },
-                { label: 'Email', value: mail || '—' },
-                { label: 'Employee type', value: <span className="capitalize">{employeeType}</span> },
-                { label: 'Language', value: language.toUpperCase() },
-                { label: 'Department', value: selectedDeptLabel },
+                { label: t('peopleUI.text.fullName'), value: `${givenName} ${sn}` },
+                { label: t('peopleUI.text.login'), value: <span className="font-mono font-medium">{uid}</span> },
+                { label: t('peopleUI.text.email'), value: mail || null },
+                { label: t('peopleUI.text.employeeType'), value: t(`peopleUI.text.${employeeType}`) },
+                { label: t('peopleUI.text.language'), value: language.toUpperCase() },
+                { label: t('peopleUI.text.department'), value: selectedDeptLabel },
                 {
-                  label: 'Assigned groups',
-                  value:
-                    selectedGroups.length > 0 ? (
-                      <span>
-                        {selectedGroups.length} groups selected
-                      </span>
-                    ) : (
-                      'None'
-                    ),
+                  label: t('peopleUI.text.assignedGroups'),
+                  value: selectedGroups.length > 0 ? t('peopleUI.text.groupsSelected', { count: selectedGroups.length }) : null,
                 },
                 {
-                  label: 'Password security',
-                  value: password ? (
-                    requirePasswordChange ? (
-                      'Set (requires change at next sign-in)'
-                    ) : (
-                      'Set (no immediate change required)'
-                    )
-                  ) : (
-                    'Not set (login without password disabled)'
-                  ),
+                  label: t('peopleUI.text.passwordSecurity'),
+                  value: password
+                    ? supportsForceChange && requirePasswordChange
+                      ? t('peopleUI.text.passwordSetMustChange')
+                      : t('peopleUI.text.passwordSet')
+                    : t('peopleUI.text.passwordNotSet'),
                 },
               ]}
             />
           </div>
         </SectionCard>
+      )}
+
+      {createError && step === 4 && (
+        <p role="alert" className="rounded-md border border-destructive/30 bg-destructive-soft p-3 text-small text-destructive">
+          {createError}
+        </p>
       )}
 
       {/* Navigation Buttons */}

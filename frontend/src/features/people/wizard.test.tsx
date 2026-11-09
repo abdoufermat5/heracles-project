@@ -23,9 +23,10 @@ describe('Create user wizard', () => {
     await userEvent.type(firstName, 'Claire')
     await userEvent.type(lastName, 'Danvers')
 
-    // Suggestions should be populated
+    // the login is suggested from the name; the email is never guessed (no known domain)
     expect(login).toHaveValue('cdanvers')
-    expect(email).toHaveValue('cdanvers@example.com')
+    expect(email).toHaveValue('')
+    await userEvent.type(email, 'claire.danvers@example.org')
 
     // Next step
     const nextBtn = screen.getByRole('button', { name: 'Next step' })
@@ -40,7 +41,7 @@ describe('Create user wizard', () => {
     const genBtn = screen.getByRole('button', { name: 'Generate strong password' })
     await userEvent.click(genBtn)
 
-    const pwInput = screen.getByPlaceholderText('Enter or generate initial password')
+    const pwInput = screen.getByPlaceholderText('Enter or generate an initial password')
     expect(pwInput).not.toHaveValue('')
 
     await userEvent.click(screen.getByRole('button', { name: 'Next step' }))
