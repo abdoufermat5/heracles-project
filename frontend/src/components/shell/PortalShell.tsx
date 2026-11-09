@@ -7,8 +7,11 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useTheme } from '@/lib/theme'
 import { UserMenu } from './AppShell'
 
-/** Pages of the self-service portal; anything else leads back to its home. */
-const PORTAL_PATHS = ['/me']
+/**
+ * Console pages lead back to the portal home. Only those: while signing out the
+ * shell is still mounted on its way to /login, which must not be redirected.
+ */
+const CONSOLE_PATH = /^\/($|types(\/|$)|admin(\/|$)|io$|styleguide$)/
 
 /**
  * Shell of the self-service portal: a calm single column for employees who
@@ -20,7 +23,7 @@ export function PortalShell() {
   const { resolved, toggle } = useTheme()
   const path = useRouterState({ select: (s) => s.location.pathname })
 
-  if (!PORTAL_PATHS.includes(path)) return <Navigate to="/me" replace />
+  if (CONSOLE_PATH.test(path)) return <Navigate to="/me" replace />
 
   return (
     <TooltipProvider delayDuration={200}>
