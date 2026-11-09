@@ -15,7 +15,7 @@ CONFIG ?= $(HERACLES_CONFIG)
 .PHONY: help install install-backend install-frontend \
         dev dev-demo dev-down dev-mock backend frontend demo build serve \
         test test-backend test-frontend lint lint-backend lint-frontend \
-        format typecheck check ldap-up ldap-down ldap-logs test-integration e2e e2e-down compat-schema clean
+        format typecheck check ldap-up ldap-down ldap-logs test-integration e2e e2e-ui e2e-down compat-schema clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "; printf "\nUsage: make \033[36m<target>\033[0m\n\n"} \
@@ -126,6 +126,10 @@ e2e: ## Build and start OpenLDAP + Heracles containers, run the end-to-end tests
 	$(COMPOSE) --profile e2e up -d --build --wait heracles
 	cd $(BACKEND) && HERACLES_E2E_URL=http://localhost:8420 uv run pytest -q -m e2e tests/e2e
 	$(COMPOSE) --profile e2e run --rm integration
+	cd $(FRONTEND) && HERACLES_E2E_URL=http://localhost:8420 pnpm exec playwright test
+
+e2e-ui: ## Browser end-to-end tests only, against the running stack (make dev or make e2e)
+	cd $(FRONTEND) && HERACLES_E2E_URL=http://localhost:$(PORT) pnpm exec playwright test
 
 e2e-down: ## Stop the end-to-end stack and drop its LDAP data
 	$(COMPOSE) --profile e2e down -v
