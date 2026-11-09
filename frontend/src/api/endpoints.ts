@@ -27,6 +27,7 @@ import type {
   WebAuthnCredentialInfo,
   WebAuthnOptionsResponse,
   WebAuthnRegisterRequest,
+  MyGroup,
 } from './types'
 import type { CreationOptionsJson, RequestOptionsJson } from '@/lib/webauthn'
 
@@ -109,6 +110,8 @@ export const api = {
     }),
   deleteObject: (type: string, dn: string) =>
     request<undefined>(`/objects/${encodeURIComponent(type)}/${dnPath(dn)}`, { method: 'DELETE' }),
+  /** Groups the signed-in person belongs to (self-service; no rights on the groups needed). */
+  myGroups: () => request<MyGroup[]>('/auth/me/groups'),
   references: (type: string, dn: string) =>
     request<ObjectReference[]>(`/objects/${encodeURIComponent(type)}/${dnPath(dn)}/references`),
   moveObject: (type: string, dn: string, base: string) =>

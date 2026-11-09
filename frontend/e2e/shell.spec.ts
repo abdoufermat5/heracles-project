@@ -23,5 +23,9 @@ test('people who only manage themselves get the portal with real data only', asy
   await expect(page).toHaveURL(/\/me$/)
   // nothing invented: the seed account's address is on heracles.test
   await expect(page.getByText(/@example\.com/)).toHaveCount(0)
+  // his own groups show even without read rights on the group entries
+  const groups = page.locator('#portal-groups')
+  await expect(groups.getByText('staff')).toBeVisible()
+  await expect(groups.getByText('Something went wrong')).toHaveCount(0)
   await signOut(page)
 })

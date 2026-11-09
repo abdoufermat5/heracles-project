@@ -1,16 +1,20 @@
 import { Shield, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useObjectReferences } from '@/api/hooks'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/api/endpoints'
 import { SectionCard } from '@/components/patterns/SectionCard'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 
-export function GroupsSection({ userDn }: { userDn: string }) {
+export function GroupsSection() {
   const { t } = useTranslation()
-  const { data: references, isPending, isError } = useObjectReferences('user', userDn)
-
-  const groupRefs = (references ?? []).filter((r) => r.type === 'group')
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['me', 'groups'],
+    queryFn: api.myGroups,
+    staleTime: 60_000,
+  })
+  const groupRefs = data ?? []
 
   return (
     <SectionCard
@@ -31,7 +35,7 @@ export function GroupsSection({ userDn }: { userDn: string }) {
           <Skeleton className="h-12 w-full" />
         </div>
       ) : isError ? (
-        <p className="text-small text-destructive">{t('common.error')}</p>
+        <p className="text-small text-muted-foreground">{t('settingsUI.portal.groupsUnavailable')}</p>
       ) : groupRefs.length === 0 ? (
         <EmptyState
           icon={<Users className="size-6 text-muted-foreground" aria-hidden />}
@@ -50,7 +54,7 @@ export function GroupsSection({ userDn }: { userDn: string }) {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-body font-medium text-foreground">
-                    {group.label}
+                    {group.name}
                   </p>
                   <p className="text-micro text-muted-foreground uppercase tracking-wide">
                     {t('settingsUI.portal.groupMember')}

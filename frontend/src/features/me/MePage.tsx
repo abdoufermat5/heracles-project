@@ -95,7 +95,7 @@ export function MePage() {
       <SecuritySection />
 
       {/* My Groups (Read-only list) */}
-      <GroupsSection userDn={me.dn} />
+      <GroupsSection />
 
       {/* Technical details (Visible for console administrators when technical preference is enabled) */}
       {isConsoleUser && technical && (

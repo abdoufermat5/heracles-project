@@ -344,3 +344,10 @@ export interface Dashboard {
   expiring_passwords: number
   tasks: { pending: number; failed: number }
 }
+
+/** A group the signed-in person belongs to (GET /auth/me/groups). */
+export interface MyGroup {
+  dn: string
+  name: string
+  description: string
+}

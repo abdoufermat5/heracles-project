@@ -31,7 +31,8 @@ from heracles.auth.recovery import RecoveryError
 from heracles.auth.second_factor import WebAuthnCredential
 from heracles.auth.sessions import Session
 from heracles.auth.webauthn import ASSERTION_KEY, REGISTRATION_KEY, WebAuthnError
-from heracles.ldap.client import DirectoryClient, DirectoryError
+from heracles.ldap.client import DirectoryClient, DirectoryError, Scope
+from heracles.ldap.filter import escape_filter_value
 
 log = structlog.get_logger(__name__)
 
@@ -523,6 +524,37 @@ def logout(request: Request, response: Response, state: StateDep) -> None:
             except Exception:
                 log.exception("logout_hook_failed")
     response.delete_cookie(state.settings.session.cookie_name, path="/")
+
+
+class MyGroup(BaseModel):
+    dn: str
+    name: str
+    description: str
+
+
+@router.get("/me/groups")
+def my_groups(user: CurrentUserDep) -> list[MyGroup]:
+    """Groups the signed-in person belongs to (self-service portal).
+
+    A person may always see their own memberships, even without read rights on
+    the group entries; only the name and description are returned.
+    """
+    member = escape_filter_value(user.dn)
+    found = user.directory.search(
+        user.directory.base_dn,
+        f"(&(objectClass=groupOfNames)(member={member}))",
+        Scope.SUBTREE,
+        ["cn", "description"],
+    )
+    groups = [
+        MyGroup(
+            dn=g.dn,
+            name=g.text("cn") or g.dn,
+            description=g.text("description") or "",
+        )
+        for g in found
+    ]
+    return sorted(groups, key=lambda g: g.name.lower())
 
 
 @router.get("/me")

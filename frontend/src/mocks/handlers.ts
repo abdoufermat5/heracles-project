@@ -275,6 +275,24 @@ export const handlers: HttpHandler[] = [
     return new HttpResponse(null, { status: 204 })
   }),
 
+  http.get(`${B}/auth/me/groups`, () => {
+    const me = db.me()
+    if (!me) return err(401, 'unauthenticated', 'Not signed in')
+    const mine = [...db.records.values()]
+      .filter((r) => r.type === 'group')
+      .filter((r) => {
+        const members = r.tabs.main?.values.member
+        const list = Array.isArray(members) ? members : members ? [members] : []
+        return list.some((m) => String(m).toLowerCase() === me.dn.toLowerCase())
+      })
+      .map((r) => ({
+        dn: r.dn,
+        name: String(r.tabs.main?.values.cn ?? r.dn),
+        description: String(r.tabs.main?.values.description ?? ''),
+      }))
+    return HttpResponse.json(mine)
+  }),
+
   http.get(`${B}/auth/me`, () => {
     const me = db.me()
     return me ? HttpResponse.json(me) : unauth()
