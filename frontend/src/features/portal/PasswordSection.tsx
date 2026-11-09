@@ -20,7 +20,7 @@ const STRENGTH_KEYS = [
   'settingsUI.portal.strengthStrong',
 ] as const
 
-export function PasswordSection({ userDn }: { userDn: string }) {
+export function PasswordSection({ userDn, allowed = true }: { userDn: string; allowed?: boolean }) {
   const { t } = useTranslation()
   const patch = usePatchObject('user', userDn)
   const [newPassword, setNewPassword] = useState('')
@@ -80,6 +80,9 @@ export function PasswordSection({ userDn }: { userDn: string }) {
       title={t('settingsUI.portal.passwordTitle')}
       description={t('settingsUI.portal.passwordSubtitle')}
     >
+      {!allowed ? (
+        <p className="text-small text-muted-foreground">{t('settingsUI.portal.passwordNotAllowed')}</p>
+      ) : (
       <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
         {/* New password input */}
         <div className="space-y-1.5">
@@ -186,6 +189,7 @@ export function PasswordSection({ userDn }: { userDn: string }) {
           {t('settingsUI.portal.changePassword')}
         </Button>
       </form>
+      )}
     </SectionCard>
   )
 }

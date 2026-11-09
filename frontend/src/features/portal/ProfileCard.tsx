@@ -63,10 +63,12 @@ export function ProfileCard({
 
         {/* Contact info badges */}
         <div className="flex flex-col gap-1.5 text-caption text-muted-foreground sm:text-right">
-          <div className="inline-flex items-center gap-1.5 sm:justify-end">
-            <Mail className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="font-medium text-foreground">{mail || `${me.uid}@example.com`}</span>
-          </div>
+          {mail && (
+            <div className="inline-flex items-center gap-1.5 sm:justify-end">
+              <Mail className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="font-medium text-foreground">{mail}</span>
+            </div>
+          )}
           {phone && (
             <div className="inline-flex items-center gap-1.5 sm:justify-end">
               <Phone className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />

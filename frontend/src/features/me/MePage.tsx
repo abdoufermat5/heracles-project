@@ -86,7 +86,10 @@ export function MePage() {
       />
 
       {/* Password Change Flow */}
-      <PasswordSection userDn={me.dn} />
+      <PasswordSection
+        userDn={me.dn}
+        allowed={(userObject?.acl?.[userDescriptor?.tabs[0]?.name ?? 'main']?.attributes.userPassword ?? '').includes('w')}
+      />
 
       {/* Guided 2FA and Security Keys Setup */}
       <SecuritySection />

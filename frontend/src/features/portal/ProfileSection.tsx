@@ -1,24 +1,39 @@
+import { Info } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
 import { usePatchObject } from '@/api/hooks'
-import type { Me, ObjectDetail, TypeDescriptor } from '@/api/types'
+import type { AttributeDescriptor, Me, ObjectDetail, TypeDescriptor } from '@/api/types'
 import { FactList, SectionCard } from '@/components/patterns/SectionCard'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
+/**
+ * Personal details an employee looks at or keeps up to date, in this order. Only
+ * the ones the user type actually has are shown; labels come from the server.
+ */
+const PERSONAL_ATTRIBUTES = [
+  'mail',
+  'telephoneNumber',
+  'mobile',
+  'description',
+  'roomNumber',
+  'l',
+  'preferredLanguage',
+  'employeeNumber',
+] as const
+
+function firstText(value: unknown): string {
+  if (Array.isArray(value)) return typeof value[0] === 'string' ? value[0] : ''
+  return typeof value === 'string' ? value : ''
+}
+
+/** The employee's own details, editable where the directory's rights allow it. */
 export function ProfileSection({
   me,
   detail,
-  descriptor: _descriptor,
+  descriptor,
 }: {
   me: Me
   detail?: ObjectDetail
@@ -27,67 +42,40 @@ export function ProfileSection({
   const { t } = useTranslation()
   const patch = usePatchObject('user', me.dn)
   const [editing, setEditing] = useState(false)
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
 
-  const mainValues = detail?.tabs.main?.values ?? {}
-  const mainAcl = detail?.acl?.main?.attributes ?? {}
+  const mainTab = descriptor?.tabs[0]
+  const tabName = mainTab?.name ?? 'main'
+  const values = detail?.tabs[tabName]?.values ?? {}
+  const rights = detail?.acl?.[tabName]?.attributes ?? {}
 
-  // Current values
-  const currentPhone = Array.isArray(mainValues.telephoneNumber)
-    ? (mainValues.telephoneNumber[0] as string | undefined) ?? ''
-    : typeof mainValues.telephoneNumber === 'string'
-      ? mainValues.telephoneNumber
-      : ''
-  const currentTitle = typeof mainValues.description === 'string' ? mainValues.description : ''
-  const currentLang = typeof mainValues.preferredLanguage === 'string' ? mainValues.preferredLanguage : 'en'
+  const byName = new Map<string, AttributeDescriptor>()
+  for (const section of mainTab?.sections ?? [])
+    for (const attr of section.attributes) byName.set(attr.name, attr)
 
-  // Form draft state
-  const [phoneDraft, setPhoneDraft] = useState(currentPhone)
-  const [titleDraft, setTitleDraft] = useState(currentTitle)
-  const [langDraft, setLangDraft] = useState(currentLang)
-
-  const canEditPhone = mainAcl.telephoneNumber === 'rw'
-  const canEditTitle = mainAcl.description === 'rw'
-  const canEditLang = mainAcl.preferredLanguage === 'rw'
-
-  const hasEditable = canEditPhone || canEditTitle || canEditLang
+  const fields = PERSONAL_ATTRIBUTES.map((name) => byName.get(name)).filter(
+    (a): a is AttributeDescriptor => a !== undefined,
+  )
+  const editable = fields.filter((a) => (rights[a.name] ?? '').includes('w'))
 
   const startEdit = () => {
-    setPhoneDraft(currentPhone)
-    setTitleDraft(currentTitle)
-    setLangDraft(currentLang)
+    setDrafts(Object.fromEntries(editable.map((a) => [a.name, firstText(values[a.name])])))
     setEditing(true)
   }
 
-  const cancelEdit = () => {
-    setEditing(false)
-  }
-
-  const saveEdit = async () => {
-    const updatedValues: Record<string, unknown> = {}
-    if (canEditPhone && phoneDraft !== currentPhone) {
-      updatedValues.telephoneNumber = phoneDraft.trim() ? [phoneDraft.trim()] : []
+  const save = async () => {
+    const changed: Record<string, unknown> = {}
+    for (const attr of editable) {
+      const next = (drafts[attr.name] ?? '').trim()
+      if (next === firstText(values[attr.name])) continue
+      changed[attr.name] = attr.multivalued ? (next ? [next] : []) : next
     }
-    if (canEditTitle && titleDraft !== currentTitle) {
-      updatedValues.description = titleDraft.trim()
-    }
-    if (canEditLang && langDraft !== currentLang) {
-      updatedValues.preferredLanguage = langDraft
-    }
-
-    if (Object.keys(updatedValues).length === 0) {
+    if (Object.keys(changed).length === 0) {
       setEditing(false)
       return
     }
-
     try {
-      await patch.mutateAsync({
-        tabs: {
-          main: {
-            active: true,
-            values: updatedValues,
-          },
-        },
-      })
+      await patch.mutateAsync({ tabs: { [tabName]: { active: true, values: changed } } })
       toast.success(t('settingsUI.portal.saveSuccess'))
       setEditing(false)
     } catch (e) {
@@ -100,92 +88,46 @@ export function ProfileSection({
       id="portal-profile"
       title={t('settingsUI.portal.profileTitle')}
       description={t('settingsUI.portal.profileSubtitle')}
-      editable={hasEditable}
+      editable={editable.length > 0}
       editing={editing}
       saving={patch.isPending}
       onEdit={startEdit}
-      onSave={() => void saveEdit()}
-      onCancel={cancelEdit}
+      onSave={() => void save()}
+      onCancel={() => setEditing(false)}
     >
-      {editing ? (
+      {!detail ? (
+        <div className="space-y-4">
+          <FactList items={[{ label: t('settingsUI.portal.login'), value: me.uid }]} />
+          <p className="flex items-start gap-2 rounded-md bg-muted/60 p-3 text-small text-muted-foreground">
+            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+            {t('settingsUI.portal.profileUnavailable')}
+          </p>
+        </div>
+      ) : editing ? (
         <form
           className="grid gap-4 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault()
-            void saveEdit()
+            void save()
           }}
         >
-          {canEditTitle && (
-            <div className="space-y-1.5">
-              <Label htmlFor="profile-title">{t('settingsUI.portal.title')}</Label>
+          {editable.map((attr) => (
+            <div key={attr.name} className="space-y-1.5">
+              <Label htmlFor={`profile-${attr.name}`}>{attr.label}</Label>
               <Input
-                id="profile-title"
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                placeholder={t('settingsUI.portal.titlePlaceholder')}
+                id={`profile-${attr.name}`}
+                type={attr.name === 'mail' ? 'email' : attr.name.toLowerCase().includes('phone') || attr.name === 'mobile' ? 'tel' : 'text'}
+                value={drafts[attr.name] ?? ''}
+                onChange={(e) => setDrafts((d) => ({ ...d, [attr.name]: e.target.value }))}
               />
             </div>
-          )}
-
-          {canEditPhone && (
-            <div className="space-y-1.5">
-              <Label htmlFor="profile-phone">{t('settingsUI.portal.phone')}</Label>
-              <Input
-                id="profile-phone"
-                type="tel"
-                value={phoneDraft}
-                onChange={(e) => setPhoneDraft(e.target.value)}
-                placeholder="+33 1 23 45 67 89"
-              />
-            </div>
-          )}
-
-          {canEditLang && (
-            <div className="space-y-1.5">
-              <Label htmlFor="profile-lang">{t('user.language')}</Label>
-              <Select value={langDraft} onValueChange={setLangDraft}>
-                <SelectTrigger id="profile-lang" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="fr">Français</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          ))}
         </form>
       ) : (
         <FactList
           items={[
-            {
-              label: t('settingsUI.portal.login'),
-              value: <span className="font-mono text-xs">{me.uid}</span>,
-            },
-            {
-              label: t('settingsUI.portal.email'),
-              value: `${me.uid}@example.com`,
-            },
-            {
-              label: t('settingsUI.portal.title'),
-              value: currentTitle || <span className="text-muted-foreground">—</span>,
-            },
-            {
-              label: t('settingsUI.portal.phone'),
-              value: currentPhone || <span className="text-muted-foreground">—</span>,
-            },
-            {
-              label: t('user.language'),
-              value: currentLang === 'fr' ? 'Français' : 'English',
-            },
-            {
-              label: t('settingsUI.portal.employeeId'),
-              value: (
-                <span className="font-mono text-xs text-muted-foreground">
-                  {(mainValues.internalId as string | undefined) ?? 'EMP-0042'}
-                </span>
-              ),
-            },
+            { label: t('settingsUI.portal.login'), value: <span className="font-mono">{me.uid}</span> },
+            ...fields.map((attr) => ({ label: attr.label, value: firstText(values[attr.name]) || null })),
           ]}
         />
       )}

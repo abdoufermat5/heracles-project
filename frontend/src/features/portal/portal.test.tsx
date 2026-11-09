@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { act } from 'react'
 import { describe, expect, it } from 'vitest'
 import { setTechnicalDetails } from '@/lib/preferences'
+import { http, HttpResponse } from 'msw'
+import { server } from '@/mocks/server'
 import { renderApp, signIn } from '@/test/utils'
 
 describe('employee self-service portal', () => {
@@ -16,7 +18,7 @@ describe('employee self-service portal', () => {
     expect(screen.getByText('Manage your profile, password, and account security.')).toBeInTheDocument()
 
     // Profile card displays details and readable department path
-    expect(screen.getByText('emma.employee@example.com')).toBeInTheDocument()
+    expect(screen.getAllByText('emma.employee@example.com').length).toBeGreaterThan(0)
     expect(screen.getByText('Paris › Engineering')).toBeInTheDocument()
 
     // My Groups displays the groups the employee belongs to
@@ -42,7 +44,7 @@ describe('employee self-service portal', () => {
     await user.click(editBtn)
 
     // Form inputs appear for editable fields
-    const phoneInput = within(profileSection).getByLabelText('Phone')
+    const phoneInput = within(profileSection).getByLabelText('Phone numbers')
     await user.clear(phoneInput)
     await user.type(phoneInput, '+33 1 99 88 77 66')
 
@@ -52,7 +54,7 @@ describe('employee self-service portal', () => {
 
     // Should return to view mode with updated value
     await waitFor(() => {
-      expect(within(profileSection).queryByRole('textbox', { name: 'Phone' })).not.toBeInTheDocument()
+      expect(within(profileSection).queryByRole('textbox', { name: 'Phone numbers' })).not.toBeInTheDocument()
     })
     expect(within(profileSection).getByText('+33 1 99 88 77 66')).toBeInTheDocument()
   })
@@ -109,5 +111,15 @@ describe('employee self-service portal', () => {
     renderApp('/me')
     expect(await screen.findByRole('heading', { name: 'My profile' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Technical details' })).not.toBeInTheDocument()
+  })
+})
+
+describe('portal without access to the own entry', () => {
+  it('shows only real data and explains what is missing', async () => {
+    signIn('employee')
+    server.use(http.get('/api/v2/objects/user/:dn', () => HttpResponse.json({ error: { code: 'forbidden', message: 'Forbidden' } }, { status: 403 })))
+    renderApp('/me')
+    expect(await screen.findByText(/has not given you access to your full profile/)).toBeInTheDocument()
+    expect(screen.queryByText(/@example\.com/)).not.toBeInTheDocument()
   })
 })
