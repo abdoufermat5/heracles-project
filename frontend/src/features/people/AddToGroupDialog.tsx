@@ -107,7 +107,7 @@ export function AddToGroupDialog({
       onOpenChange(false)
       setSelectedGroupDn('')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add to group')
+      toast.error(err instanceof Error ? err.message : t('peopleUI.errors.addToGroup'))
     } finally {
       setSubmitting(false)
     }

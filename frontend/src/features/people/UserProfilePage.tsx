@@ -45,6 +45,7 @@ import {
   SectionCard,
   StatusBadge,
 } from '@/components/patterns'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -213,7 +214,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
       )
       void obj.refetch()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Lock toggle failed')
+      toast.error(err instanceof Error ? err.message : t('peopleUI.errors.lockToggle'))
     }
   }
 
@@ -224,7 +225,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
       toast.success(t('listing.deleted', { count: 1 }))
       void navigate({ to: '/types/$type', params: { type: 'user' } })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Deletion failed')
+      toast.error(err instanceof Error ? err.message : t('peopleUI.errors.delete'))
     }
   }
 
@@ -292,7 +293,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
       if (isApiError(err) && err.code === 'locked' && err.lock) {
         setLockInfo(err.lock as LockInfo)
       } else {
-        toast.error(err instanceof Error ? err.message : 'Save failed')
+        toast.error(err instanceof Error ? err.message : t('peopleUI.errors.save'))
       }
     } finally {
       setSavingSection(null)
@@ -322,7 +323,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
       toast.success(`Removed from ${groupName}`)
       void referencesQuery.refetch()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to remove from group')
+      toast.error(err instanceof Error ? err.message : t('peopleUI.errors.removeFromGroup'))
     }
   }
 
@@ -770,36 +771,33 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
         {/* Tab 3: Access */}
         <TabsContent value="access" className="space-y-6">
           <SectionCard
-            title="Effective Access & Permissions"
-            description="Access controls and roles governing what this user can view and change."
+            title={t('peopleUI.userProfile.access.title')}
+            description={t('peopleUI.userProfile.access.description')}
             actions={
               <Button asChild variant="outline" size="sm">
                 <Link to="/admin/access">
-                  <ExternalLink className="size-3.5 mr-1" />
-                  Check rights in directory
+                  <ExternalLink className="size-3.5" aria-hidden />
+                  {t('peopleUI.userProfile.access.checkRights')}
                 </Link>
               </Button>
             }
           >
-            <div className="space-y-4">
-              <FactList
-                columns={2}
-                items={[
-                  {
-                    label: 'Organizational roles',
-                    value: userRoles.length > 0 ? userRoles.map((r) => r.name).join(', ') : 'None',
-                  },
-                  {
-                    label: 'Direct memberships',
-                    value: userGroups.length > 0 ? `${userGroups.length} groups` : 'None',
-                  },
-                  {
-                    label: 'Account privilege',
-                    value: mainValues.uid === 'admin' ? 'Super Administrator' : 'Standard User',
-                  },
-                ]}
-              />
-            </div>
+            <FactList
+              columns={2}
+              items={[
+                {
+                  label: t('peopleUI.userProfile.access.roles'),
+                  value: userRoles.length > 0 ? userRoles.map((r) => r.name).join(', ') : null,
+                },
+                {
+                  label: t('peopleUI.userProfile.access.groups'),
+                  value:
+                    userGroups.length > 0
+                      ? t('peopleUI.userProfile.access.groupCount', { count: userGroups.length })
+                      : null,
+                },
+              ]}
+            />
           </SectionCard>
         </TabsContent>
 
@@ -810,48 +808,58 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
 
         {/* Tab 5: Advanced */}
         <TabsContent value="advanced" className="space-y-6">
-          {/* POSIX / Unix Account tab if declared in descriptor */}
-          {descriptor.tabs.find((t) => t.name === 'posix') && (
-            <SectionCard
-              title="Linux / Unix Access (POSIX)"
-              description="POSIX account attributes for shell access and file permissions."
-            >
-              {detail.tabs.posix?.active ? (
-                <FactList
-                  columns={2}
-                  items={[
-                    { label: 'User ID (UID)', value: String(detail.tabs.posix.values.uidNumber ?? '—') },
-                    { label: 'Group ID (GID)', value: String(detail.tabs.posix.values.gidNumber ?? '—') },
-                    { label: 'Home directory', value: String(detail.tabs.posix.values.homeDirectory ?? '—') },
-                    { label: 'Login shell', value: String(detail.tabs.posix.values.loginShell ?? '—') },
-                    { label: 'Disk quota', value: detail.tabs.posix.values.diskQuotaGb ? `${detail.tabs.posix.values.diskQuotaGb} GB` : '—' },
-                  ]}
-                />
-              ) : (
-                <p className="text-small text-muted-foreground italic">
-                  POSIX account is not activated for this user.
-                </p>
-              )}
-            </SectionCard>
-          )}
+          {/* Every other tab of the type (plugins: Unix, mail, SSH keys...) opens in the full editor */}
+          <SectionCard
+            title={t('peopleUI.userProfile.advanced.tabsTitle')}
+            description={t('peopleUI.userProfile.advanced.tabsDescription')}
+            bodyClassName="p-0"
+          >
+            <ul className="divide-y">
+              {descriptor.tabs.slice(1).map((tab) => {
+                const active = detail.tabs[tab.name]?.active ?? false
+                return (
+                  <li key={tab.name} className="flex items-center gap-3 px-5 py-3">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-body font-medium text-foreground">{tab.label}</span>
+                      {technical && (
+                        <span className="block font-mono text-caption text-muted-foreground">{tab.name}</span>
+                      )}
+                    </span>
+                    <Badge variant={active ? 'success' : 'neutral'}>
+                      {active ? t('peopleUI.userProfile.advanced.active') : t('peopleUI.userProfile.advanced.inactive')}
+                    </Badge>
+                    <Button asChild variant="outline" size="sm">
+                      <Link
+                        to="/types/$type/$dn"
+                        params={{ type: 'user', dn }}
+                        search={{ view: 'generic', tab: tab.name }}
+                      >
+                        {active ? t('peopleUI.userProfile.advanced.open') : t('peopleUI.userProfile.advanced.enable')}
+                      </Link>
+                    </Button>
+                  </li>
+                )
+              })}
+            </ul>
+          </SectionCard>
 
           {/* Directory References */}
-          <SectionCard title="Inbound References">
+          <SectionCard title={t('peopleUI.userProfile.advanced.references')}>
             <ReferencesPanel type="user" dn={dn} />
           </SectionCard>
 
           {/* Snapshots / Version History */}
-          <SectionCard title="History & Saved Versions">
+          <SectionCard title={t('peopleUI.userProfile.advanced.history')}>
             <SnapshotsPanel type="user" dn={dn} onRestored={() => void obj.refetch()} />
           </SectionCard>
 
           {/* Raw LDIF */}
           <SectionCard
-            title="Raw LDIF"
-            description="View or export the raw directory entry representation."
+            title={t('peopleUI.userProfile.advanced.ldif')}
+            description={t('peopleUI.userProfile.advanced.ldifDescription')}
             actions={
               <Button variant="outline" size="sm" onClick={() => setLdifOpen(true)}>
-                View LDIF
+                {t('peopleUI.userProfile.advanced.viewLdif')}
               </Button>
             }
           >

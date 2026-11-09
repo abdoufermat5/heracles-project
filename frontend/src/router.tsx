@@ -205,19 +205,20 @@ const templateEditRoute = createRoute({
 const editRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/types/$type/$dn',
-  validateSearch: (s: Record<string, unknown>): { view?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { view?: string; tab?: string } => ({
     view: typeof s.view === 'string' ? s.view : undefined,
+    tab: typeof s.tab === 'string' ? s.tab : undefined,
   }),
   component: function EditRoute() {
     const { type, dn } = editRoute.useParams()
-    const { view } = editRoute.useSearch()
+    const { view, tab } = editRoute.useSearch()
     if (type === 'user' && view !== 'generic') {
       return <UserProfilePage key={`user:${dn}`} dn={dn} />
     }
     if (type === 'group' && view !== 'generic') {
       return <GroupProfilePage key={`group:${dn}`} dn={dn} />
     }
-    return <ObjectEditor key={`${type}:${dn}`} type={type} dn={dn} />
+    return <ObjectEditor key={`${type}:${dn}:${tab ?? ''}`} type={type} dn={dn} initialTab={tab} />
   },
 })
 

@@ -189,7 +189,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
       setMemberToRemove(null)
       void obj.refetch()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to remove member')
+      toast.error(err instanceof Error ? err.message : t('peopleUI.errors.removeMember'))
     }
   }
 
@@ -217,7 +217,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
       setSearchUserQuery('')
       void obj.refetch()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add members')
+      toast.error(err instanceof Error ? err.message : t('peopleUI.errors.addMembers'))
     } finally {
       setSubmittingAdd(false)
     }
@@ -248,7 +248,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
       setEditingProps(false)
       void obj.refetch()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Save failed')
+      toast.error(err instanceof Error ? err.message : t('peopleUI.errors.save'))
     } finally {
       setSavingProps(false)
     }
@@ -261,7 +261,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
       toast.success(t('listing.deleted', { count: 1 }))
       void navigate({ to: '/types/$type', params: { type: 'group' } })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Group deletion failed')
+      toast.error(err instanceof Error ? err.message : t('peopleUI.errors.delete'))
     }
   }
 
@@ -422,10 +422,10 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
               <table className="w-full text-body">
                 <thead className="border-b bg-muted/40 text-left text-small text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-2.5 font-medium">Person</th>
-                    <th className="hidden px-4 py-2.5 font-medium sm:table-cell">Login</th>
-                    <th className="hidden px-4 py-2.5 font-medium md:table-cell">Department</th>
-                    <th className="w-16 px-4 py-2.5 text-right font-medium">Actions</th>
+                    <th className="px-4 py-2.5 font-medium">{t('peopleUI.text.person')}</th>
+                    <th className="hidden px-4 py-2.5 font-medium sm:table-cell">{t('peopleUI.text.login')}</th>
+                    <th className="hidden px-4 py-2.5 font-medium md:table-cell">{t('peopleUI.text.department')}</th>
+                    <th className="w-16 px-4 py-2.5 text-right font-medium"><span className="sr-only">{t('peopleUI.text.actions')}</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -515,10 +515,10 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
               <FactList
                 columns={2}
                 items={[
-                  { label: 'Name', value: groupName },
-                  { label: 'Description', value: groupDesc ?? '—' },
-                  { label: 'Department', value: <OrgPath dn={detail.dn} /> },
-                  { label: 'Member count', value: `${memberDns.length} members` },
+                  { label: t('peopleUI.text.name'), value: groupName },
+                  { label: t('peopleUI.text.description'), value: groupDesc ?? null },
+                  { label: t('peopleUI.text.department'), value: <OrgPath dn={detail.dn} /> },
+                  { label: t('peopleUI.text.memberCount'), value: t('peopleUI.text.members', { count: memberDns.length }) },
                 ]}
               />
             )}
@@ -527,13 +527,13 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
 
         {/* Tab 3: Advanced */}
         <TabsContent value="advanced" className="space-y-6">
-          <SectionCard title="History & Saved Versions">
+          <SectionCard title={t('peopleUI.userProfile.advanced.history')}>
             <SnapshotsPanel type="group" dn={dn} onRestored={() => void obj.refetch()} />
           </SectionCard>
 
           <SectionCard
-            title="Raw LDIF"
-            description="View or export the raw directory entry representation."
+            title={t('peopleUI.userProfile.advanced.ldif')}
+            description={t('peopleUI.userProfile.advanced.ldifDescription')}
             actions={
               <Button variant="outline" size="sm" onClick={() => setLdifOpen(true)}>
                 View LDIF

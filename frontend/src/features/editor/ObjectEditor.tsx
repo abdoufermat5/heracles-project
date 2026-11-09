@@ -74,9 +74,10 @@ interface Props {
   dn: string | null
   /** Create mode only: DN of an object of the same type to prefill the form from. */
   copyFrom?: string | null
+  initialTab?: string
 }
 
-export function ObjectEditor({ type, dn, copyFrom = null }: Props) {
+export function ObjectEditor({ type, dn, copyFrom = null, initialTab }: Props) {
   const desc = useTypeDescriptor(type)
   const obj = useObject(type, dn)
   const source = useObject(type, dn === null ? copyFrom : null)
@@ -107,6 +108,7 @@ export function ObjectEditor({ type, dn, copyFrom = null }: Props) {
       desc={desc.data}
       detail={obj.data ?? null}
       source={dn === null ? (source.data ?? null) : null}
+      initialTab={initialTab}
     />
   )
 }
@@ -116,9 +118,11 @@ interface InnerProps {
   detail: ObjectDetail | null
   /** Create mode: the object this one is copied from. */
   source: ObjectDetail | null
+  /** Tab to open first (deep links from the profile pages). */
+  initialTab?: string
 }
 
-function EditorInner({ desc, detail, source }: InnerProps) {
+function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const scope = useScope()
@@ -151,7 +155,9 @@ function EditorInner({ desc, detail, source }: InnerProps) {
   activeRef.current = active
 
   const [editing, setEditing] = useState(isCreate)
-  const [tab, setTab] = useState(desc.tabs[0]?.name ?? 'main')
+  const [tab, setTab] = useState(
+    initialTab && desc.tabs.some((x) => x.name === initialTab) ? initialTab : (desc.tabs[0]?.name ?? 'main'),
+  )
   const [lockInfo, setLockInfo] = useState<LockInfo | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [ldifOpen, setLdifOpen] = useState(false)

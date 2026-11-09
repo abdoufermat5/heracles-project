@@ -186,7 +186,7 @@ export function OffboardingDialog({
       setCompleted(true)
       onSuccess?.()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error executing offboarding')
+      toast.error(err instanceof Error ? err.message : t('peopleUI.errors.offboarding'))
     } finally {
       setSubmitting(false)
     }
@@ -290,7 +290,7 @@ export function OffboardingDialog({
                     value={snapshotDesc}
                     onChange={(e) => setSnapshotDesc(e.target.value)}
                     className="h-8 text-small ml-6 w-[calc(100%-1.5rem)]"
-                    placeholder="Snapshot description"
+                    placeholder={t('peopleUI.text.snapshotDescription')}
                   />
                 )}
               </div>
@@ -337,7 +337,7 @@ export function OffboardingDialog({
                         )
                       }
                     >
-                      {selectedGroups.length === groups.length ? 'Deselect all' : 'Select all'}
+                      {selectedGroups.length === groups.length ? t('peopleUI.text.deselectAll') : t('peopleUI.text.selectAll')}
                     </Button>
                   )}
                 </div>

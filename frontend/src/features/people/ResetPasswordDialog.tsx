@@ -78,7 +78,7 @@ export function ResetPasswordDialog({
       onOpenChange(false)
       setPassword('')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to reset password')
+      toast.error(err instanceof Error ? err.message : t('peopleUI.errors.resetPassword'))
     } finally {
       setSubmitting(false)
     }
