@@ -185,7 +185,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
           },
         },
       })
-      toast.success(t('peopleUI.groupProfile.members.memberRemoved', { defaultValue: 'Member removed' }))
+      toast.success(t('peopleUI.groupProfile.members.memberRemoved'))
       setMemberToRemove(null)
       void obj.refetch()
     } catch (err) {
@@ -244,7 +244,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
       }
 
       await patch.mutateAsync({ tabs: changes })
-      toast.success(t('common.saved', { defaultValue: 'Properties saved' }))
+      toast.success(t('common.saved'))
       setEditingProps(false)
       void obj.refetch()
     } catch (err) {
@@ -648,7 +648,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
       <ConfirmDialog
         open={Boolean(memberToRemove)}
         onOpenChange={(o) => (!o ? setMemberToRemove(null) : undefined)}
-        title={t('peopleUI.groupProfile.members.removeMemberTitle', { defaultValue: 'Remove group member?' })}
+        title={t('peopleUI.groupProfile.members.removeMemberTitle')}
         description={
           memberToRemove
             ? t('peopleUI.groupProfile.members.removeConfirm', {

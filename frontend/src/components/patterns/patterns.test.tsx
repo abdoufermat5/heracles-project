@@ -14,7 +14,7 @@ describe('patterns', () => {
     expect(screen.getByText('Password expired')).toBeInTheDocument()
   })
 
-  it('shows a readable location, and the DN only with technical details', () => {
+  it('always shows a readable location; the DN stays one hover away', () => {
     act(() => setTechnicalDetails(false))
     const { rerender } = render(
       <TooltipProvider>
@@ -30,7 +30,8 @@ describe('patterns', () => {
         <OrgPath dn={DN} baseDn="dc=example,dc=com" />
       </TooltipProvider>,
     )
-    expect(screen.getByText(DN)).toBeInTheDocument()
+    // still the readable path: a column of full DNs is unreadable
+    expect(screen.getByText('Paris › Sales')).toBeInTheDocument()
     act(() => setTechnicalDetails(false))
   })
 

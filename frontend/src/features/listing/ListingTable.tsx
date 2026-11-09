@@ -203,7 +203,11 @@ export function ListingTable({
         id: 'department',
         header: t('peopleUI.columns.department'),
         cell: ({ row }) => (
-          <OrgPath dn={typeof row.original.values.base === 'string' ? row.original.values.base : row.original.dn} />
+          typeof row.original.values.base === 'string' ? (
+            <OrgPath dn={row.original.values.base} includeSelf />
+          ) : (
+            <OrgPath dn={row.original.dn} />
+          )
         ),
       })
 
@@ -367,7 +371,7 @@ export function ListingTable({
                   variant="ghost"
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
-                  aria-label={t('copyMove.rowMenu', { defaultValue: 'Copy or move' })}
+                  aria-label={t('copy.rowMenu')}
                 >
                   <MoreHorizontal aria-hidden />
                 </Button>
@@ -581,7 +585,11 @@ export function ListingTable({
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-caption text-muted-foreground">
-                <OrgPath dn={typeof item.values.base === 'string' ? item.values.base : item.dn} />
+                {typeof item.values.base === 'string' ? (
+                  <OrgPath dn={item.values.base} includeSelf className="min-w-0" />
+                ) : (
+                  <OrgPath dn={item.dn} className="min-w-0" />
+                )}
                 {isUser && (
                   <span className="tabular-nums">
                     {t('peopleUI.mobile.groupsCount', {
@@ -613,7 +621,7 @@ export function ListingTable({
                     <th
                       key={header.id}
                       className={cn(
-                        'h-9 px-3 text-left text-caption font-semibold tracking-[0.06em] uppercase text-muted-foreground select-none',
+                        'h-10 px-3 text-left text-small font-medium text-muted-foreground select-none',
                         header.id === 'select' && 'w-10 px-0 text-center',
                         header.id === 'actions' && 'w-24 text-right',
                         header.id === 'status' && 'w-32',

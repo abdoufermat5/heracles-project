@@ -6,7 +6,6 @@ import { isApiError } from '@/api/client'
 import { useMe, useTree } from '@/api/hooks'
 import { DepartmentPicker, ObjectRefPicker } from '@/components/fields/RefFields'
 import { OrgPath } from '@/components/patterns'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -200,9 +199,6 @@ export function CheckRightsPanel() {
                 >
                   {allowed ? t('accessUI.check.yesTitle') : t('accessUI.check.noTitle')}
                 </h3>
-                <Badge variant="outline">
-                  {allowed ? t('accessUI.check.yes') : t('accessUI.check.no')}
-                </Badge>
               </div>
               <p className="text-body text-foreground">
                 {allowed

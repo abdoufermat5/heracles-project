@@ -67,6 +67,7 @@ import { CopyMoveDialog } from '@/features/listing/CopyMoveDialog'
 import {
   computeChanges,
   objectToLdif,
+  rdnValue,
   valuesFromDetail,
   type FormValues,
 } from '@/lib/objects'
@@ -95,6 +96,15 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   const isLockedQuery = useObjectAccountLocked('user', dn)
   const referencesQuery = useReferences('user', dn)
   const secondFactorsQuery = useSecondFactors(dn)
+  const secondFactorMethods: string[] = []
+  if (secondFactorsQuery.data?.totp)
+    secondFactorMethods.push(t('peopleUI.userProfile.securitySummary.authenticatorApp'))
+  if (secondFactorsQuery.data && secondFactorsQuery.data.security_keys.length > 0)
+    secondFactorMethods.push(
+      t('peopleUI.userProfile.securitySummary.securityKeys', {
+        count: secondFactorsQuery.data.security_keys.length,
+      }),
+    )
   const snapshotsQuery = useSnapshots('user', dn)
   const canCopy = types.data?.find((x) => x.name === 'user')?.can_create ?? false
   // Modals state
@@ -271,7 +281,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
 
       const res = await patch.mutateAsync({ tabs: changes })
       showTriggerOutput(res)
-      toast.success(t('common.saved', { defaultValue: 'Changes saved' }))
+      toast.success(t('common.saved'))
       if (isAcquiredLock.current) {
         void api.unlockObject('user', detail.dn).catch(() => undefined)
         isAcquiredLock.current = false
@@ -319,7 +329,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   // Helper for rendering fact values
   const renderFactValue = (attr: AttributeDescriptor, val: unknown) => {
     if (val === null || val === undefined || val === '') return '—'
-    if (attr.kind === 'department') return <OrgPath dn={String(val)} />
+    if (attr.kind === 'department') return <OrgPath dn={String(val)} includeSelf />
     if (attr.kind === 'image') return typeof val === 'string' ? <img src={val} alt="" className="size-10 rounded-md object-cover" /> : '—'
     if (typeof val === 'boolean') return val ? t('common.yes') : t('common.no')
     if (Array.isArray(val)) return val.join(', ')
@@ -352,11 +362,11 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   const overviewFacts = [
     { label: t('peopleUI.userProfile.facts.login'), value: <span className="font-mono">{uidVal}</span> },
     { label: t('peopleUI.userProfile.facts.email'), value: mailVal ?? '—' },
-    { label: t('peopleUI.userProfile.facts.department'), value: <OrgPath dn={typeof mainValues.base === 'string' ? mainValues.base : detail.dn} /> },
+    { label: t('peopleUI.userProfile.facts.department'), value: typeof mainValues.base === 'string' ? <OrgPath dn={mainValues.base} includeSelf /> : <OrgPath dn={detail.dn} /> },
     { label: t('peopleUI.userProfile.facts.employeeType'), value: employeeTypeVal ?? '—' },
     { label: t('peopleUI.userProfile.facts.language'), value: mainValues.preferredLanguage ? String(mainValues.preferredLanguage).toUpperCase() : '—' },
     { label: t('peopleUI.userProfile.facts.phone'), value: phoneVal ?? '—' },
-    { label: t('peopleUI.userProfile.facts.manager'), value: mainValues.manager ? <OrgPath dn={String(mainValues.manager)} /> : '—' },
+    { label: t('peopleUI.userProfile.facts.manager'), value: mainValues.manager ? rdnValue(String(mainValues.manager)) : null },
     { label: t('peopleUI.userProfile.facts.internalId'), value: mainValues.internalId ? String(mainValues.internalId) : '—' },
   ]
 
@@ -364,7 +374,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   const headerMeta = [
     {
       icon: <Building2 />,
-      content: <OrgPath dn={typeof mainValues.base === 'string' ? mainValues.base : detail.dn} />,
+      content: typeof mainValues.base === 'string' ? <OrgPath dn={mainValues.base} includeSelf showIcon={false} /> : <OrgPath dn={detail.dn} showIcon={false} />,
     },
     ...(mailVal ? [{ icon: <Mail />, content: mailVal }] : []),
     ...(phoneVal ? [{ icon: <Phone />, content: phoneVal }] : []),
@@ -556,15 +566,10 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
                 items={[
                   {
                     label: t('peopleUI.userProfile.securitySummary.twoFactor'),
-                    value: secondFactorsQuery.data ? (
+                    value: secondFactorMethods.length > 0 ? (
                       <span className="flex items-center gap-1.5 text-foreground">
                         <Shield className="size-4 text-success" />
-                        {t('peopleUI.userProfile.securitySummary.twoFactorActive', {
-                          keys: secondFactorsQuery.data.security_keys.length,
-                          totp: secondFactorsQuery.data.totp
-                            ? t('peopleUI.userProfile.securitySummary.totpEnabled')
-                            : t('peopleUI.userProfile.securitySummary.totpDisabled'),
-                        })}
+                        {secondFactorMethods.join(' · ')}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">

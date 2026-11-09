@@ -76,12 +76,23 @@ function findDepartmentLabel(nodes: TreeNode[] | undefined, dn: string | null): 
 
 const VIEW_STORAGE_PREFIX = 'heracles.listing.view.'
 
+/** Status filter behind a saved view of the user list. */
+function statusForView(v: string): StatusFilter {
+  if (v === 'active') return 'active'
+  if (v === 'locked') return 'locked'
+  if (v === 'expiring') return 'expired'
+  return 'all'
+}
+
 export function ObjectListPage({
   type,
   view = 'objects',
+  initialView,
 }: {
   type: string
   view?: 'objects' | 'templates'
+  /** Saved view to open with (dashboard links: "locked", "expiring"). */
+  initialView?: string
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -94,6 +105,7 @@ export function ObjectListPage({
 
   // Saved view (for user list)
   const [savedView, setSavedView] = useState<string>(() => {
+    if (initialView) return initialView
     try {
       return localStorage.getItem(`${VIEW_STORAGE_PREFIX}${type}`) || 'all'
     } catch {
@@ -104,7 +116,7 @@ export function ObjectListPage({
   // State
   const [searchQuery, setSearchQuery] = useState('')
   const debouncedQuery = useDebounced(searchQuery)
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => statusForView(savedView))
   const [employeeTypes, setEmployeeTypes] = useState<string[]>([])
   const [filterBase, setFilterBase] = useState<string | null>(null)
   const [filterScope, setFilterScope] = useState<Scope>(globalScope)
@@ -137,10 +149,7 @@ export function ObjectListPage({
       /* ignore */
     }
     setPage(1)
-    if (v === 'active') setStatusFilter('active')
-    else if (v === 'locked') setStatusFilter('locked')
-    else if (v === 'expiring') setStatusFilter('expired')
-    else setStatusFilter('all')
+    setStatusFilter(statusForView(v))
   }
 
   // Handlers for persistence

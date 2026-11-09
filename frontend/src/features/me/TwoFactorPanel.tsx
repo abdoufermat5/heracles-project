@@ -120,7 +120,7 @@ export function TwoFactorPanel() {
         <CardTitle className="text-body font-semibold">{t('twofactor.title')}</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <p className="px-4 pt-3 text-xs text-muted-foreground">{t('twofactor.help')}</p>
+        <p className="px-4 pt-3 text-caption text-muted-foreground">{t('twofactor.help')}</p>
 
         {error && (
           <p role="alert" className="mx-4 mt-3 rounded-sm border border-destructive/30 bg-destructive-soft p-2.5 text-body text-destructive">
@@ -133,10 +133,10 @@ export function TwoFactorPanel() {
         ) : (
           <>
             <section aria-label={t('twofactor.appTitle')} className="mt-3 border-t p-4">
-              <div className="flex items-center gap-2 text-body">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-body">
                 <Smartphone className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="font-medium text-foreground">{t('twofactor.appTitle')}</span>
-                <span className="flex-1 text-muted-foreground">
+                <span className="min-w-32 flex-1 text-muted-foreground">
                   {enabled ? t('twofactor.appOn') : t('twofactor.appOff')}
                 </span>
                 {enabled && !setup && (
@@ -171,12 +171,12 @@ export function TwoFactorPanel() {
                   <p className="text-body text-muted-foreground">{t('twofactor.scan')}</p>
                   <QrImage value={setup.uri} alt={t('twofactor.qrAlt')} />
                   <div className="grid gap-1 text-body">
-                    <span className="text-xs text-muted-foreground">{t('twofactor.secret')}</span>
+                    <span className="text-caption text-muted-foreground">{t('twofactor.secret')}</span>
                     <code data-testid="totp-secret" className="w-fit select-all rounded-sm bg-muted px-2 py-1 font-mono text-xs tracking-wider">
                       {setup.secret}
                     </code>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Input
                       value={code}
                       onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -213,10 +213,10 @@ export function TwoFactorPanel() {
             </section>
 
             <section aria-label={t('twofactor.recoveryTitle')} className="border-t p-4">
-              <div className="flex items-center gap-2 text-body">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-body">
                 <ShieldCheck className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="font-medium text-foreground">{t('twofactor.recoveryTitle')}</span>
-                <span className="flex-1 text-muted-foreground">
+                <span className="min-w-32 flex-1 text-muted-foreground">
                   {remaining > 0 ? t('twofactor.recoveryRemaining', { count: remaining }) : t('twofactor.recoveryNone')}
                 </span>
                 <Button
@@ -230,7 +230,7 @@ export function TwoFactorPanel() {
                   {remaining > 0 || codes ? t('twofactor.regenerate') : t('twofactor.generate')}
                 </Button>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
+              <p className="mt-2 text-caption text-muted-foreground">
                 {hasFactor ? t('twofactor.recoveryHelp') : t('twofactor.needsFactor')}
               </p>
 
@@ -245,7 +245,7 @@ export function TwoFactorPanel() {
                       <li key={c}>{c}</li>
                     ))}
                   </ul>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button type="button" variant="outline" size="sm" onClick={() => void copyCodes()}>
                       {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
                       {copied ? t('twofactor.copied') : t('twofactor.copy')}

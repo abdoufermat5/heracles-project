@@ -7,6 +7,7 @@ import { adminFr } from '@/features/admin/locale-fr'
 
 const fr: Translation = {
   common: {
+    saved: 'Modifications enregistrées',
     loading: 'Chargement…',
     error: 'Une erreur est survenue.',
     errorTitle: 'Impossible de charger cette page',

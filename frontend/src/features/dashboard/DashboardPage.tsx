@@ -186,7 +186,7 @@ export function DashboardPage() {
                   description={t('dashboard.lockedHelp')}
                   action={
                     <Button asChild variant="outline" size="sm">
-                      <Link to="/types/$type" params={{ type: 'user' }}>
+                      <Link to="/types/$type" params={{ type: 'user' }} search={{ filter: 'locked' }}>
                         {t('dashboard.review')}
                         <ArrowRight />
                       </Link>
@@ -203,7 +203,7 @@ export function DashboardPage() {
                   description={t('dashboard.expiringHelp')}
                   action={
                     <Button asChild variant="outline" size="sm">
-                      <Link to="/types/$type" params={{ type: 'user' }}>
+                      <Link to="/types/$type" params={{ type: 'user' }} search={{ filter: 'expiring' }}>
                         {t('dashboard.review')}
                         <ArrowRight />
                       </Link>

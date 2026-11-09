@@ -83,7 +83,9 @@ export const peopleEn = {
       securitySummary: {
         title: 'Sign-in security',
         twoFactor: 'Two-factor authentication',
-        twoFactorActive: 'Configured ({{keys}} keys, TOTP {{totp}})',
+        authenticatorApp: 'Authenticator app',
+        securityKeys_one: '{{count}} security key',
+        securityKeys_other: '{{count}} security keys',
         twoFactorNone: 'Not configured',
         totpEnabled: 'active',
         totpDisabled: 'inactive',
@@ -216,6 +218,8 @@ export const peopleEn = {
         advanced: 'Advanced',
       },
       members: {
+        memberRemoved: 'Member removed',
+        removeMemberTitle: 'Remove group member?',
         title: 'Group members',
         description: 'Users who belong to this group.',
         searchPlaceholder: 'Search members…',
@@ -338,7 +342,9 @@ export const peopleFr: typeof peopleEn = {
       securitySummary: {
         title: 'Sécurité de connexion',
         twoFactor: 'Authentification à deux facteurs',
-        twoFactorActive: 'Configurée ({{keys}} clés, TOTP {{totp}})',
+        authenticatorApp: 'Application d’authentification',
+        securityKeys_one: '{{count}} clé de sécurité',
+        securityKeys_other: '{{count}} clés de sécurité',
         twoFactorNone: 'Non configurée',
         totpEnabled: 'actif',
         totpDisabled: 'inactif',
@@ -471,6 +477,8 @@ export const peopleFr: typeof peopleEn = {
         advanced: 'Avancé',
       },
       members: {
+        memberRemoved: 'Membre retiré',
+        removeMemberTitle: 'Retirer ce membre du groupe ?',
         title: 'Membres du groupe',
         description: 'Personnes appartenant à ce groupe.',
         searchPlaceholder: 'Rechercher un membre…',

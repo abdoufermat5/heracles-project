@@ -6,6 +6,7 @@ import { adminEn } from '@/features/admin/locale-en'
 
 const en = {
   common: {
+    saved: 'Changes saved',
     loading: 'Loading…',
     error: 'Something went wrong.',
     errorTitle: 'Unable to load this page',

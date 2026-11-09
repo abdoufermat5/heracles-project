@@ -145,13 +145,24 @@ const styleguideRoute = createRoute({
 const listRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/types/$type',
-  validateSearch: (s: Record<string, unknown>): { view?: 'templates' } => ({
+  validateSearch: (
+    s: Record<string, unknown>,
+  ): { view?: 'templates'; filter?: 'active' | 'locked' | 'expiring' } => ({
     view: s.view === 'templates' ? 'templates' : undefined,
+    filter:
+      s.filter === 'active' || s.filter === 'locked' || s.filter === 'expiring' ? s.filter : undefined,
   }),
   component: function ListRoute() {
     const { type } = listRoute.useParams()
-    const { view } = listRoute.useSearch()
-    return <ObjectListPage key={type} type={type} view={view === 'templates' ? 'templates' : 'objects'} />
+    const { view, filter } = listRoute.useSearch()
+    return (
+      <ObjectListPage
+        key={`${type}:${filter ?? ''}`}
+        type={type}
+        view={view === 'templates' ? 'templates' : 'objects'}
+        initialView={filter}
+      />
+    )
   },
 })
 

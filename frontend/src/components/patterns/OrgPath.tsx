@@ -9,8 +9,8 @@ import { cn } from '@/lib/utils'
 /**
  * Where an entry lives, as people say it: "Paris › Sales".
  *
- * The distinguished name stays one hover (and one click to copy) away, and is
- * shown in full when the viewer turned "technical details" on.
+ * The distinguished name stays one hover (and one click to copy) away; with
+ * "technical details" on, a copy icon makes that visible at a glance.
  */
 export function OrgPath({
   dn,
@@ -37,22 +37,6 @@ export function OrgPath({
     })
   }
 
-  if (technical) {
-    return (
-      <span className={cn('inline-flex min-w-0 items-center gap-1.5', className)}>
-        <span className="truncate font-dn text-muted-foreground">{dn}</span>
-        <button
-          type="button"
-          onClick={copy}
-          className="shrink-0 text-muted-foreground hover:text-foreground"
-          aria-label={t('patterns.copyDn')}
-        >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-        </button>
-      </span>
-    )
-  }
-
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -69,6 +53,12 @@ export function OrgPath({
           <span className="truncate">
             {path.length > 0 ? path.join(' › ') : t('patterns.topLevel')}
           </span>
+          {technical &&
+            (copied ? (
+              <Check className="size-3.5 shrink-0" aria-hidden />
+            ) : (
+              <Copy className="size-3.5 shrink-0 opacity-60" aria-hidden />
+            ))}
         </button>
       </TooltipTrigger>
       <TooltipContent className="max-w-md">
