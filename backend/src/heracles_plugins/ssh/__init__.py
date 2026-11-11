@@ -162,6 +162,7 @@ class SshTab(Tab):
     name = "ssh"
     acl_key = "sshAccount"
     label = _("SSH keys")
+    description = _("Public keys for SSH login")
     optional = True
     object_classes = ("ldapPublicKey",)
     requires = ("posix",)

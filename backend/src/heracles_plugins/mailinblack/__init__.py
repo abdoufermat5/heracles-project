@@ -15,6 +15,7 @@ class MailInBlackUserTab(Tab):
     name = "mailinblack"
     acl_key = "mailInBlackUser"
     label = _("Mailinblack")
+    description = _("Anti-spam quarantine service account")
     description = _("Mailinblack email protection")
     optional = True
     object_classes = ("hrcMailInBlackUser",)

@@ -174,6 +174,7 @@ class NetgroupUserTab(Tab):
     name = "netgroup"
     acl_key = "netgroupMembership"
     label = _("Netgroups")
+    description = _("Network groups this account belongs to")
     object_classes = ()
     optional = False
 

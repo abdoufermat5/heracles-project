@@ -69,6 +69,7 @@ class MacroTab(Tab):
     name = "macro"
     acl_key = "Macro"
     label = _("Macro")
+    description = _("Telephony macro: quick-dial actions")
     object_classes = ("hrcPhoneMacroUser",)
     optional = True
 

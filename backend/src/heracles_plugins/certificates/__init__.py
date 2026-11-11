@@ -144,6 +144,7 @@ class UserCertificatesTab(Tab):
     name = "certificates"
     acl_key = "userCertificates"
     label = _("Certificates")
+    description = _("X.509 certificates attached to the account")
     optional = True
     object_classes = ("strongAuthenticationUser",)
 

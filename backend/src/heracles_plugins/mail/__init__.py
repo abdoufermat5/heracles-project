@@ -262,6 +262,7 @@ class UserMailTab(Tab):
     name = "mail"
     acl_key = "mailAccount"
     label = _("Mail")
+    description = _("Mailbox: addresses, aliases, quota and forwarding")
     optional = True
     object_classes = ("hrcMailAccount",)
 

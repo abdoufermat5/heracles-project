@@ -210,6 +210,7 @@ class UserRegistrationTab(Tab):
     name = "registration"
     acl_key = "userRegistration"
     label = _("Registration")
+    description = _("Self-registration status of this account")
     optional = True
     object_classes = ("hrcUserRegistration",)
 

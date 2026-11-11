@@ -20,6 +20,7 @@ class FreeradiusAccountTab(Tab):
     name = "freeradius"
     acl_key = "freeradiusAccount"
     label = _("RADIUS")
+    description = _("Network access (RADIUS) account settings")
     optional = True
     object_classes = ("radiusprofile",)
 

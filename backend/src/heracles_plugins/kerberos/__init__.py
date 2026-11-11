@@ -84,6 +84,7 @@ class KerberosAccountTab(Tab):
     name = "kerberos"
     acl_key = "kerberosAccount"
     label = _("Kerberos")
+    description = _("Single sign-on principal and ticket policy")
     optional = True
     object_classes = ("krbPrincipalAux", "krbTicketPolicyAux")
 
