@@ -1,8 +1,8 @@
-import { peopleFr } from './people'
-import { accessFr } from './access'
-import { settingsFr } from './settings'
+import { peopleFr } from './people.fr'
+import { accessFr } from './access.fr'
+import { settingsFr } from './settings.fr'
 import type { Translation } from './en'
-import { objectsFr } from './objects'
+import { objectsFr } from './objects.fr'
 import { adminFr } from '@/features/admin/locale-fr'
 
 const fr: Translation = {

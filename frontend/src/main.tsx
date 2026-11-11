@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
-import './i18n'
+import { i18nReady } from './i18n'
 import './index.css'
 
 async function bootstrap(): Promise<void> {
@@ -10,6 +10,8 @@ async function bootstrap(): Promise<void> {
     const { startMockWorker } = await import('./mocks/browser')
     await startMockWorker()
   }
+  // French users must not see an English flash: wait for the lazy French bundle.
+  await i18nReady
   const el = document.getElementById('root')
   if (!el) throw new Error('missing #root')
   createRoot(el).render(
