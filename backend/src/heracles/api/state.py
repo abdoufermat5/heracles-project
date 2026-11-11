@@ -15,6 +15,7 @@ from heracles.auth.recovery import RecoveryService
 from heracles.auth.second_factor import SecondFactorService
 from heracles.auth.sessions import Session, SessionStore
 from heracles.auth.webauthn import WebAuthnService
+from heracles.core.audit import AuditSink
 from heracles.ldap.client import DirectoryClient
 from heracles.storage import Database
 
@@ -41,3 +42,5 @@ class AppState:
     clock: Callable[[], float] = time.time
     #: The application database, when one is configured (``settings.database.path``).
     database: Database | None = None
+    #: Records audit events outside the object service (no-op without the audit plugin).
+    audit: AuditSink = field(default_factory=AuditSink)

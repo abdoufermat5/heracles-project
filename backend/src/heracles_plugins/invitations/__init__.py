@@ -158,6 +158,7 @@ class Registration(ObjectType):
     nav_group = "people"
     icon = "clipboard-list"
     category = "workflow"
+    creatable = False
     filter = f"(objectClass={REGISTRATION_CLASS})"
     main_attr = "hrcRegistrationEmailAddress"
     name_attr = "hrcRegistrationEmailAddress"

@@ -20,6 +20,7 @@ import { getRecentItems } from '@/components/shell/recent'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCapabilities } from '@/features/admin/hooks'
+import { RecentActivityCard } from '@/features/audit/RecentActivityCard'
 import { useIoAccess } from '@/features/io/hooks'
 import { TypeIcon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
@@ -269,6 +270,8 @@ export function DashboardPage() {
           )}
         </section>
       </div>
+
+      <RecentActivityCard />
 
       <section aria-labelledby="actions-title" className="space-y-3">
         <h2 id="actions-title" className="label-caps">

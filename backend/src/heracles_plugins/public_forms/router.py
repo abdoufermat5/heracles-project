@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from heracles.api.errors import error_body
 from heracles.auth.ratelimit import RateLimiter
+from heracles.core.audit import AuditSink
 from heracles.ldap.client import DirectoryClient, DirectoryError
 from heracles.objects import (
     ObjectConflictError,
@@ -289,9 +290,10 @@ def build_public_router(
                     "The terms must be accepted",
                     fields={"accept_terms": "You must accept the terms."},
                 )
-            submit_form(
+            created = submit_form(
                 directory, registry_of(request), form, body.values, context=context, now=now()
             )
+            _audit_submission(registry_of(request), directory, form, created, context, ip)
         except InvitationUsedError:
             guard.record_failure(key)
             return _error(404, "not_found", "Form not found")
@@ -313,6 +315,32 @@ def build_public_router(
         return JSONResponse({"status": "ok", "message": form.final_text}, status_code=201)
 
     return router
+
+
+def _audit_submission(
+    registry: Any, directory: DirectoryClient, form: Any, created: str, context: Any, ip: str
+) -> None:
+    """Record a public submission (anonymous: only the address is known)."""
+    sink = AuditSink(registry)
+    sink.record(
+        directory,
+        "create",
+        object_type=form.type_name,
+        object_dn=created,
+        author_ip=ip,
+        attributes=[f"form: {form.name}"],
+        source="public form",
+    )
+    if context is not None:
+        sink.record(
+            directory,
+            "modify",
+            object_type="registration",
+            object_dn=context.registration_dn,
+            author_ip=ip,
+            attributes=["invitation accepted", f"user: {created}"],
+            source="public form",
+        )
 
 
 def build_router(ctx: PluginRouterContext) -> APIRouter:

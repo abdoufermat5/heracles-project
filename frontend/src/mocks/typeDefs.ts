@@ -374,6 +374,38 @@ export const typeDescriptors: TypeDescriptor[] = [
       },
     ],
   },
+  {
+    name: 'audit_event',
+    label: 'Audit event',
+    icon: 'shield',
+    category: 'workflow',
+    main_attr: 'cn',
+    name_attr: 'cn',
+    creatable: false,
+    editable: false,
+    deletable: false,
+    columns: [
+      { key: 'hrcAuditDateTime', label: 'Date' },
+      { key: 'hrcAuditAction', label: 'Action' },
+    ],
+    tabs: [
+      {
+        name: 'main',
+        label: 'Audit event',
+        optional: false,
+        sections: [
+          {
+            name: 'event',
+            label: 'Event',
+            attributes: [
+              str('cn', 'Identifier', { readonly: true }),
+              str('hrcAuditAction', 'Action', { readonly: true }),
+            ],
+          },
+        ],
+      },
+    ],
+  },
 ]
 
 export const typeSummaries: TypeSummary[] = [
@@ -382,6 +414,20 @@ export const typeSummaries: TypeSummary[] = [
   { name: 'department', label: 'Department', label_plural: 'Departments', icon: 'building-2', category: 'directory', can_create: true, nav: 'primary', nav_group: 'organization', count_key: 'department' },
   { name: 'role', label: 'Role', label_plural: 'Roles', icon: 'shield', category: 'access', can_create: true, nav: 'primary', nav_group: 'people', count_key: 'role' },
   { name: 'dns_zone', label: 'DNS zone', label_plural: 'DNS zones', icon: 'globe', category: 'network', can_create: true, nav: 'primary', nav_group: 'infrastructure', count_key: null },
+  {
+    name: 'audit_event',
+    label: 'Audit event',
+    label_plural: 'Audit events',
+    icon: 'shield',
+    category: 'workflow',
+    can_create: false,
+    nav: 'hidden',
+    nav_group: 'activity',
+    count_key: null,
+    creatable: false,
+    editable: false,
+    deletable: false,
+  },
 ]
 
 /** RDN container (relative to a department) per type. */
@@ -391,4 +437,5 @@ export const typeRdn: Record<string, string> = {
   role: 'ou=roles',
   dns_zone: 'ou=dns',
   department: '',
+  audit_event: 'ou=audit',
 }

@@ -354,6 +354,8 @@ class ObjectService:
     def create(self, type_name: str, base: str, tabs_json: Mapping[str, Any]) -> str:
         """Create an object below department ``base``; returns its DN."""
         info = self.registry.get(type_name)
+        if not info.type.creatable:
+            raise PermissionDeniedError(f"{type_name} objects cannot be created")
         if not self.policy.can_create(type_name, base):
             raise PermissionDeniedError(f"cannot create {type_name} in {base}")
         initial: dict[str, TabState] = {}
@@ -488,6 +490,8 @@ class ObjectService:
     def update(self, type_name: str, dn: str, tabs_json: Mapping[str, Any]) -> ObjectState:
         """Apply a PATCH-like change; one ``modify`` plus an optional rename."""
         info = self.registry.get(type_name)
+        if not info.type.editable:
+            raise PermissionDeniedError(f"{type_name} objects cannot be modified")
         state = self.load(type_name, dn)
         errors: dict[str, str] = {}
         new, touched = self._apply(info, state.tabs, tabs_json, errors, creating=False)
@@ -558,6 +562,8 @@ class ObjectService:
     def delete(self, type_name: str, dn: str) -> None:
         """Delete an object."""
         info = self.registry.get(type_name)
+        if not info.type.deletable:
+            raise PermissionDeniedError(f"{type_name} objects cannot be deleted")
         state = self.load(type_name, dn)
         if not self.policy.can_delete(dn, type_name):
             raise PermissionDeniedError(f"cannot delete {dn}")

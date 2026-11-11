@@ -156,6 +156,10 @@ export interface TypeSummary {
   nav_group: NavGroup
   count_key: string | null
   // --- end navigation metadata ---
+  /** Type capability flags: false for types Heracles writes itself (absent = true). */
+  creatable?: boolean
+  editable?: boolean
+  deletable?: boolean
 }
 
 /** How a type appears in the sidebar: a link, under "More", or only in the palette. */
@@ -261,6 +265,9 @@ export interface TypeDescriptor {
   name_attr: string
   columns: ColumnDescriptor[]
   tabs: TabDescriptor[]
+  creatable?: boolean
+  editable?: boolean
+  deletable?: boolean
 }
 
 // ── Tree ──────────────────────────────────────────────────────────────────

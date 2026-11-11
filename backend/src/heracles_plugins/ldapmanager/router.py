@@ -157,6 +157,25 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             apply=not body.dry_run,
             protected=None if admin else importer.configuration_entry(user.directory),
         )
+        if not body.dry_run:
+            summary = importer.summarize(results)
+            domain.audit.record_by(
+                user,
+                "import",
+                object_type="ldif",
+                object_dn=user.directory.base_dn,
+                attributes=[f"{name}: {count}" for name, count in summary.items() if count],
+                result="failure" if summary["error"] else "success",
+            )
+            for r in results:
+                if r.action in ("add", "modify"):
+                    domain.audit.record_by(
+                        user,
+                        "import",
+                        object_type="ldif_entry",
+                        object_dn=r.dn,
+                        attributes=[r.action, *r.changes],
+                    )
         return {
             "dry_run": body.dry_run,
             "summary": cast("dict[str, JSON]", importer.summarize(results)),
@@ -315,6 +334,14 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             except DirectoryError as exc:
                 outcome["error"] = type(exc).__name__
             results.append(outcome)
+        domain.audit.record_by(
+            user,
+            "import",
+            object_type=info.name,
+            object_dn=default_base,
+            attributes=[f"csv lines: {len(results)}", f"created: {imported}"],
+            result="failure" if imported < len(results) else "success",
+        )
         return {"imported": imported, "failed": len(results) - imported, "results": results}
 
     return router

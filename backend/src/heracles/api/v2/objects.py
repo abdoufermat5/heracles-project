@@ -129,6 +129,15 @@ def _nav_fields(type_: type[ObjectType]) -> dict[str, JSON]:
     }
 
 
+def _capabilities(info: Any) -> dict[str, JSON]:
+    """Capability flags of a type (``creatable`` / ``editable`` / ``deletable``)."""
+    return {
+        "creatable": info.type.creatable,
+        "editable": info.type.editable,
+        "deletable": info.type.deletable,
+    }
+
+
 @router.get("/types")
 def list_types(user: CurrentUserDep, domain: DomainDep) -> list[JSON]:
     base = user.directory.base_dn
@@ -136,24 +145,30 @@ def list_types(user: CurrentUserDep, domain: DomainDep) -> list[JSON]:
 
     def can_create(name: str) -> bool:
         info = domain.registry.get(name)
+        if not info.type.creatable:
+            return False
         return evaluator.permissions(base, info.acl_object(info.main_tab)).create
 
-    summaries = domain.registry.summaries(can_create=can_create)
-    infos = domain.registry.list()
-    out: list[JSON] = []
-    for summary, info in zip(summaries, infos, strict=True):
-        out.append({**cast("dict[str, JSON]", summary), **_nav_fields(info.type)})
-    return out
+    return [
+        {
+            **cast("dict[str, JSON]", t.summary(can_create=can_create(t.name))),
+            **_nav_fields(t.type),
+            **_capabilities(t),
+        }
+        for t in domain.registry.list()
+    ]
 
 
 @router.get("/types/{type_name}")
 def describe_type(type_name: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
     del user
     with object_errors():
-        return {
-            **domain.registry.describe(type_name),
-            **_nav_fields(domain.registry.get(type_name).type),
-        }
+        body = domain.registry.describe(type_name)
+        info = domain.registry.get(type_name)
+    body.update(_nav_fields(info.type))
+    body.update(_capabilities(info))
+    body["supports_templates"] = bool(body["supports_templates"]) and info.type.creatable
+    return body
 
 
 # ---------------------------------------------------------------- templates

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-import secrets
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 
 import structlog
 
-from heracles.core.containers import ensure_container
-from heracles.core.generalized_time import format_generalized_time
+from heracles.core.audit import (
+    ACTIONS,
+    EVENT_CLASS,
+    audit_container,
+    write_event,
+)
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import (
     DirectoryClient,
@@ -25,13 +27,8 @@ from heracles.objects.policy import EventContext, NullEvents
 
 log = structlog.get_logger(__name__)
 
-EVENT_CLASS = "hrcAuditEvent"
-AUDIT_RDN = "ou=audit"
-ACTIONS = ("create", "modify", "delete")
 #: Attribute values longer than this are cut in the log.
 MAX_VALUE_LENGTH = 256
-#: Number of attributes recorded per event.
-MAX_ATTRIBUTES = 100
 
 
 @dataclass(slots=True)
@@ -46,10 +43,6 @@ class AuditSettings:
     hidden_attributes: tuple[str, ...] = ("userPassword",)
     #: Object types that are not audited (the log itself and its helpers).
     ignored_types: tuple[str, ...] = ("audit_event",)
-
-
-def audit_container(directory: DirectoryClient) -> str:
-    return dnlib.join(AUDIT_RDN, directory.base_dn)
 
 
 def _text(raw: bytes) -> str:
@@ -73,42 +66,6 @@ def describe_values(
     if not values:
         return f"{prefix}{name}: (removed)"
     return _cut(f"{prefix}{name}: " + ", ".join(_text(v) for v in values))
-
-
-def write_event(
-    directory: DirectoryClient,
-    *,
-    action: str,
-    object_type: str,
-    object_dn: str,
-    author_dn: str,
-    author_ip: str = "",
-    attributes: Sequence[str] = (),
-    result: str = "success",
-    now: datetime | None = None,
-) -> str:
-    """Create one event entry and return its DN."""
-    moment = (now or datetime.now(UTC)).astimezone(UTC)
-    container = audit_container(directory)
-    ensure_container(directory, container)
-    cn = f"{moment.strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
-    attrs: dict[str, list[bytes]] = {
-        "objectClass": [EVENT_CLASS.encode()],
-        "cn": [cn.encode()],
-        "hrcAuditDateTime": [format_generalized_time(moment).encode()],
-        "hrcAuditAction": [action.encode()],
-        "hrcAuditAuthorDN": [author_dn.encode()],
-        "hrcAuditObjectType": [object_type.encode()],
-        "hrcAuditObject": [object_dn.encode()],
-        "hrcAuditResult": [result.encode()],
-    }
-    if author_ip:
-        attrs["hrcAuditAuthorIP"] = [author_ip.encode()]
-    if attributes:
-        attrs["hrcAuditAttributes"] = [a.encode() for a in attributes[:MAX_ATTRIBUTES]]
-    dn = f"cn={cn},{container}"
-    directory.add(dn, attrs)
-    return dn
 
 
 def _created_attributes(ctx: EventContext, hidden: Sequence[str]) -> list[str]:
@@ -174,9 +131,17 @@ class AuditEvents(NullEvents):
     def post_delete(self, ctx: EventContext) -> None:
         self._record("delete", ctx, [])
 
-    def post_second_factor_reset(self, ctx: EventContext) -> None:
+    def post_lock(self, ctx: EventContext) -> None:
         self._record(
             "modify", ctx, _changed_attributes(ctx.changes, self.settings.hidden_attributes)
+        )
+
+    def post_unlock(self, ctx: EventContext) -> None:
+        self.post_lock(ctx)
+
+    def post_second_factor_reset(self, ctx: EventContext) -> None:
+        self._record(
+            "second_factor", ctx, _changed_attributes(ctx.changes, self.settings.hidden_attributes)
         )
 
 

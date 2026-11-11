@@ -72,6 +72,8 @@ class ArchivedObject(ObjectType):
     nav = "hidden"
     icon = "archive"
     category = "workflow"
+    creatable = False
+    editable = False
     filter = f"(objectClass={ARCHIVE_CLASS})"
     main_attr = "cn"
     name_attr = "cn"

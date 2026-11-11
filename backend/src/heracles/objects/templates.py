@@ -93,7 +93,7 @@ def container_rdn(info: TypeInfo) -> str:
 
 
 def supports_templates(info: TypeInfo) -> bool:
-    return bool(info.type.rdn)
+    return bool(info.type.rdn) and info.type.creatable
 
 
 def _split_field(raw: str) -> tuple[str, str] | None:

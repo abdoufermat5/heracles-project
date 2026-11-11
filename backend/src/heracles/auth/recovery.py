@@ -143,20 +143,23 @@ class RecoveryService:
         """(dn, login) of the single user owning ``email``, else ``None``."""
         return self._find_by_mail(directory, email.strip())
 
-    def request(self, directory: DirectoryClient, email: str) -> None:
-        """Create a token and mail the link. Never raises for unknown addresses."""
+    def request(self, directory: DirectoryClient, email: str) -> str | None:
+        """Create a token and mail the link. Never raises for unknown addresses.
+
+        Returns the DN of the account the link was sent for, ``None`` when nothing was sent.
+        """
         email = email.strip()
         if not email:
-            return
+            return None
         try:
             match = self._find_by_mail(directory, email)
             if match is None:
-                return
+                return None
             user_dn, login = match
             current = directory.get(user_dn, ["userPassword"])
             current_pw = current.text("userPassword") if current else None
             if current_pw and is_locked(current_pw):
-                return
+                return None
             token = secrets.token_urlsafe(32)
             self._store.put(
                 TokenRecord(user_dn, hash_token(token), self._clock(), TOKEN_TYPE_RECOVERY)
@@ -171,6 +174,8 @@ class RecoveryService:
             self._mailer.send(email, self._config.subject, body)
         except (DirectoryError, OSError) as exc:
             log.warning("recovery_request_failed", error=type(exc).__name__)
+            return None
+        return user_dn
 
     def issue(self, directory: DirectoryClient, email: str) -> tuple[str, str] | None:
         """Create a token for the user owning ``email`` and return ``(token, login)``.
@@ -190,8 +195,11 @@ class RecoveryService:
         self._store.put(TokenRecord(user_dn, hash_token(token), self._clock(), TOKEN_TYPE_RECOVERY))
         return token, login
 
-    def confirm(self, directory: DirectoryClient, login: str, token: str, password: str) -> None:
-        """Set a new password. Raises :class:`RecoveryError` / :class:`PasswordPolicyError`."""
+    def confirm(self, directory: DirectoryClient, login: str, token: str, password: str) -> str:
+        """Set a new password and return the account DN.
+
+        Raises :class:`RecoveryError` / :class:`PasswordPolicyError`.
+        """
         user_dn = find_user_dn(directory, self._login, login)
         if user_dn is None or not token:
             raise RecoveryError
@@ -212,3 +220,4 @@ class RecoveryService:
         directory.modify(
             user_dn, [Modification("replace", "userPassword", [new_value.encode("utf-8")])]
         )
+        return user_dn
