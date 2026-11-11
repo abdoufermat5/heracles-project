@@ -940,7 +940,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         if (entry.text(schema.TASKS_STATUS_ATTR) or "").lower() != "activated":
             mods.append(Modification("replace", schema.TASKS_STATUS_ATTR, [b"Activated"]))
         user.directory.modify(entry.dn, mods)
-        _audit(user, domain, "task", "task", entry.dn, "run requested")
+        _audit(user, domain, "task", kind, entry.dn, "run requested")
         scheduler = getattr(request.app.state, "scheduler", None)
         runs = (
             scheduler.run_pass([user.directory_id], kinds=[kind]) if scheduler is not None else None
@@ -952,7 +952,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
     @router.post("/tasks/{dn:path}/retry")
     def retry_task(dn: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, Any]:
         """Put the failed granular sub-tasks of a task back in the queue."""
-        entry, _key, _kind = _task_entry(user, domain, dn)
+        entry, _key, kind = _task_entry(user, domain, dn)
         now = format_generalized_time(datetime.now(UTC)).encode()
         retried: list[str] = []
         for sub in user.directory.search(
@@ -970,7 +970,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
                     ],
                 )
                 retried.append(sub.dn)
-        _audit(user, domain, "task", "task", entry.dn, f"retried sub-tasks: {len(retried)}")
+        _audit(user, domain, "task", kind, entry.dn, f"retried sub-tasks: {len(retried)}")
         return {"dn": entry.dn, "retried": retried}
 
     return router
