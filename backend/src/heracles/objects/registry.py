@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
 from typing import Any, Protocol, cast
@@ -159,8 +159,11 @@ class PluginStatus:
 
     name: str
     version: str
+    #: Registered: available in the schema *and* switched on by the operator.
     enabled: bool
     missing_object_classes: list[str] = field(default_factory=lambda: [])
+    #: Every required objectClass is defined by the directory schema.
+    available: bool = True
 
 
 class EntryPointLike(Protocol):
@@ -174,6 +177,18 @@ class EntryPointLike(Protocol):
 def _tab_available(tab: type[Tab], available_classes: set[str]) -> bool:
     """A mandatory tab is always kept; an optional one needs all its objectClasses."""
     return not tab.optional or all(c.lower() in available_classes for c in tab.object_classes)
+
+
+def discover_plugins(found: Iterable[EntryPointLike] | None = None) -> list[Plugin]:
+    """Load the plugin objects of the ``heracles.plugins`` entry points (or of ``found``)."""
+    points: Iterable[EntryPointLike] = (
+        found if found is not None else entry_points(group=PLUGIN_GROUP)
+    )
+    plugins: list[Plugin] = []
+    for point in points:
+        loaded = point.load()
+        plugins.append(cast("Plugin", loaded() if callable(loaded) else loaded))
+    return plugins
 
 
 class TypeRegistry:
@@ -244,9 +259,16 @@ class TypeRegistry:
         return self.register_plugins([plugin], available_classes)[0]
 
     def register_plugins(
-        self, plugins: Sequence[Plugin], available_classes: set[str]
+        self,
+        plugins: Sequence[Plugin],
+        available_classes: set[str],
+        enabled_names: Collection[str] | None = None,
     ) -> list[PluginStatus]:
         """Register several plugins in two passes, independently of their order.
+
+        A plugin is registered when its schema is available and, if ``enabled_names`` is
+        given, its name is listed there (``None``: every available plugin). A plugin that
+        is not registered contributes no type, tab, router, hook or setting.
 
         Pass 1 registers the types of every enabled plugin, pass 2 attaches tabs and
         collects hooks/routers/settings, so a plugin may extend a type provided by
@@ -256,10 +278,11 @@ class TypeRegistry:
         enabled: list[Plugin] = []
         for plugin in plugins:
             missing = plugin.missing_object_classes(available_classes)
-            status = PluginStatus(plugin.name, plugin.version, not missing, missing)
+            on = not missing and (enabled_names is None or plugin.name in enabled_names)
+            status = PluginStatus(plugin.name, plugin.version, on, missing, not missing)
             self.plugins.append(status)
             statuses.append(status)
-            if not missing:
+            if on:
                 enabled.append(plugin)
         for plugin in enabled:
             for type_cls in plugin.types:
@@ -285,14 +308,8 @@ class TypeRegistry:
         self,
         directory: DirectoryClient,
         found: Iterable[EntryPointLike] | None = None,
+        enabled_names: Collection[str] | None = None,
     ) -> Sequence[PluginStatus]:
-        """Load every ``heracles.plugins`` entry point against the directory schema."""
+        """Load the ``heracles.plugins`` entry points against the directory schema."""
         available = {c.lower() for c in directory.schema_object_classes()}
-        points: Iterable[EntryPointLike] = (
-            found if found is not None else entry_points(group=PLUGIN_GROUP)
-        )
-        plugins: list[Plugin] = []
-        for point in points:
-            loaded = point.load()
-            plugins.append(cast("Plugin", loaded() if callable(loaded) else loaded))
-        return self.register_plugins(plugins, available)
+        return self.register_plugins(discover_plugins(found), available, enabled_names)

@@ -89,6 +89,15 @@ class DatabaseSettings(BaseModel):
     path: Path | None = None
 
 
+class PluginsSettings(BaseModel):
+    """Which plugins are on (``plugins:`` in the configuration file)."""
+
+    #: Plugin names to enable (``"*"``: all). ``None`` (key absent): the core profile. A plugin is
+    #: only registered when the directory schema also defines its objectClasses. Changes
+    #: made from the console (stored in the application database) take precedence.
+    enabled: list[str] | None = None
+
+
 class ApiSettings(BaseModel):
     """Everything ``create_app`` needs besides the directories."""
 
@@ -103,6 +112,7 @@ class ApiSettings(BaseModel):
     oidc: OidcSettings = Field(default_factory=OidcSettings)
     webauthn: WebAuthnSettings = Field(default_factory=WebAuthnSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    plugins: PluginsSettings = Field(default_factory=PluginsSettings)
     branding: BrandingSettings = Field(default_factory=BrandingSettings)
     #: Host names the server may build links from when no public address is configured
     #: (``cas_service_name``, the invitations ``public_base_url``): the request ``Host``
