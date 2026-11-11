@@ -27,6 +27,8 @@ class PhoneMacro(ObjectType):
     acl_category = "phoneMacro"
     label = _("Phone macro")
     label_plural = _("Phone macros")
+    nav = "secondary"
+    nav_group = "settings"
     icon = "phone"
     category = "systems"
     rdn = "ou=macros,ou=asterisk,ou=configs,ou=systems"

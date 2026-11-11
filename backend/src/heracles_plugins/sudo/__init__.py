@@ -65,6 +65,8 @@ class SudoRole(ObjectType):
     acl_category = "sudo"
     label = _("Sudo role")
     label_plural = _("Sudo roles")
+    nav = "primary"
+    nav_group = "access"
     icon = "shield-check"
     category = "access"
     filter = "(objectClass=sudoRole)"

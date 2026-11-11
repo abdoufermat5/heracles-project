@@ -82,6 +82,21 @@ def test_types_and_descriptor(app_client: TestClient) -> None:
     assert a.get("/types/nope").status_code == 404
 
 
+def test_types_expose_navigation_metadata(app_client: TestClient) -> None:
+    a = api(app_client, "admin")
+    types = {t["name"]: t for t in a.get("/types").json()}
+    for t in types.values():
+        assert t["nav"] in {"primary", "secondary", "hidden"}
+        assert t["nav_group"]
+    assert types["user"]["nav"] == "primary"
+    assert types["user"]["nav_group"] == "people"
+    assert types["user"]["count_key"] == "user"
+    assert types["department"]["nav_group"] == "organization"
+    assert types["department_o"]["nav"] == "hidden"
+    desc = a.get("/types/user").json()
+    assert (desc["nav"], desc["nav_group"], desc["count_key"]) == ("primary", "people", "user")
+
+
 def test_tree_admin_sees_all_departments(app_client: TestClient) -> None:
     a = api(app_client, "admin")
     [root] = a.get("/tree").json()

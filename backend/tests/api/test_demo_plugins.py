@@ -28,6 +28,9 @@ def test_types_list_plugin_types_and_user_tabs(app_client: TestClient) -> None:
     names = {t["name"] for t in r.json()}
     assert {"ppolicy", "mail_alias_redirection", "mail_alias_distribution"} <= names
     assert "dhcp_configuration" in names
+    nav = {t["name"]: (t["nav"], t["nav_group"]) for t in r.json()}
+    assert all(v[0] == "hidden" for k, v in nav.items() if k.endswith("_task"))
+    assert nav["mail_alias_redirection"] == ("secondary", "mail")
 
     user = admin.get("/types/user").json()
     tabs = {t["name"]: t for t in user["tabs"]}

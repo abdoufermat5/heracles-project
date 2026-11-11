@@ -37,6 +37,7 @@ class ExtractorTask(TaskObjectType):
     name = "extractor_task"
     label = _("Extractor task")
     label_plural = _("Extractor tasks")
+    nav = "hidden"
     icon = "download"
     filter = TASK_FILTER
 

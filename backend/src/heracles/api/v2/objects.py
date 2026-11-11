@@ -27,6 +27,7 @@ from heracles.objects import (
     ObjectNotFoundError,
     ObjectService,
     ObjectState,
+    ObjectType,
     ObjectValidationError,
     PermissionDeniedError,
     UnknownTypeError,
@@ -108,6 +109,25 @@ def _check_not_locked_by_other(domain: DomainDep, user: CurrentUserDep, dn: str)
 
 # --------------------------------------------------------------- metadata
 
+_NAV_GROUP_BY_CATEGORY = {
+    "directory": "people",
+    "access": "access",
+    "network": "infrastructure",
+    "systems": "infrastructure",
+    "mail": "mail",
+    "workflow": "activity",
+    "configuration": "settings",
+}
+
+
+def _nav_fields(type_: type[ObjectType]) -> dict[str, JSON]:
+    """Sidebar metadata of a type (``nav``, ``nav_group``, ``count_key``)."""
+    return {
+        "nav": type_.nav,
+        "nav_group": type_.nav_group or _NAV_GROUP_BY_CATEGORY.get(type_.category, "settings"),
+        "count_key": type_.count_key,
+    }
+
 
 @router.get("/types")
 def list_types(user: CurrentUserDep, domain: DomainDep) -> list[JSON]:
@@ -118,14 +138,22 @@ def list_types(user: CurrentUserDep, domain: DomainDep) -> list[JSON]:
         info = domain.registry.get(name)
         return evaluator.permissions(base, info.acl_object(info.main_tab)).create
 
-    return list(domain.registry.summaries(can_create=can_create))
+    summaries = domain.registry.summaries(can_create=can_create)
+    infos = domain.registry.list()
+    out: list[JSON] = []
+    for summary, info in zip(summaries, infos, strict=True):
+        out.append({**cast("dict[str, JSON]", summary), **_nav_fields(info.type)})
+    return out
 
 
 @router.get("/types/{type_name}")
 def describe_type(type_name: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
     del user
     with object_errors():
-        return domain.registry.describe(type_name)
+        return {
+            **domain.registry.describe(type_name),
+            **_nav_fields(domain.registry.get(type_name).type),
+        }
 
 
 # ---------------------------------------------------------------- templates

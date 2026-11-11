@@ -58,6 +58,7 @@ class EjbcaCertificate(ObjectType):
     """A certificate entry published by the PKI (read-only)."""
 
     name = "ejbca_certificate"
+    icon = "file-key"
     label = _("PKI certificate")
     label_plural = _("PKI certificates")
     category = "access"

@@ -91,6 +91,9 @@ class OuDepartment(DepartmentType):
     name = "department"
     label = _("Department")
     label_plural = _("Departments")
+    nav = "primary"
+    nav_group = "organization"
+    count_key = "department"
     filter = _filter("organizationalUnit")
     main_attr = "ou"
     name_attr = "ou"
@@ -105,6 +108,8 @@ class OrganizationDepartment(DepartmentType):
     name = "department_o"
     label = _("Organization")
     label_plural = _("Organizations")
+    nav = "hidden"
+    nav_group = "organization"
     filter = _filter("organization")
     main_attr = "o"
     name_attr = "o"
@@ -119,6 +124,8 @@ class LocalityDepartment(DepartmentType):
     name = "department_l"
     label = _("Locality")
     label_plural = _("Localities")
+    nav = "hidden"
+    nav_group = "organization"
     filter = _filter("locality")
     main_attr = "l"
     name_attr = "l"
@@ -133,6 +140,8 @@ class CountryDepartment(DepartmentType):
     name = "department_c"
     label = _("Country")
     label_plural = _("Countries")
+    nav = "hidden"
+    nav_group = "organization"
     filter = _filter("country")
     main_attr = "c"
     name_attr = "c"
@@ -149,6 +158,8 @@ class DomainDepartment(DepartmentType):
     name = "department_dc"
     label = _("Domain")
     label_plural = _("Domains")
+    nav = "hidden"
+    nav_group = "organization"
     filter = _filter("domain")
     main_attr = "dc"
     name_attr = "dc"

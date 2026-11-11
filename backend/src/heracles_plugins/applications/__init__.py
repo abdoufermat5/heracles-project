@@ -74,6 +74,8 @@ class Application(ObjectType):
     acl_category = "application"
     label = _("Application")
     label_plural = _("Applications")
+    nav = "secondary"
+    nav_group = "settings"
     icon = "app-window"
     category = "configuration"
     filter = f"(objectClass={DESKTOP_CLASS})"
@@ -134,6 +136,8 @@ class WebApplication(ObjectType):
     acl_category = "webApplication"
     label = _("Web application")
     label_plural = _("Web applications")
+    nav = "secondary"
+    nav_group = "settings"
     icon = "globe"
     category = "configuration"
     filter = f"(objectClass={WEB_CLASS})"

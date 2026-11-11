@@ -131,6 +131,7 @@ class PgpKey(ObjectType):
     """An OpenPGP public key entry (``pgpKeyInfo``)."""
 
     name = "pgp_key"
+    icon = "key"
     label = _("PGP key")
     label_plural = _("PGP keys")
     category = "access"
@@ -203,8 +204,11 @@ class PgpServerInfo(ObjectType):
     """PGP server information entry (``pgpServerInfo``)."""
 
     name = "pgp_server_info"
+    icon = "settings"
     label = _("PGP server info")
     label_plural = _("PGP server info")
+    nav = "secondary"
+    nav_group = "settings"
     category = "configuration"
     acl_category = "configuration"
     required_object_classes = ("top",)

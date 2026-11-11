@@ -51,6 +51,7 @@ class ArchiveTask(TaskObjectType):
     name = "archive_task"
     label = _("Archive task")
     label_plural = _("Archive tasks")
+    nav = "hidden"
     icon = "archive"
     filter = TASK_FILTER
 
@@ -68,6 +69,7 @@ class ArchivedObject(ObjectType):
     acl_category = "archivedObject"
     label = _("Archived object")
     label_plural = _("Archived objects")
+    nav = "hidden"
     icon = "archive"
     category = "workflow"
     filter = f"(objectClass={ARCHIVE_CLASS})"

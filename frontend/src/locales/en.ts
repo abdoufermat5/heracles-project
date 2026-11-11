@@ -2,6 +2,7 @@ import { peopleEn } from './people'
 import { accessEn } from './access'
 import { settingsEn } from './settings'
 import { objectsEn } from './objects'
+import { sidebarEn } from './sidebar'
 import { adminEn } from '@/features/admin/locale-en'
 
 const en = {
@@ -28,6 +29,7 @@ const en = {
   ...peopleEn,
   ...accessEn,
   ...settingsEn,
+  ...sidebarEn,
   // --- end P3 objects ---
   categories: {
     directory: 'Directory',

@@ -38,6 +38,7 @@ class LifecycleTask(TaskObjectType):
     name = "lifecycle_task"
     label = _("Lifecycle task")
     label_plural = _("Lifecycle tasks")
+    nav = "hidden"
     icon = "hourglass"
     filter = TASK_FILTER
 

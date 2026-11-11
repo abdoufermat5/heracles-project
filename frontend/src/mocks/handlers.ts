@@ -329,11 +329,11 @@ export const handlers: HttpHandler[] = [
     guarded(() =>
       HttpResponse.json({
         cards: [
-          { key: 'users', label: 'Users', value: db.all('user').length, trend: 4 },
-          { key: 'groups', label: 'Groups', value: db.all('group').length, trend: 0 },
-          { key: 'roles', label: 'Roles', value: db.all('role').length, trend: null },
-          { key: 'departments', label: 'Departments', value: db.all('department').length + 1, trend: 1 },
-          { key: 'dns_zones', label: 'DNS zones', value: db.all('dns_zone').length, trend: null },
+          { key: 'user', label: 'Users', value: db.all('user').length, trend: 4 },
+          { key: 'group', label: 'Groups', value: db.all('group').length, trend: 0 },
+          { key: 'role', label: 'Roles', value: db.all('role').length, trend: null },
+          { key: 'department', label: 'Departments', value: db.all('department').length + 1, trend: 1 },
+          { key: 'dns_zone', label: 'DNS zones', value: db.all('dns_zone').length, trend: null },
         ],
         locked_users: db.all('user').filter((u) => u.accountLocked).length,
         expiring_passwords: 12,

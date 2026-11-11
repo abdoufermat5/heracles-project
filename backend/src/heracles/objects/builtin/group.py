@@ -23,6 +23,9 @@ class Group(ObjectType):
     acl_category = "ogroup"
     label = _("Group")
     label_plural = _("Groups")
+    nav = "primary"
+    nav_group = "people"
+    count_key = "group"
     icon = "users"
     category = "directory"
     filter = "(objectClass=groupOfNames)"
@@ -62,6 +65,9 @@ class Role(ObjectType):
     name = "role"
     label = _("Role")
     label_plural = _("Roles")
+    nav = "primary"
+    nav_group = "people"
+    count_key = "role"
     icon = "briefcase"
     category = "directory"
     filter = "(objectClass=organizationalRole)"

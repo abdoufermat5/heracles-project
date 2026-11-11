@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from heracles.attributes import JSON, AnyAttribute
 
@@ -152,6 +152,16 @@ class ObjectType:
     label_plural: ClassVar[str] = ""
     icon: ClassVar[str] = "file"
     category: ClassVar[str] = "directory"
+    # --- navigation metadata (sidebar) ---
+    #: ``primary`` types get a sidebar link, ``secondary`` ones sit under the group's
+    #: "More" disclosure, ``hidden`` ones are only reachable from the command palette.
+    nav: ClassVar[Literal["primary", "secondary", "hidden"]] = "secondary"
+    #: Sidebar group (people, organization, access, infrastructure, mail, activity,
+    #: settings); ``None`` derives it from ``category``.
+    nav_group: ClassVar[str | None] = None
+    #: Dashboard card key whose value is shown as the type's count.
+    count_key: ClassVar[str | None] = None
+    # --- end navigation metadata ---
     #: objectClasses the directory schema must know for a plugin type to be
     #: registered (default: the main tab's objectClasses).
     required_object_classes: ClassVar[Sequence[str]] = ()

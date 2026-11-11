@@ -69,7 +69,7 @@ class AutomountMap(ObjectType):
     acl_category = "automountMap"
     label = _("Automount Map")
     label_plural = _("Automount Maps")
-    icon = "network"
+    icon = "folder-tree"
     category = "network"
     filter = "(objectClass=automountMap)"
     main_attr = "ou"
@@ -131,7 +131,7 @@ class Automount(ObjectType):
     acl_category = "automountMap"
     label = _("Automount Entry")
     label_plural = _("Automount Entries")
-    icon = "network"
+    icon = "hard-drive"
     category = "network"
     filter = "(objectClass=automount)"
     main_attr = "automountKey"
