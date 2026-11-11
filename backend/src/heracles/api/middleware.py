@@ -11,6 +11,7 @@ import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from heracles.api.errors import error_body
@@ -101,7 +102,15 @@ def install_body_limit(app: FastAPI, settings: ApiSettings) -> None:
     )
 
 
+#: Responses smaller than this are sent as they are (compressing them gains nothing).
+GZIP_MINIMUM_BYTES = 1024
+
+
 def install_middleware(app: FastAPI) -> None:
+    # Added first so it sits inside ``request_context``: the SPA bundle and the JSON
+    # listings compress to about a quarter of their size.
+    app.add_middleware(GZipMiddleware, minimum_size=GZIP_MINIMUM_BYTES)
+
     @app.middleware("http")
     async def request_context(  # pyright: ignore[reportUnusedFunction]
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
