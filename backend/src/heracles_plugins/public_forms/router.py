@@ -1,7 +1,7 @@
 """Public (unauthenticated) endpoints of the public forms.
 
 * ``GET  /api/v2/public/forms/{name}?token=`` form definition;
-* ``GET  /api/v2/public/forms/{name}/captcha`` arithmetic challenge;
+* ``GET  /api/v2/public/forms/{name}/captcha`` proof-of-work challenge;
 * ``POST /api/v2/public/forms/{name}`` submission, creates the object.
 
 A private form needs the personal token of an invitation. Failed attempts are
@@ -61,6 +61,8 @@ class SubmitBody(BaseModel):
     token: str | None = Field(default=None, max_length=512)
     captcha_token: str | None = Field(default=None, max_length=1024)
     captcha_answer: str | None = Field(default=None, max_length=32)
+    #: Honeypot: hidden from people, filled in by bots; a non-empty value drops the submission.
+    website: str = Field(default="", max_length=256)
     accept_terms: bool = False
 
 
@@ -198,7 +200,11 @@ def build_public_router(
     guard = limiter if limiter is not None else RateLimiter()
     secret = str(getattr(settings, "captcha_secret", "") or "").encode() or None
     challenges = captcha or Captcha(
-        secret, ttl=float(getattr(settings, "captcha_ttl_seconds", 600)), clock=clock
+        secret,
+        ttl=float(getattr(settings, "captcha_ttl_seconds", 600)),
+        difficulty=int(getattr(settings, "captcha_difficulty", 20)),
+        min_fill=float(getattr(settings, "captcha_min_fill_seconds", 3.0)),
+        clock=clock,
     )
     successes = SubmissionWindow(int(getattr(settings, "submissions_per_hour", 20)), HOUR, clock)
     allow_private_view = bool(getattr(settings, "allow_private_without_invitations", False))
@@ -267,6 +273,10 @@ def build_public_router(
         wait = max(guard.retry_after(key), successes.retry_after(ip))
         if wait > 0:
             return _error(429, "rate_limited", "Too many attempts", retry_after=wait)
+        if body.website:
+            # A bot filled the hidden field: answer like a success, create nothing.
+            guard.record_failure(key)
+            return JSONResponse({"status": "ok", "message": ""}, status_code=201)
         try:
             directory = get_directory()
             form = find_form(directory, name)
@@ -280,7 +290,10 @@ def build_public_router(
             if form.captcha and not challenges.verify(body.captcha_token, body.captcha_answer):
                 guard.record_failure(key)
                 return _error(
-                    422, "validation", "Wrong answer", fields={"captcha_answer": "Wrong answer."}
+                    422,
+                    "validation",
+                    "The check failed",
+                    fields={"captcha_answer": "The check failed, try again."},
                 )
             if form.tos_url and not body.accept_terms:
                 guard.record_failure(key)

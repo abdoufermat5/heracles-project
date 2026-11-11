@@ -69,6 +69,11 @@ class PublicFormsSettings:
     #: workers serve the forms).
     captcha_secret: str = ""
     captcha_ttl_seconds: int = 600
+    #: Leading zero bits the proof-of-work needs (each bit doubles the client's work; 20 is
+    #: about 0.5 to 1 s in a browser).
+    captcha_difficulty: int = 20
+    #: A form with a challenge is refused when submitted sooner than this after it was issued.
+    captcha_min_fill_seconds: float = 3.0
     #: Successful submissions accepted per client address and hour.
     submissions_per_hour: int = 20
     max_body_bytes: int = 1_048_576
