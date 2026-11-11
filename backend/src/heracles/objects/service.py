@@ -37,6 +37,7 @@ from heracles.objects.errors import (
     PermissionDeniedError,
 )
 from heracles.objects.hooks import TabContext
+from heracles.objects.listing_cache import ListingKey, ListingScope
 from heracles.objects.model import Tab
 from heracles.objects.policy import (
     TAB_ATTR,
@@ -124,11 +125,14 @@ class ObjectService:
         *,
         policy: AccessPolicy | None = None,
         events: ObjectEvents | None = None,
+        listings: ListingScope | None = None,
     ) -> None:
         self.directory = directory
         self.registry = registry
         self.policy: AccessPolicy = policy or AllowAll()
         self.events: ObjectEvents = events or NullEvents()
+        #: Snapshot cache of :meth:`list` for one user; ``None`` searches every page.
+        self.listings = listings
 
     # ------------------------------------------------------------------ load
 
@@ -211,9 +215,59 @@ class ObjectService:
         ``locked`` computes the ``locked`` flag of a row from its entry; the attributes
         it needs are named in ``extra_attrs`` and fetched by the same search (they never
         appear in the row values).
+
+        With a :class:`ListingScope` (see the constructor) the filtered and sorted entry
+        list is kept as a snapshot: the first page (no cursor) always searches the
+        directory and refreshes it, later pages reuse it while it is fresh. ``total``
+        and ``next_cursor`` come from the snapshot. Changes made by other sessions
+        show up once the snapshot expires or page one is loaded again.
         """
         info = self.registry.get(type_name)
         base = base or self.directory.base_dn
+        sort_key = sort or info.type.main_attr
+        offset = _decode_cursor(cursor)
+        limit = max(1, limit)
+        entries: Sequence[Entry] | None = None
+        listings = self.listings
+        key: ListingKey | None = None
+        if listings is not None:
+            key = listings.key(
+                type_name,
+                dnlib.normalize(base),
+                scope,
+                query or "",
+                sort_key,
+                descending,
+                extra_attrs,
+            )
+            if offset > 0:
+                entries = listings.get(key)
+        if entries is None:
+            entries = self._search_listing(
+                info, base, scope, query, sort_key, descending, extra_attrs
+            )
+            if listings is not None and key is not None:
+                listings.put(key, entries)
+
+        window = entries[offset : offset + limit]
+        more = offset + limit < len(entries)
+        return ListPage(
+            items=[self._row(info, e, locked) for e in window],
+            next_cursor=_encode_cursor(offset + limit) if more else None,
+            total=len(entries),
+        )
+
+    def _search_listing(
+        self,
+        info: TypeInfo,
+        base: str,
+        scope: Scope,
+        query: str | None,
+        sort_key: str,
+        descending: bool,
+        extra_attrs: Sequence[str],
+    ) -> list[Entry]:
+        """Readable entries of a listing, sorted (one directory search)."""
         if scope == Scope.SUBTREE:
             search_base, ldap_scope = base, Scope.SUBTREE
         else:
@@ -235,21 +289,11 @@ class ObjectService:
             ]
         except NoSuchObjectError:
             entries = []
-
-        sort_key = sort or info.type.main_attr
         entries.sort(
             key=lambda e: ((e.text(sort_key) or "").lower(), dnlib.normalize(e.dn)),
             reverse=descending,
         )
-        offset = _decode_cursor(cursor)
-        limit = max(1, limit)
-        window = entries[offset : offset + limit]
-        more = offset + limit < len(entries)
-        return ListPage(
-            items=[self._row(info, e, locked) for e in window],
-            next_cursor=_encode_cursor(offset + limit) if more else None,
-            total=len(entries),
-        )
+        return entries
 
     def count(self, type_name: str, base: str | None = None, scope: Scope = Scope.ONE) -> int:
         """Number of objects :meth:`list` would report as ``total`` (no rows, no sorting)."""

@@ -132,6 +132,98 @@ def test_listing_round_trips_do_not_grow_with_the_page(
     assert cost(1) == cost(7)
 
 
+def count_searches(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record the base DN of every directory search made from now on."""
+    state = cast(AppState, cast(FastAPI, app_client.app).state.heracles)
+    directory = state.directories["main"]
+    original = directory.search
+    searches: list[str] = []
+
+    def counted(base: str, *args: Any, **kw: Any) -> Any:
+        searches.append(base)
+        return original(base, *args, **kw)
+
+    monkeypatch.setattr(directory, "search", counted)
+    return searches
+
+
+def test_later_pages_reuse_the_first_page_snapshot(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    a = api(app_client, "admin")
+    a.get("/types")  # resolves the ACLs of the session once
+    searches = count_searches(app_client, monkeypatch)
+
+    first = a.get("/objects/user", base=BASE, scope="sub", limit=3).json()
+    first_cost = len(searches)
+    searches.clear()
+    second = a.get("/objects/user", base=BASE, scope="sub", limit=3, offset=3).json()
+    assert len(searches) < first_cost  # the listing search is not repeated
+    assert second["total"] == first["total"] == 7
+    assert len(second["items"]) == 3
+    assert {i["dn"] for i in second["items"]}.isdisjoint(i["dn"] for i in first["items"])
+    assert first["next_cursor"]
+
+    # Reloading the first page searches again.
+    searches.clear()
+    a.get("/objects/user", base=BASE, scope="sub", limit=3)
+    assert len(searches) == first_cost
+
+
+def test_listing_snapshot_is_dropped_by_a_write(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    a = api(app_client, "admin")
+    a.get("/types")
+    searches = count_searches(app_client, monkeypatch)
+    first = a.get("/objects/user", base=BASE, scope="sub", limit=3).json()
+    first_cost = len(searches)
+    assert first["total"] == 7
+
+    r = a.post(
+        "/objects/user",
+        {
+            "base": PARIS,
+            "tabs": {
+                "main": {
+                    "active": True,
+                    "values": {"uid": "zed", "givenName": "Zed", "sn": "Last", "mail": "z@h.test"},
+                }
+            },
+        },
+    )
+    assert r.status_code == 201, r.text
+    searches.clear()
+    second = a.get("/objects/user", base=BASE, scope="sub", limit=3, offset=3).json()
+    assert second["total"] == 8
+    assert len(searches) == first_cost  # the snapshot was dropped, so page 2 searched again
+
+
+def test_account_lock_drops_the_listing_snapshot(app_client: TestClient) -> None:
+    a = api(app_client, "admin")
+    a.get("/objects/user", base=BASE, scope="sub", limit=1, order="desc")
+    assert a.post(f"/users/{q(ASMITH)}/lock").status_code == 200
+    rest = a.get("/objects/user", base=BASE, scope="sub", limit=6, offset=1, order="desc").json()
+    assert {i["dn"]: i["locked"] for i in rest["items"]}[ASMITH] is True
+
+
+def test_listing_snapshots_are_not_shared_between_sessions(app_client: TestClient) -> None:
+    admin = api(app_client, "admin")
+    assert admin.get("/objects/user", base=BASE, scope="sub", limit=3).json()["total"] == 7
+    with TestClient(app_client.app) as other_client:
+        # a regular user sees (almost) nothing: admin's snapshot must not leak to it
+        other = api(other_client, "bmartin")
+        page = other.get("/objects/user", base=BASE, scope="sub", limit=3, offset=3).json()
+        assert page["total"] < 7
+    with TestClient(app_client.app) as helpdesk_client:
+        helpdesk = api(helpdesk_client, "helpdesk")
+        page = helpdesk.get("/objects/user", base=BASE, scope="sub", limit=3, offset=3).json()
+        assert page["total"] == 7
+    # and the admin's own snapshot is still served to the admin
+    again = admin.get("/objects/user", base=BASE, scope="sub", limit=3, offset=3).json()
+    assert again["total"] == 7
+
+
 def test_crud_flow_with_lock(app_client: TestClient) -> None:
     a = api(app_client, "admin")
     r = a.post(

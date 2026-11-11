@@ -66,6 +66,15 @@ def object_errors() -> Iterator[None]:
         raise locked_error(exc.lock) from exc
 
 
+@contextmanager  # pyright: ignore[reportDeprecated]
+def _writing(domain: DomainDep, user: CurrentUserDep) -> Iterator[None]:
+    """Drop the caller's listing snapshots after a write, even a failed one (it may be partial)."""
+    try:
+        yield
+    finally:
+        domain.invalidate_listings(user)
+
+
 def lock_json(lock: Lock) -> dict[str, JSON]:
     return {"user": lock.user_dn, "since": lock.acquired_at.isoformat()}
 
@@ -357,7 +366,8 @@ def create_object(
         tabs = _tabs_json(body.tabs)
         if body.template is not None:
             tabs = _tabs_from_template(service, type_name, body.template, body.tabs)
-        new_dn = service.create(type_name, body.base, tabs)
+        with _writing(domain, user):
+            new_dn = service.create(type_name, body.base, tabs)
     return _with_event_output(user, domain, {"dn": new_dn})
 
 
@@ -425,7 +435,10 @@ def bulk_edit(
 
     with object_errors():
         service, _policy = domain.service(user, type_name)
-        results = bulk.bulk_update(service, type_name, body.dns, body.changes, is_locked=is_locked)
+        with _writing(domain, user):
+            results = bulk.bulk_update(
+                service, type_name, body.dns, body.changes, is_locked=is_locked
+            )
     return {"results": [r.to_json() for r in results]}
 
 
@@ -474,7 +487,8 @@ def move_object(
             raise PermissionDeniedError(f"cannot move {dn} to {body.base}")
         info = domain.registry.get(type_name)
         superior = dnlib.join(info.type.rdn, body.base)
-        new_dn = user.directory.rename(dn, dnlib.rdn(dn), superior)
+        with _writing(domain, user):
+            new_dn = user.directory.rename(dn, dnlib.rdn(dn), superior)
     return {"dn": new_dn}
 
 
@@ -493,7 +507,8 @@ def copy_object(
         service.load(type_name, dn)
         if not policy.can_read(dn, domain.registry.get(type_name).main_tab.name, ""):
             raise PermissionDeniedError(f"cannot read {dn}")
-        new_dn = transfer.copy_object(service, type_name, dn, body.base, body.values)
+        with _writing(domain, user):
+            new_dn = transfer.copy_object(service, type_name, dn, body.base, body.values)
     return {"dn": new_dn}
 
 
@@ -621,7 +636,8 @@ def restore_snapshot(snapshot_id: str, user: CurrentUserDep, domain: DomainDep) 
         raise forbidden("Cannot restore this snapshot")
     _check_not_locked_by_other(domain, user, snap.object_dn)
     try:
-        restored = snapshots.restore(snapshot_id)
+        with _writing(domain, user):
+            restored = snapshots.restore(snapshot_id)
     except SnapshotError as exc:
         raise ApiError(409, "conflict", str(exc)) from exc
     return {"dn": snap.object_dn, "restored": list(restored)}
@@ -657,7 +673,8 @@ def patch_object(
     _check_not_locked_by_other(domain, user, dn)
     with object_errors():
         service, policy = domain.service(user, type_name)
-        state = service.update(type_name, dn, _tabs_json(body.tabs))
+        with _writing(domain, user):
+            state = service.update(type_name, dn, _tabs_json(body.tabs))
         if dnlib.normalize(state.dn) != dnlib.normalize(dn):
             locks = domain.locks(user.directory_id, user.directory)
             locks.release(dn, user.dn)
@@ -669,6 +686,7 @@ def delete_object(type_name: str, dn: str, user: CurrentUserDep, domain: DomainD
     _check_not_locked_by_other(domain, user, dn)
     with object_errors():
         service, _policy = domain.service(user, type_name)
-        service.delete(type_name, dn)
+        with _writing(domain, user):
+            service.delete(type_name, dn)
     domain.locks(user.directory_id, user.directory).release(dn, user.dn)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

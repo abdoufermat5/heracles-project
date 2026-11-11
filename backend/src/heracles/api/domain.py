@@ -21,6 +21,7 @@ from heracles.core.snapshots import SnapshotService
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient
 from heracles.objects import ObjectService, TypeInfo, TypeRegistry
+from heracles.objects.listing_cache import ListingCache, ListingScope
 from heracles.objects.model import Tab
 from heracles.objects.policy import CompositeEvents, ObjectEvents
 from heracles.objects.registry import EventsContext
@@ -91,6 +92,8 @@ class Domain:
         "department_c",
         "department_dc",
     )
+    #: Listing snapshots shared by the requests of this process (one set per session).
+    listings: ListingCache = field(default_factory=ListingCache)
 
     def is_admin(self, user_dn: str) -> bool:
         return dnlib.normalize(user_dn) in self.admin_dns
@@ -152,11 +155,25 @@ class Domain:
         return evaluator
 
     def service(self, user: CurrentUser, type_name: str) -> tuple[ObjectService, TypeAclPolicy]:
-        """Object service for one type, enforcing the user's ACLs."""
+        """Object service for one type, enforcing the user's ACLs.
+
+        Listings reuse the user's snapshots (see :class:`ListingCache`); they are tied to
+        the ACL resolution the evaluator was built from.
+        """
         info = self.registry.get(type_name)
-        policy = TypeAclPolicy(self.evaluator(user), info, self.registry)
+        evaluator = self.evaluator(user)
+        policy = TypeAclPolicy(evaluator, info, self.registry)
         events = self.events(user)
-        return ObjectService(user.directory, self.registry, policy=policy, events=events), policy
+        memo = cast("tuple[ResolvedAcl, AclEvaluator]", user.acl)
+        listings = ListingScope(self.listings, user.session.id, memo[0])
+        service = ObjectService(
+            user.directory, self.registry, policy=policy, events=events, listings=listings
+        )
+        return service, policy
+
+    def invalidate_listings(self, user: CurrentUser) -> None:
+        """Drop the user's listing snapshots (call after any write the user made)."""
+        self.listings.invalidate(user.session.id)
 
     def events(self, user: CurrentUser) -> ObjectEvents:
         """Object event hooks contributed by the plugins, for one request.
@@ -191,7 +208,11 @@ def _cached_resolution(session: Session) -> ResolvedAcl | None:
 
 
 def invalidate_acl_cache(session: Session) -> None:
-    """Forget the cached ACL resolution (after ACL or membership changes)."""
+    """Forget the cached ACL resolution (after ACL or membership changes).
+
+    The session's listing snapshots die with it: they are bound to the resolution they
+    were filtered with, and the next request resolves the ACLs again.
+    """
     session.cache.pop(_ACL_CACHE_KEY, None)
 
 
