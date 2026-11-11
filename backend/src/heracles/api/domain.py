@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Annotated, cast
@@ -29,6 +30,8 @@ from heracles.objects.policy import CompositeEvents, ObjectEvents
 from heracles.objects.registry import EventsContext
 
 _ACL_CACHE_KEY = "acl.resolved"
+#: How often a process compares its enabled plugins with the shared app database.
+PLUGIN_SYNC_SECONDS = 2.0
 
 
 class TypeAclPolicy:
@@ -98,6 +101,31 @@ class Domain:
     )
     #: Listing snapshots shared by the requests of this process (one set per session).
     listings: ListingCache = field(default_factory=ListingCache)
+    #: When this process last compared its plugins with the app database (monotonic).
+    _plugins_checked: float = field(default=float("-inf"), repr=False, compare=False)
+
+    def sync_plugins(self, interval: float = PLUGIN_SYNC_SECONDS) -> TypeRegistry:
+        """The current registry, rebuilt first when another process switched a plugin.
+
+        The check (one small query of the app database) runs at most every ``interval``
+        seconds; it is a no-op when the plugins are not configurable.
+        """
+        manager = self.plugins
+        if manager is not None:
+            now = time.monotonic()
+            if now - self._plugins_checked >= interval:
+                self._plugins_checked = now
+                fresh = manager.refresh()
+                if fresh is not None:
+                    self.swap_registry(fresh)
+        return self.registry
+
+    def swap_registry(self, registry: TypeRegistry) -> None:
+        """Serve ``registry`` from now on (plugin switched here or in another process)."""
+        self.registry = registry
+        own = registry.settings.get("acl_admin")
+        if own is not None and hasattr(own, "registry"):
+            own.registry = registry  # trigger settings follow the live registry
 
     @property
     def audit(self) -> AuditSink:
@@ -235,6 +263,7 @@ def install_domain(app: FastAPI, domain: Domain) -> None:
 
 def get_domain(request: Request) -> Domain:
     domain: Domain = request.app.state.domain
+    domain.sync_plugins()
     return domain
 
 

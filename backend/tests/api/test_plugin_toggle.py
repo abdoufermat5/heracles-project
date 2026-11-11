@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from heracles import demo
+from heracles.api.domain import Domain
 from heracles.api.settings import ApiSettings, DatabaseSettings, PluginsSettings
 from heracles.api.state import AppState
 from heracles.server import create_full_app
@@ -114,3 +115,15 @@ def test_audit_sink_follows_the_audit_plugin_switch(client: TestClient) -> None:
     assert patch(admin, "audit", True).status_code == 200
     events = admin.client.get("/api/v2/audit", params={"action": "config"}).json()["items"]
     assert any("plugin audit disabled" in line for e in events for line in e["attributes"])
+
+
+def test_switch_reaches_other_processes_sharing_the_database(tmp_path: Path) -> None:
+    """Two server processes on one app database: a switch in one reaches the other."""
+    with build(tmp_path) as first, build(tmp_path) as second:
+        other = Api(second).login("admin")
+        assert "dns_zone" not in type_names(other)
+        assert patch(Api(first).login("admin"), "dns", True).status_code == 200
+        domain: Domain = cast(FastAPI, second.app).state.domain
+        domain.sync_plugins(interval=0)  # the periodic check, without waiting for it
+        assert "dns_zone" in type_names(other)
+        assert domain.plugins is not None and domain.plugins.refresh() is None  # up to date

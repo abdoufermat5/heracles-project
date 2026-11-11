@@ -16,7 +16,7 @@ changes, so a toggle takes effect without a restart.
 from __future__ import annotations
 
 import threading
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 
 import structlog
 
@@ -117,6 +117,8 @@ class PluginManager:
         self.store = store or PluginOverrideStore()
         #: Serialises toggles (and the registry swap that follows).
         self.lock = threading.RLock()
+        #: Stored overrides the last registry was built from (see :meth:`refresh`).
+        self._applied: dict[str, bool] | None = None
         known = {p.name for p in self.plugins}
         for name in [*(self.configured or ()), *self.store.load()]:
             if name not in known and name != WILDCARD:
@@ -131,12 +133,12 @@ class PluginManager:
     def is_available(self, name: str) -> bool:
         return not self.get(name).missing_object_classes(self.available_classes)
 
-    def enabled_names(self) -> set[str]:
+    def enabled_names(self, overrides: Mapping[str, bool] | None = None) -> set[str]:
         """Names switched on (before the schema availability filter)."""
         names = set(CORE_PROFILE if self.configured is None else self.configured)
         if WILDCARD in names:
             names |= {p.name for p in self.plugins}
-        for name, on in self.store.load().items():
+        for name, on in (self.store.load() if overrides is None else overrides).items():
             if on:
                 names.add(name)
             else:
@@ -153,10 +155,32 @@ class PluginManager:
         """A fresh registry: built-in types plus the enabled plugins."""
         from heracles.objects.builtin import register_builtin_types
 
-        registry = TypeRegistry()
-        register_builtin_types(registry)
-        registry.register_plugins(self.plugins, self.available_classes, self.enabled_names())
-        return registry
+        with self.lock:
+            overrides = self.store.load()
+            registry = TypeRegistry()
+            register_builtin_types(registry)
+            registry.register_plugins(
+                self.plugins, self.available_classes, self.enabled_names(overrides)
+            )
+            self._applied = overrides
+            return registry
+
+    def refresh(self) -> TypeRegistry | None:
+        """A rebuilt registry when the stored overrides changed since the last build.
+
+        Several server processes share the app database: a plugin switched in one of them
+        reaches the others through this check. ``None`` when nothing changed.
+        """
+        with self.lock:
+            try:
+                current = self.store.load()
+            except Exception as exc:  # a database hiccup must not break requests
+                log.warning("plugin_refresh_failed", error=type(exc).__name__)
+                return None
+            if current == self._applied:
+                return None
+            log.info("plugins_changed_elsewhere")
+            return self.build_registry()
 
     def set_enabled(self, name: str, enabled: bool, user: str = "") -> TypeRegistry:
         """Store the override and return the rebuilt registry (the caller swaps it in)."""

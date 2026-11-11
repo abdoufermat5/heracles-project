@@ -37,7 +37,7 @@ def attach_scheduler(
     app.state.task_store = store
     domain = app.state.domain
     scheduler = Scheduler(
-        lambda: domain.registry,
+        domain.sync_plugins,  # picks up plugins switched by other processes too
         state.directories,
         store,
         mailer=mailer,
