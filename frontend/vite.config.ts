@@ -15,9 +15,30 @@ export default defineConfig({
     },
   },
   build: {
-    chunkSizeWarningLimit: 900,
+    // Budget for a single chunk (minified); pages are loaded per route (src/router.tsx).
+    chunkSizeWarningLimit: 400,
     // Never inline fonts as data: URIs; the server CSP only allows font-src 'self'.
     assetsInlineLimit: (file) => (/\.(woff2?|ttf|otf)$/.test(file) ? false : undefined),
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              // The framework changes far less often than the application: its own
+              // chunk stays in the browser cache across releases.
+              name: 'framework',
+              test: /node_modules[\\/](react|react-dom|scheduler|@tanstack[\\/](react-router|router-core|history|react-query|query-core))[\\/]/,
+            },
+            {
+              // Design-system primitives and icons are shared by the shell and every
+              // page: one chunk instead of dozens of sub-kilobyte requests.
+              name: 'ui',
+              test: /src[\\/]components[\\/]ui[\\/]|node_modules[\\/](@radix-ui|radix-ui|@floating-ui|lucide-react|react-remove-scroll[^\\/]*|aria-hidden|clsx|tailwind-merge|class-variance-authority)[\\/]/,
+            },
+          ],
+        },
+      },
+    },
   },
   test: {
     globals: true,

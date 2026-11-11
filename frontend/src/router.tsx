@@ -3,12 +3,14 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Link,
   Outlet,
   redirect,
+  type AsyncRouteComponent,
   type RouterHistory,
 } from '@tanstack/react-router'
-import type { ComponentType } from 'react'
+import type { ReactNode } from 'react'
 import { Compass } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/endpoints'
@@ -18,28 +20,45 @@ import { adminApi } from '@/features/admin/api'
 import { ak } from '@/features/admin/hooks'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import {
-  LoginPage,
-  RecoveryConfirmPage,
-  RecoveryRequestPage,
-  SecondFactorPage,
-} from '@/features/auth/AuthPages'
-import { DashboardPage } from '@/features/dashboard/DashboardPage'
-import { ObjectEditor } from '@/features/editor/ObjectEditor'
-import { TemplateEditorPage } from '@/features/editor/TemplateEditor'
-import { ObjectListPage } from '@/features/listing/ObjectListPage'
-import { CreateUserWizard } from '@/features/people/CreateUserWizard'
-import { GroupProfilePage } from '@/features/people/GroupProfilePage'
-import { UserProfilePage } from '@/features/people/UserProfilePage'
-import { MePage } from '@/features/me/MePage'
-import { StyleguidePage } from '@/features/styleguide/StyleguidePage'
-import { AccessPage } from '@/features/admin/AccessPage'
 import { AdminGate, type AdminCapability } from '@/features/admin/AdminGate'
-import { ConfigPage } from '@/features/admin/ConfigPage'
-import { HealthPage } from '@/features/admin/HealthPage'
-import { PluginsPage } from '@/features/admin/PluginsPage'
-import { TasksPage } from '@/features/admin/TasksPage'
-import { IoPage } from '@/features/io/IoPage'
+
+// Pages are split out of the entry bundle: the router loads a page's chunk before
+// rendering its route, and on link intent (`defaultPreload`).
+const authPages = () => import('@/features/auth/AuthPages')
+const LoginPage = lazyRouteComponent(authPages, 'LoginPage')
+const SecondFactorPage = lazyRouteComponent(authPages, 'SecondFactorPage')
+const RecoveryRequestPage = lazyRouteComponent(authPages, 'RecoveryRequestPage')
+const RecoveryConfirmPage = lazyRouteComponent(authPages, 'RecoveryConfirmPage')
+const DashboardPage = lazyRouteComponent(() => import('@/features/dashboard/DashboardPage'), 'DashboardPage')
+const ObjectEditor = lazyRouteComponent(() => import('@/features/editor/ObjectEditor'), 'ObjectEditor')
+const TemplateEditorPage = lazyRouteComponent(
+  () => import('@/features/editor/TemplateEditor'),
+  'TemplateEditorPage',
+)
+const ObjectListPage = lazyRouteComponent(() => import('@/features/listing/ObjectListPage'), 'ObjectListPage')
+const CreateUserWizard = lazyRouteComponent(() => import('@/features/people/CreateUserWizard'), 'CreateUserWizard')
+const GroupProfilePage = lazyRouteComponent(() => import('@/features/people/GroupProfilePage'), 'GroupProfilePage')
+const UserProfilePage = lazyRouteComponent(() => import('@/features/people/UserProfilePage'), 'UserProfilePage')
+const MePage = lazyRouteComponent(() => import('@/features/me/MePage'), 'MePage')
+const StyleguidePage = lazyRouteComponent(() => import('@/features/styleguide/StyleguidePage'), 'StyleguidePage')
+const AccessPage = lazyRouteComponent(() => import('@/features/admin/AccessPage'), 'AccessPage')
+const ConfigPage = lazyRouteComponent(() => import('@/features/admin/ConfigPage'), 'ConfigPage')
+const HealthPage = lazyRouteComponent(() => import('@/features/admin/HealthPage'), 'HealthPage')
+const PluginsPage = lazyRouteComponent(() => import('@/features/admin/PluginsPage'), 'PluginsPage')
+const TasksPage = lazyRouteComponent(() => import('@/features/admin/TasksPage'), 'TasksPage')
+const IoPage = lazyRouteComponent(() => import('@/features/io/IoPage'), 'IoPage')
+
+/** A route component that renders lazy `pages`: preloading it preloads them. */
+function rendering(
+  component: () => ReactNode,
+  ...pages: { preload?: () => Promise<void> | undefined }[]
+): AsyncRouteComponent<object> {
+  return Object.assign(component, {
+    preload: async () => {
+      await Promise.all(pages.map((page) => page.preload?.()))
+    },
+  })
+}
 
 export interface RouterContext {
   queryClient: QueryClient
@@ -152,7 +171,7 @@ const listRoute = createRoute({
     filter:
       s.filter === 'active' || s.filter === 'locked' || s.filter === 'expiring' ? s.filter : undefined,
   }),
-  component: function ListRoute() {
+  component: rendering(function ListRoute() {
     const { type } = listRoute.useParams()
     const { view, filter } = listRoute.useSearch()
     return (
@@ -163,7 +182,7 @@ const listRoute = createRoute({
         initialView={filter}
       />
     )
-  },
+  }, ObjectListPage),
 })
 
 const newRoute = createRoute({
@@ -172,33 +191,37 @@ const newRoute = createRoute({
   validateSearch: (s: Record<string, unknown>): { copy?: string } => ({
     copy: typeof s.copy === 'string' && s.copy !== '' ? s.copy : undefined,
   }),
-  component: function NewRoute() {
-    const { type } = newRoute.useParams()
-    const { copy } = newRoute.useSearch()
-    if (type === 'user') {
-      return <CreateUserWizard key={`user:${copy ?? ''}`} copyFrom={copy ?? null} />
-    }
-    return <ObjectEditor key={`${type}:${copy ?? ''}`} type={type} dn={null} copyFrom={copy ?? null} />
-  },
+  component: rendering(
+    function NewRoute() {
+      const { type } = newRoute.useParams()
+      const { copy } = newRoute.useSearch()
+      if (type === 'user') {
+        return <CreateUserWizard key={`user:${copy ?? ''}`} copyFrom={copy ?? null} />
+      }
+      return <ObjectEditor key={`${type}:${copy ?? ''}`} type={type} dn={null} copyFrom={copy ?? null} />
+    },
+    CreateUserWizard,
+    ObjectEditor,
+  ),
 })
 
 // --- P3 objects ---
 const templateNewRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/types/$type/templates/new',
-  component: function TemplateNewRoute() {
+  component: rendering(function TemplateNewRoute() {
     const { type } = templateNewRoute.useParams()
     return <TemplateEditorPage key={type} type={type} dn={null} />
-  },
+  }, TemplateEditorPage),
 })
 
 const templateEditRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/types/$type/templates/$dn',
-  component: function TemplateEditRoute() {
+  component: rendering(function TemplateEditRoute() {
     const { type, dn } = templateEditRoute.useParams()
     return <TemplateEditorPage key={`${type}:${dn}`} type={type} dn={dn} />
-  },
+  }, TemplateEditorPage),
 })
 // --- end P3 objects ---
 
@@ -209,28 +232,40 @@ const editRoute = createRoute({
     view: typeof s.view === 'string' ? s.view : undefined,
     tab: typeof s.tab === 'string' ? s.tab : undefined,
   }),
-  component: function EditRoute() {
-    const { type, dn } = editRoute.useParams()
-    const { view, tab } = editRoute.useSearch()
-    if (type === 'user' && view !== 'generic') {
-      return <UserProfilePage key={`user:${dn}`} dn={dn} />
-    }
-    if (type === 'group' && view !== 'generic') {
-      return <GroupProfilePage key={`group:${dn}`} dn={dn} />
-    }
-    return <ObjectEditor key={`${type}:${dn}:${tab ?? ''}`} type={type} dn={dn} initialTab={tab} />
-  },
+  component: rendering(
+    function EditRoute() {
+      const { type, dn } = editRoute.useParams()
+      const { view, tab } = editRoute.useSearch()
+      if (type === 'user' && view !== 'generic') {
+        return <UserProfilePage key={`user:${dn}`} dn={dn} />
+      }
+      if (type === 'group' && view !== 'generic') {
+        return <GroupProfilePage key={`group:${dn}`} dn={dn} />
+      }
+      return <ObjectEditor key={`${type}:${dn}:${tab ?? ''}`} type={type} dn={dn} initialTab={tab} />
+    },
+    UserProfilePage,
+    GroupProfilePage,
+    ObjectEditor,
+  ),
 })
 
 // --- P3 admin ---
-function adminRoute<P extends string>(path: P, capability: AdminCapability, Page: ComponentType) {
+function adminRoute<P extends string>(
+  path: P,
+  capability: AdminCapability,
+  Page: AsyncRouteComponent<object>,
+) {
   return createRoute({
     getParentRoute: () => appRoute,
     path,
-    component: () => (
-      <AdminGate capability={capability}>
-        <Page />
-      </AdminGate>
+    component: rendering(
+      () => (
+        <AdminGate capability={capability}>
+          <Page />
+        </AdminGate>
+      ),
+      Page,
     ),
   })
 }
