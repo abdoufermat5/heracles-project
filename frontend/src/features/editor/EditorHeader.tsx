@@ -91,8 +91,8 @@ export function EditorHeader({
   isCreate,
   editing,
   dirty,
-  canEdit,
-  canDelete,
+  canEdit: canEditRights,
+  canDelete: canDeleteRights,
   isSubmitting,
   accountLocked,
   onStartEdit,
@@ -106,6 +106,9 @@ export function EditorHeader({
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const type = desc.name
+  // type capability flags: Heracles-written types (audit events, ...) are view-only
+  const canEdit = canEditRights && desc.editable !== false
+  const canDelete = canDeleteRights && desc.deletable !== false
 
   const copyDn = async () => {
     if (!dn || typeof navigator === 'undefined' || !navigator.clipboard) return
@@ -236,7 +239,7 @@ export function EditorHeader({
                   <FileCode2 className="size-3.5 text-muted-foreground" />
                   <span>{t('editor.rawLdif')}</span>
                 </DropdownMenuItem>
-                {onCopy && (
+                {onCopy && desc.creatable !== false && (
                   <DropdownMenuItem onClick={onCopy}>
                     <Copy className="size-3.5 text-muted-foreground" />
                     <span>{t('copy.editorAction')}</span>

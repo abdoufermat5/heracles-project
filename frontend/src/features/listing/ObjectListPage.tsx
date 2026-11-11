@@ -282,7 +282,9 @@ export function ObjectListPage({
   }
 
   const canCreate = summary?.can_create ?? false
-  const hasTemplates = supportsTemplates(desc.data)
+  const canEditObjects = summary?.editable !== false
+  const canDeleteObjects = summary?.deletable !== false
+  const hasTemplates = supportsTemplates(desc.data) && summary?.creatable !== false
   const showTemplates = view === 'templates' && hasTemplates
   const copyMoveItems = copyMove
     ? copyMove.dns.flatMap((dn) => {
@@ -442,14 +444,16 @@ export function ObjectListPage({
                       </Button>
                     </>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setBulkEditOpen(true)}
-                  >
-                    <Pencil className="size-4" />
-                    {t('bulkEdit.action')}
-                  </Button>
+                  {canEditObjects && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setBulkEditOpen(true)}
+                    >
+                      <Pencil className="size-4" />
+                      {t('bulkEdit.action')}
+                    </Button>
+                  )}
                   {canCreate && (
                     <>
                       <Button
@@ -478,16 +482,18 @@ export function ObjectListPage({
                     <Download className="size-4" />
                     {t('peopleUI.bulk.exportCsv')}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    disabled={del.isPending}
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    <Trash2 className="size-4" />
-                    {t('common.delete')}
-                  </Button>
+                  {canDeleteObjects && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      disabled={del.isPending}
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      <Trash2 className="size-4" />
+                      {t('common.delete')}
+                    </Button>
+                  )}
                 </BulkActionBar>
 
                 {desc.data && (
@@ -513,7 +519,7 @@ export function ObjectListPage({
                           })
                         }
                       }}
-                      onDeleteSingle={(item) => setSingleDeleteTarget(item)}
+                      onDeleteSingle={canDeleteObjects ? (item) => setSingleDeleteTarget(item) : undefined}
                       onCopyTo={canCreate ? (item) => setCopyMove({ mode: 'copy', dns: [item.dn] }) : undefined}
                       onMoveTo={canCreate ? (item) => setCopyMove({ mode: 'move', dns: [item.dn] }) : undefined}
                       selectedRowDn={showPreview ? (previewDn ?? rows[0]?.dn ?? null) : null}

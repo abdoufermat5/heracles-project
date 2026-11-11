@@ -151,6 +151,10 @@ export interface TypeSummary {
   icon: string
   category: Category
   can_create: boolean
+  /** Type capability flags: false for types Heracles writes itself (absent = true). */
+  creatable?: boolean
+  editable?: boolean
+  deletable?: boolean
 }
 
 export type AttributeKind =
@@ -234,6 +238,9 @@ export interface TypeDescriptor {
   name_attr: string
   columns: ColumnDescriptor[]
   tabs: TabDescriptor[]
+  creatable?: boolean
+  editable?: boolean
+  deletable?: boolean
 }
 
 // ── Tree ──────────────────────────────────────────────────────────────────
