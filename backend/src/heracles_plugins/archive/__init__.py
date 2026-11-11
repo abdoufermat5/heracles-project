@@ -5,12 +5,12 @@ Provides the read-only ``archived_object`` type (entries below ``ou=archive``, A
 (:func:`run_archive`), the service function :func:`archive` and the router
 ``POST /api/v2/archive/{type}/{dn}`` for users allowed to delete the object.
 
-Integration notes for the framework owners:
+Integration notes:
 
 * The UI (or the API client) calls the endpoint, then ``DELETE /objects/...``. To archive
   automatically, pass ``ArchiveBeforeDelete(directory, settings)`` as ``events=`` of the
   ``ObjectService`` handling deletions.
-* Scheduler / CLI: ``run_archive(directory, datetime.now(UTC), registry.settings["archive"])``.
+* The scheduler (``heracles worker``) runs the purge task through the registered runner.
 * Per type rules (kept attributes, unique key) are ``ArchiveSettings.rules``.
 """
 
@@ -22,6 +22,7 @@ from heracles.objects import ObjectType, Plugin, Section, Tab
 from heracles.objects.hooks import TabContext
 from heracles.objects.policy import NullEvents, ObjectEvents
 from heracles.objects.registry import EventsContext
+from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles_plugins._tasks import TaskObjectType, TaskTab
 from heracles_plugins.archive.router import build_router
 from heracles_plugins.archive.runner import (
@@ -118,7 +119,13 @@ def plugin() -> Plugin:
         settings=ArchiveSettings(),
         api_routers=(build_router,),
         object_events=(_archive_events,),
+        task_runners=(TaskRunner(PLUGIN_NAME, _run, kind=ArchiveTask.name),),
     )
+
+
+def _run(ctx: TaskRunContext) -> ArchiveReport:
+    settings = ctx.settings if isinstance(ctx.settings, ArchiveSettings) else None
+    return run_archive(ctx.directory, ctx.now, settings)
 
 
 def _archive_events(ctx: EventsContext) -> ObjectEvents:

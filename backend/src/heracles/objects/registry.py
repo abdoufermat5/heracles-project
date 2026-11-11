@@ -12,6 +12,7 @@ from heracles.ldap.client import DirectoryClient, Entry, Modification
 from heracles.objects.errors import UnknownTypeError
 from heracles.objects.model import ObjectType, Tab
 from heracles.objects.policy import ObjectEvents
+from heracles.objects.task_runner import TaskRunner
 
 PLUGIN_GROUP = "heracles.plugins"
 
@@ -143,6 +144,8 @@ class Plugin:
     public_routers: Sequence[PublicRouterFactory] = ()
     #: Authenticated routers mounted under ``/api/v2``, see :data:`ApiRouterFactory`.
     api_routers: Sequence[ApiRouterFactory] = ()
+    #: Scheduled task runners, see :class:`TaskRunner`.
+    task_runners: Sequence[TaskRunner] = ()
     #: Default settings, registered as ``registry.settings[name]`` unless already set.
     settings: Any = None
     config: Any = None
@@ -190,6 +193,8 @@ class TypeRegistry:
         self.public_router_factories: list[tuple[str, PublicRouterFactory]] = []
         #: ``(plugin name, factory)`` of enabled plugins' authenticated API routers.
         self.api_router_factories: list[tuple[str, ApiRouterFactory]] = []
+        #: ``(plugin name, runner)`` of enabled plugins' scheduled task runners.
+        self.task_runners: list[tuple[str, TaskRunner]] = []
         self._types: dict[str, TypeInfo] = {}
         self.plugins: list[PluginStatus] = []
 
@@ -277,6 +282,7 @@ class TypeRegistry:
             self.events_factories.extend((plugin.name, f) for f in plugin.object_events)
             self.public_router_factories.extend((plugin.name, f) for f in plugin.public_routers)
             self.api_router_factories.extend((plugin.name, f) for f in plugin.api_routers)
+            self.task_runners.extend((plugin.name, r) for r in plugin.task_runners)
             if plugin.settings is not None:
                 self.settings.setdefault(plugin.name, plugin.settings)
         return statuses
