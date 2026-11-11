@@ -30,6 +30,7 @@ from heracles.core import config_store, setup_checks
 from heracles.core.generalized_time import format_generalized_time, parse_generalized_time
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Modification, NoSuchObjectError, Scope
+from heracles.ldap.filter import matches as filter_matches
 from heracles.objects.activation import (
     LOCKED_PLUGINS,
     PluginLockedError,
@@ -418,16 +419,24 @@ def task_rows(
     return rows
 
 
-def _task_entry(user: CurrentUser, domain: Domain, dn: str) -> tuple[Any, str]:
+def _task_entry(user: CurrentUser, domain: Domain, dn: str) -> tuple[Any, str, str]:
+    """``(entry, acl key, type name)`` of a task the user may write.
+
+    The rights are those of the task's own type (the first ``tasks`` type whose filter
+    matches the entry), not of any task type.
+    """
     directory = user.directory
     entry = directory.get(dn)
     if entry is None or not entry.has_object_class(schema.OC.TASKS):
         raise not_found("Task not found")
+    if not dnlib.is_descendant(dn, directory.base_dn):
+        raise not_found("Task not found")
     for info in domain.registry.list():
-        if info.acl_category == "tasks" and dnlib.is_descendant(dn, directory.base_dn):
+        if info.acl_category == "tasks" and filter_matches(entry, info.type.filter):
             key = info.acl_object(info.main_tab)
             if rights_of(user, domain, key, dn).write:
-                return entry, key
+                return entry, key, info.name
+            break
     raise forbidden("You cannot run this task")
 
 
@@ -925,7 +934,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
 
         Otherwise (a separate ``heracles worker``) the task is only queued for the next pass.
         """
-        entry, _key = _task_entry(user, domain, dn)
+        entry, _key, kind = _task_entry(user, domain, dn)
         now = format_generalized_time(datetime.now(UTC)).encode()
         mods = [Modification("replace", schema.TASKS_NEXT_EXEC_ATTR, [now])]
         if (entry.text(schema.TASKS_STATUS_ATTR) or "").lower() != "activated":
@@ -933,7 +942,9 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         user.directory.modify(entry.dn, mods)
         _audit(user, domain, "task", "task", entry.dn, "run requested")
         scheduler = getattr(request.app.state, "scheduler", None)
-        runs = scheduler.run_pass([user.directory_id]) if scheduler is not None else None
+        runs = (
+            scheduler.run_pass([user.directory_id], kinds=[kind]) if scheduler is not None else None
+        )
         if runs is None:  # no in-process scheduler, or another worker is mid-pass
             return {"dn": entry.dn, "queued": True, "runs": []}
         return {"dn": entry.dn, "queued": False, "runs": [r.as_dict() for r in runs]}
@@ -941,7 +952,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
     @router.post("/tasks/{dn:path}/retry")
     def retry_task(dn: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, Any]:
         """Put the failed granular sub-tasks of a task back in the queue."""
-        entry, _key = _task_entry(user, domain, dn)
+        entry, _key, _kind = _task_entry(user, domain, dn)
         now = format_generalized_time(datetime.now(UTC)).encode()
         retried: list[str] = []
         for sub in user.directory.search(

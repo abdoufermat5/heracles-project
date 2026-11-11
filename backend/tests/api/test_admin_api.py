@@ -456,3 +456,25 @@ def test_user_list_counts_only_groups_the_caller_may_read() -> None:
     # helpdesk reads users but no groups: memberships must not leak through the count
     helpdesk_view = counts("helpdesk")
     assert helpdesk_view and all(n == 0 for n in helpdesk_view.values())
+
+
+def test_run_task_checks_the_rights_of_its_own_kind(
+    client: TestClient, admin: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Write rights on another task type do not allow running this task."""
+    from heracles.acl import Rights
+    from heracles.api.v2 import admin as admin_routes
+
+    r = client.post(
+        "/api/v2/objects/audit_task",
+        json={"base": BASE, "tabs": {"main": {"active": True, "values": {"cn": "purge"}}}},
+        headers=admin.headers,
+    )
+    assert r.status_code == 201, r.text
+    task_dn = r.json()["dn"]
+
+    def only_archive_tasks(_user: Any, _domain: Any, key: str, _dn: Any = None) -> Rights:
+        return Rights.parse("rw" if "archive" in key.lower() else "r")
+
+    monkeypatch.setattr(admin_routes, "rights_of", only_archive_tasks)
+    assert admin.post(f"/tasks/{dnp(task_dn)}/run").status_code == 403

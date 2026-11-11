@@ -256,8 +256,15 @@ class Scheduler:
         source = self._registry
         return source if isinstance(source, TypeRegistry) else source()
 
-    def run_pass(self, directory_ids: Iterable[str] | None = None) -> list[RunRecord] | None:
-        """One pass; ``None`` when another worker holds the lease (nothing was run)."""
+    def run_pass(
+        self,
+        directory_ids: Iterable[str] | None = None,
+        kinds: Iterable[str] | None = None,
+    ) -> list[RunRecord] | None:
+        """One pass; ``None`` when another worker holds the lease (nothing was run).
+
+        ``kinds`` limits the pass to the runners of those task types ("run now").
+        """
         owner = uuid.uuid4().hex
         if not self.store.acquire_lease(owner, self._lease_seconds):
             log.info("tasks.pass_skipped", reason="lease held by another worker")
@@ -265,11 +272,14 @@ class Scheduler:
         try:
             wanted = None if directory_ids is None else set(directory_ids)
             registry = self.registry
+            only = None if kinds is None else set(kinds)
             runs: list[RunRecord] = []
             for dir_id, directory in self.directories.items():
                 if wanted is not None and dir_id not in wanted:
                     continue
                 for plugin_name, runner in registry.task_runners:
+                    if only is not None and runner.kind not in only:
+                        continue
                     run = self._run_one(registry, dir_id, directory, plugin_name, runner)
                     self.store.record(run)
                     runs.append(run)

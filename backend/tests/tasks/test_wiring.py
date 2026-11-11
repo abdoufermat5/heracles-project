@@ -49,7 +49,7 @@ class FakeScheduler(Scheduler):
     def __init__(self) -> None:  # pyright: ignore[reportMissingSuperCall]
         self.passes = 0
 
-    def run_pass(self, directory_ids: Any = None) -> list[RunRecord] | None:
+    def run_pass(self, directory_ids: Any = None, kinds: Any = None) -> list[RunRecord] | None:
         self.passes += 1
         return []
 
@@ -101,7 +101,8 @@ def test_run_now_runs_the_pass_and_exposes_reports() -> None:
         app.state.task_store = scheduler.store
         ran = client.post(f"/api/v2/admin/tasks/{dnp(dn)}/run", headers=headers).json()
         assert ran["queued"] is False
-        assert "audit" in {run["runner"] for run in ran["runs"]}
+        # only the runner of the task's own kind runs, not every runner of the directory
+        assert {run["kind"] for run in ran["runs"]} == {"audit_task"}
 
         runs = client.get("/api/v2/admin/tasks/runs").json()["runs"]
         assert runs and runs[0]["runner"]

@@ -174,3 +174,19 @@ def test_registry_provider_is_read_at_every_pass() -> None:
     assert scheduler.run_pass() is not None and calls == ["run"]
     current["registry"] = TypeRegistry()  # the plugin was disabled
     assert scheduler.run_pass() == [] and calls == ["run"]
+
+
+def test_pass_limited_to_kinds() -> None:
+    seen: list[str] = []
+
+    def run(ctx: TaskRunContext) -> FakeReport:
+        del ctx
+        return FakeReport()
+
+    def one(ctx: TaskRunContext) -> FakeReport:
+        seen.append(ctx.directory.base_dn)
+        return FakeReport()
+
+    scheduler = make(TaskRunner("one", one, kind="k1"), TaskRunner("two", run, kind="k2"))
+    runs = scheduler.run_pass(["a"], kinds=["k1"])
+    assert runs is not None and [r.kind for r in runs] == ["k1"] and seen == ["dc=a"]
