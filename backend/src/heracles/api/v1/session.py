@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
+from heracles.api.auth_audit import audit_login, audit_login_failed
 from heracles.api.deps import StateDep, client_ip
 from heracles.api.errors import ApiError, unauthenticated, validation
 from heracles.api.v1.common import V1Route, V1UserDep, session_token
@@ -51,10 +52,12 @@ def login(body: LoginRequest, request: Request, state: StateDep) -> str:
         user_dn = authenticate_bind(directory, state.login_config, login_name, body.password)
     except InvalidLoginError:
         state.limiter.record_failure(key)
+        audit_login_failed(state, request, directory, login_name, "invalid credentials")
         raise unauthenticated("Invalid username or password") from None
     if state.second_factor.methods_for(user_dn):
         raise unauthenticated("Second factor accounts cannot use API v1")
     state.limiter.record_success(key)
+    audit_login(state, request, directory, user_dn, "api v1")
     return state.sessions.create(user_dn, directory_id).id
 
 

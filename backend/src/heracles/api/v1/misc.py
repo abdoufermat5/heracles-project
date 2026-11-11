@@ -163,9 +163,17 @@ def confirm_recovery(body: RecoveryRequest, user: V1UserDep, state: StateDep) ->
     if body.password1 != body.password2:
         raise bad_request("The two passwords do not match")
     try:
-        state.recovery.confirm(user.directory, body.login, body.token, body.password1)
+        target = state.recovery.confirm(user.directory, body.login, body.token, body.password1)
     except PasswordPolicyError as exc:
         raise bad_request("Password rejected: " + "; ".join(exc.problems)) from None
     except RecoveryError:
         raise bad_request("Invalid or expired recovery token") from None
+    state.audit.record_by(
+        user,
+        "password",
+        object_type="user",
+        object_dn=target,
+        attributes=["password: reset with a recovery token"],
+        source="api v1",
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

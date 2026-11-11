@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from webauthn import base64url_to_bytes
 from webauthn.helpers import bytes_to_base64url
 
+from heracles.api.auth_audit import audit_login, audit_login_failed
 from heracles.api.deps import (
     CurrentUserDep,
     PendingSessionDep,
@@ -241,9 +242,11 @@ def login(body: LoginBody, request: Request, response: Response, state: StateDep
     except InvalidLoginError:
         state.limiter.record_failure(key)
         log.info("login_failed", directory=directory_id)
+        audit_login_failed(state, request, directory, body.username, "invalid credentials")
         raise unauthenticated(_GENERIC_LOGIN_ERROR) from None
     state.limiter.record_success(key)
     log.info("login_ok", directory=directory_id, user=user_dn)
+    audit_login(state, request, directory, user_dn, "password")
     return _start_session(request, response, state, user_dn, directory_id)
 
 
@@ -267,12 +270,17 @@ def login_header(
         )
     except InvalidLoginError:
         raise unauthenticated() from None
+    audit_login(state, request, directory, user_dn, "header")
     return _start_session(request, response, state, user_dn, directory_id)
 
 
 @router.post("/second-factor")
 def second_factor(
-    body: SecondFactorBody, response: Response, state: StateDep, session: PendingSessionDep
+    body: SecondFactorBody,
+    request: Request,
+    response: Response,
+    state: StateDep,
+    session: PendingSessionDep,
 ) -> StatusResponse:
     if not session.second_factor_pending:
         return StatusResponse()
@@ -283,6 +291,7 @@ def second_factor(
     else:
         verified = state.second_factor.verify(session.user_dn, body.method, body.code)
     if not verified:
+        _audit_second_factor_failed(state, request, session, body.method)
         session.second_factor_failures += 1
         if session.second_factor_failures >= state.settings.login.max_second_factor_failures:
             state.sessions.delete(session.id)
@@ -298,6 +307,24 @@ def second_factor(
     state.sessions.save(rotated)
     _set_session_cookie(response, state, rotated)
     return StatusResponse()
+
+
+def _audit_second_factor_failed(
+    state: AppState, request: Request, session: Session, method: str
+) -> None:
+    directory = state.directories.get(session.directory_id)
+    if directory is None:
+        return
+    state.audit.record(
+        directory,
+        "login_failed",
+        object_type="user",
+        object_dn=session.user_dn,
+        author_dn=session.user_dn,
+        author_ip=client_ip(request, state),
+        attributes=[f"second factor: {method}"],
+        result="failure",
+    )
 
 
 #: How long a login or a password confirmation allows sensitive account changes.
@@ -406,6 +433,13 @@ def webauthn_register(
             "Security key registration failed", {"credential": "Registration failed"}
         ) from None
     log.info("webauthn_registered", user=user.dn)
+    state.audit.record_by(
+        user,
+        "second_factor",
+        object_type="user",
+        object_dn=user.dn,
+        attributes=["security key: added"],
+    )
     return _credential_info(stored)
 
 
@@ -431,6 +465,13 @@ def webauthn_delete(
     if not state.webauthn.remove_credential(user.dn, raw):
         raise not_found()
     log.info("webauthn_removed", user=user.dn)
+    state.audit.record_by(
+        user,
+        "second_factor",
+        object_type="user",
+        object_dn=user.dn,
+        attributes=["security key: removed"],
+    )
 
 
 # -- TOTP and recovery codes (self-service) ------------------------------------------------------
@@ -480,6 +521,13 @@ def totp_confirm(body: TotpConfirmBody, user: CurrentUserDep, state: StateDep) -
         raise validation("Wrong code", {"code": "Wrong code"})
     cache.pop(_TOTP_PENDING_KEY, None)
     log.info("totp_enabled", user=user.dn)
+    state.audit.record_by(
+        user,
+        "second_factor",
+        object_type="user",
+        object_dn=user.dn,
+        attributes=["authenticator app: enabled"],
+    )
     return StatusResponse()
 
 
@@ -500,6 +548,13 @@ def totp_disable(user: CurrentUserDep, state: StateDep, confirm_disable: bool = 
         store.set_recovery_hashes(user.dn, [])  # unusable now; do not revive them later
     user.session.cache.pop(_TOTP_PENDING_KEY, None)
     log.info("totp_disabled", user=user.dn)
+    state.audit.record_by(
+        user,
+        "second_factor",
+        object_type="user",
+        object_dn=user.dn,
+        attributes=["authenticator app: disabled"],
+    )
 
 
 @router.post("/recovery-codes")
@@ -514,6 +569,13 @@ def recovery_codes_generate(user: CurrentUserDep, state: StateDep) -> RecoveryCo
         )
     codes = state.second_factor.regenerate_recovery_codes(user.dn)
     log.info("recovery_codes_generated", user=user.dn)
+    state.audit.record_by(
+        user,
+        "second_factor",
+        object_type="user",
+        object_dn=user.dn,
+        attributes=["recovery codes: regenerated"],
+    )
     return RecoveryCodes(codes=codes)
 
 
@@ -522,6 +584,16 @@ def logout(request: Request, response: Response, state: StateDep) -> None:
     session = session_from_cookie(request, state)
     if session is not None:
         state.sessions.delete(session.id)
+        directory = state.directories.get(session.directory_id)
+        if directory is not None and not session.second_factor_pending:
+            state.audit.record(
+                directory,
+                "logout",
+                object_type="user",
+                object_dn=session.user_dn,
+                author_dn=session.user_dn,
+                author_ip=client_ip(request, state),
+            )
         for hook in state.logout_hooks:
             try:
                 hook(session)
@@ -581,6 +653,20 @@ def me(user: CurrentUserDep, request: Request, state: StateDep) -> Me:
 
 
 # -- password recovery ---------------------------------------------------------------------------
+def _recover(state: AppState, directory: DirectoryClient, email: str, ip: str) -> None:
+    """Send the recovery link and record it (runs after the response)."""
+    user_dn = state.recovery.request(directory, email)
+    if user_dn is not None:
+        state.audit.record(
+            directory,
+            "password",
+            object_type="user",
+            object_dn=user_dn,
+            author_ip=ip,
+            attributes=["recovery link: requested"],
+        )
+
+
 @router.post("/recovery", status_code=202)
 def recovery_request(
     body: RecoveryBody, request: Request, tasks: BackgroundTasks, state: StateDep
@@ -591,7 +677,7 @@ def recovery_request(
         key = state.limiter.key(client_ip(request, state), "recovery:" + body.email)
         if directory is not None and state.limiter.retry_after(key) <= 0:
             state.limiter.record_failure(key)
-            tasks.add_task(state.recovery.request, directory, body.email)
+            tasks.add_task(_recover, state, directory, body.email, client_ip(request, state))
     return StatusResponse()
 
 
@@ -611,16 +697,35 @@ def recovery_confirm(
             "Too many attempts, try again later",
             headers={"Retry-After": str(math.ceil(wait))},
         )
+    ip = client_ip(request, state)
     try:
-        state.recovery.confirm(directory, body.login, body.token, body.password)
+        user_dn = state.recovery.confirm(directory, body.login, body.token, body.password)
     except PasswordPolicyError as exc:
         raise validation("Password rejected", {"password": "; ".join(exc.problems)}) from None
     except RecoveryError:
         state.limiter.record_failure(key)
+        state.audit.record(
+            directory,
+            "password",
+            object_type="user",
+            object_dn=body.login,
+            author_ip=ip,
+            attributes=["recovery: invalid or expired link"],
+            result="failure",
+        )
         raise validation(
             "Invalid or expired recovery link", {"token": "Invalid or expired token"}
         ) from None
     state.limiter.record_success(key)
+    state.audit.record(
+        directory,
+        "password",
+        object_type="user",
+        object_dn=user_dn,
+        author_dn=user_dn,
+        author_ip=ip,
+        attributes=["password: reset with a recovery link"],
+    )
     return StatusResponse()
 
 

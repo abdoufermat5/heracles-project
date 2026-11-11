@@ -284,7 +284,7 @@ def test_reset_is_logged_and_audited(app: FastAPI, state: AppState) -> None:
 
     directory = state.directories["main"]
     [event] = events_for(directory, ASMITH)
-    assert event.text("hrcAuditAction") == "modify"
+    assert event.text("hrcAuditAction") == "second_factor"
     assert event.text("hrcAuditAuthorDN") == HELPDESK
     attrs = [v.decode() for v in event.attrs["hrcAuditAttributes"]]
     assert attrs == [

@@ -16,6 +16,7 @@ from fastapi import Depends, FastAPI, Request
 from heracles.acl import AclEvaluator, AclResolver, LdapAclDirectory, ResolvedAcl, Rights
 from heracles.api.deps import CurrentUser
 from heracles.auth.sessions import Session
+from heracles.core.audit import AuditSink
 from heracles.core.locks import LockService
 from heracles.core.snapshots import SnapshotService
 from heracles.ldap import dn as dnlib
@@ -94,6 +95,11 @@ class Domain:
     )
     #: Listing snapshots shared by the requests of this process (one set per session).
     listings: ListingCache = field(default_factory=ListingCache)
+
+    @property
+    def audit(self) -> AuditSink:
+        """Audit sink bound to this domain's registry (no-op without the audit plugin)."""
+        return AuditSink(self.registry)
 
     def is_admin(self, user_dn: str) -> bool:
         return dnlib.normalize(user_dn) in self.admin_dns
@@ -218,6 +224,9 @@ def invalidate_acl_cache(session: Session) -> None:
 
 def install_domain(app: FastAPI, domain: Domain) -> None:
     app.state.domain = domain
+    state = getattr(app.state, "heracles", None)
+    if state is not None:
+        state.audit.attach(domain.registry)
 
 
 def get_domain(request: Request) -> Domain:

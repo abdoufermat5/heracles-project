@@ -67,6 +67,11 @@ def _require(
         raise forbidden("You do not have the rights for this operation")
 
 
+def _audit(user: CurrentUser, domain: Domain, action: str, kind: str, dn: str, *notes: str) -> None:
+    """Record an administration change in the audit log (no-op without the audit plugin)."""
+    domain.audit.record_by(user, action, object_type=kind, object_dn=dn, attributes=notes)
+
+
 @contextmanager  # pyright: ignore[reportDeprecated]
 def admin_errors() -> Iterator[None]:
     try:
@@ -546,6 +551,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
             )
             role = acl_admin.get_role(user.directory, dn)
         assert role is not None
+        _audit(user, domain, "acl", "acl_role", dn, "role created")
         return role.to_json()
 
     @router.put("/acl/roles/{dn:path}")
@@ -558,6 +564,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
                 user.directory, dn, description=body.description, templates=body.templates
             )
         invalidate_acl_cache(user.session)
+        _audit(user, domain, "acl", "acl_role", dn, "role updated")
         return role.to_json()
 
     @router.delete("/acl/roles/{dn:path}", status_code=204)
@@ -571,6 +578,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         with admin_errors():
             acl_admin.delete_role(user.directory, dn, force=force)
         invalidate_acl_cache(user.session)
+        _audit(user, domain, "acl", "acl_role", dn, "role deleted")
         return Response(status_code=204)
 
     @router.get("/acl/assignments")
@@ -596,6 +604,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         with admin_errors():
             items = acl_admin.set_assignments(user.directory, dn, body.assignments)
         invalidate_acl_cache(user.session)
+        _audit(user, domain, "acl", "acl_assignment", dn, f"assignments: {len(items)}")
         return {"dn": dn, "assignments": items}
 
     @router.post("/acl/check")
@@ -663,6 +672,14 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         with admin_errors():
             config_store.save_config(user.directory, body.changes)
         apply_runtime(state, domain, user.directory_id, effective(state, user.directory_id))
+        _audit(
+            user,
+            domain,
+            "config",
+            "config",
+            config_store.config_dn(user.directory),
+            *(f"changed: {k}" for k in sorted(body.changes)),
+        )
         return config_view(user, domain, state)
 
     # --------------------------------------------------------- triggers
@@ -728,6 +745,14 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
             changes["display_hook_output"] = body.display_output
         with admin_errors():
             config_store.save_config(user.directory, changes)
+        _audit(
+            user,
+            domain,
+            "config",
+            "hooks",
+            config_store.config_dn(user.directory),
+            f"hooks: {len(values)}",
+        )
         return hooks_view(user, domain, state)
 
     # ----------------------------------------------------------- health
@@ -752,6 +777,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         except setup_checks.UnknownCheckError:
             raise not_found("This check has no fix") from None
         invalidate_acl_cache(user.session)
+        _audit(user, domain, "config", "setup_check", user.directory.base_dn, f"fix: {check_id}")
         remaining = setup_checks.run_checks(ctx, [check_id])
         return {"result": outcome.to_json(), "check": remaining[0].to_json() if remaining else None}
 
@@ -795,6 +821,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         if (entry.text(schema.TASKS_STATUS_ATTR) or "").lower() != "activated":
             mods.append(Modification("replace", schema.TASKS_STATUS_ATTR, [b"Activated"]))
         user.directory.modify(entry.dn, mods)
+        _audit(user, domain, "task", "task", entry.dn, "run requested")
         return {"dn": entry.dn, "queued": True}
 
     @router.post("/tasks/{dn:path}/retry")
@@ -818,6 +845,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
                     ],
                 )
                 retried.append(sub.dn)
+        _audit(user, domain, "task", "task", entry.dn, f"retried sub-tasks: {len(retried)}")
         return {"dn": entry.dn, "retried": retried}
 
     return router
