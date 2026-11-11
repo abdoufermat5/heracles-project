@@ -80,6 +80,10 @@ class DirectoryError(Exception):
     """Base error for directory operations."""
 
 
+class DirectoryUnavailableError(DirectoryError):
+    """No server of the directory can be reached (or none accepts writes)."""
+
+
 class NoSuchObjectError(DirectoryError):
     """The target entry does not exist."""
 
