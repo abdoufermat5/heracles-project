@@ -151,7 +151,33 @@ export interface TypeSummary {
   icon: string
   category: Category
   can_create: boolean
+  // --- navigation metadata ---
+  nav: NavLevel
+  nav_group: NavGroup
+  count_key: string | null
+  // --- end navigation metadata ---
 }
+
+/** How a type appears in the sidebar: a link, under "More", or only in the palette. */
+export type NavLevel = 'primary' | 'secondary' | 'hidden'
+export type NavGroup =
+  | 'people'
+  | 'organization'
+  | 'access'
+  | 'infrastructure'
+  | 'mail'
+  | 'activity'
+  | 'settings'
+
+export const NAV_GROUPS: readonly NavGroup[] = [
+  'people',
+  'organization',
+  'access',
+  'infrastructure',
+  'mail',
+  'activity',
+  'settings',
+]
 
 export type AttributeKind =
   | 'string'

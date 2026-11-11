@@ -3,6 +3,7 @@ import { accessFr } from './access.fr'
 import { settingsFr } from './settings.fr'
 import type { Translation } from './en'
 import { objectsFr } from './objects.fr'
+import { sidebarFr } from './sidebar.fr'
 import { adminFr } from '@/features/admin/locale-fr'
 
 const fr: Translation = {
@@ -29,6 +30,7 @@ const fr: Translation = {
   ...peopleFr,
   ...accessFr,
   ...settingsFr,
+  ...sidebarFr,
   // --- end P3 objects ---
   categories: {
     directory: 'Annuaire',

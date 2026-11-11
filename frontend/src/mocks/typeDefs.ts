@@ -376,11 +376,11 @@ export const typeDescriptors: TypeDescriptor[] = [
 ]
 
 export const typeSummaries: TypeSummary[] = [
-  { name: 'user', label: 'User', label_plural: 'Users', icon: 'user', category: 'directory', can_create: true },
-  { name: 'group', label: 'Group', label_plural: 'Groups', icon: 'users', category: 'directory', can_create: true },
-  { name: 'department', label: 'Department', label_plural: 'Departments', icon: 'building-2', category: 'directory', can_create: true },
-  { name: 'role', label: 'Role', label_plural: 'Roles', icon: 'shield', category: 'access', can_create: true },
-  { name: 'dns_zone', label: 'DNS zone', label_plural: 'DNS zones', icon: 'globe', category: 'network', can_create: true },
+  { name: 'user', label: 'User', label_plural: 'Users', icon: 'user', category: 'directory', can_create: true, nav: 'primary', nav_group: 'people', count_key: 'user' },
+  { name: 'group', label: 'Group', label_plural: 'Groups', icon: 'users', category: 'directory', can_create: true, nav: 'primary', nav_group: 'people', count_key: 'group' },
+  { name: 'department', label: 'Department', label_plural: 'Departments', icon: 'building-2', category: 'directory', can_create: true, nav: 'primary', nav_group: 'organization', count_key: 'department' },
+  { name: 'role', label: 'Role', label_plural: 'Roles', icon: 'shield', category: 'access', can_create: true, nav: 'primary', nav_group: 'people', count_key: 'role' },
+  { name: 'dns_zone', label: 'DNS zone', label_plural: 'DNS zones', icon: 'globe', category: 'network', can_create: true, nav: 'primary', nav_group: 'infrastructure', count_key: null },
 ]
 
 /** RDN container (relative to a department) per type. */

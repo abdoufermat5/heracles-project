@@ -85,22 +85,28 @@ describe('config model', () => {
 })
 
 describe('administration navigation', () => {
-  it('shows the administration group with the entries the user may use', async () => {
+  it('lists the administration entries the user may use', async () => {
     signIn()
     renderApp('/')
-    const nav = await screen.findByTestId('admin-nav')
-    for (const name of ['Configuration', 'Directory health', 'Plugins', 'Tasks'])
-      expect(within(nav).getByRole('link', { name })).toBeInTheDocument()
-    // permissions live with the other access entries
-    expect(screen.getByRole('link', { name: 'Access control' })).toBeInTheDocument()
-    expect(within(nav).queryByRole('link', { name: 'Access control' })).not.toBeInTheDocument()
+    const nav = await screen.findByRole('navigation', { name: 'Main navigation' })
+    for (const name of ['Configuration', 'Directory health', 'Plugins', 'Tasks', 'Access control'])
+      expect(await within(nav).findByRole('link', { name })).toBeInTheDocument()
+    // permissions live with the other access entries, tasks with the activity entries
+    expect(
+      within(within(nav).getByTestId('nav-group-access')).getByRole('link', {
+        name: 'Access control',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(within(nav).getByTestId('nav-group-activity')).getByRole('link', { name: 'Tasks' }),
+    ).toBeInTheDocument()
   })
 
   it('hides the entries the user has no rights for', async () => {
     signIn('viewer')
     renderApp('/')
-    const nav = await screen.findByTestId('admin-nav')
-    expect(within(nav).getByRole('link', { name: 'Configuration' })).toBeInTheDocument()
+    const nav = await screen.findByRole('navigation', { name: 'Main navigation' })
+    expect(await within(nav).findByRole('link', { name: 'Configuration' })).toBeInTheDocument()
     expect(within(nav).queryByRole('link', { name: 'Access control' })).not.toBeInTheDocument()
     expect(within(nav).queryByRole('link', { name: 'Tasks' })).not.toBeInTheDocument()
   })
