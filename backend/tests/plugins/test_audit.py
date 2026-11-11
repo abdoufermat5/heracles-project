@@ -10,7 +10,12 @@ import pytest
 import heracles_plugins.audit as audit
 from heracles.core.generalized_time import format_generalized_time
 from heracles.ldap.memory import MemoryDirectory
-from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
+from heracles.objects import (
+    ObjectService,
+    ObjectValidationError,
+    PermissionDeniedError,
+    TypeRegistry,
+)
 from heracles.objects.builtin import register_builtin_types
 from heracles_plugins.audit.events import write_event
 
@@ -143,8 +148,9 @@ def test_events_of_audit_type_are_not_audited(
     audit_dn = write_event(
         directory, action="create", object_type="user", object_dn="uid=z", author_dn=ADMIN
     )
-    service.delete("audit_event", audit_dn)
-    assert events(directory) == []
+    with pytest.raises(PermissionDeniedError):
+        service.delete("audit_event", audit_dn)
+    assert [e["hrcAuditAction"] for e in events(directory)] == [["create"]]
 
 
 # ------------------------------------------------------------------ runner
@@ -246,9 +252,8 @@ def test_acl_keys_and_containers(directory: MemoryDirectory) -> None:
     event = registry.get("audit_event")
     assert event.acl_object(event.main_tab) == "auditEvent/auditEvent"
     assert event.type.rdn == "ou=audit"
-    user = registry.get("user")
-    tab = user.tab("auditSecurity")
-    assert tab is not None and user.acl_object(tab) == "user/auditSecurity"
+    assert registry.get("user").tab("auditSecurity") is None
+    assert not (event.type.creatable or event.type.editable or event.type.deletable)
 
 
 def test_audit_task_crud(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -295,13 +300,15 @@ def test_audit_events_are_read_only_in_the_object_layer(
     values = state.tabs["main"].values
     assert values["hrcAuditAction"] == "create"
     assert values["hrcAuditAttributes"] == ["uid: a"]
-    with pytest.raises(ObjectValidationError):
+    with pytest.raises(PermissionDeniedError):
         service.update("audit_event", dn, {"main": {"values": {"hrcAuditResult": "failure"}}})
-    with pytest.raises(ObjectValidationError):
+    with pytest.raises(PermissionDeniedError):
         service.create("audit_event", BASE, {"main": {"values": {"cn": "x"}}})
+    with pytest.raises(PermissionDeniedError):
+        service.delete("audit_event", dn)
 
 
-def test_security_tab_lists_events_about_and_by_the_user(
+def test_events_for_lists_events_about_and_by_the_user(
     service: ObjectService, directory: MemoryDirectory
 ) -> None:
     dn = service.create(
@@ -314,13 +321,7 @@ def test_security_tab_lists_events_about_and_by_the_user(
     write_event(
         directory, action="modify", object_type="group", object_dn=f"cn=g,{BASE}", author_dn=ADMIN
     )
-    state = service.load("user", dn)
-    log = state.tabs["auditSecurity"].values["hrcAuditSecurityLog"]
-    assert len(log) == 3
-    assert all(dn in line for line in log)
-    stamps = [line.split()[0] for line in log]
+    found = audit.events_for(directory, dn)
+    assert len(found) == 3
+    stamps = [e.text("hrcAuditDateTime") or "" for e in found]
     assert stamps == sorted(stamps, reverse=True)
-    # the tab is never written to the entry
-    entry = directory.get(dn)
-    assert entry is not None and not entry.get("hrcAuditSecurityLog")
-    service.update("user", dn, {"main": {"values": {"mail": "k@example.com"}}})

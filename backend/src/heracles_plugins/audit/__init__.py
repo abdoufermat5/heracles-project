@@ -5,7 +5,8 @@ Provides:
 * the read-only ``audit_event`` type (entries below ``ou=audit``, ACL ``auditEvent/auditEvent``);
 * the ``audit_task`` type (``hrcTasks`` + ``hrcAuditTasks``) that purges old events and can
   forward new ones to syslog, run with :func:`run_audit`;
-* the read-only ``auditSecurity`` tab on users listing the events concerning them;
+* ``GET /api/v2/audit``: filtered, paged and exportable view of the log (the user
+  profile and the object editor use it for their history);
 * :class:`AuditEvents`, an ``ObjectEvents`` implementation writing the events.
 
 Integration notes for the framework owners:
@@ -30,20 +31,20 @@ from heracles.attributes import (
     ObjectRefAttr,
     StringAttr,
 )
+from heracles.core.audit import AUDIT_RDN, EVENT_CLASS
 from heracles.i18n import _
-from heracles.objects import ObjectType, Plugin, Section, Tab, TabAttachment
+from heracles.objects import ObjectType, Plugin, Section, Tab
 from heracles.objects.hooks import TabContext
 from heracles.objects.registry import EventsContext
 from heracles_plugins._tasks import TaskObjectType, TaskTab
 from heracles_plugins.audit.events import (
-    AUDIT_RDN,
-    EVENT_CLASS,
     AuditEvents,
     AuditSettings,
     events_for,
     format_event,
     write_event,
 )
+from heracles_plugins.audit.router import build_router
 from heracles_plugins.audit.runner import TASK_CLASS, TASK_FILTER, AuditReport, run_audit
 
 PLUGIN_NAME = "audit"
@@ -100,6 +101,9 @@ class AuditEvent(ObjectType):
     label_plural = _("Audit events")
     icon = "shield"
     category = "workflow"
+    creatable = False
+    editable = False
+    deletable = False
     filter = f"(objectClass={EVENT_CLASS})"
     main_attr = "cn"
     name_attr = "cn"
@@ -151,45 +155,16 @@ class AuditEvent(ObjectType):
             ctx.error("cn", _("Audit events are written by Heracles and cannot be edited."))
 
 
-class AuditSecurityTab(Tab):
-    """Read-only list of the latest events about a user or made by them."""
-
-    name = "auditSecurity"
-    acl_key = "auditSecurity"
-    label = _("Security audit")
-
-    log = Section(
-        _("Security audit"),
-        virtual(
-            ListAttr(
-                "hrcAuditSecurityLog",
-                _("Latest events"),
-                StringAttr("event", _("Event")),
-                readonly=True,
-                description=_("Changes made to or by this account, newest first"),
-            )
-        ),
-    )
-
-    @classmethod
-    def on_load(cls, ctx: TabContext) -> None:
-        if ctx.dn is None:
-            return
-        ctx.values["hrcAuditSecurityLog"] = [
-            format_event(e) for e in events_for(ctx.directory, ctx.dn)
-        ] or None
-
-
 def plugin() -> Plugin:
     """Entry point of the audit plugin."""
     return Plugin(
         name=PLUGIN_NAME,
         version="0.1.0",
         types=(AuditTask, AuditEvent),
-        tabs=(TabAttachment("user", AuditSecurityTab),),
         required_object_classes=(EVENT_CLASS,),
         settings=AuditSettings(),
         object_events=(_audit_events,),
+        api_routers=(build_router,),
     )
 
 
@@ -205,7 +180,6 @@ __all__ = [
     "AuditEvent",
     "AuditEvents",
     "AuditReport",
-    "AuditSecurityTab",
     "AuditSettings",
     "AuditTask",
     "events_for",
