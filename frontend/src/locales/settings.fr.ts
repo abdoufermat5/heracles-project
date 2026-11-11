@@ -167,6 +167,7 @@ export const settingsFr: typeof settingsEn = {
         posix_groups_tree: 'Vérifie que les groupes Unix POSIX sont situés dans le conteneur configuré.',
         departments: 'Vérifie la présence du marqueur de département sur les unités organisationnelles.',
         duplicate_ids: 'Recherche les doublons d\'identifiants numériques uidNumber ou gidNumber.',
+        plugin_data: 'Compte les entrées qui utilisent le schéma de modules désactivés (leurs onglets sont masqués dans la console).',
       },
       checkFix: {
         root_object: 'Ajoute les classes organisationnelles manquantes à l\'entrée racine.',
@@ -179,6 +180,7 @@ export const settingsFr: typeof settingsEn = {
         posix_groups_tree: 'Déplace les groupes POSIX sélectionnés vers le conteneur de groupes configuré.',
         departments: 'Ajoute la classe d\'objet de département aux unités organisationnelles.',
         duplicate_ids: 'Rapport seul. Réattribuez manuellement des identifiants uniques aux entrées en conflit.',
+        plugin_data: 'Rapport seul. Réactivez le module ou nettoyez les entrées.',
       },
     },
     tasks: {

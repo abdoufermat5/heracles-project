@@ -182,11 +182,21 @@ export interface FixOutcome {
 export interface PluginInfo {
   name: string
   version: string
+  /** Registered: available in the schema and switched on. */
   enabled: boolean
+  /** Every required objectClass is defined by the directory schema. */
+  available: boolean
+  /** Cannot be switched off (serves the console itself). */
+  locked?: boolean
   missing_object_classes: string[]
   required_object_classes: string[]
   types: { name: string; label: string; category: string }[]
   tabs: { type: string; name: string; label: string }[]
+}
+
+export interface PluginToggleResult {
+  restart_required: boolean
+  plugin: PluginInfo
 }
 
 export interface TaskRow {

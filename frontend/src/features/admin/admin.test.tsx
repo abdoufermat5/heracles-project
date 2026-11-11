@@ -3,7 +3,11 @@ import { join } from 'node:path'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { renderHook } from '@testing-library/react'
+import { createElement } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { qk } from '@/api/hooks'
 import en from '@/locales/en'
 import fr from '@/locales/fr'
 import { adminMock } from '@/mocks/adminHandlers'
@@ -11,6 +15,7 @@ import { BASE_DN } from '@/mocks/db'
 import { must, renderApp, signIn } from '@/test/utils'
 import { server } from '@/mocks/server'
 import { nextDraft, normalise } from './configModel'
+import { useTogglePlugin } from './hooks'
 import { toggleRight } from './rights'
 import type { ConfigField } from './types'
 
@@ -289,8 +294,66 @@ describe('plugins page', () => {
     expect(within(posix).getByText('Unix group')).toBeInTheDocument()
     expect(within(posix).getByText('0.1.0')).toBeInTheDocument()
     const samba = (await screen.findByText('samba')).closest('[data-plugin]') as HTMLElement
-    expect(within(samba).getByText('Disabled')).toBeInTheDocument()
+    expect(within(samba).getByText('Unavailable')).toBeInTheDocument()
     expect(within(samba).getByText('sambaSamAccount')).toBeInTheDocument()
+  })
+
+  it('groups the cards as enabled, available and unavailable', async () => {
+    signIn()
+    renderApp('/admin/plugins')
+    await screen.findByText('samba')
+    const inGroup = (id: string) =>
+      [...document.querySelectorAll(`[data-group="${id}"] [data-plugin]`)].map((n) =>
+        n.getAttribute('data-plugin'),
+      )
+    expect(inGroup('enabled')).toEqual(['posix', 'acl_admin'])
+    expect(inGroup('available')).toEqual(['dns'])
+    expect(inGroup('unavailable')).toEqual(['samba'])
+  })
+
+  it('switches a plugin on', async () => {
+    signIn()
+    renderApp('/admin/plugins')
+    const dns = (await screen.findByText('dns')).closest('[data-plugin]') as HTMLElement
+    await userEvent.click(within(dns).getByRole('switch', { name: 'Enable plugin dns' }))
+    await waitFor(() => expect(lastRequest('PATCH', '/plugins/dns')?.body).toEqual({ enabled: true }))
+    await waitFor(() =>
+      expect(document.querySelector('[data-group="enabled"] [data-plugin="dns"]')).not.toBeNull(),
+    )
+  })
+
+  it('rolls the switch back when the server refuses', async () => {
+    signIn()
+    adminMock.failPluginToggle = true
+    renderApp('/admin/plugins')
+    const dns = (await screen.findByText('dns')).closest('[data-plugin]') as HTMLElement
+    await userEvent.click(within(dns).getByRole('switch', { name: 'Enable plugin dns' }))
+    await waitFor(() => expect(lastRequest('PATCH', '/plugins/dns')).toBeDefined())
+    await waitFor(() =>
+      expect(document.querySelector('[data-group="available"] [data-plugin="dns"]')).not.toBeNull(),
+    )
+  })
+
+  it('disables the switch of an unavailable plugin and of the console plugin', async () => {
+    signIn()
+    renderApp('/admin/plugins')
+    const samba = (await screen.findByText('samba')).closest('[data-plugin]') as HTMLElement
+    expect(within(samba).getByRole('switch')).toBeDisabled()
+    const own = (await screen.findByText('acl_admin')).closest('[data-plugin]') as HTMLElement
+    expect(within(own).getByRole('switch')).toBeDisabled()
+  })
+
+  it('refreshes the types and the capabilities after a toggle', async () => {
+    const qc = new QueryClient()
+    const spy = vi.spyOn(qc, 'invalidateQueries')
+    signIn()
+    const { result } = renderHook(() => useTogglePlugin(), {
+      wrapper: ({ children }) => createElement(QueryClientProvider, { client: qc }, children),
+    })
+    await result.current.mutateAsync({ name: 'dns', enabled: true })
+    const keys = spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))
+    expect(keys).toContain(JSON.stringify(qk.types))
+    expect(keys).toContain(JSON.stringify(['admin', 'capabilities']))
   })
 })
 

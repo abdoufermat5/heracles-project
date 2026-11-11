@@ -399,26 +399,51 @@ function initialChecks(): HealthCheck[] {
   ]
 }
 
-const PLUGINS: PluginInfo[] = [
+function initialPlugins(): PluginInfo[] {
+  return [
   {
     name: 'posix',
     version: '0.1.0',
     enabled: true,
+    available: true,
     missing_object_classes: [],
     required_object_classes: ['posixAccount'],
     types: [{ name: 'posix_group', label: 'Unix group', category: 'directory' }],
     tabs: [{ type: 'user', name: 'posix', label: 'Unix' }],
   },
   {
+    name: 'dns',
+    version: '0.3.0',
+    enabled: false,
+    available: true,
+    missing_object_classes: [],
+    required_object_classes: ['dNSZone'],
+    types: [{ name: 'dns_zone', label: 'DNS zone', category: 'systems' }],
+    tabs: [],
+  },
+  {
+    name: 'acl_admin',
+    version: '0.1.0',
+    enabled: true,
+    available: true,
+    locked: true,
+    missing_object_classes: [],
+    required_object_classes: [],
+    types: [],
+    tabs: [],
+  },
+  {
     name: 'samba',
     version: '0.2.0',
     enabled: false,
+    available: false,
     missing_object_classes: ['sambaSamAccount'],
     required_object_classes: ['sambaSamAccount'],
     types: [],
     tabs: [],
   },
-]
+  ]
+}
 
 function initialTasks(): TaskRow[] {
   return [
@@ -460,6 +485,9 @@ export const adminMock = {
   displayOutput: false,
   checks: initialChecks(),
   tasks: initialTasks(),
+  plugins: initialPlugins(),
+  /** Makes the next plugin toggle fail (to test the rollback). */
+  failPluginToggle: false,
   requests: [] as { method: string; path: string; body: unknown }[],
   reset() {
     this.roles = initialRoles()
@@ -469,6 +497,8 @@ export const adminMock = {
     this.displayOutput = false
     this.checks = initialChecks()
     this.tasks = initialTasks()
+    this.plugins = initialPlugins()
+    this.failPluginToggle = false
     this.requests = []
   },
 }
@@ -837,7 +867,19 @@ export const adminHandlers: HttpHandler[] = [
   ),
 
   // ── plugins and tasks ────────────────────────────────────────────────────
-  http.get(`${A}/plugins`, guarded(() => HttpResponse.json(PLUGINS))),
+  http.get(`${A}/plugins`, guarded(() => HttpResponse.json(adminMock.plugins))),
+  http.patch(
+    `${A}/plugins/:name`,
+    guarded(async ({ request, params }) => {
+      const body = (await request.json()) as { enabled: boolean }
+      record('PATCH', `/plugins/${String(params.name)}`, body)
+      if (adminMock.failPluginToggle) return err(409, 'plugin_unavailable', 'Unavailable')
+      const plugin = adminMock.plugins.find((p) => p.name === params.name)
+      if (!plugin) return err(404, 'not_found', 'Unknown plugin')
+      plugin.enabled = body.enabled
+      return HttpResponse.json({ restart_required: false, plugin })
+    }),
+  ),
   http.get(
     `${A}/tasks`,
     guarded(({ request }) => {
