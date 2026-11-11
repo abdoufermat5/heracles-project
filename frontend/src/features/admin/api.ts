@@ -13,6 +13,7 @@ import type {
   Hook,
   HooksView,
   PluginInfo,
+  PluginToggleResult,
   RightsReport,
   RoleInput,
   RoleTemplate,
@@ -63,6 +64,11 @@ export const adminApi = {
     }),
 
   plugins: () => request<PluginInfo[]>(`${A}/plugins`),
+  setPlugin: (name: string, enabled: boolean) =>
+    request<PluginToggleResult>(`${A}/plugins/${encodeURIComponent(name)}`, {
+      method: 'PATCH',
+      body: { enabled },
+    }),
   tasks: (p: { kind?: string; status?: string } = {}) =>
     request<TasksView>(`${A}/tasks`, { query: { ...p } }),
   runTask: (dn: string) =>

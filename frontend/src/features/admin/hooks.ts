@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { qk } from '@/api/hooks'
 import { adminApi } from './api'
-import type { Assignment, ConfigValue, Hook, RoleInput, RoleTemplate } from './types'
+import type { Assignment, ConfigValue, Hook, PluginInfo, RoleInput, RoleTemplate } from './types'
 
 export const ak = {
   caps: ['admin', 'capabilities'] as const,
@@ -123,6 +124,35 @@ export function useFix() {
 
 export function usePlugins() {
   return useQuery({ queryKey: ak.plugins, queryFn: adminApi.plugins })
+}
+
+/**
+ * Switch a plugin on or off. The card flips at once and rolls back on error; afterwards the
+ * plugin list, the capabilities and the type queries are refetched, so the sidebar and the
+ * editor tabs follow the new set.
+ */
+export function useTogglePlugin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { name: string; enabled: boolean }) => adminApi.setPlugin(v.name, v.enabled),
+    onMutate: async (v) => {
+      await qc.cancelQueries({ queryKey: ak.plugins })
+      const previous = qc.getQueryData<PluginInfo[]>(ak.plugins)
+      qc.setQueryData<PluginInfo[]>(ak.plugins, (list) =>
+        list?.map((p) => (p.name === v.name ? { ...p, enabled: v.enabled } : p)),
+      )
+      return { previous }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(ak.plugins, ctx.previous)
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ak.plugins })
+      void qc.invalidateQueries({ queryKey: ak.caps })
+      void qc.invalidateQueries({ queryKey: qk.types })
+      void qc.invalidateQueries({ queryKey: qk.tree })
+    },
+  })
 }
 
 export function useTasks(kind: string, status: string) {

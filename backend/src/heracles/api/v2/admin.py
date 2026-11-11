@@ -30,6 +30,12 @@ from heracles.core import config_store, setup_checks
 from heracles.core.generalized_time import format_generalized_time, parse_generalized_time
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Modification, NoSuchObjectError, Scope
+from heracles.objects.activation import (
+    LOCKED_PLUGINS,
+    PluginLockedError,
+    UnavailablePluginError,
+    UnknownPluginError,
+)
 from heracles.objects.errors import UnknownTypeError
 from heracles.objects.registry import PLUGIN_GROUP, Plugin, TypeRegistry
 from heracles.schema import names as schema
@@ -292,6 +298,8 @@ def describe_plugins(registry: TypeRegistry) -> list[dict[str, Any]]:
                 "name": status.name,
                 "version": status.version,
                 "enabled": status.enabled,
+                "available": status.available,
+                "locked": status.name in LOCKED_PLUGINS,
                 "missing_object_classes": list(status.missing_object_classes),
                 "types": types,
                 "tabs": tabs,
@@ -436,6 +444,10 @@ class HookBody(BaseModel):
 class HooksBody(BaseModel):
     hooks: list[HookBody] = Field(default_factory=lambda: [])
     display_output: bool | None = None
+
+
+class PluginBody(BaseModel):
+    enabled: bool
 
 
 class FixBody(BaseModel):
@@ -733,7 +745,17 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
     # ----------------------------------------------------------- health
 
     def check_context(user: CurrentUser, domain: Domain) -> setup_checks.CheckContext:
-        return setup_checks.context_for(user.directory, sorted(domain.admin_dns))
+        manager = domain.plugins
+        disabled = (
+            [
+                (p.name, list(p.required_object_classes))
+                for p in manager.plugins
+                if manager.is_available(p.name) and not manager.is_enabled(p.name)
+            ]
+            if manager is not None
+            else []
+        )
+        return setup_checks.context_for(user.directory, sorted(domain.admin_dns), disabled)
 
     @router.get("/checks")
     def run_checks(user: CurrentUserDep, domain: DomainDep) -> list[dict[str, Any]]:
@@ -762,6 +784,33 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         remember(domain)
         _require(user, domain, CONFIG_KEY, "r")
         return describe_plugins(domain.registry)
+
+    @router.patch("/plugins/{name}")
+    def set_plugin(
+        name: str, body: PluginBody, user: CurrentUserDep, domain: DomainDep
+    ) -> dict[str, Any]:
+        """Switch a plugin on or off; the registry is rebuilt and swapped in live."""
+        _require(user, domain, CONFIG_KEY, "w")
+        manager = domain.plugins
+        if manager is None:
+            raise ApiError(409, "plugins_fixed", "This server's plugins are not configurable")
+        with manager.lock:
+            try:
+                registry = manager.set_enabled(name, body.enabled, user.dn)
+            except UnknownPluginError:
+                raise not_found("Unknown plugin") from None
+            except UnavailablePluginError:
+                raise ApiError(
+                    409, "plugin_unavailable", "The directory schema lacks this plugin's classes"
+                ) from None
+            except PluginLockedError:
+                raise ApiError(409, "plugin_locked", "This plugin cannot be disabled") from None
+            domain.registry = registry
+            if holder is not None:
+                holder.registry = registry
+        log.info("plugin_toggled", plugin=name, enabled=body.enabled, by=user.dn)
+        row = next(p for p in describe_plugins(registry) if p["name"] == name)
+        return {"restart_required": False, "plugin": row}
 
     # ------------------------------------------------------------ tasks
 

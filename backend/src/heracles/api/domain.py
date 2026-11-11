@@ -21,6 +21,7 @@ from heracles.core.snapshots import SnapshotService
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient
 from heracles.objects import ObjectService, TypeInfo, TypeRegistry
+from heracles.objects.activation import PluginManager
 from heracles.objects.listing_cache import ListingCache, ListingScope
 from heracles.objects.model import Tab
 from heracles.objects.policy import CompositeEvents, ObjectEvents
@@ -79,6 +80,8 @@ class Domain:
     """Domain services available to the object routers."""
 
     registry: TypeRegistry
+    #: Plugin activation (``None`` when the registry was supplied ready-made).
+    plugins: PluginManager | None = None
     #: Users (normalised DNs) for whom ACLs are ignored (bootstrap administrators).
     admin_dns: frozenset[str] = frozenset()
     acl_target_limit: int = 100
