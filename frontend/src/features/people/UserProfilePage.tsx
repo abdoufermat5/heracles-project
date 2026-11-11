@@ -45,7 +45,6 @@ import {
   SectionCard,
   StatusBadge,
 } from '@/components/patterns'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -809,39 +808,53 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
         {/* Tab 5: Advanced */}
         <TabsContent value="advanced" className="space-y-6">
           {/* Every other tab of the type (plugins: Unix, mail, SSH keys...) opens in the full editor */}
-          <SectionCard
-            title={t('peopleUI.userProfile.advanced.tabsTitle')}
-            description={t('peopleUI.userProfile.advanced.tabsDescription')}
-            bodyClassName="p-0"
-          >
-            <ul className="divide-y">
-              {descriptor.tabs.slice(1).map((tab) => {
-                const active = detail.tabs[tab.name]?.active ?? false
-                return (
-                  <li key={tab.name} className="flex items-center gap-3 px-5 py-3">
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-body font-medium text-foreground">{tab.label}</span>
-                      {technical && (
-                        <span className="block font-mono text-caption text-muted-foreground">{tab.name}</span>
-                      )}
-                    </span>
-                    <Badge variant={active ? 'success' : 'neutral'}>
-                      {active ? t('peopleUI.userProfile.advanced.active') : t('peopleUI.userProfile.advanced.inactive')}
-                    </Badge>
-                    <Button asChild variant="outline" size="sm">
-                      <Link
-                        to="/types/$type/$dn"
-                        params={{ type: 'user', dn }}
-                        search={{ view: 'generic', tab: tab.name }}
-                      >
-                        {active ? t('peopleUI.userProfile.advanced.open') : t('peopleUI.userProfile.advanced.enable')}
-                      </Link>
-                    </Button>
-                  </li>
-                )
-              })}
-            </ul>
-          </SectionCard>
+          {(['active', 'available'] as const).map((group) => {
+            const isActiveGroup = group === 'active'
+            const items = descriptor.tabs
+              .slice(1)
+              .filter((tab) => (detail.tabs[tab.name]?.active ?? false) === isActiveGroup)
+            return (
+              <SectionCard
+                key={group}
+                title={t(`peopleUI.userProfile.advanced.${group}Title`)}
+                description={t(`peopleUI.userProfile.advanced.${group}Description`)}
+                bodyClassName="p-0"
+              >
+                {items.length === 0 ? (
+                  <p className="px-5 py-3 text-body text-muted-foreground">
+                    {t(`peopleUI.userProfile.advanced.${group}Empty`)}
+                  </p>
+                ) : (
+                  <ul className="divide-y" aria-label={t(`peopleUI.userProfile.advanced.${group}Title`)}>
+                    {items.map((tab) => (
+                      <li key={tab.name} className="flex items-center gap-3 px-5 py-3">
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-body font-medium text-foreground">{tab.label}</span>
+                          {tab.description && (
+                            <span className="block text-caption text-muted-foreground">{tab.description}</span>
+                          )}
+                          {technical && (
+                            <span className="block font-mono text-caption text-muted-foreground">{tab.name}</span>
+                          )}
+                        </span>
+                        <Button asChild variant="outline" size="sm">
+                          <Link
+                            to="/types/$type/$dn"
+                            params={{ type: 'user', dn }}
+                            search={{ view: 'generic', tab: tab.name }}
+                          >
+                            {isActiveGroup
+                              ? t('peopleUI.userProfile.advanced.open')
+                              : t('peopleUI.userProfile.advanced.enable')}
+                          </Link>
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </SectionCard>
+            )
+          })}
 
           {/* Directory References */}
           <SectionCard title={t('peopleUI.userProfile.advanced.references')}>
