@@ -105,6 +105,36 @@ def _schema_export(args: argparse.Namespace) -> int:
     return 0
 
 
+def _migrate_directory(args: argparse.Namespace) -> int:
+    import csv
+
+    from heracles.migrate.directory import migrate_ldif
+
+    with open(args.source, encoding="utf-8") as src:
+        converted, report = migrate_ldif(src.read())
+    err = sys.stderr
+    print(f"renamed names: {len(report.renamed)} ({sum(report.renamed.values())} uses)", file=err)
+    for cls, count in sorted(report.added_classes.items()):
+        print(f"added objectClass {cls} to {count} entries", file=err)
+    for dn in report.dropped_entries:
+        print(f"dropped transient entry {dn}", file=err)
+    for line in report.dropped_values:
+        print(f"dropped value {line}", file=err)
+    for line in report.errors:
+        print(f"error: {line}", file=err)
+    if args.report:
+        with open(args.report, "w", encoding="utf-8", newline="") as out:
+            writer = csv.writer(out)
+            writer.writerow(["old", "new"])
+            writer.writerows(report.rename_table())
+    if report.errors and not args.force:
+        print(f"{len(report.errors)} error(s): nothing written (use --force)", file=err)
+        return 1
+    with open(args.target, "w", encoding="utf-8") as out:
+        out.write(converted)
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -148,6 +178,18 @@ def main(
     )
     export.add_argument("-o", "--output", help="output file (default: standard output)")
     export.set_defaults(func=_schema_export)
+
+    migrate = sub.add_parser(
+        "migrate-directory",
+        help="convert an LDIF export from the legacy layout to the Heracles schema",
+    )
+    migrate.add_argument("source", help="LDIF export of the existing directory")
+    migrate.add_argument("target", help="converted LDIF to import into the new server")
+    migrate.add_argument("--report", help="CSV file listing every renamed name (old,new)")
+    migrate.add_argument(
+        "--force", action="store_true", help="write the result even when errors were found"
+    )
+    migrate.set_defaults(func=_migrate_directory)
 
     # --- P3 admin ---
     admin_commands.register(sub, directories or admin_commands.load_directories)
