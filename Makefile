@@ -13,7 +13,7 @@ UI_PORT ?= 5173
 CONFIG ?= $(HERACLES_CONFIG)
 
 .PHONY: help install install-backend install-frontend \
-        dev dev-demo dev-down dev-mock backend frontend demo build serve \
+        dev dev-demo dev-down dev-mock backend frontend demo build serve dns-demo \
         test test-backend test-frontend lint lint-backend lint-frontend \
         format typecheck check bench ldap-up ldap-down ldap-logs test-integration e2e e2e-ui e2e-down compat-schema clean
 
@@ -80,6 +80,9 @@ serve: ## Production server on a real directory (CONFIG=path/to/heracles.yaml)
 	@test -n "$(CONFIG)" || { echo "Set CONFIG=path/to/heracles.yaml (or HERACLES_CONFIG)"; exit 1; }
 	cd $(BACKEND) && uv run --extra ldap heracles serve --config "$(abspath $(CONFIG))" \
 	  --host $(HOST) --port $(PORT)
+
+dns-demo: ## Serve the demo directory's DNS zones on port 5353
+	cd $(BACKEND) && uv run --extra dns heracles dns --demo --port 5353
 
 # --------------------------------------------------------------- quality
 

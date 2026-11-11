@@ -45,6 +45,54 @@ def _serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _dns(args: argparse.Namespace) -> int:
+    try:
+        from heracles_plugins.dns.server import serve
+    except ImportError:
+        print(
+            "heracles dns: dnspython is not installed; install Heracles with the 'dns' extra",
+            file=sys.stderr,
+        )
+        return 2
+    except RuntimeError as exc:  # dnspython missing
+        print(f"heracles dns: {exc}", file=sys.stderr)
+        return 2
+
+    if args.demo:
+        from heracles import demo
+
+        directory = demo.build_demo_directory()
+    else:
+        from heracles.ldap.config import ConfigError, load_settings
+        from heracles.ldap.pyldap import LdapUnavailableError, PyLdapDirectory
+
+        try:
+            settings = load_settings(args.config)
+        except ConfigError as exc:
+            print(f"heracles dns: {exc}", file=sys.stderr)
+            return 2
+        # The server answers for one directory; like the console, the first configured one.
+        if not settings.directories:
+            print("heracles dns: no directory is configured", file=sys.stderr)
+            return 2
+        try:
+            directory = PyLdapDirectory(settings.directories[0])
+        except LdapUnavailableError as exc:
+            print(f"heracles dns: {exc}", file=sys.stderr)
+            return 2
+
+    transport = "udp" if args.no_tcp else "udp and tcp"
+    print(f"heracles dns: listening on {args.host}:{args.port} ({transport})", file=sys.stderr)
+    try:
+        serve(directory, args.host, args.port, tcp=not args.no_tcp)
+    except RuntimeError as exc:  # dnspython missing
+        print(f"heracles dns: {exc}", file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -67,6 +115,15 @@ def main(
         help="worker processes (state is shared through the application database)",
     )
     serve.set_defaults(func=_serve)
+
+    dns = sub.add_parser("dns", help="serve the DNS zones stored in the directory")
+    source = dns.add_mutually_exclusive_group()
+    source.add_argument("--config", help="configuration file (default: $HERACLES_CONFIG)")
+    source.add_argument("--demo", action="store_true", help="use the in-memory demo directory")
+    dns.add_argument("--host", default="127.0.0.1")
+    dns.add_argument("--port", type=int, default=5353)
+    dns.add_argument("--no-tcp", action="store_true", help="answer over UDP only")
+    dns.set_defaults(func=_dns)
 
     # --- P3 admin ---
     admin_commands.register(sub, directories or admin_commands.load_directories)

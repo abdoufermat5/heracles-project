@@ -16,16 +16,16 @@ RUN apt-get update \
 WORKDIR /app/backend
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 COPY backend/pyproject.toml backend/uv.lock backend/.python-version ./
-RUN uv sync --frozen --no-dev --extra ldap --no-install-project
+RUN uv sync --frozen --no-dev --extra ldap --extra dns --no-install-project
 COPY backend/src ./src
-RUN uv sync --frozen --no-dev --extra ldap --no-editable
+RUN uv sync --frozen --no-dev --extra ldap --extra dns --no-editable
 
 # --- tests (python-ldap integration tests against the compose LDAP server) --------
 FROM build AS test
-RUN uv sync --frozen --extra ldap
+RUN uv sync --frozen --extra ldap --extra dns
 COPY backend/tests ./tests
 ENV HERACLES_TEST_LDAP_URI=ldap://ldap:1389
-CMD ["uv", "run", "--frozen", "--extra", "ldap", "pytest", "-q", "-m", "integration", "-p", "no:cacheprovider"]
+CMD ["uv", "run", "--frozen", "--extra", "ldap", "--extra", "dns", "pytest", "-q", "-m", "integration", "-p", "no:cacheprovider"]
 
 # --- runtime --------------------------------------------------------------------
 FROM python:3.12-slim

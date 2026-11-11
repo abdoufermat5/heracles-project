@@ -28,6 +28,7 @@ Other useful targets (`make help` lists them all):
 | `make dev-demo` | in-memory demo directory (no LDAP) + UI |
 | `make dev-down` | stop the dev containers, keep the LDAP data volume |
 | `make demo` | build the UI and serve everything from the demo backend |
+| `make dns-demo` | serve the demo directory's DNS zones on port 5353 |
 | `make dev-mock` | UI only, with the in-browser mock API |
 | `make test` / `make check` | tests / lint + types + tests |
 | `make bench USERS=5000` | latency and LDAP round trips per API endpoint on a large demo directory |
@@ -37,5 +38,10 @@ Other useful targets (`make help` lists them all):
 Production state that is not in the directory (sessions, login throttling,
 recovery tokens, second factors) lives in the SQLite application database, so
 `heracles serve --workers N` can run several processes sharing it.
+
+The zones stored by the DNS plugin can be served authoritatively: `make dns-demo`
+answers for the demo zone on port 5353 (`dig @127.0.0.1 -p 5353 www.heracles.test`),
+and the `dns` service of the compose stack publishes the test directory's zones
+on port 15353.
 
 Heracles works on directories that provide its compatibility LDAP schema.

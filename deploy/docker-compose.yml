@@ -63,6 +63,22 @@ services:
       ldap:
         condition: service_healthy
 
+  # Authoritative DNS for the zones of the test directory (port 15353 on the host).
+  dns:
+    profiles: [dev, e2e]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["heracles", "dns", "--config", "/etc/heracles/heracles.yaml", "--host", "0.0.0.0", "--port", "5353"]
+    ports:
+      - "15353:5353/udp"
+      - "15353:5353/tcp"
+    volumes:
+      - ./e2e/heracles.yaml:/etc/heracles/heracles.yaml:ro
+    depends_on:
+      ldap:
+        condition: service_healthy
+
 volumes:
   ldap-data:
   heracles-data:
