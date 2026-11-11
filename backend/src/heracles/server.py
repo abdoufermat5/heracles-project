@@ -14,6 +14,8 @@ Config file (YAML/TOML, path in ``$HERACLES_CONFIG``)::
       static_dir: /srv/heracles/frontend
       database:
         path: /var/lib/heracles/heracles.db   # default: $HERACLES_DATA_DIR/heracles.db
+    plugins:                # optional; absent: the core profile (see heracles.objects.activation)
+      enabled: [posix, ssh, sudo, mail, audit, acl_admin, ppolicy, dns, systems]
 """
 
 from __future__ import annotations
@@ -25,11 +27,12 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
-from fastapi import FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 
 from heracles.api.app import create_app
 from heracles.api.domain import Domain, install_domain
-from heracles.api.settings import ApiSettings
+from heracles.api.errors import not_found
+from heracles.api.settings import ApiSettings, PluginsSettings
 from heracles.api.v2 import directory as directory_routes
 from heracles.api.v2 import objects as object_routes
 from heracles.attributes import set_default_password_checker, set_default_password_hasher
@@ -38,8 +41,10 @@ from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient
 from heracles.ldap.config import load_settings
 from heracles.objects import TypeRegistry
+from heracles.objects.activation import LOCKED_PLUGINS, PluginManager, PluginOverrideStore
 from heracles.objects.builtin import register_builtin_types
-from heracles.objects.registry import PluginRouterContext
+from heracles.objects.registry import PluginRouterContext, discover_plugins
+from heracles.storage import Database
 
 __all__ = ["build_app", "build_demo_app", "create_full_app"]
 
@@ -52,14 +57,27 @@ def create_full_app(
     load_plugins: bool = True,
 ) -> FastAPI:
     """Wire domain services and object routers on top of :func:`create_app`."""
+    manager: PluginManager | None = None
     if registry is None:
-        registry = TypeRegistry()
-        register_builtin_types(registry)
         if load_plugins and directories:
-            registry.load_plugins(next(iter(directories.values())))
+            database = (
+                Database(settings.database.path) if settings.database.path is not None else None
+            )
+            manager = PluginManager(
+                discover_plugins(),
+                next(iter(directories.values())).schema_object_classes(),
+                configured=settings.plugins.enabled,
+                store=PluginOverrideStore(database),
+            )
+            registry = manager.build_registry()
+        else:
+            registry = TypeRegistry()
+            register_builtin_types(registry)
 
     domain = Domain(
-        registry=registry, admin_dns=frozenset(dnlib.normalize(d) for d in settings.admin_dns)
+        registry=registry,
+        plugins=manager,
+        admin_dns=frozenset(dnlib.normalize(d) for d in settings.admin_dns),
     )
 
     def is_admin(_directory: DirectoryClient, user_dn: str) -> bool:
@@ -70,14 +88,17 @@ def create_full_app(
         if directory is not None:
             domain.locks(session.directory_id, directory).release_all_for_user(session.user_dn)
 
-    public = [
-        factory(PluginRouterContext(directories, registry.settings.get(name)))
-        for name, factory in registry.public_router_factories
-    ]
-    plugin_api = [
-        factory(PluginRouterContext(directories, registry.settings.get(name)))
-        for name, factory in registry.api_router_factories
-    ]
+    if manager is None:
+        public = [
+            factory(PluginRouterContext(directories, registry.settings.get(name)))
+            for name, factory in registry.public_router_factories
+        ]
+        plugin_api = [
+            factory(PluginRouterContext(directories, registry.settings.get(name)))
+            for name, factory in registry.api_router_factories
+        ]
+    else:
+        public, plugin_api = _plugin_routers(manager, directories)
     app = create_app(
         settings,
         directories,
@@ -97,6 +118,39 @@ def create_full_app(
     set_default_password_hasher(hash_password)
     set_default_password_checker(policy.problems)
     return app
+
+
+def _gated(manager: PluginManager, name: str, router: APIRouter) -> APIRouter:
+    """``router`` answering 404 while plugin ``name`` is disabled.
+
+    Routers are mounted once, at start-up; the gate is what makes a console toggle take
+    effect without a restart. Plugins that cannot be disabled are mounted as they are.
+    """
+    if name in LOCKED_PLUGINS:
+        return router
+
+    def gate() -> None:
+        if not manager.is_enabled(name):
+            raise not_found("This feature is disabled")
+
+    outer = APIRouter(dependencies=[Depends(gate)])
+    outer.include_router(router)
+    return outer
+
+
+def _plugin_routers(
+    manager: PluginManager, directories: dict[str, DirectoryClient]
+) -> tuple[list[APIRouter], list[APIRouter]]:
+    """``(public, authenticated)`` routers of every available plugin, each gated."""
+    public: list[APIRouter] = []
+    api: list[APIRouter] = []
+    for plugin in manager.plugins:
+        if not manager.is_available(plugin.name):
+            continue
+        ctx = PluginRouterContext(directories, plugin.settings)
+        public.extend(_gated(manager, plugin.name, f(ctx)) for f in plugin.public_routers)
+        api.extend(_gated(manager, plugin.name, f(ctx)) for f in plugin.api_routers)
+    return public, api
 
 
 def _read_config(path: Path) -> Mapping[str, Any]:
@@ -123,6 +177,8 @@ def build_app(config_path: str | os.PathLike[str] | None = None) -> FastAPI:
     if api_settings.database.path is None:
         data_dir = Path(os.environ.get("HERACLES_DATA_DIR", "/var/lib/heracles"))
         api_settings.database.path = data_dir / "heracles.db"
+    if "plugins" in raw and "plugins" not in raw.get("api", {}):
+        api_settings.plugins = PluginsSettings.model_validate(raw["plugins"])
     if not api_settings.directory_labels:
         api_settings.directory_labels = {cfg.id: cfg.label for cfg in ldap_settings.directories}
     return create_full_app(api_settings, directories)
@@ -137,6 +193,7 @@ def build_demo_app(static_dir: str | os.PathLike[str] | None = None) -> FastAPI:
         directory_labels={"main": "Demo directory"},
         enable_docs=True,
         static_dir=Path(static_dir) if static_dir else None,
+        plugins=PluginsSettings(enabled=["*"]),  # the demo shows every extension
     )
     settings.session.cookie_secure = False
     return create_full_app(settings, {"main": demo.build_demo_directory()})
