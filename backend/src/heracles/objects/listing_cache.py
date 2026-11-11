@@ -45,6 +45,8 @@ class ListingKey(NamedTuple):
     sort: str
     descending: bool
     extra_attrs: tuple[str, ...]
+    #: Extra caller-supplied LDAP filter (empty: none).
+    extra_filter: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,9 +125,18 @@ class ListingScope:
         sort: str,
         descending: bool,
         extra_attrs: Sequence[str],
+        extra_filter: str = "",
     ) -> ListingKey:
         return ListingKey(
-            self.owner, type_name, base, scope, query, sort, descending, tuple(extra_attrs)
+            self.owner,
+            type_name,
+            base,
+            scope,
+            query,
+            sort,
+            descending,
+            tuple(extra_attrs),
+            extra_filter,
         )
 
     def get(self, key: ListingKey) -> Sequence[Entry] | None:

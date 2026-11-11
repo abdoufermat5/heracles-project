@@ -209,12 +209,18 @@ class ObjectService:
         descending: bool = False,
         extra_attrs: Sequence[str] = (),
         locked: Callable[[Entry], bool] | None = None,
+        extra_filter: str = "",
+        filter_checks: Sequence[tuple[str, str]] = (),
     ) -> ListPage:
         """List objects of a type below a department (``ONE``: its container, ``SUB``: tree).
 
         ``locked`` computes the ``locked`` flag of a row from its entry; the attributes
         it needs are named in ``extra_attrs`` and fetched by the same search (they never
         appear in the row values).
+
+        ``extra_filter`` is a caller-supplied LDAP filter ANDed with the type filter; the
+        caller validated it and passes the ``(tab, attribute)`` pairs it tests as
+        ``filter_checks``: a row is kept only if each is readable on that entry.
 
         With a :class:`ListingScope` (see the constructor) the filtered and sorted entry
         list is kept as a snapshot: the first page (no cursor) always searches the
@@ -239,12 +245,21 @@ class ObjectService:
                 sort_key,
                 descending,
                 extra_attrs,
+                extra_filter,
             )
             if offset > 0:
                 entries = listings.get(key)
         if entries is None:
             entries = self._search_listing(
-                info, base, scope, query, sort_key, descending, extra_attrs
+                info,
+                base,
+                scope,
+                query,
+                sort_key,
+                descending,
+                extra_attrs,
+                extra_filter,
+                filter_checks,
             )
             if listings is not None and key is not None:
                 listings.put(key, entries)
@@ -266,6 +281,8 @@ class ObjectService:
         sort_key: str,
         descending: bool,
         extra_attrs: Sequence[str],
+        extra_filter: str = "",
+        filter_checks: Sequence[tuple[str, str]] = (),
     ) -> list[Entry]:
         """Readable entries of a listing, sorted (one directory search)."""
         if scope == Scope.SUBTREE:
@@ -273,7 +290,9 @@ class ObjectService:
         else:
             search_base, ldap_scope = dnlib.join(info.type.rdn, base), Scope.ONE
         search_attrs = self._search_attrs(info)
-        flt = filters.and_(info.type.filter, filters.text_query(search_attrs, query or ""))
+        flt = filters.and_(
+            info.type.filter, extra_filter, filters.text_query(search_attrs, query or "")
+        )
         wanted = list(
             dict.fromkeys(
                 [*info.type.columns, info.type.main_attr, info.type.name_attr, *extra_attrs]
@@ -286,6 +305,7 @@ class ObjectService:
                     search_base, flt, ldap_scope, [a for a in wanted if a]
                 )
                 if self.policy.can_read(e.dn, info.main_tab.name, info.type.main_attr)
+                and all(self.policy.can_read(e.dn, t, a) for t, a in filter_checks)
             ]
         except NoSuchObjectError:
             entries = []

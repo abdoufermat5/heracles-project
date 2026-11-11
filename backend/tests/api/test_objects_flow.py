@@ -120,6 +120,19 @@ def test_listing_and_search(app_client: TestClient) -> None:
     assert [i["dn"] for i in found["items"]] == [CDUPONT]
 
 
+def test_listing_raw_filter(app_client: TestClient) -> None:
+    a = api(app_client, "admin")
+    ok = a.get("/objects/user", base=BASE, scope="sub", filter="(&(uid=cdup*)(uid=*nt))")
+    assert [i["dn"] for i in ok.json()["items"]] == [CDUPONT]
+    assert ok.json()["total"] == 1
+    bad = a.get("/objects/user", base=BASE, scope="sub", filter="(nosuchattr=1)")
+    assert bad.status_code == 400
+    assert "nosuchattr" in bad.json()["error"]["message"]
+    # write-only attributes cannot be probed
+    assert a.get("/objects/user", scope="sub", filter="(userPassword=*)").status_code == 400
+    assert a.get("/objects/user", scope="sub", filter="(uid=").status_code == 400
+
+
 def test_listing_round_trips_do_not_grow_with_the_page(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
