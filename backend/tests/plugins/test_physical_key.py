@@ -17,7 +17,7 @@ PEOPLE = f"ou=people,{BASE}"
 @pytest.fixture
 def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
-    d.set_schema_object_classes(d.schema_object_classes() | {"fdphysicalkey"})
+    d.set_schema_object_classes(d.schema_object_classes() | {"hrcphysicalkey"})
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     d.add(PEOPLE, {"objectClass": [b"organizationalUnit"], "ou": [b"people"]})
     return d
@@ -52,17 +52,17 @@ def test_create_user_with_physical_key(service: ObjectService, directory: Memory
             "physical_key": {
                 "active": True,
                 "values": {
-                    "fdPhysicalKeyType": "mifare",
-                    "fdPhysicalKeyValue": "04A1B2C3D4",
+                    "hrcPhysicalKeyType": "mifare",
+                    "hrcPhysicalKeyValue": "04A1B2C3D4",
                 },
             },
         },
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.has_object_class("fdPhysicalKey")
-    assert entry.text("fdPhysicalKeyType") == "mifare"
-    assert entry.text("fdPhysicalKeyValue") == "04A1B2C3D4"
+    assert entry.has_object_class("hrcPhysicalKey")
+    assert entry.text("hrcPhysicalKeyType") == "mifare"
+    assert entry.text("hrcPhysicalKeyValue") == "04A1B2C3D4"
 
 
 def test_default_key_type(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -75,15 +75,15 @@ def test_default_key_type(service: ObjectService, directory: MemoryDirectory) ->
             "physical_key": {
                 "active": True,
                 "values": {
-                    "fdPhysicalKeyValue": "YUBI-12345",
+                    "hrcPhysicalKeyValue": "YUBI-12345",
                 },
             },
         },
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.text("fdPhysicalKeyType") == "fido2"
-    assert entry.text("fdPhysicalKeyValue") == "YUBI-12345"
+    assert entry.text("hrcPhysicalKeyType") == "fido2"
+    assert entry.text("hrcPhysicalKeyValue") == "YUBI-12345"
 
 
 def test_update_physical_key(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -95,8 +95,8 @@ def test_update_physical_key(service: ObjectService, directory: MemoryDirectory)
             "physical_key": {
                 "active": True,
                 "values": {
-                    "fdPhysicalKeyType": "rfid",
-                    "fdPhysicalKeyValue": "1001",
+                    "hrcPhysicalKeyType": "rfid",
+                    "hrcPhysicalKeyValue": "1001",
                 },
             },
         },
@@ -107,14 +107,14 @@ def test_update_physical_key(service: ObjectService, directory: MemoryDirectory)
         {
             "physical_key": {
                 "values": {
-                    "fdPhysicalKeyValue": "1002",
+                    "hrcPhysicalKeyValue": "1002",
                 }
             }
         },
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.text("fdPhysicalKeyValue") == "1002"
+    assert entry.text("hrcPhysicalKeyValue") == "1002"
 
 
 def test_deactivate_physical_key_tab(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -126,19 +126,19 @@ def test_deactivate_physical_key_tab(service: ObjectService, directory: MemoryDi
             "physical_key": {
                 "active": True,
                 "values": {
-                    "fdPhysicalKeyType": "hid",
-                    "fdPhysicalKeyValue": "9999",
+                    "hrcPhysicalKeyType": "hid",
+                    "hrcPhysicalKeyValue": "9999",
                 },
             },
         },
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.has_object_class("fdPhysicalKey")
+    assert entry.has_object_class("hrcPhysicalKey")
 
     service.update("user", dn, {"physical_key": {"active": False}})
     entry = directory.get(dn)
     assert entry is not None
-    assert not entry.has_object_class("fdPhysicalKey")
-    assert entry.first("fdPhysicalKeyType") is None
-    assert entry.first("fdPhysicalKeyValue") is None
+    assert not entry.has_object_class("hrcPhysicalKey")
+    assert entry.first("hrcPhysicalKeyType") is None
+    assert entry.first("hrcPhysicalKeyValue") is None

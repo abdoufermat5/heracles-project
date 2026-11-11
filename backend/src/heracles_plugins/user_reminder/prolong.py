@@ -27,7 +27,7 @@ from heracles.ldap.client import (
     Scope,
 )
 from heracles.ldap.filter import escape_filter_value
-from heracles.schema import legacy
+from heracles.schema import names as schema
 from heracles_plugins.user_reminder.runner import (
     EPOCH,
     TOKEN_TYPE_REMINDER,
@@ -53,8 +53,8 @@ def prolong_account(
 ) -> date:
     """Validate and consume ``token`` and extend the account; returns the new expiry."""
     flt = (
-        f"(&(objectClass={legacy.STD_OC.INET_ORG_PERSON})"
-        f"({legacy.STD_ATTR.UID}={escape_filter_value(login)}))"
+        f"(&(objectClass={schema.STD_OC.INET_ORG_PERSON})"
+        f"({schema.STD_ATTR.UID}={escape_filter_value(login)}))"
     )
     users = list(directory.search(directory.base_dn, flt, Scope.SUBTREE, ["shadowExpire"]))
     if len(users) != 1:
@@ -63,8 +63,8 @@ def prolong_account(
     hashed = hash_token(token)
     container = reminder_tokens_container(directory)
     tflt = (
-        f"(&(objectClass={legacy.OC.TOKEN})({legacy.ATTR.TOKEN_TYPE}={TOKEN_TYPE_REMINDER})"
-        f"({legacy.ATTR.TOKEN}={escape_filter_value(hashed)}))"
+        f"(&(objectClass={schema.OC.TOKEN})({schema.ATTR.TOKEN_TYPE}={TOKEN_TYPE_REMINDER})"
+        f"({schema.ATTR.TOKEN}={escape_filter_value(hashed)}))"
     )
     try:
         found = list(directory.search(container, tflt))
@@ -74,17 +74,17 @@ def prolong_account(
         (
             e
             for e in found
-            if hmac.compare_digest((e.text(legacy.ATTR.TOKEN) or "").encode(), hashed.encode())
+            if hmac.compare_digest((e.text(schema.ATTR.TOKEN) or "").encode(), hashed.encode())
         ),
         None,
     )
     if entry is None:
         raise ProlongError
-    owner = entry.text(legacy.ATTR.TOKEN_USER_DN) or ""
+    owner = entry.text(schema.ATTR.TOKEN_USER_DN) or ""
     if dnlib.normalize(owner) != dnlib.normalize(user.dn):
         raise ProlongError
     try:
-        expires_at = int(entry.text(legacy.ATTR.TOKEN_TIMESTAMP) or "0")
+        expires_at = int(entry.text(schema.ATTR.TOKEN_TIMESTAMP) or "0")
     except ValueError:
         expires_at = 0
     utc_now = now.astimezone(UTC) if now.tzinfo else now.replace(tzinfo=UTC)

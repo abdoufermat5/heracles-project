@@ -58,13 +58,13 @@ def app_client() -> Iterator[TestClient]:
             *directory.schema_object_classes(),
             "ieee802Device",
             "device",
-            "fdServer",
-            "fdWorkstation",
-            "fdTerminal",
-            "fdPrinter",
-            "fdPhone",
-            "fdMobilePhone",
-            "fdNetworkInterface",
+            "hrcServer",
+            "hrcWorkstation",
+            "hrcTerminal",
+            "hrcPrinter",
+            "hrcPhone",
+            "hrcMobilePhone",
+            "hrcNetworkInterface",
             "ipHost",
         ]
     )
@@ -95,7 +95,7 @@ def test_create_server_with_two_interfaces(app_client: TestClient) -> None:
                                 "cn": "eth0",
                                 "macAddress": "AA:BB:CC:DD:EE:01",
                                 "ipHostNumber": ["10.1.0.10", "2001:db8::10"],
-                                "fdNetworkInterfaceVlanTagged": False,
+                                "hrcNetworkInterfaceVlanTagged": False,
                             },
                             {"cn": "eth1", "macAddress": "aa:bb:cc:dd:ee:02"},
                         ],
@@ -110,7 +110,7 @@ def test_create_server_with_two_interfaces(app_client: TestClient) -> None:
 
     obj = a.get(f"/objects/server/{q(dn)}").json()
     values = obj["tabs"]["main"]["values"]
-    assert values["fdMode"] is False
+    assert values["hrcMode"] is False
     interfaces = values["networkInterfaces"]
     assert [i["cn"] for i in interfaces] == ["eth0", "eth1"]
     assert interfaces[0]["macAddress"] == "aa:bb:cc:dd:ee:01"

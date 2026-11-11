@@ -16,10 +16,10 @@ SERVERS = f"ou=servers,ou=systems,{BASE}"
 POSTFIX_CLASSES = {
     "ieee802Device",
     "device",
-    "fdServer",
-    "fdPostfixServer",
+    "hrcServer",
+    "hrcPostfixServer",
     "ipHost",
-    "fdNetworkInterface",
+    "hrcNetworkInterface",
 }
 
 
@@ -53,11 +53,11 @@ def test_postfix_tab_registration_and_acl(service: ObjectService) -> None:
     assert tab.acl_key == "servicePostfix"
     assert server_info.acl_object(tab) == "server/servicePostfix"
     assert tab.optional is True
-    assert tab.object_classes == ("fdPostfixServer",)
+    assert tab.object_classes == ("hrcPostfixServer",)
 
 
 def test_postfix_tab_dropped_without_schema(directory: MemoryDirectory) -> None:
-    directory.set_schema_object_classes(["ieee802Device", "device", "fdServer"])
+    directory.set_schema_object_classes(["ieee802Device", "device", "hrcServer"])
     registry = TypeRegistry()
     register_builtin_types(registry)
     schema_classes = {c.lower() for c in directory.schema_object_classes()}
@@ -79,29 +79,31 @@ def test_create_server_with_postfix_service(
             "postfix": {
                 "active": True,
                 "values": {
-                    "postfixMyHostname": "mta1.example.com",
-                    "postfixMyDomain": "example.com",
-                    "postfixMyDestinations": "mta1.example.com, localhost.example.com, localhost",
-                    "postfixHeaderSizeLimit": 102400,
-                    "postfixMailboxSizeLimit": 51200000,
-                    "postfixMessageSizeLimit": 10485760,
-                    "fdPostfixTransportTable": [
+                    "hrcPostfixMyHostname": "mta1.example.com",
+                    "hrcPostfixMyDomain": "example.com",
+                    "hrcPostfixMyDestinations": (
+                        "mta1.example.com, localhost.example.com, localhost"
+                    ),
+                    "hrcPostfixHeaderSizeLimit": 102400,
+                    "hrcPostfixMailboxSizeLimit": 51200000,
+                    "hrcPostfixMessageSizeLimit": 10485760,
+                    "hrcPostfixTransportTable": [
                         {
-                            "fdTransportTableMatch": "sub.example.com",
+                            "hrcTransportTableMatch": "sub.example.com",
                             "transport": "smtp",
                             "nexthop": "[relay.example.com]:25",
                         }
                     ],
-                    "fdPostfixCatchallTable": [
+                    "hrcPostfixCatchallTable": [
                         {
-                            "fdCatchallTableDomain": "example.com",
-                            "fdCatchallTableRecipient": "postmaster@example.com",
+                            "hrcCatchallTableDomain": "example.com",
+                            "hrcCatchallTableRecipient": "postmaster@example.com",
                         }
                     ],
-                    "fdPostfixDomainAliasTable": [
+                    "hrcPostfixDomainAliasTable": [
                         {
-                            "fdDomainAliasTableFrom": "old-domain.com",
-                            "fdDomainAliasTableTo": "example.com",
+                            "hrcDomainAliasTableFrom": "old-domain.com",
+                            "hrcDomainAliasTableTo": "example.com",
                         }
                     ],
                 },
@@ -111,38 +113,40 @@ def test_create_server_with_postfix_service(
     assert dn == f"cn=mta1,{SERVERS}"
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdPostfixServer" in entry.get("objectClass")
-    assert entry.text("postfixMyHostname") == "mta1.example.com"
-    assert entry.text("postfixMyDomain") == "example.com"
-    assert entry.text("postfixHeaderSizeLimit") == "102400"
-    assert entry.text("postfixMailboxSizeLimit") == "51200000"
-    assert entry.text("postfixMessageSizeLimit") == "10485760"
-    assert entry.texts("fdPostfixTransportTable") == ["sub.example.com;smtp;[relay.example.com]:25"]
-    assert entry.texts("fdPostfixCatchallTable") == ["example.com;postmaster@example.com"]
-    assert entry.texts("fdPostfixDomainAliasTable") == ["old-domain.com;example.com"]
+    assert b"hrcPostfixServer" in entry.get("objectClass")
+    assert entry.text("hrcPostfixMyHostname") == "mta1.example.com"
+    assert entry.text("hrcPostfixMyDomain") == "example.com"
+    assert entry.text("hrcPostfixHeaderSizeLimit") == "102400"
+    assert entry.text("hrcPostfixMailboxSizeLimit") == "51200000"
+    assert entry.text("hrcPostfixMessageSizeLimit") == "10485760"
+    assert entry.texts("hrcPostfixTransportTable") == [
+        "sub.example.com;smtp;[relay.example.com]:25"
+    ]
+    assert entry.texts("hrcPostfixCatchallTable") == ["example.com;postmaster@example.com"]
+    assert entry.texts("hrcPostfixDomainAliasTable") == ["old-domain.com;example.com"]
 
     loaded = service.load("server", dn)
     assert loaded.tabs["postfix"].active is True
     vals = loaded.tabs["postfix"].values
-    assert vals["postfixMyHostname"] == "mta1.example.com"
-    assert vals["postfixHeaderSizeLimit"] == 102400
-    assert vals["fdPostfixTransportTable"] == [
+    assert vals["hrcPostfixMyHostname"] == "mta1.example.com"
+    assert vals["hrcPostfixHeaderSizeLimit"] == 102400
+    assert vals["hrcPostfixTransportTable"] == [
         {
-            "fdTransportTableMatch": "sub.example.com",
+            "hrcTransportTableMatch": "sub.example.com",
             "transport": "smtp",
             "nexthop": "[relay.example.com]:25",
         }
     ]
-    assert vals["fdPostfixCatchallTable"] == [
+    assert vals["hrcPostfixCatchallTable"] == [
         {
-            "fdCatchallTableDomain": "example.com",
-            "fdCatchallTableRecipient": "postmaster@example.com",
+            "hrcCatchallTableDomain": "example.com",
+            "hrcCatchallTableRecipient": "postmaster@example.com",
         }
     ]
-    assert vals["fdPostfixDomainAliasTable"] == [
+    assert vals["hrcPostfixDomainAliasTable"] == [
         {
-            "fdDomainAliasTableFrom": "old-domain.com",
-            "fdDomainAliasTableTo": "example.com",
+            "hrcDomainAliasTableFrom": "old-domain.com",
+            "hrcDomainAliasTableTo": "example.com",
         }
     ]
 
@@ -158,8 +162,8 @@ def test_update_and_deactivate_postfix_tab(
             "postfix": {
                 "active": True,
                 "values": {
-                    "postfixMyHostname": "mta2.example.com",
-                    "postfixHeaderSizeLimit": 10240,
+                    "hrcPostfixMyHostname": "mta2.example.com",
+                    "hrcPostfixHeaderSizeLimit": 10240,
                 },
             },
         },
@@ -172,22 +176,22 @@ def test_update_and_deactivate_postfix_tab(
         {
             "postfix": {
                 "values": {
-                    "postfixHeaderSizeLimit": 20480,
-                    "postfixMyDomain": "corp.test",
+                    "hrcPostfixHeaderSizeLimit": 20480,
+                    "hrcPostfixMyDomain": "corp.test",
                 }
             }
         },
     )
     loaded = service.load("server", dn)
-    assert loaded.tabs["postfix"].values["postfixHeaderSizeLimit"] == 20480
-    assert loaded.tabs["postfix"].values["postfixMyDomain"] == "corp.test"
+    assert loaded.tabs["postfix"].values["hrcPostfixHeaderSizeLimit"] == 20480
+    assert loaded.tabs["postfix"].values["hrcPostfixMyDomain"] == "corp.test"
 
     # Deactivate tab
     service.update("server", dn, {"postfix": {"active": False}})
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdPostfixServer" not in entry.get("objectClass")
-    assert entry.get("postfixMyHostname") == []
+    assert b"hrcPostfixServer" not in entry.get("objectClass")
+    assert entry.get("hrcPostfixMyHostname") == []
 
     loaded_deactivated = service.load("server", dn)
     assert loaded_deactivated.tabs["postfix"].active is False
@@ -203,11 +207,11 @@ def test_postfix_validation(service: ObjectService) -> None:
                 "main": {"values": {"cn": "badmta"}},
                 "postfix": {
                     "active": True,
-                    "values": {"postfixHeaderSizeLimit": -10},
+                    "values": {"hrcPostfixHeaderSizeLimit": -10},
                 },
             },
         )
-    assert "postfixHeaderSizeLimit" in str(exc_info.value)
+    assert "hrcPostfixHeaderSizeLimit" in str(exc_info.value)
 
 
 def test_mail_servers_helper_postfix(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -221,7 +225,7 @@ def test_mail_servers_helper_postfix(service: ObjectService, directory: MemoryDi
         BASE,
         {
             "main": {"values": {"cn": "mta-srv"}},
-            "postfix": {"active": True, "values": {"postfixMyHostname": "mta.test"}},
+            "postfix": {"active": True, "values": {"hrcPostfixMyHostname": "mta.test"}},
         },
     )
     assert postfix.mail_servers(directory) == ["mta-srv"]

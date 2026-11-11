@@ -2,7 +2,7 @@
 
 The PKI publishes certificate entries itself (under ``ou=certificates``); Heracles only
 shows them (read-only: name and the X.509 details of ``userCertificate;binary``) and lets
-users, servers and other systems reference them (``fdEjbcaCertificates``). No call is made
+users, servers and other systems reference them (``hrcEjbcaCertificates``). No call is made
 to the PKI.
 """
 
@@ -102,12 +102,12 @@ class EjbcaCertificatesTab(Tab):
     acl_key = "ejbcaCertificates"
     label = _("PKI certificates")
     optional = True
-    object_classes = ("fdEjbcaCertificates",)
+    object_classes = ("hrcEjbcaCertificates",)
 
     certs = Section(
         _("PKI certificates"),
         ListAttr(
-            "fdEjbcaCertDN",
+            "hrcEjbcaCertDN",
             _("Certificates"),
             ObjectRefAttr("certificate", _("Certificate"), ref_type="ejbca_certificate"),
             required=True,
@@ -118,7 +118,7 @@ class EjbcaCertificatesTab(Tab):
     @classmethod
     def on_load(cls, ctx: TabContext) -> None:
         lines: list[str] = []
-        for dn in cast("list[object]", ctx.values.get("fdEjbcaCertDN") or []):
+        for dn in cast("list[object]", ctx.values.get("hrcEjbcaCertDN") or []):
             if not isinstance(dn, str):
                 continue
             entry = ctx.directory.get(dn, ["cn", CERT_ATTR])
@@ -144,7 +144,7 @@ def plugin() -> Plugin:
         version="0.1.0",
         types=(EjbcaCertificate,),
         tabs=tuple(_attachment(t) for t in REFERENCING_TYPES),
-        required_object_classes=("fdEjbcaCertificates",),
+        required_object_classes=("hrcEjbcaCertificates",),
         settings=EjbcaSettings(),
     )
 

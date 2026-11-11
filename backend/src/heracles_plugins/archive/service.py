@@ -1,4 +1,4 @@
-"""Archiving of objects: copy selected attributes to an ``fdArchivedObject`` entry."""
+"""Archiving of objects: copy selected attributes to an ``hrcArchivedObject`` entry."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from heracles.ldap.client import (
 from heracles.ldap.filter import escape_filter_value
 from heracles.objects.policy import EventContext, NullEvents
 
-ARCHIVE_CLASS = "fdArchivedObject"
+ARCHIVE_CLASS = "hrcArchivedObject"
 ARCHIVE_RDN = "ou=archive"
 _SAFE = re.compile(r"[^A-Za-z0-9._@-]+")
 
@@ -128,16 +128,16 @@ def archive(
     moment = (now or datetime.now(UTC)).astimezone(UTC)
     attrs: dict[str, list[bytes]] = {
         "objectClass": [ARCHIVE_CLASS.encode()],
-        "fdArchivedDateTime": [format_generalized_time(moment).encode()],
-        "fdArchivedObjectType": [type_name.encode()],
-        "fdArchivedOriginDn": [dn.encode()],
-        "fdArchivedUniqueField": [u.encode() for u in unique],
+        "hrcArchivedDateTime": [format_generalized_time(moment).encode()],
+        "hrcArchivedObjectType": [type_name.encode()],
+        "hrcArchivedOriginDn": [dn.encode()],
+        "hrcArchivedUniqueField": [u.encode() for u in unique],
     }
     fields = [*rule.fields, *rule.unique_fields]
     if can_read is not None:
         fields = [f for f in fields if can_read(f)]
     kept = _pairs(entry, tuple(dict.fromkeys(fields)))
-    attrs["fdArchivedField"] = [k.encode() for k in kept]
+    attrs["hrcArchivedField"] = [k.encode() for k in kept]
     key = _SAFE.sub("_", "_".join(u.partition("=")[2] for u in unique)).strip("_") or "object"
     stem = f"{type_name}_{key}_{moment.strftime('%Y%m%d%H%M%S')}"
     container = archive_container(directory)
@@ -159,17 +159,17 @@ def find_archives(
 ) -> list[Entry]:
     """Archive entries of ``type_name`` whose unique fields equal ``unique`` (newest first)."""
     parts = "".join(
-        f"(fdArchivedUniqueField={escape_filter_value(f'{k}={v}')})" for k, v in unique.items()
+        f"(hrcArchivedUniqueField={escape_filter_value(f'{k}={v}')})" for k, v in unique.items()
     )
     flt = (
         f"(&(objectClass={ARCHIVE_CLASS})"
-        f"(fdArchivedObjectType={escape_filter_value(type_name)}){parts})"
+        f"(hrcArchivedObjectType={escape_filter_value(type_name)}){parts})"
     )
     try:
         found = list(directory.search(archive_container(directory), flt, Scope.ONE))
     except NoSuchObjectError:
         return []
-    found.sort(key=lambda e: (e.text("fdArchivedDateTime") or "", e.dn), reverse=True)
+    found.sort(key=lambda e: (e.text("hrcArchivedDateTime") or "", e.dn), reverse=True)
     return found
 
 

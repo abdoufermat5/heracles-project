@@ -23,7 +23,7 @@ def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     d.add(PEOPLE, {"objectClass": [b"organizationalUnit"], "ou": [b"people"]})
-    d.set_schema_object_classes(d.schema_object_classes() | {"fdnextcloudaccount"})
+    d.set_schema_object_classes(d.schema_object_classes() | {"hrcnextcloudaccount"})
     return d
 
 
@@ -91,7 +91,7 @@ def test_bytes_size_attr_ldap_roundtrip() -> None:
 
 
 def test_tab_schema_requirement(directory: MemoryDirectory) -> None:
-    # When fdNextCloudAccount is absent from schema, optional tab is dropped
+    # When hrcNextCloudAccount is absent from schema, optional tab is dropped
     d = MemoryDirectory(BASE)
     registry = TypeRegistry()
     register_builtin_types(registry)
@@ -100,10 +100,10 @@ def test_tab_schema_requirement(directory: MemoryDirectory) -> None:
     assert status.enabled
     assert registry.get("user").tab("nextcloud") is None
 
-    # When fdNextCloudAccount is present, tab is attached
+    # When hrcNextCloudAccount is present, tab is attached
     registry2 = TypeRegistry()
     register_builtin_types(registry2)
-    status2 = registry2.register_plugin(nextcloud.plugin(), classes | {"fdnextcloudaccount"})
+    status2 = registry2.register_plugin(nextcloud.plugin(), classes | {"hrcnextcloudaccount"})
     assert status2.enabled
     assert registry2.get("user").tab("nextcloud") is not None
 
@@ -123,21 +123,21 @@ def test_create_user_with_nextcloud_tab(service: ObjectService, directory: Memor
             "nextcloud": {
                 "active": True,
                 "values": {
-                    "fdNextCloudQuota": "15 GB",
-                    "fdNextCloudHomeFolder": "/var/nextcloud/data/jdoe",
+                    "hrcNextCloudQuota": "15 GB",
+                    "hrcNextCloudHomeFolder": "/var/nextcloud/data/jdoe",
                 },
             }
         },
     )
     entry = stored_entry(directory, dn)
-    assert entry.has_object_class("fdNextCloudAccount")
-    assert entry.text("fdNextCloudQuota") == "15 GB"
-    assert entry.text("fdNextCloudHomeFolder") == "/var/nextcloud/data/jdoe"
+    assert entry.has_object_class("hrcNextCloudAccount")
+    assert entry.text("hrcNextCloudQuota") == "15 GB"
+    assert entry.text("hrcNextCloudHomeFolder") == "/var/nextcloud/data/jdoe"
 
     obj = service.load("user", dn)
     assert obj.tabs["nextcloud"].active
-    assert obj.tabs["nextcloud"].values["fdNextCloudQuota"] == "15 GB"
-    assert obj.tabs["nextcloud"].values["fdNextCloudHomeFolder"] == "/var/nextcloud/data/jdoe"
+    assert obj.tabs["nextcloud"].values["hrcNextCloudQuota"] == "15 GB"
+    assert obj.tabs["nextcloud"].values["hrcNextCloudHomeFolder"] == "/var/nextcloud/data/jdoe"
 
 
 def test_update_user_nextcloud_tab(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -146,12 +146,12 @@ def test_update_user_nextcloud_tab(service: ObjectService, directory: MemoryDire
         {
             "nextcloud": {
                 "active": True,
-                "values": {"fdNextCloudQuota": "10 GB"},
+                "values": {"hrcNextCloudQuota": "10 GB"},
             }
         },
     )
     obj = service.load("user", dn)
-    assert obj.tabs["nextcloud"].values["fdNextCloudHomeFolder"] is None
+    assert obj.tabs["nextcloud"].values["hrcNextCloudHomeFolder"] is None
 
     service.update(
         "user",
@@ -160,15 +160,15 @@ def test_update_user_nextcloud_tab(service: ObjectService, directory: MemoryDire
             "nextcloud": {
                 "active": True,
                 "values": {
-                    "fdNextCloudQuota": "50 GB",
-                    "fdNextCloudHomeFolder": "/home/jdoe/cloud",
+                    "hrcNextCloudQuota": "50 GB",
+                    "hrcNextCloudHomeFolder": "/home/jdoe/cloud",
                 },
             }
         },
     )
     entry = stored_entry(directory, dn)
-    assert entry.text("fdNextCloudQuota") == "50 GB"
-    assert entry.text("fdNextCloudHomeFolder") == "/home/jdoe/cloud"
+    assert entry.text("hrcNextCloudQuota") == "50 GB"
+    assert entry.text("hrcNextCloudHomeFolder") == "/home/jdoe/cloud"
 
 
 def test_deactivate_nextcloud_tab(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -177,7 +177,7 @@ def test_deactivate_nextcloud_tab(service: ObjectService, directory: MemoryDirec
         {
             "nextcloud": {
                 "active": True,
-                "values": {"fdNextCloudQuota": "10 GB"},
+                "values": {"hrcNextCloudQuota": "10 GB"},
             }
         },
     )
@@ -188,8 +188,8 @@ def test_deactivate_nextcloud_tab(service: ObjectService, directory: MemoryDirec
         {"nextcloud": {"active": False, "values": {}}},
     )
     entry = stored_entry(directory, dn)
-    assert not entry.has_object_class("fdNextCloudAccount")
-    assert entry.get("fdNextCloudQuota") == []
+    assert not entry.has_object_class("hrcNextCloudAccount")
+    assert entry.get("hrcNextCloudQuota") == []
 
 
 def test_create_user_with_invalid_quota(service: ObjectService) -> None:
@@ -199,8 +199,8 @@ def test_create_user_with_invalid_quota(service: ObjectService) -> None:
             {
                 "nextcloud": {
                     "active": True,
-                    "values": {"fdNextCloudQuota": "not-a-valid-size"},
+                    "values": {"hrcNextCloudQuota": "not-a-valid-size"},
                 }
             },
         )
-    assert "nextcloud.fdNextCloudQuota" in exc.value.fields
+    assert "nextcloud.hrcNextCloudQuota" in exc.value.fields

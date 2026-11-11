@@ -32,7 +32,7 @@ from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Modification, NoSuchObjectError, Scope
 from heracles.objects.errors import UnknownTypeError
 from heracles.objects.registry import PLUGIN_GROUP, Plugin, TypeRegistry
-from heracles.schema import legacy
+from heracles.schema import names as schema
 from heracles.triggers import HOOK_MODES, TabHook, TriggerSettings, parse_hook
 
 log = structlog.get_logger(__name__)
@@ -329,14 +329,14 @@ def task_rows(
     granular: dict[str, list[tuple[str, str]]] = {}
     try:
         for entry in directory.search(
-            directory.base_dn, f"(objectClass={legacy.OC.TASKS_GRANULAR})", Scope.SUBTREE
+            directory.base_dn, f"(objectClass={schema.OC.TASKS_GRANULAR})", Scope.SUBTREE
         ):
-            master = entry.text(legacy.TASKS_GRANULAR_MASTER_ATTR)
+            master = entry.text(schema.TASKS_GRANULAR_MASTER_ATTR)
             if master:
                 granular.setdefault(dnlib.normalize(master), []).append(
                     (
                         entry.dn,
-                        (entry.text(legacy.TASKS_GRANULAR_STATUS_ATTR) or "").strip(),
+                        (entry.text(schema.TASKS_GRANULAR_STATUS_ATTR) or "").strip(),
                     )
                 )
     except NoSuchObjectError:
@@ -353,7 +353,7 @@ def task_rows(
         for entry in found:
             if not domain.is_admin(user.dn) and not evaluator.permissions(entry.dn, key).read:
                 continue
-            state = (entry.text(legacy.TASKS_STATUS_ATTR) or "").strip()
+            state = (entry.text(schema.TASKS_STATUS_ATTR) or "").strip()
             if status and state.lower() != status.lower():
                 continue
             subs = granular.get(dnlib.normalize(entry.dn), [])
@@ -365,9 +365,9 @@ def task_rows(
                     "kind": info.name,
                     "kind_label": info.type.label,
                     "status": state,
-                    "created": _utc_text(entry.text(legacy.TASKS_CREATION_DATE_ATTR)),
-                    "last_run": _utc_text(entry.text(legacy.TASKS_LAST_EXEC_ATTR)),
-                    "next_run": _utc_text(entry.text(legacy.TASKS_NEXT_EXEC_ATTR)),
+                    "created": _utc_text(entry.text(schema.TASKS_CREATION_DATE_ATTR)),
+                    "last_run": _utc_text(entry.text(schema.TASKS_LAST_EXEC_ATTR)),
+                    "next_run": _utc_text(entry.text(schema.TASKS_NEXT_EXEC_ATTR)),
                     "subtasks": {
                         "total": len(subs),
                         "done": sum(
@@ -386,7 +386,7 @@ def task_rows(
 def _task_entry(user: CurrentUser, domain: Domain, dn: str) -> tuple[Any, str]:
     directory = user.directory
     entry = directory.get(dn)
-    if entry is None or not entry.has_object_class(legacy.OC.TASKS):
+    if entry is None or not entry.has_object_class(schema.OC.TASKS):
         raise not_found("Task not found")
     for info in domain.registry.list():
         if info.acl_category == "tasks" and dnlib.is_descendant(dn, directory.base_dn):
@@ -791,9 +791,9 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         """Ask the scheduler to run the task at its next pass (status active, due now)."""
         entry, _key = _task_entry(user, domain, dn)
         now = format_generalized_time(datetime.now(UTC)).encode()
-        mods = [Modification("replace", legacy.TASKS_NEXT_EXEC_ATTR, [now])]
-        if (entry.text(legacy.TASKS_STATUS_ATTR) or "").lower() != "activated":
-            mods.append(Modification("replace", legacy.TASKS_STATUS_ATTR, [b"Activated"]))
+        mods = [Modification("replace", schema.TASKS_NEXT_EXEC_ATTR, [now])]
+        if (entry.text(schema.TASKS_STATUS_ATTR) or "").lower() != "activated":
+            mods.append(Modification("replace", schema.TASKS_STATUS_ATTR, [b"Activated"]))
         user.directory.modify(entry.dn, mods)
         return {"dn": entry.dn, "queued": True}
 
@@ -805,16 +805,16 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         retried: list[str] = []
         for sub in user.directory.search(
             entry.dn,
-            f"(&(objectClass={legacy.OC.TASKS_GRANULAR})"
-            f"({legacy.TASKS_GRANULAR_MASTER_ATTR}={_escape(entry.dn)}))",
+            f"(&(objectClass={schema.OC.TASKS_GRANULAR})"
+            f"({schema.TASKS_GRANULAR_MASTER_ATTR}={_escape(entry.dn)}))",
             Scope.SUBTREE,
         ):
-            if (sub.text(legacy.TASKS_GRANULAR_STATUS_ATTR) or "").lower() in _FAILED:
+            if (sub.text(schema.TASKS_GRANULAR_STATUS_ATTR) or "").lower() in _FAILED:
                 user.directory.modify(
                     sub.dn,
                     [
-                        Modification("replace", legacy.TASKS_GRANULAR_STATUS_ATTR, [b"Activated"]),
-                        Modification("replace", legacy.TASKS_GRANULAR_NEXT_EXEC_ATTR, [now]),
+                        Modification("replace", schema.TASKS_GRANULAR_STATUS_ATTR, [b"Activated"]),
+                        Modification("replace", schema.TASKS_GRANULAR_NEXT_EXEC_ATTR, [now]),
                     ],
                 )
                 retried.append(sub.dn)

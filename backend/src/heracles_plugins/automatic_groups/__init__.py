@@ -1,6 +1,6 @@
 """Automatic groups plugin: keep group memberships in line with a rule.
 
-Provides the ``automatic_groups_task`` type (``fdTasks`` + ``fdTasksAutomaticGroups``, ACL
+Provides the ``automatic_groups_task`` type (``hrcTasks`` + ``hrcTasksAutomaticGroups``, ACL
 ``tasks/automaticGroupsTask``) and the pure runner :func:`run_automatic_groups`.
 
 A task looks at its users (users, or groups and roles expanded to users), keeps those whose
@@ -47,19 +47,19 @@ class AutomaticGroupsTask(TaskObjectType):
         name = "main"
         acl_key = "automaticGroupsTask"
         label = _("Automatic groups")
-        object_classes = ("fdTasks", TASK_CLASS)
+        object_classes = ("hrcTasks", TASK_CLASS)
 
         rule = Section(
             _("Rule"),
             ObjectRefAttr(
-                "fdTasksAutomaticGroupsOfName",
+                "hrcTasksAutomaticGroupsOfName",
                 _("Group"),
                 ref_type="group",
                 required=True,
                 description=_("Group that receives the matching users"),
             ),
             StringAttr(
-                "fdTasksAutomaticGroupsRegexPattern",
+                "hrcTasksAutomaticGroupsRegexPattern",
                 _("Pattern"),
                 description=_(
                     "Regular expression, optionally prefixed by an attribute name and a colon, "
@@ -67,7 +67,7 @@ class AutomaticGroupsTask(TaskObjectType):
                 ),
             ),
             BooleanAttr(
-                "fdTasksAutomaticGroupsDynamicGroup",
+                "hrcTasksAutomaticGroupsDynamicGroup",
                 _("Dynamic group"),
                 description=_("Also remove the users that no longer match"),
                 default=False,
@@ -76,7 +76,7 @@ class AutomaticGroupsTask(TaskObjectType):
         members = Section(
             _("Users"),
             ListAttr(
-                "fdTasksAutomaticGroupsMembers",
+                "hrcTasksAutomaticGroupsMembers",
                 _("Users, groups or roles"),
                 ObjectRefAttr("member", _("Member"), ref_type="user"),
                 required=True,
@@ -87,13 +87,13 @@ class AutomaticGroupsTask(TaskObjectType):
         @classmethod
         def prepare(cls, ctx: TabContext) -> None:
             super().prepare(ctx)
-            pattern = ctx.values.get("fdTasksAutomaticGroupsRegexPattern")
+            pattern = ctx.values.get("hrcTasksAutomaticGroupsRegexPattern")
             if isinstance(pattern, str) and pattern:
                 try:
                     parse_rule(pattern, "uid")
                 except re.error:
                     ctx.error(
-                        "fdTasksAutomaticGroupsRegexPattern", _("Invalid regular expression.")
+                        "hrcTasksAutomaticGroupsRegexPattern", _("Invalid regular expression.")
                     )
 
 
@@ -103,7 +103,7 @@ def plugin() -> Plugin:
         name=PLUGIN_NAME,
         version="0.1.0",
         types=(AutomaticGroupsTask,),
-        required_object_classes=("fdTasks", TASK_CLASS),
+        required_object_classes=("hrcTasks", TASK_CLASS),
         settings=AutomaticGroupsSettings(),
     )
 

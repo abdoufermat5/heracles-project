@@ -16,7 +16,7 @@ MAILINBLACK_CLASSES = {
     "inetOrgPerson",
     "organizationalPerson",
     "person",
-    "fdMailInBlackUser",
+    "hrcMailInBlackUser",
     "organizationalUnit",
 }
 
@@ -50,7 +50,7 @@ def test_mailinblack_tab_registration_and_acl(service: ObjectService) -> None:
     assert tab.acl_key == "mailInBlackUser"
     assert user_info.acl_object(tab) == "user/mailInBlackUser"
     assert tab.optional is True
-    assert tab.object_classes == ("fdMailInBlackUser",)
+    assert tab.object_classes == ("hrcMailInBlackUser",)
 
 
 def test_mailinblack_tab_dropped_without_schema(directory: MemoryDirectory) -> None:
@@ -73,7 +73,7 @@ def test_create_user_with_mailinblack(service: ObjectService, directory: MemoryD
             "mailinblack": {
                 "active": True,
                 "values": {
-                    "fdMailInBlackProtect": True,
+                    "hrcMailInBlackProtect": True,
                 },
             },
         },
@@ -81,12 +81,12 @@ def test_create_user_with_mailinblack(service: ObjectService, directory: MemoryD
     assert dn == f"uid=aliced,{PEOPLE}"
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdMailInBlackUser" in entry.get("objectClass")
-    assert entry.text("fdMailInBlackProtect") == "TRUE"
+    assert b"hrcMailInBlackUser" in entry.get("objectClass")
+    assert entry.text("hrcMailInBlackProtect") == "TRUE"
 
     loaded = service.load("user", dn)
     assert loaded.tabs["mailinblack"].active is True
-    assert loaded.tabs["mailinblack"].values["fdMailInBlackProtect"] is True
+    assert loaded.tabs["mailinblack"].values["hrcMailInBlackProtect"] is True
 
 
 def test_update_and_deactivate_mailinblack(
@@ -100,7 +100,7 @@ def test_update_and_deactivate_mailinblack(
             "mailinblack": {
                 "active": True,
                 "values": {
-                    "fdMailInBlackProtect": True,
+                    "hrcMailInBlackProtect": True,
                 },
             },
         },
@@ -113,23 +113,23 @@ def test_update_and_deactivate_mailinblack(
         {
             "mailinblack": {
                 "values": {
-                    "fdMailInBlackProtect": False,
+                    "hrcMailInBlackProtect": False,
                 }
             }
         },
     )
     loaded = service.load("user", dn)
-    assert loaded.tabs["mailinblack"].values["fdMailInBlackProtect"] is False
+    assert loaded.tabs["mailinblack"].values["hrcMailInBlackProtect"] is False
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.text("fdMailInBlackProtect") == "FALSE"
+    assert entry.text("hrcMailInBlackProtect") == "FALSE"
 
     # Deactivate tab
     service.update("user", dn, {"mailinblack": {"active": False}})
     entry2 = directory.get(dn)
     assert entry2 is not None
-    assert b"fdMailInBlackUser" not in entry2.get("objectClass")
-    assert entry2.get("fdMailInBlackProtect") == []
+    assert b"hrcMailInBlackUser" not in entry2.get("objectClass")
+    assert entry2.get("hrcMailInBlackProtect") == []
 
     loaded_deactivated = service.load("user", dn)
     assert loaded_deactivated.tabs["mailinblack"].active is False

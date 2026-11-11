@@ -27,7 +27,7 @@ from heracles_plugins.invitations.sending import invitation_link, render
 
 BASE = "dc=test"
 NOW = datetime(2030, 6, 15, 8, 0, tzinfo=UTC)
-CLASSES = ["fdPublicForm", "fdInvitation", "fdRegistration", "fdUserRegistration"]
+CLASSES = ["hrcPublicForm", "hrcInvitation", "hrcRegistration", "hrcUserRegistration"]
 
 
 @pytest.fixture
@@ -59,9 +59,9 @@ def new_form(service: ObjectService, cn: str = "join") -> str:
             "main": {
                 "values": {
                     "cn": cn,
-                    "fdPublicFormTitle": "Join us",
-                    "fdPublicFormTemplateType": "user",
-                    "fdPublicFormPrivate": True,
+                    "hrcPublicFormTitle": "Join us",
+                    "hrcPublicFormTemplateType": "user",
+                    "hrcPublicFormPrivate": True,
                 }
             }
         },
@@ -76,8 +76,8 @@ def new_invitation(service: ObjectService, form_dn: str, **extra: object) -> str
             "main": {
                 "values": {
                     "cn": "welcome",
-                    "fdInvitationFormDN": form_dn,
-                    "fdInvitationEmailSubject": "Welcome",
+                    "hrcInvitationFormDN": form_dn,
+                    "hrcInvitationEmailSubject": "Welcome",
                     **extra,
                 }
             }
@@ -105,7 +105,7 @@ def test_invitation_content_defaults_and_needs_a_link(
     form = new_form(service)
     dn = new_invitation(service, form)
     assert dn == f"cn=welcome,ou=invitations,{BASE}"
-    content = (directory.get(dn) or pytest.fail()).text("fdInvitationEmailContent") or ""
+    content = (directory.get(dn) or pytest.fail()).text("hrcInvitationEmailContent") or ""
     assert "{link}" in content
     with pytest.raises(ObjectValidationError) as err:
         service.create(
@@ -115,14 +115,14 @@ def test_invitation_content_defaults_and_needs_a_link(
                 "main": {
                     "values": {
                         "cn": "bad",
-                        "fdInvitationFormDN": form,
-                        "fdInvitationEmailSubject": "S",
-                        "fdInvitationEmailContent": "no link here",
+                        "hrcInvitationFormDN": form,
+                        "hrcInvitationEmailSubject": "S",
+                        "hrcInvitationEmailContent": "no link here",
                     }
                 }
             },
         )
-    assert "main.fdInvitationEmailContent" in err.value.fields
+    assert "main.hrcInvitationEmailContent" in err.value.fields
     with pytest.raises(ObjectValidationError):
         new_invitation(service, f"cn=missing,ou=forms,{BASE}")
 
@@ -138,7 +138,7 @@ def test_send_creates_registrations_tokens_and_mails(
 ) -> None:
     form = new_form(service)
     invitation = new_invitation(
-        service, form, fdInvitationEmailContent="Go to {link} before {expires} ({email})"
+        service, form, hrcInvitationEmailContent="Go to {link} before {expires} ({email})"
     )
     mailer = MemoryMailer()
     report = send_invitation(
@@ -160,11 +160,11 @@ def test_send_creates_registrations_tokens_and_mails(
     assert url.path == "/forms/join"
     token = parse_qs(url.query)["token"][0]
 
-    registration = f"fdRegistrationEmailAddress=a@example.com,ou=registrations,{BASE}"
+    registration = f"hrcRegistrationEmailAddress=a@example.com,ou=registrations,{BASE}"
     entry = directory.get(registration) or pytest.fail()
-    assert entry.text("fdRegistrationState") == "invited"
-    assert entry.text("fdRegistrationInvitationDN") == invitation
-    assert (directory.get(invitation) or pytest.fail()).text("fdInvitationAuthor")
+    assert entry.text("hrcRegistrationState") == "invited"
+    assert entry.text("hrcRegistrationInvitationDN") == invitation
+    assert (directory.get(invitation) or pytest.fail()).text("hrcInvitationAuthor")
 
     context = resolve_invitation_token(directory, token, NOW)
     assert context is not None
@@ -174,7 +174,7 @@ def test_send_creates_registrations_tokens_and_mails(
 
     # the registration type lists what was created
     listed = service.list("registration")
-    assert sorted(r.values["fdRegistrationEmailAddress"] for r in listed.items) == report.sent
+    assert sorted(r.values["hrcRegistrationEmailAddress"] for r in listed.items) == report.sent
 
 
 def test_resend_replaces_the_token_and_registered_addresses_are_refused(
@@ -191,8 +191,8 @@ def test_resend_replaces_the_token_and_registered_addresses_are_refused(
 
     complete_registration(directory, context, f"uid=a,ou=people,{BASE}", NOW)
     entry = directory.get(context.registration_dn) or pytest.fail()
-    assert entry.text("fdRegistrationState") == "registered"
-    assert entry.text("fdRegistrationUserDN") == f"uid=a,ou=people,{BASE}"
+    assert entry.text("hrcRegistrationState") == "registered"
+    assert entry.text("hrcRegistrationUserDN") == f"uid=a,ou=people,{BASE}"
     assert resolve_invitation_token(directory, tokens[1], NOW) is None
     report = send_invitation(
         directory, mailer, invitation, ["a@example.com"], base_url="https://h", now=NOW

@@ -9,7 +9,7 @@ from heracles.attributes import ObjectRefAttr, StringAttr, TextAttr
 from heracles.i18n import _
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Entry, Scope
-from heracles.objects._compat import DEPARTMENT_MARKER
+from heracles.objects._names import DEPARTMENT_MARKER
 from heracles.objects.errors import ObjectConflictError
 from heracles.objects.hooks import TabContext
 from heracles.objects.model import ObjectType, Reference, Section, Tab

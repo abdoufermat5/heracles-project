@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from heracles.schema.legacy import ATTR, OC
+from heracles.schema.names import ATTR, OC
 
 TOKEN_OBJECT_CLASS: Final = OC.TOKEN
 TOKEN_ATTR_CN: Final = "cn"

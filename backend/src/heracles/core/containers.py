@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import AlreadyExistsError, DirectoryClient, DirectoryError
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 
 def ensure_container(directory: DirectoryClient, container_dn: str) -> None:
@@ -29,8 +29,8 @@ def ensure_container(directory: DirectoryClient, container_dn: str) -> None:
             directory.add(
                 current,
                 {
-                    legacy.STD_ATTR.OBJECT_CLASS: [legacy.STD_OC.ORGANIZATIONAL_UNIT.encode()],
-                    legacy.STD_ATTR.OU: [value.strip().encode("utf-8")],
+                    schema.STD_ATTR.OBJECT_CLASS: [schema.STD_OC.ORGANIZATIONAL_UNIT.encode()],
+                    schema.STD_ATTR.OU: [value.strip().encode("utf-8")],
                 },
             )
         except AlreadyExistsError:

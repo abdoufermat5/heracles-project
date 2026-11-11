@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from heracles.schema.legacy import ATTR, OC, STD_OC
+from heracles.schema.names import ATTR, OC, STD_OC
 
 OC_ACL = OC.ACL_ASSIGNMENT
 ATTR_ACL_ENTRY = ATTR.ACL_ENTRY

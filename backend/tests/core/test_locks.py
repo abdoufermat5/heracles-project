@@ -22,14 +22,14 @@ def svc(directory: MemoryDirectory) -> LockService:
 def test_entry_format(svc: LockService, directory: MemoryDirectory) -> None:
     lock = svc.acquire(OBJ, CAROL)
     md5 = hashlib.md5(OBJ.encode()).hexdigest()
-    assert lock.entry_dn == f"cn={md5},ou=locks,ou=fusiondirectory,dc=heracles,dc=test"
+    assert lock.entry_dn == f"cn={md5},ou=locks,ou=heracles,dc=heracles,dc=test"
     entry = directory.get(lock.entry_dn)
     assert entry is not None
-    assert entry.text("objectClass") == "fdLockEntry"
+    assert entry.text("objectClass") == "hrcLockEntry"
     assert entry.text("cn") == md5
-    assert entry.text("fdUserDn") == CAROL
-    assert entry.text("fdObjectDn") == base64.b64encode(OBJ.encode()).decode()
-    assert entry.text("fdLockTimestamp") == "20240305070809Z"
+    assert entry.text("hrcUserDn") == CAROL
+    assert entry.text("hrcObjectDn") == base64.b64encode(OBJ.encode()).decode()
+    assert entry.text("hrcLockTimestamp") == "20240305070809Z"
     assert lock.acquired_at == FIXED
 
 

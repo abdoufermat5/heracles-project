@@ -93,8 +93,8 @@ class Invitation(ObjectType):
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=invitations"
-    columns = ("cn", "fdInvitationEmailSubject")
-    search_attrs = ("cn", "fdInvitationEmailSubject")
+    columns = ("cn", "hrcInvitationEmailSubject")
+    search_attrs = ("cn", "hrcInvitationEmailSubject")
 
     class Main(Tab):
         name = "main"
@@ -107,14 +107,14 @@ class Invitation(ObjectType):
             DepartmentAttr("base", _("Department")),
             StringAttr("cn", _("Name"), required=True, pattern=NAME_RE),
             ObjectRefAttr(
-                "fdInvitationFormDN",
+                "hrcInvitationFormDN",
                 _("Form"),
                 ref_type="public_form",
                 required=True,
                 description=_("The public form the invitees are asked to fill in"),
             ),
             ObjectRefAttr(
-                "fdInvitationAuthor",
+                "hrcInvitationAuthor",
                 _("Author"),
                 ref_type="user",
                 readonly=True,
@@ -123,9 +123,9 @@ class Invitation(ObjectType):
         )
         message = Section(
             _("Mail"),
-            StringAttr("fdInvitationEmailSubject", _("Subject"), required=True),
+            StringAttr("hrcInvitationEmailSubject", _("Subject"), required=True),
             TextAttr(
-                "fdInvitationEmailContent",
+                "hrcInvitationEmailContent",
                 _("Content"),
                 description=_(
                     "Placeholders: {link} (required) {email} {form_title} {expires}. "
@@ -136,11 +136,11 @@ class Invitation(ObjectType):
 
         @classmethod
         def prepare(cls, ctx: TabContext) -> None:
-            content = ctx.values.get("fdInvitationEmailContent")
+            content = ctx.values.get("hrcInvitationEmailContent")
             if not content:
-                ctx.values["fdInvitationEmailContent"] = settings_of(ctx).default_email_content
+                ctx.values["hrcInvitationEmailContent"] = settings_of(ctx).default_email_content
             elif isinstance(content, str) and "{link}" not in content:
-                ctx.error("fdInvitationEmailContent", _("The content must contain {link}."))
+                ctx.error("hrcInvitationEmailContent", _("The content must contain {link}."))
             if ctx.creating:
                 ensure_container(ctx.directory, dnlib.join(Invitation.rdn, ctx.base))
 
@@ -155,11 +155,11 @@ class Registration(ObjectType):
     icon = "user-plus"
     category = "workflow"
     filter = f"(objectClass={REGISTRATION_CLASS})"
-    main_attr = "fdRegistrationEmailAddress"
-    name_attr = "fdRegistrationEmailAddress"
+    main_attr = "hrcRegistrationEmailAddress"
+    name_attr = "hrcRegistrationEmailAddress"
     rdn = "ou=registrations"
-    columns = ("fdRegistrationEmailAddress", "fdRegistrationState", "fdRegistrationLastChange")
-    search_attrs = ("fdRegistrationEmailAddress",)
+    columns = ("hrcRegistrationEmailAddress", "hrcRegistrationState", "hrcRegistrationLastChange")
+    search_attrs = ("hrcRegistrationEmailAddress",)
 
     class Main(Tab):
         name = "main"
@@ -170,28 +170,28 @@ class Registration(ObjectType):
         properties = Section(
             _("Properties"),
             DepartmentAttr("base", _("Department")),
-            EmailAttr("fdRegistrationEmailAddress", _("Email address"), required=True),
+            EmailAttr("hrcRegistrationEmailAddress", _("Email address"), required=True),
             SelectAttr(
-                "fdRegistrationState",
+                "hrcRegistrationState",
                 _("State"),
                 options=[(STATE_INVITED, _("Invited")), (STATE_REGISTERED, _("Registered"))],
                 default=STATE_INVITED,
             ),
-            DateTimeAttr("fdRegistrationLastChange", _("Last change"), readonly=True),
+            DateTimeAttr("hrcRegistrationLastChange", _("Last change"), readonly=True),
             ObjectRefAttr(
-                "fdRegistrationInvitationDN",
+                "hrcRegistrationInvitationDN",
                 _("Invitation"),
                 ref_type="invitation",
             ),
-            ObjectRefAttr("fdRegistrationUserDN", _("User"), ref_type="user"),
+            ObjectRefAttr("hrcRegistrationUserDN", _("User"), ref_type="user"),
         )
 
         @classmethod
         def prepare(cls, ctx: TabContext) -> None:
-            if not ctx.values.get("fdRegistrationState"):
-                ctx.values["fdRegistrationState"] = STATE_INVITED
-            if ctx.creating or ctx.was_touched("fdRegistrationState"):
-                ctx.values["fdRegistrationLastChange"] = datetime.now(UTC).replace(microsecond=0)
+            if not ctx.values.get("hrcRegistrationState"):
+                ctx.values["hrcRegistrationState"] = STATE_INVITED
+            if ctx.creating or ctx.was_touched("hrcRegistrationState"):
+                ctx.values["hrcRegistrationLastChange"] = datetime.now(UTC).replace(microsecond=0)
             if ctx.creating:
                 ensure_container(ctx.directory, dnlib.join(Registration.rdn, ctx.base))
 
@@ -207,7 +207,7 @@ class UserRegistrationTab(Tab):
     acl_key = "userRegistration"
     label = _("Registration")
     optional = True
-    object_classes = ("fdUserRegistration",)
+    object_classes = ("hrcUserRegistration",)
 
     info = Section(
         _("Registration"),

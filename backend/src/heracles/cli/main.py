@@ -93,6 +93,18 @@ def _dns(args: argparse.Namespace) -> int:
     return 0
 
 
+def _schema_export(args: argparse.Namespace) -> int:
+    from heracles.schema.export import render_ldif, render_schema
+
+    text = render_ldif() if args.format == "ldif" else render_schema()
+    if args.output in (None, "-"):
+        sys.stdout.write(text)
+    else:
+        with open(args.output, "w", encoding="utf-8") as out:
+            out.write(text)
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -124,6 +136,18 @@ def main(
     dns.add_argument("--port", type=int, default=5353)
     dns.add_argument("--no-tcp", action="store_true", help="answer over UDP only")
     dns.set_defaults(func=_dns)
+
+    schema = sub.add_parser("schema", help="the Heracles LDAP schema")
+    schema_sub = schema.add_subparsers(dest="schema_command", required=True)
+    export = schema_sub.add_parser("export", help="print the schema for the LDAP server")
+    export.add_argument(
+        "--format",
+        choices=("ldif", "schema"),
+        default="ldif",
+        help="cn=config LDIF (default) or OpenLDAP .schema file",
+    )
+    export.add_argument("-o", "--output", help="output file (default: standard output)")
+    export.set_defaults(func=_schema_export)
 
     # --- P3 admin ---
     admin_commands.register(sub, directories or admin_commands.load_directories)

@@ -21,7 +21,7 @@ from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Modification, NoSuchObjectError, Scope
 from heracles.objects import ObjectValidationError, UnknownTypeError
 from heracles.objects.policy import EventContext
-from heracles.schema.legacy import OC
+from heracles.schema.names import OC
 
 router = APIRouter(tags=["directory"])
 log = structlog.get_logger(__name__)

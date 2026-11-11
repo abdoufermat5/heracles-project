@@ -40,17 +40,17 @@ class IpamVlanTab(Tab):
     name = "main"
     acl_key = "ipamVlan"
     label = _("VLAN")
-    object_classes = ("fdIpamVlan",)
+    object_classes = ("hrcIpamVlan",)
 
     identity = Section(
         _("Properties"),
         StringAttr("cn", _("Name"), required=True, max_length=64),
         TextAttr("description", _("Description")),
-        BooleanAttr("fdIpamActive", _("Active"), default=True),
+        BooleanAttr("hrcIpamActive", _("Active"), default=True),
         StringAttr("o", _("Organization")),
-        IntAttr("fdIpamVlanInnerId", _("VLAN ID"), min=1, max=4094),
-        IntAttr("fdIpamVlanQinQId", _("QinQ VLAN ID"), min=1, max=4094),
-        StringAttr("fdIpamApplicant", _("Applicant")),
+        IntAttr("hrcIpamVlanInnerId", _("VLAN ID"), min=1, max=4094),
+        IntAttr("hrcIpamVlanQinQId", _("QinQ VLAN ID"), min=1, max=4094),
+        StringAttr("hrcIpamApplicant", _("Applicant")),
     )
 
     @classmethod
@@ -67,13 +67,13 @@ class IpamVlan(ObjectType):
     label_plural = _("IPAM VLANs")
     icon = "network"
     category = "network"
-    filter = "(objectClass=fdIpamVlan)"
+    filter = "(objectClass=hrcIpamVlan)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=ipam"
-    columns = ("cn", "fdIpamVlanInnerId", "description")
-    search_attrs = ("cn", "description", "fdIpamVlanInnerId", "fdIpamVlanQinQId")
-    references = (Reference("ipamSubnet", "fdIpamVlanDN"),)
+    columns = ("cn", "hrcIpamVlanInnerId", "description")
+    search_attrs = ("cn", "description", "hrcIpamVlanInnerId", "hrcIpamVlanQinQId")
+    references = (Reference("ipamSubnet", "hrcIpamVlanDN"),)
 
     Main = IpamVlanTab
 
@@ -87,20 +87,20 @@ class IpamSubnetTab(Tab):
     name = "main"
     acl_key = "ipamSubnet"
     label = _("Subnet")
-    object_classes = ("fdIpamSubnet",)
+    object_classes = ("hrcIpamSubnet",)
 
     identity = Section(
         _("Properties"),
         StringAttr("cn", _("Name"), required=True, max_length=64),
-        CidrAttr("fdIpamSubnetCIDR", _("Subnet CIDR"), required=True),
+        CidrAttr("hrcIpamSubnetCIDR", _("Subnet CIDR"), required=True),
         TextAttr("description", _("Description")),
-        BooleanAttr("fdIpamActive", _("Active"), default=True),
+        BooleanAttr("hrcIpamActive", _("Active"), default=True),
         StringAttr("o", _("Organization")),
-        StringAttr("fdIpamType", _("Type")),
-        StringAttr("fdIpamApplicant", _("Applicant")),
-        DateAttr("fdIpamAllocationDate", _("Allocation date")),
-        DateAttr("fdIpamReleaseDate", _("Release date")),
-        ObjectRefAttr("fdIpamVlanDN", _("VLAN"), ref_type="ipamVlan"),
+        StringAttr("hrcIpamType", _("Type")),
+        StringAttr("hrcIpamApplicant", _("Applicant")),
+        DateAttr("hrcIpamAllocationDate", _("Allocation date")),
+        DateAttr("hrcIpamReleaseDate", _("Release date")),
+        ObjectRefAttr("hrcIpamVlanDN", _("VLAN"), ref_type="ipamVlan"),
     )
 
     @classmethod
@@ -117,12 +117,12 @@ class IpamSubnet(ObjectType):
     label_plural = _("IPAM Subnets")
     icon = "network"
     category = "network"
-    filter = "(objectClass=fdIpamSubnet)"
+    filter = "(objectClass=hrcIpamSubnet)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=ipam"
-    columns = ("cn", "fdIpamSubnetCIDR", "description")
-    search_attrs = ("cn", "description", "fdIpamSubnetCIDR")
+    columns = ("cn", "hrcIpamSubnetCIDR", "description")
+    search_attrs = ("cn", "description", "hrcIpamSubnetCIDR")
 
     Main = IpamSubnetTab
 
@@ -145,7 +145,7 @@ def plugin() -> Plugin:
         name=PLUGIN_NAME,
         version="0.1.0",
         types=(IpamVlan, IpamSubnet),
-        required_object_classes=("fdIpamVlan", "fdIpamSubnet"),
+        required_object_classes=("hrcIpamVlan", "hrcIpamSubnet"),
         settings=IpamSettings(),
     )
 

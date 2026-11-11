@@ -51,7 +51,9 @@ class Api:
 @pytest.fixture
 def directory() -> MemoryDirectory:
     d = demo.build_demo_directory()
-    d.set_schema_object_classes([*d.schema_object_classes(), "fdArchivedObject", "fdArchiveTasks"])
+    d.set_schema_object_classes(
+        [*d.schema_object_classes(), "hrcArchivedObject", "hrcArchiveTasks"]
+    )
     return d
 
 
@@ -70,7 +72,7 @@ def test_admin_archives_a_user(app_client: TestClient, directory: MemoryDirector
     dn = r.json()["dn"]
     assert dn.startswith("cn=user_asmith_") and dn.endswith(f"ou=archive,{BASE}")
     entry = directory.get(dn)
-    assert entry is not None and entry.text("fdArchivedOriginDn") == ASMITH
+    assert entry is not None and entry.text("hrcArchivedOriginDn") == ASMITH
     assert directory.get(ASMITH) is not None
     # the archive is visible through the generic API
     listed = a.get("/objects/archived_object").json()

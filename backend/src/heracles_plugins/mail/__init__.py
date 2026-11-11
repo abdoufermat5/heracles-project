@@ -155,7 +155,7 @@ def check_mail_uniqueness(
     ctx: TabContext,
     *,
     mail_attr: str = "mail",
-    alt_attr: str | None = "gosaMailAlternateAddress",
+    alt_attr: str | None = "hrcMailAlternateAddress",
     mail_source: Mapping[str, Any] | None = None,
     mail_error_key: str | None = None,
 ) -> None:
@@ -214,7 +214,7 @@ def check_mail_uniqueness(
         return
 
     terms = [
-        f"(|(mail={escape_filter_value(addr)})(gosaMailAlternateAddress={escape_filter_value(addr)}))"
+        f"(|(mail={escape_filter_value(addr)})(hrcMailAlternateAddress={escape_filter_value(addr)}))"
         for addr in to_query
     ]
     flt = f"(|{''.join(terms)})"
@@ -223,7 +223,7 @@ def check_mail_uniqueness(
             ctx.directory.base_dn,
             flt,
             Scope.SUBTREE,
-            ["mail", "gosaMailAlternateAddress"],
+            ["mail", "hrcMailAlternateAddress"],
         )
     except NoSuchObjectError:
         return
@@ -235,7 +235,7 @@ def check_mail_uniqueness(
             continue
         entry_mails = {m.strip().lower() for m in entry.texts("mail") if m.strip()}
         entry_alts = {
-            a.strip().lower() for a in entry.texts("gosaMailAlternateAddress") if a.strip()
+            a.strip().lower() for a in entry.texts("hrcMailAlternateAddress") if a.strip()
         }
         taken = entry_mails | entry_alts
 
@@ -263,22 +263,22 @@ class UserMailTab(Tab):
     acl_key = "mailAccount"
     label = _("Mail")
     optional = True
-    object_classes = ("gosaMailAccount",)
+    object_classes = ("hrcMailAccount",)
 
     # The primary address (``mail``) belongs to the user's main tab: this tab only
     # reads and validates it, so a save never carries two modifications of ``mail``
     # and deactivating this tab never deletes it.
     account = Section(
         _("Account"),
-        StringAttr("gosaMailServer", _("Mail server")),
-        IntAttr("gosaMailQuota", _("Quota (MB)"), min=0),
+        StringAttr("hrcMailServer", _("Mail server")),
+        IntAttr("hrcMailQuota", _("Quota (MB)"), min=0),
         ListAttr(
-            "gosaMailAlternateAddress",
+            "hrcMailAlternateAddress",
             _("Alternate addresses"),
             EmailAttr("alternateAddress", _("Alternate address")),
         ),
         ListAttr(
-            "gosaMailForwardingAddress",
+            "hrcMailForwardingAddress",
             _("Forwarding addresses"),
             EmailAttr("forwardingAddress", _("Forwarding address")),
         ),
@@ -288,24 +288,24 @@ class UserMailTab(Tab):
         virtual(BooleanAttr("flag_localonly", _("Only allow local delivery"), default=False)),
         virtual(BooleanAttr("flag_ownmailbox", _("Keep a copy in own mailbox"), default=False)),
         virtual(BooleanAttr("flag_vacation", _("Vacation message active"), default=False)),
-        HiddenAttr("gosaMailDeliveryMode", "gosaMailDeliveryMode"),
+        HiddenAttr("hrcMailDeliveryMode", "hrcMailDeliveryMode"),
     )
     vacation = Section(
         _("Vacation"),
-        UnixTimestampDateAttr("gosaVacationStart", _("Vacation start date")),
-        UnixTimestampDateAttr("gosaVacationStop", _("Vacation stop date")),
-        TextAttr("gosaVacationMessage", _("Vacation message")),
+        UnixTimestampDateAttr("hrcVacationStart", _("Vacation start date")),
+        UnixTimestampDateAttr("hrcVacationStop", _("Vacation stop date")),
+        TextAttr("hrcVacationMessage", _("Vacation message")),
     )
 
     @classmethod
     def on_load(cls, ctx: TabContext) -> None:
-        mode = ctx.values.get("gosaMailDeliveryMode")
+        mode = ctx.values.get("hrcMailDeliveryMode")
         flags, _unk = parse_delivery_mode(str(mode) if mode else None)
         ctx.values.update(flags)
         if not flags.get("flag_vacation"):
-            ctx.values["gosaVacationStart"] = None
-            ctx.values["gosaVacationStop"] = None
-            ctx.values["gosaVacationMessage"] = None
+            ctx.values["hrcVacationStart"] = None
+            ctx.values["hrcVacationStop"] = None
+            ctx.values["hrcVacationMessage"] = None
 
     @classmethod
     def prepare(cls, ctx: TabContext) -> None:
@@ -336,33 +336,33 @@ class UserMailTab(Tab):
             ctx.errors.setdefault(main_mail_key, _("This field is required."))
 
         # Parse delivery mode if explicitly touched
-        if ctx.was_touched("gosaMailDeliveryMode"):
-            mode_raw = ctx.values.get("gosaMailDeliveryMode")
+        if ctx.was_touched("hrcMailDeliveryMode"):
+            mode_raw = ctx.values.get("hrcMailDeliveryMode")
             if isinstance(mode_raw, str):
                 parsed_flags, _unk = parse_delivery_mode(mode_raw)
                 for flag_name, flag_val in parsed_flags.items():
                     if not ctx.was_touched(flag_name):
                         ctx.values[flag_name] = flag_val
 
-        # Rebuild gosaMailDeliveryMode
-        orig_mode = ctx.original_values().get("gosaMailDeliveryMode") or ctx.values.get(
-            "gosaMailDeliveryMode"
+        # Rebuild hrcMailDeliveryMode
+        orig_mode = ctx.original_values().get("hrcMailDeliveryMode") or ctx.values.get(
+            "hrcMailDeliveryMode"
         )
-        ctx.values["gosaMailDeliveryMode"] = format_delivery_mode(
+        ctx.values["hrcMailDeliveryMode"] = format_delivery_mode(
             ctx.values, str(orig_mode) if orig_mode else None
         )
 
         # Vacation settings handling
         if not ctx.values.get("flag_vacation"):
-            ctx.values["gosaVacationStart"] = None
-            ctx.values["gosaVacationStop"] = None
-            ctx.values["gosaVacationMessage"] = None
+            ctx.values["hrcVacationStart"] = None
+            ctx.values["hrcVacationStop"] = None
+            ctx.values["hrcVacationMessage"] = None
         else:
-            start = ctx.values.get("gosaVacationStart")
-            stop = ctx.values.get("gosaVacationStop")
+            start = ctx.values.get("hrcVacationStart")
+            stop = ctx.values.get("hrcVacationStop")
             if isinstance(start, date) and isinstance(stop, date) and stop < start:
                 ctx.error(
-                    "gosaVacationStop",
+                    "hrcVacationStop",
                     _("Vacation stop date must be on or after start date."),
                 )
 
@@ -377,23 +377,23 @@ class GroupMailTab(Tab):
     acl_key = "mailGroup"
     label = _("Mail")
     optional = True
-    object_classes = ("fdGroupMail",)
+    object_classes = ("hrcGroupMail",)
 
     account = Section(
         _("Account"),
         EmailAttr("mail", _("Email"), required=True),
-        StringAttr("gosaMailServer", _("Mail server")),
+        StringAttr("hrcMailServer", _("Mail server")),
         ListAttr(
-            "gosaMailAlternateAddress",
+            "hrcMailAlternateAddress",
             _("Alternate addresses"),
             EmailAttr("alternateAddress", _("Alternate address")),
         ),
         ListAttr(
-            "gosaMailForwardingAddress",
+            "hrcMailForwardingAddress",
             _("Forwarding addresses"),
             EmailAttr("forwardingAddress", _("Forwarding address")),
         ),
-        BooleanAttr("fdGroupMailLocalOnly", _("Only allow local delivery"), default=False),
+        BooleanAttr("hrcGroupMailLocalOnly", _("Only allow local delivery"), default=False),
     )
 
     @classmethod
@@ -413,7 +413,7 @@ class MailAliasDistribution(ObjectType):
     icon = "mail"
     category = "mail"
     acl_category = "alias"
-    filter = "(objectClass=mailAliasDistribution)"
+    filter = "(objectClass=hrcMailAliasDistribution)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=alias"
@@ -424,7 +424,7 @@ class MailAliasDistribution(ObjectType):
         name = "main"
         acl_key = "mailAliasDistribution"
         label = _("Temporary mail distribution")
-        object_classes = ("mailAliasDistribution",)
+        object_classes = ("hrcMailAliasDistribution",)
 
         properties = Section(
             _("Properties"),
@@ -436,12 +436,12 @@ class MailAliasDistribution(ObjectType):
             _("Distribution"),
             EmailAttr("mail", _("Email"), required=True),
             ListAttr(
-                "gosaMailAlternateAddress",
+                "hrcMailAlternateAddress",
                 _("Alternate addresses"),
                 EmailAttr("alternateAddress", _("Alternate address")),
             ),
-            StringAttr("gosaMailServer", _("Mail server")),
-            UnixTimestampDateAttr("aliasExpirationDate", _("Expiration date")),
+            StringAttr("hrcMailServer", _("Mail server")),
+            UnixTimestampDateAttr("hrcMailAliasExpirationDate", _("Expiration date")),
         )
 
         @classmethod
@@ -458,7 +458,7 @@ class MailAliasRedirection(ObjectType):
     icon = "mail"
     category = "mail"
     acl_category = "alias"
-    filter = "(objectClass=mailAliasRedirection)"
+    filter = "(objectClass=hrcMailAliasRedirection)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=alias"
@@ -469,7 +469,7 @@ class MailAliasRedirection(ObjectType):
         name = "main"
         acl_key = "mailAliasRedirection"
         label = _("Temporary mail redirection")
-        object_classes = ("mailAliasRedirection",)
+        object_classes = ("hrcMailAliasRedirection",)
 
         properties = Section(
             _("Properties"),
@@ -481,13 +481,13 @@ class MailAliasRedirection(ObjectType):
             _("Redirection"),
             EmailAttr("mail", _("Email"), required=True),
             ListAttr(
-                "gosaMailForwardingAddress",
+                "hrcMailForwardingAddress",
                 _("Forwarding addresses"),
                 EmailAttr("forwardingAddress", _("Forwarding address")),
                 min_length=1,
                 required=True,
             ),
-            UnixTimestampDateAttr("aliasExpirationDate", _("Expiration date")),
+            UnixTimestampDateAttr("hrcMailAliasExpirationDate", _("Expiration date")),
         )
 
         @classmethod
@@ -512,7 +512,7 @@ def plugin() -> Plugin:
             TabAttachment("user", UserMailTab),
             TabAttachment("group", GroupMailTab),
         ),
-        required_object_classes=("gosaMailAccount",),
+        required_object_classes=("hrcMailAccount",),
         settings=MailSettings(),
     )
 

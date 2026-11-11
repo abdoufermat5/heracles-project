@@ -24,7 +24,7 @@ JDOE = f"uid=jdoe,{PEOPLE}"
 @pytest.fixture
 def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
-    d.set_schema_object_classes([*d.schema_object_classes(), ARCHIVE_CLASS, "fdArchiveTasks"])
+    d.set_schema_object_classes([*d.schema_object_classes(), ARCHIVE_CLASS, "hrcArchiveTasks"])
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     d.add(PEOPLE, {"objectClass": [b"organizationalUnit"], "ou": [b"people"]})
     d.add(
@@ -64,14 +64,14 @@ def test_archive_keeps_selected_attributes_and_unique_key(directory: MemoryDirec
     assert dn == f"cn=user_jdoe_20300615080000,{ARCH}"
     a = attrs_of(directory, dn)
     assert a["objectClass"] == [ARCHIVE_CLASS]
-    assert a["fdArchivedObjectType"] == ["user"]
-    assert a["fdArchivedOriginDn"] == [JDOE]
-    assert a["fdArchivedDateTime"] == ["20300615080000Z"]
-    assert a["fdArchivedUniqueField"] == ["uid=jdoe"]
-    assert "mail=jdoe@example.com" in a["fdArchivedField"]
-    assert "mail=john@example.com" in a["fdArchivedField"]
-    assert "sn=Doe" in a["fdArchivedField"]
-    joined = " ".join(a["fdArchivedField"])
+    assert a["hrcArchivedObjectType"] == ["user"]
+    assert a["hrcArchivedOriginDn"] == [JDOE]
+    assert a["hrcArchivedDateTime"] == ["20300615080000Z"]
+    assert a["hrcArchivedUniqueField"] == ["uid=jdoe"]
+    assert "mail=jdoe@example.com" in a["hrcArchivedField"]
+    assert "mail=john@example.com" in a["hrcArchivedField"]
+    assert "sn=Doe" in a["hrcArchivedField"]
+    joined = " ".join(a["hrcArchivedField"])
     assert "userPassword" not in joined and "jpegPhoto" not in joined
     assert directory.get(JDOE) is not None  # the object stays
 
@@ -113,7 +113,7 @@ def test_custom_rules_and_unsafe_key_characters(directory: MemoryDirectory) -> N
     )
     dn = archive.archive(directory, f"cn=we ird/name,{BASE}", "group", settings=settings, now=NOW)
     assert dn == f"cn=group_we_ird_name_20300615080000,{ARCH}"
-    assert attrs_of(directory, dn)["fdArchivedField"] == ["cn=we ird/name"]
+    assert attrs_of(directory, dn)["hrcArchivedField"] == ["cn=we ird/name"]
 
 
 def test_before_delete_event_archives_then_deletes(directory: MemoryDirectory) -> None:
@@ -132,11 +132,11 @@ def test_purge_task(directory: MemoryDirectory) -> None:
     directory.add(
         task,
         {
-            "objectClass": [b"fdTasks", b"fdArchiveTasks"],
+            "objectClass": [b"hrcTasks", b"hrcArchiveTasks"],
             "cn": [b"purge"],
-            "fdTasksStatus": [b"Activated"],
-            "fdTasksRepeatable": [b"TRUE"],
-            "fdTasksRepeatableSchedule": [b"weekly"],
+            "hrcTasksStatus": [b"Activated"],
+            "hrcTasksRepeatable": [b"TRUE"],
+            "hrcTasksRepeatableSchedule": [b"weekly"],
         },
     )
     report = archive.run_archive(directory, NOW, archive.ArchiveSettings(retention_days=1825))
@@ -153,9 +153,9 @@ def test_purge_disabled_with_zero_retention(directory: MemoryDirectory) -> None:
     directory.add(
         f"cn=purge,{TASKS}",
         {
-            "objectClass": [b"fdTasks", b"fdArchiveTasks"],
+            "objectClass": [b"hrcTasks", b"hrcArchiveTasks"],
             "cn": [b"purge"],
-            "fdTasksStatus": [b"Activated"],
+            "hrcTasksStatus": [b"Activated"],
         },
     )
     report = archive.run_archive(directory, NOW, archive.ArchiveSettings(retention_days=0))
@@ -172,17 +172,17 @@ def test_types_acl_keys_and_read_only(directory: MemoryDirectory) -> None:
     registry = make_registry(directory)
     task = registry.get("archive_task")
     assert task.acl_object(task.main_tab) == "tasks/archiveTask"
-    assert task.type.filter == "(&(objectClass=fdTasks)(objectClass=fdArchiveTasks))"
+    assert task.type.filter == "(&(objectClass=hrcTasks)(objectClass=hrcArchiveTasks))"
     obj = registry.get("archived_object")
     assert obj.acl_object(obj.main_tab) == "archivedObject/archivedObject"
     assert obj.type.rdn == "ou=archive"
     service = ObjectService(directory, registry)
     dn = archive.archive(directory, JDOE, "user", now=NOW)
     state = service.load("archived_object", dn)
-    assert state.tabs["main"].values["fdArchivedObjectType"] == "user"
+    assert state.tabs["main"].values["hrcArchivedObjectType"] == "user"
     with pytest.raises(ObjectValidationError):
         service.update(
-            "archived_object", dn, {"main": {"values": {"fdArchivedObjectType": "group"}}}
+            "archived_object", dn, {"main": {"values": {"hrcArchivedObjectType": "group"}}}
         )
     page = service.list("archived_object")
     assert page.total == 1
@@ -191,16 +191,16 @@ def test_types_acl_keys_and_read_only(directory: MemoryDirectory) -> None:
 def test_archive_task_crud(directory: MemoryDirectory) -> None:
     service = ObjectService(directory, make_registry(directory))
     dn = service.create(
-        "archive_task", BASE, {"main": {"values": {"cn": "purge", "fdTasksRepeatable": False}}}
+        "archive_task", BASE, {"main": {"values": {"cn": "purge", "hrcTasksRepeatable": False}}}
     )
     assert dn == f"cn=purge,{TASKS}"
     entry = directory.get(dn)
-    assert entry is not None and entry.has_object_class("fdArchiveTasks")
+    assert entry is not None and entry.has_object_class("hrcArchiveTasks")
 
 
 def test_archive_respects_read_acl(directory: MemoryDirectory) -> None:
     dn = archive.archive(directory, JDOE, "user", now=NOW, can_read=lambda a: a != "mail")
-    fields = attrs_of(directory, dn)["fdArchivedField"]
+    fields = attrs_of(directory, dn)["hrcArchivedField"]
     assert not any(f.startswith("mail=") for f in fields)
     assert "sn=Doe" in fields
     with pytest.raises(archive.ArchiveError):

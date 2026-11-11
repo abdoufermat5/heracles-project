@@ -58,7 +58,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     def _build_demo_dir() -> MemoryDirectory:
         d = orig_builder()
         d.set_schema_object_classes(
-            d.schema_object_classes() | {"fdgpgaccount", "pgpkeyinfo", "pgpserverinfo"}
+            d.schema_object_classes() | {"hrcgpgaccount", "pgpkeyinfo", "pgpserverinfo"}
         )
         return d
 
@@ -122,7 +122,7 @@ def test_gpg_flow_via_api(app_client: TestClient) -> None:
             "gpg": {
                 "active": True,
                 "values": {
-                    "fdUserKeyDN": [key_dn],
+                    "hrcUserKeyDN": [key_dn],
                 },
             },
         },
@@ -136,5 +136,5 @@ def test_gpg_flow_via_api(app_client: TestClient) -> None:
     assert r_get.status_code == 200
     data = r_get.json()
     assert "gpg" in data["tabs"]
-    assert data["tabs"]["gpg"]["values"]["fdUserKeyDN"] == [key_dn]
+    assert data["tabs"]["gpg"]["values"]["hrcUserKeyDN"] == [key_dn]
     assert "A1B2C3D4E5F67890" in data["tabs"]["gpg"]["values"]["gpgSummary"]

@@ -10,12 +10,12 @@ from heracles.objects import Plugin, Section, Tab, TabAttachment
 PLUGIN_NAME = "postfix"
 
 MAIL_SERVICE_CLASSES: tuple[str, ...] = (
-    "fdDovecotServer",
-    "fdCyrusServer",
-    "fdPostfixServer",
-    "fdSieveServer",
-    "goSpamServer",
-    "fdZimbraServer",
+    "hrcDovecotServer",
+    "hrcCyrusServer",
+    "hrcPostfixServer",
+    "hrcSieveServer",
+    "hrcSpamAssassinServer",
+    "hrcZimbraServer",
 )
 
 
@@ -43,24 +43,24 @@ class PostfixServiceTab(Tab):
     label = _("Postfix")
     description = _("Postfix mail transfer agent service")
     optional = True
-    object_classes = ("fdPostfixServer",)
+    object_classes = ("hrcPostfixServer",)
 
     general = Section(
         _("General"),
         StringAttr(
-            "postfixMyHostname",
+            "hrcPostfixMyHostname",
             _("Host name"),
             description=_(
                 "The myhostname parameter specifies the internet host name of this mail system"
             ),
         ),
         StringAttr(
-            "postfixMyDomain",
+            "hrcPostfixMyDomain",
             _("Domain"),
             description=_("The mydomain parameter specifies the local internet domain name"),
         ),
         StringAttr(
-            "postfixMyDestinations",
+            "hrcPostfixMyDestinations",
             _("Destinations"),
             description=_(
                 "The mydestination parameter specifies the list of domains delivered locally"
@@ -70,7 +70,7 @@ class PostfixServiceTab(Tab):
     limits = Section(
         _("Limits"),
         IntAttr(
-            "postfixHeaderSizeLimit",
+            "hrcPostfixHeaderSizeLimit",
             _("Header size limit"),
             min=0,
             description=_(
@@ -78,13 +78,13 @@ class PostfixServiceTab(Tab):
             ),
         ),
         IntAttr(
-            "postfixMailboxSizeLimit",
+            "hrcPostfixMailboxSizeLimit",
             _("Mailbox size limit"),
             min=0,
             description=_("Limits the size of any mailbox in bytes"),
         ),
         IntAttr(
-            "postfixMessageSizeLimit",
+            "hrcPostfixMessageSizeLimit",
             _("Message size limit"),
             min=0,
             description=_("Limits the total size of a message in bytes"),
@@ -93,13 +93,13 @@ class PostfixServiceTab(Tab):
     tables = Section(
         _("Tables"),
         ListAttr(
-            "fdPostfixTransportTable",
+            "hrcPostfixTransportTable",
             _("Transport table"),
             item=CompositeAttr(
                 "transport_entry",
                 _("Transport entry"),
                 [
-                    StringAttr("fdTransportTableMatch", _("Match")),
+                    StringAttr("hrcTransportTableMatch", _("Match")),
                     StringAttr("transport", _("Transport")),
                     StringAttr("nexthop", _("Next hop")),
                 ],
@@ -107,27 +107,27 @@ class PostfixServiceTab(Tab):
             ),
         ),
         ListAttr(
-            "fdPostfixCatchallTable",
+            "hrcPostfixCatchallTable",
             _("Catchall table"),
             item=CompositeAttr(
                 "catchall_entry",
                 _("Catchall entry"),
                 [
-                    StringAttr("fdCatchallTableDomain", _("Domain")),
-                    EmailAttr("fdCatchallTableRecipient", _("Recipient")),
+                    StringAttr("hrcCatchallTableDomain", _("Domain")),
+                    EmailAttr("hrcCatchallTableRecipient", _("Recipient")),
                 ],
                 separator=";",
             ),
         ),
         ListAttr(
-            "fdPostfixDomainAliasTable",
+            "hrcPostfixDomainAliasTable",
             _("Domain alias table"),
             item=CompositeAttr(
                 "alias_entry",
                 _("Domain alias entry"),
                 [
-                    StringAttr("fdDomainAliasTableFrom", _("From domain")),
-                    StringAttr("fdDomainAliasTableTo", _("To domain")),
+                    StringAttr("hrcDomainAliasTableFrom", _("From domain")),
+                    StringAttr("hrcDomainAliasTableTo", _("To domain")),
                 ],
                 separator=";",
             ),

@@ -284,9 +284,9 @@ def test_reset_is_logged_and_audited(app: FastAPI, state: AppState) -> None:
 
     directory = state.directories["main"]
     [event] = events_for(directory, ASMITH)
-    assert event.text("fdAuditAction") == "modify"
-    assert event.text("fdAuditAuthorDN") == HELPDESK
-    attrs = [v.decode() for v in event.attrs["fdAuditAttributes"]]
+    assert event.text("hrcAuditAction") == "modify"
+    assert event.text("hrcAuditAuthorDN") == HELPDESK
+    attrs = [v.decode() for v in event.attrs["hrcAuditAttributes"]]
     assert attrs == [
         "delete secondFactor: authenticator app, security key: Desk key, "
         "security key: Phone, recovery codes: 4"
@@ -301,7 +301,7 @@ def test_single_key_removal_is_audited(app: FastAPI, state: AppState) -> None:
     [entry] = [e for e in logs if e["event"] == "second_factor_reset"]
     assert entry["removed"] == ["security key: Phone"]
     [event] = events_for(state.directories["main"], ASMITH)
-    assert [v.decode() for v in event.attrs["fdAuditAttributes"]] == [
+    assert [v.decode() for v in event.attrs["hrcAuditAttributes"]] == [
         "delete secondFactor: security key: Phone"
     ]
 

@@ -60,17 +60,17 @@ class NextcloudAccountTab(Tab):
     acl_key = "nextcloudAccount"
     label = _("Nextcloud")
     optional = True
-    object_classes = ("fdNextCloudAccount",)
+    object_classes = ("hrcNextCloudAccount",)
 
     storage = Section(
         _("Nextcloud storage"),
         BytesSizeAttr(
-            "fdNextCloudQuota",
+            "hrcNextCloudQuota",
             _("Quota"),
             description=_("Storage quota (e.g. '10 GB', '500 MB', 'unlimited')"),
         ),
         StringAttr(
-            "fdNextCloudHomeFolder",
+            "hrcNextCloudHomeFolder",
             _("Home folder"),
             description=_("Path or template for the user's home folder"),
         ),

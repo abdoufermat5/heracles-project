@@ -1,4 +1,4 @@
-"""Tests for the IPMI plugin (ipmiClient tab on server, workstation)."""
+"""Tests for the IPMI plugin (hrcIpmiClient tab on server, workstation)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import heracles_plugins.systems as systems
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
-from heracles.schema.legacy import OC, PLUGIN_OBJECT_CLASSES
+from heracles.schema.names import OC, PLUGIN_OBJECT_CLASSES
 
 BASE = "dc=test"
 PARIS = f"ou=paris,{BASE}"
@@ -32,7 +32,7 @@ def directory() -> MemoryDirectory:
         [
             *d.schema_object_classes(),
             *PLUGIN_OBJECT_CLASSES,
-            "ipmiClient",
+            "hrcIpmiClient",
         ]
     )
     return d
@@ -60,9 +60,9 @@ def test_ipmi_on_server(service: ObjectService, directory: MemoryDirectory) -> N
         "description": "Database server",
     }
     ipmi_values: dict[str, Any] = {
-        "fdIpmiIP": "192.168.100.50",
-        "fdIpmiLogin": "ipmiadmin",
-        "fdIpmiPassword": "secret_bmc_password",
+        "hrcIpmiIP": "192.168.100.50",
+        "hrcIpmiLogin": "ipmiadmin",
+        "hrcIpmiPassword": "secret_bmc_password",
     }
     tabs = {
         "main": {"values": srv_values},
@@ -72,18 +72,18 @@ def test_ipmi_on_server(service: ObjectService, directory: MemoryDirectory) -> N
 
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.has_object_class("ipmiClient")
-    assert entry.text("fdIpmiIP") == "192.168.100.50"
-    assert entry.text("fdIpmiLogin") == "ipmiadmin"
+    assert entry.has_object_class("hrcIpmiClient")
+    assert entry.text("hrcIpmiIP") == "192.168.100.50"
+    assert entry.text("hrcIpmiLogin") == "ipmiadmin"
     # Password stored in cleartext for BMC protocol
-    assert entry.text("fdIpmiPassword") == "secret_bmc_password"
+    assert entry.text("hrcIpmiPassword") == "secret_bmc_password"
 
     loaded = service.load("server", dn)
     assert loaded.tabs["ipmi"].active is True
-    assert loaded.tabs["ipmi"].values["fdIpmiIP"] == "192.168.100.50"
-    assert loaded.tabs["ipmi"].values["fdIpmiLogin"] == "ipmiadmin"
+    assert loaded.tabs["ipmi"].values["hrcIpmiIP"] == "192.168.100.50"
+    assert loaded.tabs["ipmi"].values["hrcIpmiLogin"] == "ipmiadmin"
     # Password is write-only, so from_ldap gives None
-    assert loaded.tabs["ipmi"].values["fdIpmiPassword"] is None
+    assert loaded.tabs["ipmi"].values["hrcIpmiPassword"] is None
 
     # Update BMC IP
     service.update(
@@ -92,24 +92,24 @@ def test_ipmi_on_server(service: ObjectService, directory: MemoryDirectory) -> N
         {
             "ipmi": {
                 "values": {
-                    "fdIpmiIP": "192.168.100.51",
+                    "hrcIpmiIP": "192.168.100.51",
                 }
             }
         },
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.text("fdIpmiIP") == "192.168.100.51"
+    assert entry.text("hrcIpmiIP") == "192.168.100.51"
     # Existing password preserved
-    assert entry.text("fdIpmiPassword") == "secret_bmc_password"
+    assert entry.text("hrcIpmiPassword") == "secret_bmc_password"
 
     # Deactivate ipmi tab
     service.update("server", dn, {"ipmi": {"active": False}})
     entry = directory.get(dn)
     assert entry is not None
-    assert not entry.has_object_class("ipmiClient")
-    assert entry.get("fdIpmiIP") == []
-    assert entry.get("fdIpmiPassword") == []
+    assert not entry.has_object_class("hrcIpmiClient")
+    assert entry.get("hrcIpmiIP") == []
+    assert entry.get("hrcIpmiPassword") == []
 
 
 def test_ipmi_on_workstation(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -118,14 +118,14 @@ def test_ipmi_on_workstation(service: ObjectService, directory: MemoryDirectory)
         "ipmi": {
             "active": True,
             "values": {
-                "fdIpmiIP": "10.0.5.10",
-                "fdIpmiLogin": "root",
-                "fdIpmiPassword": "calvin",
+                "hrcIpmiIP": "10.0.5.10",
+                "hrcIpmiLogin": "root",
+                "hrcIpmiPassword": "calvin",
             },
         },
     }
     dn = service.create("workstation", PARIS, tabs)
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.text("fdIpmiIP") == "10.0.5.10"
-    assert entry.text("fdIpmiPassword") == "calvin"
+    assert entry.text("hrcIpmiIP") == "10.0.5.10"
+    assert entry.text("hrcIpmiPassword") == "calvin"

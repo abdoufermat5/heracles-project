@@ -6,7 +6,7 @@ from collections.abc import Iterable, Sequence
 
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Entry
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 USER_ATTRS = (
     "objectClass",
@@ -48,7 +48,7 @@ def expand_members(
         if entry.has_object_class("organizationalRole"):
             pending.extend(entry.texts("roleOccupant"))
         elif entry.has_object_class("groupOfNames") or entry.has_object_class(
-            legacy.OC.OBJECT_GROUP
+            schema.OC.OBJECT_GROUP
         ):
             pending.extend(entry.texts("member"))
         else:

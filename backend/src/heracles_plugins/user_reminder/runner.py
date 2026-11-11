@@ -32,7 +32,7 @@ from heracles.ldap.client import (
     NoSuchObjectError,
 )
 from heracles.ldap.filter import escape_filter_value
-from heracles.schema import legacy
+from heracles.schema import names as schema
 from heracles_plugins._tasks import (
     EPOCH,
     SCHEDULES,
@@ -53,9 +53,9 @@ from heracles_plugins._tasks import (
 
 log = structlog.get_logger(__name__)
 
-TASK_FILTER = task_filter("fdTasksReminder")
+TASK_FILTER = task_filter("hrcTasksReminder")
 TOKEN_TYPE_REMINDER = "reminder"  # noqa: S105
-REMINDER_TOKENS_RDN = f"ou=reminder,{legacy.RDN.TOKENS}"
+REMINDER_TOKENS_RDN = f"ou=reminder,{schema.RDN.TOKENS}"
 
 TEMPLATE_FIELDS = (
     "uid",
@@ -107,18 +107,18 @@ def create_prolongation_token(
 ) -> str:
     """Store a single-use token (hashed) for ``user_dn`` and return the clear value.
 
-    ``fdTokenTimestamp`` holds the instant (epoch seconds) until which the token is valid.
+    ``hrcTokenTimestamp`` holds the instant (epoch seconds) until which the token is valid.
     A previous reminder token of the same user is replaced.
     """
     container = reminder_tokens_container(directory)
     ensure_container(directory, container)
     flt = (
-        f"(&(objectClass={legacy.OC.TOKEN})({legacy.ATTR.TOKEN_TYPE}={TOKEN_TYPE_REMINDER})"
-        f"({legacy.ATTR.TOKEN_USER_DN}={escape_filter_value(user_dn)}))"
+        f"(&(objectClass={schema.OC.TOKEN})({schema.ATTR.TOKEN_TYPE}={TOKEN_TYPE_REMINDER})"
+        f"({schema.ATTR.TOKEN_USER_DN}={escape_filter_value(user_dn)}))"
     )
     try:
-        for old in list(directory.search(container, flt, attrs=[legacy.ATTR.TOKEN_USER_DN])):
-            if dnlib.normalize(old.text(legacy.ATTR.TOKEN_USER_DN) or "") == dnlib.normalize(
+        for old in list(directory.search(container, flt, attrs=[schema.ATTR.TOKEN_USER_DN])):
+            if dnlib.normalize(old.text(schema.ATTR.TOKEN_USER_DN) or "") == dnlib.normalize(
                 user_dn
             ):
                 directory.delete(old.dn)
@@ -130,12 +130,12 @@ def create_prolongation_token(
     directory.add(
         f"cn={hashed},{container}",
         {
-            "objectClass": [legacy.OC.TOKEN.encode()],
+            "objectClass": [schema.OC.TOKEN.encode()],
             "cn": [hashed.encode()],
-            legacy.ATTR.TOKEN: [hashed.encode()],
-            legacy.ATTR.TOKEN_TYPE: [TOKEN_TYPE_REMINDER.encode()],
-            legacy.ATTR.TOKEN_USER_DN: [user_dn.encode()],
-            legacy.ATTR.TOKEN_TIMESTAMP: [str(expires).encode()],
+            schema.ATTR.TOKEN: [hashed.encode()],
+            schema.ATTR.TOKEN_TYPE: [TOKEN_TYPE_REMINDER.encode()],
+            schema.ATTR.TOKEN_USER_DN: [user_dn.encode()],
+            schema.ATTR.TOKEN_TIMESTAMP: [str(expires).encode()],
         },
     )
     return token
@@ -145,19 +145,19 @@ def create_prolongation_token(
 
 
 def _accepts(task: Entry) -> bool:
-    return bool_of(task, "fdTasksReminderPosix") is not False
+    return bool_of(task, "hrcTasksReminderPosix") is not False
 
 
 def _template_of(directory: DirectoryClient, task: Entry) -> tuple[str, str] | None:
-    dn = task.text("fdTasksReminderMailTemplate")
+    dn = task.text("hrcTasksReminderMailTemplate")
     if not dn:
         return None
-    entry = directory.get(dn, [legacy.ATTR.MAIL_TEMPLATE_SUBJECT, legacy.ATTR.MAIL_TEMPLATE_BODY])
+    entry = directory.get(dn, [schema.ATTR.MAIL_TEMPLATE_SUBJECT, schema.ATTR.MAIL_TEMPLATE_BODY])
     if entry is None:
         return None
     return (
-        entry.text(legacy.ATTR.MAIL_TEMPLATE_SUBJECT) or "",
-        entry.text(legacy.ATTR.MAIL_TEMPLATE_BODY) or "",
+        entry.text(schema.ATTR.MAIL_TEMPLATE_SUBJECT) or "",
+        entry.text(schema.ATTR.MAIL_TEMPLATE_BODY) or "",
     )
 
 
@@ -174,19 +174,19 @@ def _process_task(
         report.errors.append(f"{task.dn}: mail template not found")
         return False
     subject_tpl, body_tpl = template
-    first = int_of(task, "fdTasksReminderFirstCall")
-    second = int_of(task, "fdTasksReminderSecondCall")
+    first = int_of(task, "hrcTasksReminderFirstCall")
+    second = int_of(task, "hrcTasksReminderSecondCall")
     calls = {c for c in (first, second) if c is not None}
-    prolong = bool_of(task, "fdTasksReminderAccountProlongation") is True
+    prolong = bool_of(task, "hrcTasksReminderAccountProlongation") is True
     valid_days = max(second if second is not None else (first or 0), 1)
     today = utc(now).date()
     copies = {
         e.text("mail"): e
-        for e in expand_members(directory, task.texts("fdTasksReminderRecipientsMembers"))
+        for e in expand_members(directory, task.texts("hrcTasksReminderRecipientsMembers"))
         if e.text("mail")
     }
-    sender = task.text("fdTasksReminderEmailSender") or None
-    for user in expand_members(directory, task.texts("fdTasksReminderMembers")):
+    sender = task.text("hrcTasksReminderEmailSender") or None
+    for user in expand_members(directory, task.texts("hrcTasksReminderMembers")):
         expires = expiration_of(user)
         if expires is None:
             continue

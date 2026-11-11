@@ -38,12 +38,12 @@ from heracles_plugins.systems.attrs import (
 PLUGIN_NAME = "systems"
 DEVICE_CLASS = "ieee802Device"
 SYSTEM_CLASSES = (
-    "fdServer",
-    "fdWorkstation",
-    "fdTerminal",
-    "fdPrinter",
-    "fdPhone",
-    "fdMobilePhone",
+    "hrcServer",
+    "hrcWorkstation",
+    "hrcTerminal",
+    "hrcPrinter",
+    "hrcPhone",
+    "hrcMobilePhone",
 )
 
 
@@ -146,7 +146,7 @@ def _location() -> StringAttr:
 
 def _lock() -> LockModeAttr:
     return LockModeAttr(
-        "fdMode",
+        "hrcMode",
         _("Lock this system"),
         description=_("Prevents the system from being reinstalled"),
         default=False,
@@ -170,7 +170,7 @@ class Server(ObjectType):
     label_plural = _("Servers")
     icon = "server"
     category = "systems"
-    filter = "(objectClass=fdServer)"
+    filter = "(objectClass=hrcServer)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=servers,ou=systems"
@@ -180,7 +180,7 @@ class Server(ObjectType):
     class Main(SystemTab):
         label = _("Server")
         acl_key = "serverGeneric"
-        object_classes = ("fdServer", DEVICE_CLASS)
+        object_classes = ("hrcServer", DEVICE_CLASS)
         identity = _identity()
         system = Section(_("System"), _location(), _lock())
         net = _network()
@@ -192,7 +192,7 @@ class Workstation(ObjectType):
     label_plural = _("Workstations")
     icon = "monitor"
     category = "systems"
-    filter = "(objectClass=fdWorkstation)"
+    filter = "(objectClass=hrcWorkstation)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=workstations,ou=systems"
@@ -202,7 +202,7 @@ class Workstation(ObjectType):
     class Main(SystemTab):
         label = _("Workstation")
         acl_key = "workstationGeneric"
-        object_classes = ("fdWorkstation", DEVICE_CLASS)
+        object_classes = ("hrcWorkstation", DEVICE_CLASS)
         identity = _identity()
         system = Section(_("System"), _location(), _lock())
         net = _network()
@@ -214,7 +214,7 @@ class Terminal(ObjectType):
     label_plural = _("Terminals")
     icon = "terminal"
     category = "systems"
-    filter = "(objectClass=fdTerminal)"
+    filter = "(objectClass=hrcTerminal)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=terminals,ou=systems"
@@ -224,7 +224,7 @@ class Terminal(ObjectType):
     class Main(SystemTab):
         label = _("Terminal")
         acl_key = "terminalGeneric"
-        object_classes = ("fdTerminal", DEVICE_CLASS)
+        object_classes = ("hrcTerminal", DEVICE_CLASS)
         identity = _identity()
         system = Section(_("System"), _location(), _lock())
         net = _network()
@@ -236,7 +236,7 @@ class Printer(ObjectType):
     label_plural = _("Printers")
     icon = "printer"
     category = "systems"
-    filter = "(objectClass=fdPrinter)"
+    filter = "(objectClass=hrcPrinter)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=printers,ou=systems"
@@ -246,7 +246,7 @@ class Printer(ObjectType):
     class Main(SystemTab):
         label = _("Printer")
         acl_key = "printGeneric"
-        object_classes = ("fdPrinter", DEVICE_CLASS)
+        object_classes = ("hrcPrinter", DEVICE_CLASS)
         identity = _identity()
         system = Section(
             _("Printer"),
@@ -260,13 +260,13 @@ class Printer(ObjectType):
         access = Section(
             _("Access"),
             ListAttr(
-                "fdPrinterUsers",
+                "hrcPrinterUsers",
                 _("Users allowed to print"),
                 ObjectRefAttr("user", _("User or group"), ref_type="user"),
                 description=_("Users or groups allowed to use the printer"),
             ),
             ListAttr(
-                "fdPrinterAdminUsers",
+                "hrcPrinterAdminUsers",
                 _("Printer administrators"),
                 ObjectRefAttr("admin", _("User or group"), ref_type="user"),
                 description=_("Users or groups allowed to administer the printer"),
@@ -274,9 +274,9 @@ class Printer(ObjectType):
         )
         windows = Section(
             _("Windows driver"),
-            StringAttr("fdPrinterWindowsInfFile", _("Windows INF file")),
-            StringAttr("fdPrinterWindowsDriverDir", _("Windows driver directory")),
-            StringAttr("fdPrinterWindowsDriverName", _("Windows driver name")),
+            StringAttr("hrcPrinterWindowsInfFile", _("Windows INF file")),
+            StringAttr("hrcPrinterWindowsDriverDir", _("Windows driver directory")),
+            StringAttr("hrcPrinterWindowsDriverName", _("Windows driver name")),
         )
         net = _network()
 
@@ -312,7 +312,7 @@ class Phone(ObjectType):
     label_plural = _("Phones")
     icon = "phone"
     category = "systems"
-    filter = "(objectClass=fdPhone)"
+    filter = "(objectClass=hrcPhone)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=phones,ou=systems"
@@ -322,7 +322,7 @@ class Phone(ObjectType):
     class Main(SystemTab):
         label = _("Phone")
         acl_key = "phoneGeneric"
-        object_classes = ("fdPhone", DEVICE_CLASS)
+        object_classes = ("hrcPhone", DEVICE_CLASS)
         identity = _identity()
         system = Section(
             _("Phone"),
@@ -339,29 +339,29 @@ class MobilePhone(ObjectType):
     label_plural = _("Mobile phones")
     icon = "smartphone"
     category = "systems"
-    filter = "(objectClass=fdMobilePhone)"
+    filter = "(objectClass=hrcMobilePhone)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=mobile,ou=systems"
-    columns = ("cn", "telephoneNumber", "fdMobileOS", "description")
-    search_attrs = ("cn", "description", "telephoneNumber", "serialNumber", "fdMobileIMEI")
+    columns = ("cn", "telephoneNumber", "hrcMobileOS", "description")
+    search_attrs = ("cn", "description", "telephoneNumber", "serialNumber", "hrcMobileIMEI")
 
     class Main(SystemTab):
         label = _("Mobile phone")
         acl_key = "mobilePhoneGeneric"
-        object_classes = ("fdMobilePhone", DEVICE_CLASS)
+        object_classes = ("hrcMobilePhone", DEVICE_CLASS)
         identity = _identity()
         system = Section(
             _("Mobile phone"),
             StringAttr("serialNumber", _("Serial number")),
             ImeiAttr(
-                "fdMobileIMEI",
+                "hrcMobileIMEI",
                 _("IMEI"),
                 description=_("15 digits, the last one being a Luhn check digit"),
             ),
-            StringAttr("fdMobileOS", _("Operating system")),
+            StringAttr("hrcMobileOS", _("Operating system")),
             PhoneAttr("telephoneNumber", _("Telephone number")),
-            StringAttr("fdMobilePUK", _("PUK code")),
+            StringAttr("hrcMobilePUK", _("PUK code")),
         )
         net = _network()
 

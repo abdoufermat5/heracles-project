@@ -28,7 +28,7 @@ def directory() -> MemoryDirectory:
     d.add(CONFIGS, {"objectClass": [b"organizationalUnit"], "ou": [b"configs"]})
     d.add(ASTERISK, {"objectClass": [b"organizationalUnit"], "ou": [b"asterisk"]})
     d.add(MACROS, {"objectClass": [b"organizationalUnit"], "ou": [b"macros"]})
-    d.set_schema_object_classes(d.schema_object_classes() | {"fdphonemacro"})
+    d.set_schema_object_classes(d.schema_object_classes() | {"hrcphonemacro", "hrcphonemacrouser"})
     return d
 
 
@@ -74,7 +74,8 @@ def test_acl_keys_and_rdn(service: ObjectService) -> None:
     assert tab is not None
     assert tab.acl_key == "Macro"
     assert user_type.acl_object(tab) == "user/Macro"
-    assert tab.optional is False
+    assert tab.optional is True
+    assert tab.object_classes == ("hrcPhoneMacroUser",)
 
 
 # ----------------------------------------------------------- phone_macro type
@@ -89,21 +90,21 @@ def test_create_and_load_phone_macro(service: ObjectService, directory: MemoryDi
                 "values": {
                     "cn": "vm-check",
                     "description": "VoiceMail check macro",
-                    "fdMacroAction": "Exten => s,1,VoiceMailMain(${MACRO_EXTEN})",
+                    "hrcMacroAction": "Exten => s,1,VoiceMailMain(${MACRO_EXTEN})",
                 }
             }
         },
     )
     assert dn.startswith("cn=vm-check,ou=macros,ou=asterisk,ou=configs,ou=systems")
     entry = stored_entry(directory, dn)
-    assert entry.has_object_class("fdPhoneMacro")
+    assert entry.has_object_class("hrcPhoneMacro")
     assert entry.text("cn") == "vm-check"
     assert entry.text("description") == "VoiceMail check macro"
-    assert entry.text("fdMacroAction") == "Exten => s,1,VoiceMailMain(${MACRO_EXTEN})"
+    assert entry.text("hrcMacroAction") == "Exten => s,1,VoiceMailMain(${MACRO_EXTEN})"
 
     obj = service.load("phone_macro", dn)
     assert obj.tabs["main"].values["cn"] == "vm-check"
-    assert obj.tabs["main"].values["fdMacroAction"] == "Exten => s,1,VoiceMailMain(${MACRO_EXTEN})"
+    assert obj.tabs["main"].values["hrcMacroAction"] == "Exten => s,1,VoiceMailMain(${MACRO_EXTEN})"
 
 
 def test_update_phone_macro(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -115,7 +116,7 @@ def test_update_phone_macro(service: ObjectService, directory: MemoryDirectory) 
                 "values": {
                     "cn": "stdexten",
                     "description": "Standard extension",
-                    "fdMacroAction": "Exten => s,1,Dial(${ARG1})",
+                    "hrcMacroAction": "Exten => s,1,Dial(${ARG1})",
                 }
             }
         },
@@ -127,14 +128,14 @@ def test_update_phone_macro(service: ObjectService, directory: MemoryDirectory) 
             "main": {
                 "values": {
                     "description": "Updated standard extension",
-                    "fdMacroAction": "Exten => s,1,Dial(${ARG1},20)",
+                    "hrcMacroAction": "Exten => s,1,Dial(${ARG1},20)",
                 }
             }
         },
     )
     entry = stored_entry(directory, dn)
     assert entry.text("description") == "Updated standard extension"
-    assert entry.text("fdMacroAction") == "Exten => s,1,Dial(${ARG1},20)"
+    assert entry.text("hrcMacroAction") == "Exten => s,1,Dial(${ARG1},20)"
 
 
 # ------------------------------------------------------------- user macro tab
@@ -147,34 +148,37 @@ def test_user_macro_tab(service: ObjectService, directory: MemoryDirectory) -> N
         {
             "main": {"values": {"uid": "macro_user", "givenName": "Macro", "sn": "User"}},
             "macro": {
+                "active": True,
                 "values": {
-                    "phoneMacro": "stdexten",
-                    "macroParameter": "SIP/100,20",
-                }
+                    "hrcPhoneMacroContent": "stdexten",
+                    "hrcPhoneMacroParameter": "SIP/100,20",
+                },
             },
         },
     )
     entry = stored_entry(directory, dn)
-    assert entry.text("phoneMacro") == "stdexten"
-    assert entry.text("macroParameter") == "SIP/100,20"
+    assert entry.has_object_class("hrcPhoneMacroUser")
+    assert entry.text("hrcPhoneMacroContent") == "stdexten"
+    assert entry.text("hrcPhoneMacroParameter") == "SIP/100,20"
 
     obj = service.load("user", dn)
     assert obj.tabs["macro"].active is True
-    assert obj.tabs["macro"].values["phoneMacro"] == "stdexten"
-    assert obj.tabs["macro"].values["macroParameter"] == "SIP/100,20"
+    assert obj.tabs["macro"].values["hrcPhoneMacroContent"] == "stdexten"
+    assert obj.tabs["macro"].values["hrcPhoneMacroParameter"] == "SIP/100,20"
 
     service.update(
         "user",
         dn,
         {
             "macro": {
+                "active": True,
                 "values": {
-                    "phoneMacro": "vm-check",
-                    "macroParameter": "100",
-                }
+                    "hrcPhoneMacroContent": "vm-check",
+                    "hrcPhoneMacroParameter": "100",
+                },
             }
         },
     )
     entry = stored_entry(directory, dn)
-    assert entry.text("phoneMacro") == "vm-check"
-    assert entry.text("macroParameter") == "100"
+    assert entry.text("hrcPhoneMacroContent") == "vm-check"
+    assert entry.text("hrcPhoneMacroParameter") == "100"

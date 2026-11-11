@@ -37,9 +37,9 @@ def directory() -> MemoryDirectory:
     d.set_schema_object_classes(
         [
             *d.schema_object_classes(),
-            "fdDesktopApplication",
-            "fdWebApplication",
-            "fdApplicationRights",
+            "hrcDesktopApplication",
+            "hrcWebApplication",
+            "hrcApplicationRights",
         ]
     )
     return d
@@ -60,7 +60,7 @@ def new_app(service: ObjectService, cn: str = "terminal", **extra: object) -> st
     return service.create(
         "application",
         BASE,
-        {"main": {"values": {"cn": cn, "fdApplicationExecutePath": "xterm", **extra}}},
+        {"main": {"values": {"cn": cn, "hrcApplicationExecutePath": "xterm", **extra}}},
     )
 
 
@@ -78,7 +78,7 @@ def new_role(service: ObjectService, allowed: list[str], occupants: list[str]) -
         BASE,
         {
             "main": {"values": {"cn": "staff", "roleOccupant": occupants}},
-            "applications": {"active": True, "values": {"fdApplicationAllowed": allowed}},
+            "applications": {"active": True, "values": {"hrcApplicationAllowed": allowed}},
         },
     )
 
@@ -113,12 +113,12 @@ def test_application_flags_are_stored_and_loaded(
         service,
         flag_menu=True,
         flag_launchbar=True,
-        fdApplicationImage="data:image/png;base64," + base64.b64encode(PNG).decode(),
+        hrcApplicationImage="data:image/png;base64," + base64.b64encode(PNG).decode(),
     )
     assert dn == f"cn=terminal,ou=apps,{BASE}"
     entry = directory.get(dn) or pytest.fail()
-    assert entry.text("fdApplicationFlags") == "[ML]"
-    assert entry.first("fdApplicationImage") == PNG
+    assert entry.text("hrcApplicationFlags") == "[ML]"
+    assert entry.first("hrcApplicationImage") == PNG
     values = service.load("application", dn).tabs["main"].values
     assert values["flag_menu"] is True and values["flag_group"] is False
     service.update("application", dn, {"main": {"values": {"flag_menu": False}}})
@@ -137,15 +137,15 @@ def test_role_tab_checks_the_applications(service: ObjectService) -> None:
     web = new_web(service)
     with pytest.raises(ObjectValidationError) as err:
         new_role(service, [USER], [USER])
-    assert "applications.fdApplicationAllowed" in err.value.fields
+    assert "applications.hrcApplicationAllowed" in err.value.fields
     dn = new_role(service, [web, web], [USER])
     loaded = service.load("role", dn).tabs["applications"].values
-    assert loaded["fdApplicationAllowed"] == [web]
+    assert loaded["hrcApplicationAllowed"] == [web]
 
 
 def test_allowed_applications_through_roles(service: ObjectService) -> None:
-    desktop = new_app(service, "terminal", fdApplicationTitle="Terminal", flag_menu=True)
-    web = new_web(service, "wiki", fdApplicationTitle="Company wiki")
+    desktop = new_app(service, "terminal", hrcApplicationTitle="Terminal", flag_menu=True)
+    web = new_web(service, "wiki", hrcApplicationTitle="Company wiki")
     unused = new_web(service, "other")
     new_role(service, [web, desktop], [USER])
     result = allowed_applications(service.directory, USER)
@@ -161,7 +161,7 @@ def test_allowed_applications_through_roles(service: ObjectService) -> None:
 def test_plugin_registers_without_the_role_class() -> None:
     registry = TypeRegistry()
     register_builtin_types(registry)
-    classes = {"fdDesktopApplication".lower(), "fdWebApplication".lower(), "organizationalrole"}
+    classes = {"hrcDesktopApplication".lower(), "hrcWebApplication".lower(), "organizationalrole"}
     registry.register_plugin(apps.plugin(), classes)
     role = registry.get("role")
     assert role.tab("applications") is None

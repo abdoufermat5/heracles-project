@@ -16,10 +16,10 @@ SERVERS = f"ou=servers,ou=systems,{BASE}"
 SIEVE_CLASSES = {
     "ieee802Device",
     "device",
-    "fdServer",
-    "fdSieveServer",
+    "hrcServer",
+    "hrcSieveServer",
     "ipHost",
-    "fdNetworkInterface",
+    "hrcNetworkInterface",
 }
 
 
@@ -53,11 +53,11 @@ def test_sieve_tab_registration_and_acl(service: ObjectService) -> None:
     assert tab.acl_key == "serviceSieve"
     assert server_info.acl_object(tab) == "server/serviceSieve"
     assert tab.optional is True
-    assert tab.object_classes == ("fdSieveServer",)
+    assert tab.object_classes == ("hrcSieveServer",)
 
 
 def test_sieve_tab_dropped_without_schema(directory: MemoryDirectory) -> None:
-    directory.set_schema_object_classes(["ieee802Device", "device", "fdServer"])
+    directory.set_schema_object_classes(["ieee802Device", "device", "hrcServer"])
     registry = TypeRegistry()
     register_builtin_types(registry)
     schema_classes = {c.lower() for c in directory.schema_object_classes()}
@@ -79,11 +79,11 @@ def test_create_server_with_sieve_service(
             "sieve": {
                 "active": True,
                 "values": {
-                    "sieveConnectURL": "sieve.example.com",
-                    "sieveConnectPort": 4190,
-                    "sieveConnectOptions": "/tls",
-                    "fdSieveAdmin": "sieveadmin",
-                    "fdSievePassword": "sievepassword",
+                    "hrcSieveConnectURL": "sieve.example.com",
+                    "hrcSieveConnectPort": 4190,
+                    "hrcSieveConnectOptions": "/tls",
+                    "hrcSieveAdmin": "sieveadmin",
+                    "hrcSievePassword": "sievepassword",
                 },
             },
         },
@@ -91,21 +91,21 @@ def test_create_server_with_sieve_service(
     assert dn == f"cn=sieve1,{SERVERS}"
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdSieveServer" in entry.get("objectClass")
-    assert entry.text("sieveConnectURL") == "sieve.example.com"
-    assert entry.text("sieveConnectPort") == "4190"
-    assert entry.text("sieveConnectOptions") == "/tls"
-    assert entry.text("fdSieveAdmin") == "sieveadmin"
-    assert entry.text("fdSievePassword") == "sievepassword"
+    assert b"hrcSieveServer" in entry.get("objectClass")
+    assert entry.text("hrcSieveConnectURL") == "sieve.example.com"
+    assert entry.text("hrcSieveConnectPort") == "4190"
+    assert entry.text("hrcSieveConnectOptions") == "/tls"
+    assert entry.text("hrcSieveAdmin") == "sieveadmin"
+    assert entry.text("hrcSievePassword") == "sievepassword"
 
     loaded = service.load("server", dn)
     assert loaded.tabs["sieve"].active is True
     vals = loaded.tabs["sieve"].values
-    assert vals["sieveConnectURL"] == "sieve.example.com"
-    assert vals["sieveConnectPort"] == 4190
-    assert vals["sieveConnectOptions"] == "/tls"
-    assert vals["fdSieveAdmin"] == "sieveadmin"
-    assert vals["fdSievePassword"] == "sievepassword"
+    assert vals["hrcSieveConnectURL"] == "sieve.example.com"
+    assert vals["hrcSieveConnectPort"] == 4190
+    assert vals["hrcSieveConnectOptions"] == "/tls"
+    assert vals["hrcSieveAdmin"] == "sieveadmin"
+    assert vals["hrcSievePassword"] == "sievepassword"
 
 
 def test_update_and_deactivate_sieve_tab(
@@ -119,9 +119,9 @@ def test_update_and_deactivate_sieve_tab(
             "sieve": {
                 "active": True,
                 "values": {
-                    "sieveConnectURL": "sieve2.example.com",
-                    "sieveConnectPort": 4190,
-                    "sieveConnectOptions": "/notls",
+                    "hrcSieveConnectURL": "sieve2.example.com",
+                    "hrcSieveConnectPort": 4190,
+                    "hrcSieveConnectOptions": "/notls",
                 },
             },
         },
@@ -134,23 +134,23 @@ def test_update_and_deactivate_sieve_tab(
         {
             "sieve": {
                 "values": {
-                    "sieveConnectPort": 2000,
-                    "sieveConnectOptions": "/ssl",
+                    "hrcSieveConnectPort": 2000,
+                    "hrcSieveConnectOptions": "/ssl",
                 }
             }
         },
     )
     loaded = service.load("server", dn)
-    assert loaded.tabs["sieve"].values["sieveConnectPort"] == 2000
-    assert loaded.tabs["sieve"].values["sieveConnectOptions"] == "/ssl"
+    assert loaded.tabs["sieve"].values["hrcSieveConnectPort"] == 2000
+    assert loaded.tabs["sieve"].values["hrcSieveConnectOptions"] == "/ssl"
 
     # Deactivate tab
     service.update("server", dn, {"sieve": {"active": False}})
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdSieveServer" not in entry.get("objectClass")
-    assert entry.get("sieveConnectURL") == []
-    assert entry.get("sieveConnectPort") == []
+    assert b"hrcSieveServer" not in entry.get("objectClass")
+    assert entry.get("hrcSieveConnectURL") == []
+    assert entry.get("hrcSieveConnectPort") == []
 
     loaded_deactivated = service.load("server", dn)
     assert loaded_deactivated.tabs["sieve"].active is False
@@ -165,11 +165,11 @@ def test_sieve_validation(service: ObjectService) -> None:
                 "main": {"values": {"cn": "badsieve"}},
                 "sieve": {
                     "active": True,
-                    "values": {"sieveConnectPort": 70000},
+                    "values": {"hrcSieveConnectPort": 70000},
                 },
             },
         )
-    assert "sieveConnectPort" in str(exc_info.value)
+    assert "hrcSieveConnectPort" in str(exc_info.value)
 
 
 def test_mail_servers_helper_sieve(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -183,7 +183,7 @@ def test_mail_servers_helper_sieve(service: ObjectService, directory: MemoryDire
         BASE,
         {
             "main": {"values": {"cn": "sieve-srv"}},
-            "sieve": {"active": True, "values": {"sieveConnectURL": "sieve.test"}},
+            "sieve": {"active": True, "values": {"hrcSieveConnectURL": "sieve.test"}},
         },
     )
     assert sieve.mail_servers(directory) == ["sieve-srv"]

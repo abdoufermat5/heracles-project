@@ -273,7 +273,7 @@ class SambaUserTab(Tab):
                 default=False,
             )
         ),
-        virtual(BooleanAttr("fd_pwdCantChange", _("Password cannot be changed"), default=False)),
+        virtual(BooleanAttr("hrc_pwdCantChange", _("Password cannot be changed"), default=False)),
         UnixDateAttr("sambaKickoffTime", _("Account expiration date")),
         LogonHoursAttr(
             "sambaLogonHours",
@@ -299,7 +299,7 @@ class SambaUserTab(Tab):
         values["flag_pwdNeverExpires"] = FLAG_NO_EXPIRE in letters
         values["flag_noPwdRequired"] = FLAG_NEEDS_NO_AUTH in letters
         values["flag_autoLocked"] = FLAG_AUTOLOCKED in letters
-        values["fd_pwdCantChange"] = values.get("sambaPwdLastSet") == str(PWD_CANNOT_CHANGE)
+        values["hrc_pwdCantChange"] = values.get("sambaPwdLastSet") == str(PWD_CANNOT_CHANGE)
         values["_primary_group_warning"] = None
         if settings_of(ctx).primary_group_warning:
             domain = resolve_domain(ctx, cast("str | None", values.get("sambaDomainName")))
@@ -380,8 +380,8 @@ class SambaUserTab(Tab):
             values["sambaNTPassword"] = nt_hash(password)
             lm = lm_hash(password) if settings.generate_lm_password else None
             values["sambaLMPassword"] = lm or ""
-        cannot = bool(values.get("fd_pwdCantChange"))
-        was_cannot = bool(ctx.original_values().get("fd_pwdCantChange"))
+        cannot = bool(values.get("hrc_pwdCantChange"))
+        was_cannot = bool(ctx.original_values().get("hrc_pwdCantChange"))
         if cannot:
             values["sambaPwdLastSet"] = str(PWD_CANNOT_CHANGE)
         elif changed or was_cannot:
@@ -676,7 +676,7 @@ def plugin() -> Plugin:
             "sambaSamAccount",
             "sambaGroupMapping",
             "posixGroup",
-            "fdWorkstation",
+            "hrcWorkstation",
         ),
         account_lock_hooks=(lock_account,),
         settings=SambaSettings(),

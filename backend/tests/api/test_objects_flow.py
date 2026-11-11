@@ -518,12 +518,12 @@ def test_changes_are_audited(app_client: TestClient) -> None:
     directory = state.directories["main"]
     found = [
         e
-        for e in directory.search(BASE, "(objectClass=fdAuditEvent)")
-        if (e.text("fdAuditObject") or "").lower() == ASMITH.lower()
+        for e in directory.search(BASE, "(objectClass=hrcAuditEvent)")
+        if (e.text("hrcAuditObject") or "").lower() == ASMITH.lower()
     ]
     assert found
-    assert found[-1].text("fdAuditAuthorDN") == f"uid=admin,ou=people,{BASE}"
-    assert "sn" in " ".join(found[-1].texts("fdAuditAttributes"))
+    assert found[-1].text("hrcAuditAuthorDN") == f"uid=admin,ou=people,{BASE}"
+    assert "sn" in " ".join(found[-1].texts("hrcAuditAttributes"))
 
 
 def test_password_policy_violation_is_a_validation_error(app_client: TestClient) -> None:

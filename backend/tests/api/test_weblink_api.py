@@ -49,7 +49,7 @@ class Api:
 @pytest.fixture
 def app_client() -> Iterator[TestClient]:
     directory = build_demo_directory()
-    directory.set_schema_object_classes([*directory.schema_object_classes(), "webLink"])
+    directory.set_schema_object_classes([*directory.schema_object_classes(), "hrcWebLinkAccount"])
     settings = ApiSettings(admin_dns=[], directory_labels={"main": "Demo directory"})
     settings.session.cookie_secure = False
     with TestClient(create_full_app(settings, {"main": directory})) as client:
@@ -74,8 +74,8 @@ def test_weblink_server_api(app_client: TestClient) -> None:
                 "weblink": {
                     "active": True,
                     "values": {
-                        "fdWebLinkProtocol": "https://",
-                        "fdWebLinkURL": "api.example.com",
+                        "hrcWebLinkProtocol": "https://",
+                        "hrcWebLinkURL": "api.example.com",
                     },
                 },
             },
@@ -89,7 +89,7 @@ def test_weblink_server_api(app_client: TestClient) -> None:
     assert r.status_code == 200
     weblink_tab = r.json()["tabs"]["weblink"]
     assert weblink_tab["active"] is True
-    assert weblink_tab["values"]["fdWebLink"] == "https://api.example.com"
+    assert weblink_tab["values"]["hrcWebLink"] == "https://api.example.com"
 
     # Cleanup
     r = a.delete(f"/objects/server/{dn}")

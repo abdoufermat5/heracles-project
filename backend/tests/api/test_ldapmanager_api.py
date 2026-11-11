@@ -133,7 +133,7 @@ def test_export_only_returns_readable_entries_and_attributes(app: FastAPI) -> No
     from heracles.acl.model import AclAssignment, AclScope, RoleTemplateValue
     from heracles.acl.parser import parse_role_value
     from heracles.ldap.client import Modification
-    from heracles.schema.legacy import ATTR, OC
+    from heracles.schema.names import ATTR, OC
 
     role = parse_role_value("0:ldif/ldifManager;r,user/user;r#userPassword;r")
     assert isinstance(role, RoleTemplateValue)
@@ -230,7 +230,7 @@ def test_import_dry_run_then_apply(admin: Api) -> None:
 def test_import_overwrite_options(admin: Api) -> None:
     text = (
         f"dn: ou=paris,{BASE}\nobjectClass: organizationalUnit\n"
-        "objectClass: gosaDepartment\nou: paris\nl: Paris\n"
+        "objectClass: hrcDepartment\nou: paris\nl: Paris\n"
     )
     first = admin.post("/ldif/import", {"text": text}).json()
     assert first["results"][0]["action"] == "exists"
@@ -265,7 +265,7 @@ def _grant_ldif_write(app: FastAPI, member_uid: str) -> None:
     from heracles.acl.model import AclAssignment, AclScope, RoleTemplateValue
     from heracles.acl.parser import parse_role_value
     from heracles.ldap.client import Modification
-    from heracles.schema.legacy import ATTR, OC
+    from heracles.schema.names import ATTR, OC
 
     api = Api(app).login("admin")
     role = parse_role_value("0:ldif/ldifManager;rw")
@@ -291,11 +291,9 @@ def test_import_cannot_define_triggers_unless_administrator(app: FastAPI) -> Non
     _grant_ldif_write(app, "helpdesk")
     hook_text = (
         f"dn: ou=sneaky,{BASE}\nobjectClass: organizationalUnit\nou: sneaky\n"
-        "fdTabHook: user|postcreate|touch /tmp/pwned\n"
+        "hrcTabHook: user|postcreate|touch /tmp/pwned\n"
     )
-    config_text = (
-        f"dn: cn=config,ou=fusiondirectory,{BASE}\nobjectClass: fusionDirectoryConf\ncn: config\n"
-    )
+    config_text = f"dn: cn=config,ou=heracles,{BASE}\nobjectClass: hrcConf\ncn: config\n"
     helpdesk = Api(app).login("helpdesk")
     # the right itself works for ordinary entries
     ok = helpdesk.post("/ldif/import", {"text": NEW_LDIF}).json()
@@ -310,7 +308,7 @@ def test_import_cannot_define_triggers_unless_administrator(app: FastAPI) -> Non
 def test_import_of_triggers_is_allowed_for_administrators(admin: Api) -> None:
     text = (
         f"dn: ou=hooked,{BASE}\nobjectClass: organizationalUnit\nou: hooked\n"
-        "fdTabHook: user|postcreate|true\n"
+        "hrcTabHook: user|postcreate|true\n"
     )
     body = admin.post("/ldif/import", {"text": text}).json()
     assert "administrator" not in str(body["results"][0]["error"]), body
@@ -399,7 +397,7 @@ def test_csv_import_goes_through_acls(app: FastAPI) -> None:
     from heracles.acl.model import AclAssignment, AclScope, RoleTemplateValue
     from heracles.acl.parser import parse_role_value
     from heracles.ldap.client import Modification
-    from heracles.schema.legacy import ATTR, OC
+    from heracles.schema.names import ATTR, OC
 
     role = parse_role_value("0:csv/csvImport;rw")
     assert isinstance(role, RoleTemplateValue)

@@ -17,12 +17,12 @@ class MailInBlackUserTab(Tab):
     label = _("Mailinblack")
     description = _("Mailinblack email protection")
     optional = True
-    object_classes = ("fdMailInBlackUser",)
+    object_classes = ("hrcMailInBlackUser",)
 
     protection = Section(
         _("Protection"),
         BooleanAttr(
-            "fdMailInBlackProtect",
+            "hrcMailInBlackProtect",
             _("Protect"),
             default=True,
             description=_("Protect this user with Mailinblack anti-spam and security"),

@@ -36,13 +36,13 @@ def make_service(directory: MemoryDirectory, settings: Any = None) -> ObjectServ
             for c in (
                 "ieee802Device",
                 "device",
-                "fdServer",
-                "fdWorkstation",
-                "fdTerminal",
-                "fdPrinter",
-                "fdPhone",
-                "fdMobilePhone",
-                "fdNetworkInterface",
+                "hrcServer",
+                "hrcWorkstation",
+                "hrcTerminal",
+                "hrcPrinter",
+                "hrcPhone",
+                "hrcMobilePhone",
+                "hrcNetworkInterface",
                 "ipHost",
             )
         },
@@ -85,31 +85,31 @@ def fields_of(service: ObjectService, type_name: str, values: dict[str, Any]) ->
 # ---------------------------------------------------------------- CRUD
 
 CASES = [
-    ("server", "ou=servers,ou=systems", "fdServer", {"l": "Paris", "fdMode": True}),
-    ("workstation", "ou=workstations,ou=systems", "fdWorkstation", {"l": "Lyon"}),
-    ("terminal", "ou=terminals,ou=systems", "fdTerminal", {"l": "Lyon"}),
+    ("server", "ou=servers,ou=systems", "hrcServer", {"l": "Paris", "hrcMode": True}),
+    ("workstation", "ou=workstations,ou=systems", "hrcWorkstation", {"l": "Lyon"}),
+    ("terminal", "ou=terminals,ou=systems", "hrcTerminal", {"l": "Lyon"}),
     (
         "printer",
         "ou=printers,ou=systems",
-        "fdPrinter",
+        "hrcPrinter",
         {
             "labeledURI": "ipp://print.example.org/p1",
-            "fdPrinterWindowsDriverName": "Generic",
-            "fdPrinterUsers": ["uid=a,ou=people,dc=test"],
+            "hrcPrinterWindowsDriverName": "Generic",
+            "hrcPrinterUsers": ["uid=a,ou=people,dc=test"],
         },
     ),
     ("component", "ou=netdevices,ou=systems", "device", {"description": "switch"}),
     (
         "phone",
         "ou=phones,ou=systems",
-        "fdPhone",
+        "hrcPhone",
         {"serialNumber": "S1", "telephoneNumber": "+33 1 23 45"},
     ),
     (
         "mobile_phone",
         "ou=mobile,ou=systems",
-        "fdMobilePhone",
-        {"fdMobileIMEI": GOOD_IMEI, "fdMobileOS": "Android", "fdMobilePUK": "12345678"},
+        "hrcMobilePhone",
+        {"hrcMobileIMEI": GOOD_IMEI, "hrcMobileOS": "Android", "hrcMobilePUK": "12345678"},
     ),
 ]
 
@@ -189,24 +189,24 @@ def test_duplicate_name_rejected(service: ObjectService) -> None:
     assert "main.cn" in fields_of(service, "server", {"cn": "dup"})
 
 
-# --------------------------------------------------------------- fdMode
+# --------------------------------------------------------------- hrcMode
 
 
-def test_fdmode_encoding(directory: MemoryDirectory, service: ObjectService) -> None:
+def test_mode_encoding(directory: MemoryDirectory, service: ObjectService) -> None:
     dn = create_server(service, "m1")
     entry = directory.get(dn)
-    assert entry is not None and entry.texts("fdMode") == ["unlocked"]
-    assert service.load("server", dn).tabs["main"].values["fdMode"] is False
-    service.update("server", dn, {"main": {"values": {"fdMode": True}}})
+    assert entry is not None and entry.texts("hrcMode") == ["unlocked"]
+    assert service.load("server", dn).tabs["main"].values["hrcMode"] is False
+    service.update("server", dn, {"main": {"values": {"hrcMode": True}}})
     entry = directory.get(dn)
-    assert entry is not None and entry.texts("fdMode") == ["locked"]
-    assert service.load("server", dn).tabs["main"].values["fdMode"] is True
+    assert entry is not None and entry.texts("hrcMode") == ["locked"]
+    assert service.load("server", dn).tabs["main"].values["hrcMode"] is True
     # absent means unlocked
     directory.modify(
         dn,
-        [Modification("delete", "fdMode")],
+        [Modification("delete", "hrcMode")],
     )
-    assert service.load("server", dn).tabs["main"].values["fdMode"] is False
+    assert service.load("server", dn).tabs["main"].values["hrcMode"] is False
 
 
 # ------------------------------------------------------------ normalisers
@@ -235,8 +235,8 @@ def test_interfaces_sync_and_copies(directory: MemoryDirectory, service: ObjectS
                 "eth0",
                 "AA:BB:CC:00:00:01",
                 ["10.0.0.5", "2001:db8::5"],
-                fdNetworkInterfaceVlanTagged=True,
-                fdNetworkInterfaceVlanDN="cn=v10,dc=test",
+                hrcNetworkInterfaceVlanTagged=True,
+                hrcNetworkInterfaceVlanDN="cn=v10,dc=test",
             ),
             iface("eth1", "aa-bb-cc-00-00-02"),
         ],
@@ -248,10 +248,10 @@ def test_interfaces_sync_and_copies(directory: MemoryDirectory, service: ObjectS
     assert system.has_object_class("ipHost")
     eth0 = directory.get(f"cn=eth0,{dn}")
     assert eth0 is not None
-    assert eth0.has_object_class("fdNetworkInterface")
+    assert eth0.has_object_class("hrcNetworkInterface")
     assert eth0.texts("macAddress") == ["aa:bb:cc:00:00:01"]
-    assert eth0.texts("fdNetworkInterfaceVlanTagged") == ["TRUE"]
-    assert eth0.texts("fdNetworkInterfaceVlanDN") == ["cn=v10,dc=test"]
+    assert eth0.texts("hrcNetworkInterfaceVlanTagged") == ["TRUE"]
+    assert eth0.texts("hrcNetworkInterfaceVlanDN") == ["cn=v10,dc=test"]
     loaded = service.load("server", dn).tabs["main"].values["networkInterfaces"]
     assert [i["cn"] for i in loaded] == ["eth0", "eth1"]
     assert loaded[0]["ipHostNumber"] == ["10.0.0.5", "2001:db8::5"]
@@ -274,7 +274,7 @@ def test_interfaces_sync_and_copies(directory: MemoryDirectory, service: ObjectS
     assert directory.get(f"cn=eth1,{dn}") is None
     eth0 = directory.get(f"cn=eth0,{dn}")
     assert eth0 is not None and eth0.texts("ipHostNumber") == ["10.0.0.6"]
-    assert eth0.get("fdNetworkInterfaceVlanTagged") == []
+    assert eth0.get("hrcNetworkInterfaceVlanTagged") == []
     system = directory.get(dn)
     assert system is not None
     assert sorted(system.texts("macAddress")) == ["aa:bb:cc:00:00:01", "aa:bb:cc:00:00:03"]
@@ -403,13 +403,15 @@ def test_mandatory_ip_types(directory: MemoryDirectory) -> None:
 
 def test_imei_validation(service: ObjectService) -> None:
     for bad in ("12345", "49015420323751", "490154203237519", "49015420323751a"):
-        assert "main.fdMobileIMEI" in fields_of(
-            service, "mobile_phone", {"cn": "m", "fdMobileIMEI": bad}
+        assert "main.hrcMobileIMEI" in fields_of(
+            service, "mobile_phone", {"cn": "m", "hrcMobileIMEI": bad}
         ), bad
     dn = service.create(
-        "mobile_phone", BASE, {"main": {"values": {"cn": "m", "fdMobileIMEI": "490154 2032-37518"}}}
+        "mobile_phone",
+        BASE,
+        {"main": {"values": {"cn": "m", "hrcMobileIMEI": "490154 2032-37518"}}},
     )
-    assert service.load("mobile_phone", dn).tabs["main"].values["fdMobileIMEI"] == GOOD_IMEI
+    assert service.load("mobile_phone", dn).tabs["main"].values["hrcMobileIMEI"] == GOOD_IMEI
 
 
 # --------------------------------------------------------------- delete

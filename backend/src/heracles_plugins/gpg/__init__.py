@@ -53,7 +53,7 @@ def settings_of(ctx: TabContext) -> GpgSettings:
 
 def summarize_user_keys(values: dict[str, Any]) -> str | None:
     """Read-only summary of the user's referenced PGP keys."""
-    raw = values.get("fdUserKeyDN")
+    raw = values.get("hrcUserKeyDN")
     if not isinstance(raw, list) or not raw:
         return None
     items = cast("list[object]", raw)
@@ -71,12 +71,12 @@ class GpgAccountTab(Tab):
     acl_key = "gpgAccount"
     label = _("GPG")
     optional = True
-    object_classes = ("fdGpgAccount",)
+    object_classes = ("hrcGpgAccount",)
 
     keys = Section(
         _("PGP keys"),
         ListAttr(
-            "fdUserKeyDN",
+            "hrcUserKeyDN",
             _("PGP keys"),
             ObjectRefAttr("key", _("PGP key"), ref_type="pgp_key"),
         ),
@@ -85,7 +85,7 @@ class GpgAccountTab(Tab):
 
     @classmethod
     def on_load(cls, ctx: TabContext) -> None:
-        raw_keys = ctx.values.get("fdUserKeyDN")
+        raw_keys = ctx.values.get("hrcUserKeyDN")
         if not isinstance(raw_keys, list) or not raw_keys:
             ctx.values["gpgSummary"] = None
             return
@@ -225,7 +225,7 @@ class PgpServerInfo(ObjectType):
             StringAttr("cn", _("Name"), required=True),
             StringAttr("pgpSoftware", _("Software name")),
             StringAttr("pgpVersion", _("Software version")),
-            StringAttr("baseKeyBranchDN", _("Base key branch DN")),
+            StringAttr("pgpBaseKeySpaceDN", _("Base key branch DN")),
         )
 
         @classmethod

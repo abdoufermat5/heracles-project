@@ -57,7 +57,7 @@ class ArchiveTask(TaskObjectType):
         name = "main"
         acl_key = "archiveTask"
         label = _("Archive")
-        object_classes = ("fdTasks", TASK_CLASS)
+        object_classes = ("hrcTasks", TASK_CLASS)
 
 
 class ArchivedObject(ObjectType):
@@ -73,8 +73,8 @@ class ArchivedObject(ObjectType):
     main_attr = "cn"
     name_attr = "cn"
     rdn = ARCHIVE_RDN
-    columns = ("cn", "fdArchivedObjectType", "fdArchivedOriginDn", "fdArchivedDateTime")
-    search_attrs = ("cn", "fdArchivedObjectType", "fdArchivedOriginDn", "fdArchivedUniqueField")
+    columns = ("cn", "hrcArchivedObjectType", "hrcArchivedOriginDn", "hrcArchivedDateTime")
+    search_attrs = ("cn", "hrcArchivedObjectType", "hrcArchivedOriginDn", "hrcArchivedUniqueField")
 
     class Main(Tab):
         name = "main"
@@ -86,17 +86,17 @@ class ArchivedObject(ObjectType):
             _("Archive"),
             DepartmentAttr("base", _("Department")),
             StringAttr("cn", _("Identifier"), readonly=True),
-            DateTimeAttr("fdArchivedDateTime", _("Archived on"), readonly=True),
-            StringAttr("fdArchivedObjectType", _("Object type"), readonly=True),
-            StringAttr("fdArchivedOriginDn", _("Original DN"), readonly=True),
+            DateTimeAttr("hrcArchivedDateTime", _("Archived on"), readonly=True),
+            StringAttr("hrcArchivedObjectType", _("Object type"), readonly=True),
+            StringAttr("hrcArchivedOriginDn", _("Original DN"), readonly=True),
             ListAttr(
-                "fdArchivedUniqueField",
+                "hrcArchivedUniqueField",
                 _("Unique fields"),
                 StringAttr("field", _("Field")),
                 readonly=True,
             ),
             ListAttr(
-                "fdArchivedField",
+                "hrcArchivedField",
                 _("Archived fields"),
                 StringAttr("field", _("Field")),
                 readonly=True,

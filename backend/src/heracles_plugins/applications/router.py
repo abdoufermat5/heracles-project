@@ -12,11 +12,11 @@ from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, Entry, NoSuchObjectError
 from heracles.objects.registry import PluginRouterContext
 
-DESKTOP_CLASS = "fdDesktopApplication"
-WEB_CLASS = "fdWebApplication"
-RIGHTS_CLASS = "fdApplicationRights"
-ALLOWED_ATTR = "fdApplicationAllowed"
-FLAGS_ATTR = "fdApplicationFlags"
+DESKTOP_CLASS = "hrcDesktopApplication"
+WEB_CLASS = "hrcWebApplication"
+RIGHTS_CLASS = "hrcApplicationRights"
+ALLOWED_ATTR = "hrcApplicationAllowed"
+FLAGS_ATTR = "hrcApplicationFlags"
 
 #: Flag name → letter stored in the flags attribute.
 FLAG_LETTERS: tuple[tuple[str, str], ...] = (
@@ -57,15 +57,15 @@ def application_json(entry: Entry) -> dict[str, Any] | None:
         "dn": entry.dn,
         "type": "web_application" if is_web else "application",
         "name": cn,
-        "title": entry.text("fdApplicationTitle") or cn,
+        "title": entry.text("hrcApplicationTitle") or cn,
         "description": entry.text("description") or "",
-        "image": _IMAGE.to_json(entry.first("fdApplicationImage")),
-        "image_location": entry.text("fdApplicationImageLocation"),
+        "image": _IMAGE.to_json(entry.first("hrcApplicationImage")),
+        "image_location": entry.text("hrcApplicationImageLocation"),
     }
     if is_web:
         out["url"] = entry.text("labeledURI")
     else:
-        out["execute_path"] = entry.text("fdApplicationExecutePath")
+        out["execute_path"] = entry.text("hrcApplicationExecutePath")
         out["flags"] = decode_flags(entry.text(FLAGS_ATTR))
     return out
 

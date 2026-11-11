@@ -14,7 +14,7 @@ from heracles.ldap.client import DirectoryClient, DirectoryError, Modification
 from heracles.objects.errors import ObjectValidationError
 from heracles.objects.policy import EventContext, NullEvents
 from heracles.objects.state import ObjectState
-from heracles.schema import legacy
+from heracles.schema import names as schema
 from heracles.triggers.hooks import HookResult, TabHook, parse_hooks, run_hook
 
 log = structlog.get_logger(__name__)
@@ -135,7 +135,7 @@ class TriggerEvents(NullEvents):
                 entry = self.directory.get(parent, ["objectClass"])
             except DirectoryError:
                 entry = None
-            if entry is not None and entry.has_object_class(legacy.OC.DEPARTMENT):
+            if entry is not None and entry.has_object_class(schema.OC.DEPARTMENT):
                 return parent
             parent = dnlib.parent(parent)
         return self.directory.base_dn

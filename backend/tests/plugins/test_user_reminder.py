@@ -21,7 +21,7 @@ PEOPLE = f"ou=people,{BASE}"
 GROUPS = f"ou=groups,{BASE}"
 ROLES = f"ou=roles,{BASE}"
 TASKS = f"ou=tasks,{BASE}"
-TOKENS = f"ou=reminder,ou=tokens,ou=fusiondirectory,{BASE}"
+TOKENS = f"ou=reminder,ou=tokens,ou=heracles,{BASE}"
 NOW = datetime(2030, 6, 15, 8, 0, tzinfo=UTC)
 TODAY = NOW.date()
 EPOCH = date(1970, 1, 1)
@@ -37,7 +37,7 @@ def days(d: date) -> str:
 @pytest.fixture
 def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
-    d.set_schema_object_classes([*d.schema_object_classes(), "fdTasksReminder", "fdMailTemplate"])
+    d.set_schema_object_classes([*d.schema_object_classes(), "hrcTasksReminder", "hrcMailTemplate"])
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     for dn, ou in ((PEOPLE, "people"), (GROUPS, "groups"), (ROLES, "roles")):
         d.add(dn, {"objectClass": [b"organizationalUnit"], "ou": [ou.encode()]})
@@ -48,10 +48,10 @@ def directory() -> MemoryDirectory:
     d.add(
         TEMPLATE_DN,
         {
-            "objectClass": [b"fdMailTemplate"],
+            "objectClass": [b"hrcMailTemplate"],
             "cn": [b"expiry"],
-            "fdMailTemplateSubject": [b"Account {uid} expires in {days_left} days"],
-            "fdMailTemplateBody": [
+            "hrcMailTemplateSubject": [b"Account {uid} expires in {days_left} days"],
+            "hrcMailTemplateBody": [
                 b"Hi {givenName} {sn} ({cn}, {mail}): expires {expiration_date}. "
                 b"{prolongation_url} {unknown}"
             ],
@@ -81,18 +81,18 @@ def add_task(d: MemoryDirectory, members: list[str], **extra: str) -> str:
     if d.get(TASKS) is None:
         d.add(TASKS, {"objectClass": [b"organizationalUnit"], "ou": [b"tasks"]})
     attrs: dict[str, list[bytes]] = {
-        "objectClass": [b"fdTasks", b"fdTasksReminder"],
+        "objectClass": [b"hrcTasks", b"hrcTasksReminder"],
         "cn": [b"expiry"],
-        "fdTasksStatus": [b"Activated"],
-        "fdTasksRepeatable": [b"TRUE"],
-        "fdTasksRepeatableSchedule": [b"daily"],
-        "fdTasksReminderFirstCall": [b"30"],
-        "fdTasksReminderSecondCall": [b"7"],
-        "fdTasksReminderPosix": [b"TRUE"],
-        "fdTasksReminderAccountProlongation": [b"FALSE"],
-        "fdTasksReminderMailTemplate": [TEMPLATE_DN.encode()],
-        "fdTasksReminderEmailSender": [b"noreply@example.com"],
-        "fdTasksReminderMembers": [m.encode() for m in members],
+        "hrcTasksStatus": [b"Activated"],
+        "hrcTasksRepeatable": [b"TRUE"],
+        "hrcTasksRepeatableSchedule": [b"daily"],
+        "hrcTasksReminderFirstCall": [b"30"],
+        "hrcTasksReminderSecondCall": [b"7"],
+        "hrcTasksReminderPosix": [b"TRUE"],
+        "hrcTasksReminderAccountProlongation": [b"FALSE"],
+        "hrcTasksReminderMailTemplate": [TEMPLATE_DN.encode()],
+        "hrcTasksReminderEmailSender": [b"noreply@example.com"],
+        "hrcTasksReminderMembers": [m.encode() for m in members],
     }
     for key, value in extra.items():
         attrs[key] = [v.encode() for v in value.split("|")] if value else []
@@ -163,7 +163,7 @@ def test_first_and_second_call_only(directory: MemoryDirectory) -> None:
 
 def test_same_call_days_send_once(directory: MemoryDirectory) -> None:
     dn = add_user(directory, "u", TODAY + timedelta(days=7))
-    add_task(directory, [dn], fdTasksReminderFirstCall="7", fdTasksReminderSecondCall="7")
+    add_task(directory, [dn], hrcTasksReminderFirstCall="7", hrcTasksReminderSecondCall="7")
     mailer = MemoryMailer()
     run(directory, mailer)
     assert len(mailer.outbox) == 1
@@ -207,7 +207,7 @@ def test_copy_recipients_and_missing_mail(directory: MemoryDirectory) -> None:
             "member": [boss.encode(), hr.encode()],
         },
     )
-    add_task(directory, [dn], fdTasksReminderRecipientsMembers=f"cn=staff,{GROUPS}")
+    add_task(directory, [dn], hrcTasksReminderRecipientsMembers=f"cn=staff,{GROUPS}")
     mailer = MemoryMailer()
     report = run(directory, mailer)
     assert sorted(m.to for m in mailer.outbox) == [
@@ -222,7 +222,7 @@ def test_copy_recipients_and_missing_mail(directory: MemoryDirectory) -> None:
 def test_user_without_mail_still_notifies_recipients(directory: MemoryDirectory) -> None:
     dn = add_user(directory, "u", TODAY + timedelta(days=30), mail=None)
     hr = add_user(directory, "hr", None)
-    add_task(directory, [dn], fdTasksReminderRecipientsMembers=hr)
+    add_task(directory, [dn], hrcTasksReminderRecipientsMembers=hr)
     mailer = MemoryMailer()
     run(directory, mailer)
     assert [m.to for m in mailer.outbox] == ["hr@example.com"]
@@ -233,7 +233,7 @@ def test_user_without_mail_still_notifies_recipients(directory: MemoryDirectory)
 
 def test_token_created_hashed_and_link_in_mail(directory: MemoryDirectory) -> None:
     dn = add_user(directory, "jdoe", TODAY + timedelta(days=7))
-    add_task(directory, [dn], fdTasksReminderAccountProlongation="TRUE")
+    add_task(directory, [dn], hrcTasksReminderAccountProlongation="TRUE")
     mailer = MemoryMailer()
     report = run(directory, mailer)
     assert report.tokens_created == 1
@@ -241,12 +241,12 @@ def test_token_created_hashed_and_link_in_mail(directory: MemoryDirectory) -> No
     prefix = f"{URL}/reminder/prolong?login=jdoe&token="
     link = next(w for w in mail.body.split() if w.startswith(prefix))
     token = link.removeprefix(prefix)
-    (stored,) = list(directory.search(TOKENS, "(objectClass=fdTokenEntry)"))
+    (stored,) = list(directory.search(TOKENS, "(objectClass=hrcTokenEntry)"))
     assert token not in stored.dn
-    assert stored.text("fdToken") == hash_token(token)
-    assert stored.text("fdTokenType") == "reminder"
-    assert stored.text("fdTokenUserDN") == dn
-    assert int(stored.text("fdTokenTimestamp") or 0) == int(NOW.timestamp()) + 7 * 86400
+    assert stored.text("hrcToken") == hash_token(token)
+    assert stored.text("hrcTokenType") == "reminder"
+    assert stored.text("hrcTokenUserDN") == dn
+    assert int(stored.text("hrcTokenTimestamp") or 0) == int(NOW.timestamp()) + 7 * 86400
     assert token.encode() not in b"".join(v for vs in stored.attrs.values() for v in vs)
 
 
@@ -263,7 +263,7 @@ def test_prolongation_extends_from_expiry_and_consumes_token(directory: MemoryDi
     assert new == expire + timedelta(days=30)
     entry = directory.get(dn)
     assert entry is not None and entry.text("shadowExpire") == days(new)
-    assert list(directory.search(TOKENS, "(objectClass=fdTokenEntry)")) == []
+    assert list(directory.search(TOKENS, "(objectClass=hrcTokenEntry)")) == []
     with pytest.raises(ProlongError):
         prolong_account(directory, "jdoe", token, days=30, now=NOW)  # reuse
 
@@ -293,7 +293,7 @@ def test_expired_token_wrong_user_and_wrong_token(directory: MemoryDirectory) ->
 def test_new_token_replaces_previous(directory: MemoryDirectory) -> None:
     dn, first = prolongable(directory, TODAY + timedelta(days=7))
     second = ur.create_prolongation_token(directory, dn, now=NOW, valid_days=7)
-    assert len(list(directory.search(TOKENS, "(objectClass=fdTokenEntry)"))) == 1
+    assert len(list(directory.search(TOKENS, "(objectClass=hrcTokenEntry)"))) == 1
     with pytest.raises(ProlongError):
         prolong_account(directory, "jdoe", first, days=30, now=NOW)
     prolong_account(directory, "jdoe", second, days=30, now=NOW)
@@ -328,13 +328,13 @@ def test_next_execution_clamps_month_end_and_unknown() -> None:
 
 def test_repeatable_task_is_rescheduled_and_not_due_twice(directory: MemoryDirectory) -> None:
     dn = add_user(directory, "u", TODAY + timedelta(days=7))
-    add_task(directory, [dn], fdTasksRepeatableSchedule="weekly")
+    add_task(directory, [dn], hrcTasksRepeatableSchedule="weekly")
     mailer = MemoryMailer()
     run(directory, mailer)
     task = task_entry(directory)
-    assert task.text("fdTasksLastExec") == format_generalized_time(NOW)
-    assert task.text("fdTasksNextExec") == format_generalized_time(NOW + timedelta(weeks=1))
-    assert task.text("fdTasksStatus") == "Activated"
+    assert task.text("hrcTasksLastExec") == format_generalized_time(NOW)
+    assert task.text("hrcTasksNextExec") == format_generalized_time(NOW + timedelta(weeks=1))
+    assert task.text("hrcTasksStatus") == "Activated"
     report = run(directory, mailer, NOW + timedelta(hours=1))
     assert report.tasks_run == 0 and len(mailer.outbox) == 1
     assert run(directory, mailer, NOW + timedelta(weeks=1)).tasks_run == 1
@@ -342,25 +342,25 @@ def test_repeatable_task_is_rescheduled_and_not_due_twice(directory: MemoryDirec
 
 def test_non_repeatable_task_is_deactivated(directory: MemoryDirectory) -> None:
     dn = add_user(directory, "u", TODAY + timedelta(days=7))
-    add_task(directory, [dn], fdTasksRepeatable="FALSE")
+    add_task(directory, [dn], hrcTasksRepeatable="FALSE")
     mailer = MemoryMailer()
     run(directory, mailer)
     task = task_entry(directory)
-    assert task.text("fdTasksStatus") == "Deactivated"
-    assert task.text("fdTasksNextExec") is None
+    assert task.text("hrcTasksStatus") == "Deactivated"
+    assert task.text("hrcTasksNextExec") is None
     assert run(directory, mailer, NOW + timedelta(days=1)).tasks_run == 0
 
 
 def test_deactivated_task_and_missing_template_are_skipped(directory: MemoryDirectory) -> None:
     dn = add_user(directory, "u", TODAY + timedelta(days=7))
-    add_task(directory, [dn], fdTasksStatus="Deactivated")
+    add_task(directory, [dn], hrcTasksStatus="Deactivated")
     mailer = MemoryMailer()
     assert run(directory, mailer).tasks_run == 0
     directory.delete(TASK_DN)
-    add_task(directory, [dn], fdTasksReminderMailTemplate=f"cn=gone,{BASE}")
+    add_task(directory, [dn], hrcTasksReminderMailTemplate=f"cn=gone,{BASE}")
     report = run(directory, mailer)
     assert report.tasks_run == 0 and report.errors and not mailer.outbox
-    assert task_entry(directory).text("fdTasksLastExec") is None
+    assert task_entry(directory).text("hrcTasksLastExec") is None
 
 
 def test_runner_without_tasks_container(directory: MemoryDirectory) -> None:
@@ -385,7 +385,7 @@ def service(directory: MemoryDirectory) -> ObjectService:
 def test_plugin_disabled_without_schema() -> None:
     registry = TypeRegistry()
     status = registry.register_plugin(ur.plugin(), set())
-    assert not status.enabled and status.missing_object_classes == ["fdTasks", "fdTasksReminder"]
+    assert not status.enabled and status.missing_object_classes == ["hrcTasks", "hrcTasksReminder"]
 
 
 def test_reminder_task_crud(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -398,32 +398,32 @@ def test_reminder_task_crud(service: ObjectService, directory: MemoryDirectory) 
             "main": {
                 "values": {
                     "cn": "expiry",
-                    "fdTasksReminderFirstCall": 30,
-                    "fdTasksReminderSecondCall": 7,
-                    "fdTasksReminderPosix": False,
-                    "fdTasksReminderMailTemplate": TEMPLATE_DN,
-                    "fdTasksReminderEmailSender": "noreply@example.com",
-                    "fdTasksReminderMembers": [f"uid=a,{PEOPLE}"],
-                    "fdTasksScheduleDate": schedule,
-                    "fdTasksRepeatable": True,
-                    "fdTasksRepeatableSchedule": "weekly",
+                    "hrcTasksReminderFirstCall": 30,
+                    "hrcTasksReminderSecondCall": 7,
+                    "hrcTasksReminderPosix": False,
+                    "hrcTasksReminderMailTemplate": TEMPLATE_DN,
+                    "hrcTasksReminderEmailSender": "noreply@example.com",
+                    "hrcTasksReminderMembers": [f"uid=a,{PEOPLE}"],
+                    "hrcTasksScheduleDate": schedule,
+                    "hrcTasksRepeatable": True,
+                    "hrcTasksRepeatableSchedule": "weekly",
                 }
             }
         },
     )
     assert dn == TASK_DN
     entry = task_entry(directory)
-    assert entry.has_object_class("fdTasks") and entry.has_object_class("fdTasksReminder")
-    assert entry.text("fdTasksReminderPosix") == "TRUE"
-    assert entry.text("fdTasksStatus") == "Activated"
-    assert entry.text("fdTasksNextExec") == "20300701100000Z"
-    assert entry.text("fdTasksCreationDate")
-    assert entry.text("fdTasksRepeatable") == "TRUE"
+    assert entry.has_object_class("hrcTasks") and entry.has_object_class("hrcTasksReminder")
+    assert entry.text("hrcTasksReminderPosix") == "TRUE"
+    assert entry.text("hrcTasksStatus") == "Activated"
+    assert entry.text("hrcTasksNextExec") == "20300701100000Z"
+    assert entry.text("hrcTasksCreationDate")
+    assert entry.text("hrcTasksRepeatable") == "TRUE"
     state = service.load("reminder_task", dn)
-    assert state.tabs["main"].values["fdTasksReminderFirstCall"] == 30
-    service.update("reminder_task", dn, {"main": {"values": {"fdTasksReminderFirstCall": 14}}})
-    assert task_entry(directory).text("fdTasksReminderFirstCall") == "14"
-    assert [e.dn for e in directory.search(BASE, "(&(objectClass=fdTasks)(cn=expiry))")] == [dn]
+    assert state.tabs["main"].values["hrcTasksReminderFirstCall"] == 30
+    service.update("reminder_task", dn, {"main": {"values": {"hrcTasksReminderFirstCall": 14}}})
+    assert task_entry(directory).text("hrcTasksReminderFirstCall") == "14"
+    assert [e.dn for e in directory.search(BASE, "(&(objectClass=hrcTasks)(cn=expiry))")] == [dn]
     service.delete("reminder_task", dn)
     assert directory.get(dn) is None
 
@@ -439,11 +439,11 @@ def test_reminder_task_validation(service: ObjectService) -> None:
                 "main": {
                     "values": {
                         "cn": "x",
-                        "fdTasksReminderFirstCall": 5,
-                        "fdTasksReminderMailTemplate": TEMPLATE_DN,
-                        "fdTasksReminderEmailSender": "a@example.com",
-                        "fdTasksReminderMembers": [f"uid=a,{PEOPLE}"],
-                        "fdTasksRepeatable": True,
+                        "hrcTasksReminderFirstCall": 5,
+                        "hrcTasksReminderMailTemplate": TEMPLATE_DN,
+                        "hrcTasksReminderEmailSender": "a@example.com",
+                        "hrcTasksReminderMembers": [f"uid=a,{PEOPLE}"],
+                        "hrcTasksRepeatable": True,
                     }
                 }
             },
@@ -458,12 +458,12 @@ def test_mail_template_crud(service: ObjectService, directory: MemoryDirectory) 
             "main": {
                 "values": {
                     "cn": "second",
-                    "fdMailTemplateSubject": "Hi {uid}",
-                    "fdMailTemplateBody": "Bye {uid}",
+                    "hrcMailTemplateSubject": "Hi {uid}",
+                    "hrcMailTemplateBody": "Bye {uid}",
                 }
             }
         },
     )
     assert dn == f"cn=second,ou=mailTemplate,{BASE}"
     entry = directory.get(dn)
-    assert entry is not None and entry.text("fdMailTemplateBody") == "Bye {uid}"
+    assert entry is not None and entry.text("hrcMailTemplateBody") == "Bye {uid}"

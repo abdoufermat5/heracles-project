@@ -41,7 +41,7 @@ def make_dummy_armored_key(user_id: str = "Alice <alice@example.com>") -> str:
 def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
     d.set_schema_object_classes(
-        d.schema_object_classes() | {"fdgpgaccount", "pgpkeyinfo", "pgpserverinfo"}
+        d.schema_object_classes() | {"hrcgpgaccount", "pgpkeyinfo", "pgpserverinfo"}
     )
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     d.add(PEOPLE, {"objectClass": [b"organizationalUnit"], "ou": [b"people"]})
@@ -120,7 +120,7 @@ def test_create_pgp_server_info(service: ObjectService, directory: MemoryDirecto
                     "cn": "main-pgp",
                     "pgpSoftware": "Heracles Keyserver",
                     "pgpVersion": "1.0",
-                    "baseKeyBranchDN": PGP_OU,
+                    "pgpBaseKeySpaceDN": PGP_OU,
                 }
             }
         },
@@ -130,7 +130,7 @@ def test_create_pgp_server_info(service: ObjectService, directory: MemoryDirecto
     assert entry.has_object_class("pgpServerInfo")
     assert entry.text("cn") == "main-pgp"
     assert entry.text("pgpSoftware") == "Heracles Keyserver"
-    assert entry.text("baseKeyBranchDN") == PGP_OU
+    assert entry.text("pgpBaseKeySpaceDN") == PGP_OU
 
 
 def test_user_gpg_account_tab(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -157,15 +157,15 @@ def test_user_gpg_account_tab(service: ObjectService, directory: MemoryDirectory
             "gpg": {
                 "active": True,
                 "values": {
-                    "fdUserKeyDN": [key_dn],
+                    "hrcUserKeyDN": [key_dn],
                 },
             },
         },
     )
     entry = directory.get(user_dn)
     assert entry is not None
-    assert entry.has_object_class("fdGpgAccount")
-    assert entry.texts("fdUserKeyDN") == [key_dn]
+    assert entry.has_object_class("hrcGpgAccount")
+    assert entry.texts("hrcUserKeyDN") == [key_dn]
 
     # 3. Load user and check gpgSummary
     loaded = service.load("user", user_dn)
@@ -198,17 +198,17 @@ def test_deactivate_gpg_tab(service: ObjectService, directory: MemoryDirectory) 
             "gpg": {
                 "active": True,
                 "values": {
-                    "fdUserKeyDN": [key_dn],
+                    "hrcUserKeyDN": [key_dn],
                 },
             },
         },
     )
     entry = directory.get(user_dn)
     assert entry is not None
-    assert entry.has_object_class("fdGpgAccount")
+    assert entry.has_object_class("hrcGpgAccount")
 
     service.update("user", user_dn, {"gpg": {"active": False}})
     entry = directory.get(user_dn)
     assert entry is not None
-    assert not entry.has_object_class("fdGpgAccount")
-    assert not entry.get("fdUserKeyDN")
+    assert not entry.has_object_class("hrcGpgAccount")
+    assert not entry.get("hrcUserKeyDN")

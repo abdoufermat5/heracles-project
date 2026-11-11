@@ -51,7 +51,7 @@ def app_client() -> TestClient:
     d.set_schema_object_classes(
         [
             *d.schema_object_classes(),
-            "fdMailInBlackUser",
+            "hrcMailInBlackUser",
             "inetOrgPerson",
         ]
     )
@@ -90,7 +90,7 @@ def test_mailinblack_api_flow(app_client: TestClient) -> None:
                 "mailinblack": {
                     "active": True,
                     "values": {
-                        "fdMailInBlackProtect": True,
+                        "hrcMailInBlackProtect": True,
                     },
                 },
             },
@@ -104,7 +104,7 @@ def test_mailinblack_api_flow(app_client: TestClient) -> None:
     assert r.status_code == 200
     data = r.json()
     assert data["tabs"]["mailinblack"]["active"] is True
-    assert data["tabs"]["mailinblack"]["values"]["fdMailInBlackProtect"] is True
+    assert data["tabs"]["mailinblack"]["values"]["hrcMailInBlackProtect"] is True
 
     # Update user
     r = client.patch(
@@ -113,14 +113,14 @@ def test_mailinblack_api_flow(app_client: TestClient) -> None:
             "tabs": {
                 "mailinblack": {
                     "values": {
-                        "fdMailInBlackProtect": False,
+                        "hrcMailInBlackProtect": False,
                     }
                 }
             }
         },
     )
     assert r.status_code == 200
-    assert r.json()["tabs"]["mailinblack"]["values"]["fdMailInBlackProtect"] is False
+    assert r.json()["tabs"]["mailinblack"]["values"]["hrcMailInBlackProtect"] is False
 
     # Delete user
     r = client.delete(f"/objects/user/{quote(dn, safe='')}")

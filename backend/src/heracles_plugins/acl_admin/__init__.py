@@ -28,7 +28,7 @@ from heracles.i18n import _
 from heracles.objects import ObjectType, Plugin, Section, Tab, TabAttachment
 from heracles.objects.hooks import TabContext
 from heracles.objects.registry import EventsContext, PluginRouterContext
-from heracles.schema.legacy import ATTR, OC
+from heracles.schema.names import ATTR, OC
 from heracles.triggers import TriggerEvents, TriggerSettings
 
 PLUGIN_NAME = "acl_admin"

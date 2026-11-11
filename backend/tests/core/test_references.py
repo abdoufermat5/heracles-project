@@ -4,7 +4,7 @@ from heracles.core.references import ACL_ASSIGNMENT, dn_attributes, find_referen
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import TypeRegistry
 from heracles.objects.builtin import register_builtin_types
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 BASE = "dc=example,dc=com"
 ALICE = f"uid=alice,ou=people,{BASE}"
@@ -46,9 +46,9 @@ def build() -> tuple[MemoryDirectory, TypeRegistry]:
     d.add(
         f"cn=t,ou=templates,ou=people,{BASE}",
         {
-            "objectClass": [b"top", legacy.OC.TEMPLATE.encode()],
+            "objectClass": [b"top", schema.OC.TEMPLATE.encode()],
             "cn": [b"t"],
-            legacy.TEMPLATE_FIELD_ATTR: [f"manager:{ALICE}".encode()],
+            schema.TEMPLATE_FIELD_ATTR: [f"manager:{ALICE}".encode()],
         },
     )
     registry = TypeRegistry()
@@ -84,8 +84,8 @@ def test_acl_assignment_is_reported() -> None:
     d.modify(
         f"ou=groups,{BASE}",
         [
-            Modification("add", "objectClass", [b"gosaDepartment"]),
-            Modification("add", legacy.ATTR.ACL_ENTRY, [value]),
+            Modification("add", "objectClass", [b"hrcDepartment"]),
+            Modification("add", schema.ATTR.ACL_ENTRY, [value]),
         ],
     )
     hits = find_references(d, registry, ROLE)

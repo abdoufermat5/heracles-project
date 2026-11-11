@@ -38,7 +38,7 @@ TASKS_RDN = "ou=tasks"
 
 def task_filter(object_class: str) -> str:
     """LDAP filter of the tasks of one kind."""
-    return f"(&(objectClass=fdTasks)(objectClass={object_class}))"
+    return f"(&(objectClass=hrcTasks)(objectClass={object_class}))"
 
 
 @dataclass(slots=True)
@@ -60,33 +60,33 @@ def find_tasks(directory: DirectoryClient, flt: str) -> list[Entry]:
 
 def is_due(task: Entry, now: datetime) -> bool:
     """Activated and past its next execution date (or never scheduled)."""
-    status = (task.text("fdTasksStatus") or "").strip().lower()
+    status = (task.text("hrcTasksStatus") or "").strip().lower()
     if status != STATUS_ACTIVATED.lower():
         return False
-    next_exec = time_of(task, "fdTasksNextExec")
+    next_exec = time_of(task, "hrcTasksNextExec")
     return next_exec is None or next_exec <= now
 
 
 def reschedule(directory: DirectoryClient, task: Entry, now: datetime) -> str | None:
     """Update last/next execution; returns an error message for a bad schedule."""
-    repeatable = bool_of(task, "fdTasksRepeatable") is True
+    repeatable = bool_of(task, "hrcTasksRepeatable") is True
     changes = [
-        Modification("replace", "fdTasksLastExec", [format_generalized_time(now).encode()]),
+        Modification("replace", "hrcTasksLastExec", [format_generalized_time(now).encode()]),
     ]
     error: str | None = None
-    following = next_execution(now, task.text("fdTasksRepeatableSchedule")) if repeatable else None
+    following = next_execution(now, task.text("hrcTasksRepeatableSchedule")) if repeatable else None
     if repeatable and following is None:
         error = f"{task.dn}: unknown repeat schedule, task deactivated"
     if following is not None:
         changes.append(
             Modification(
-                "replace", "fdTasksNextExec", [format_generalized_time(following).encode()]
+                "replace", "hrcTasksNextExec", [format_generalized_time(following).encode()]
             )
         )
     else:
-        if task.get("fdTasksNextExec"):
-            changes.append(Modification("delete", "fdTasksNextExec"))
-        changes.append(Modification("replace", "fdTasksStatus", [STATUS_DEACTIVATED.encode()]))
+        if task.get("hrcTasksNextExec"):
+            changes.append(Modification("delete", "hrcTasksNextExec"))
+        changes.append(Modification("replace", "hrcTasksStatus", [STATUS_DEACTIVATED.encode()]))
     directory.modify(task.dn, changes)
     return error
 

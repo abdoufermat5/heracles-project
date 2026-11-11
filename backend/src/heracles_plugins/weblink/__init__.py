@@ -25,12 +25,12 @@ class WeblinkSettings:
 
 def _compute_weblink(values: dict[str, Any]) -> str | None:
     """Compute the full URL from protocol and URL attributes."""
-    url = str(values.get("fdWebLinkURL") or "").strip()
+    url = str(values.get("hrcWebLinkURL") or "").strip()
     if not url:
         return None
     if "://" in url:
         return url
-    protocol = str(values.get("fdWebLinkProtocol") or "https://").strip()
+    protocol = str(values.get("hrcWebLinkProtocol") or "https://").strip()
     if not protocol.endswith("//"):
         protocol = f"{protocol}//" if protocol.endswith(":") else f"{protocol}://"
     return f"{protocol}{url.lstrip('/')}"
@@ -42,13 +42,13 @@ class WebLinkTab(Tab):
     name = "weblink"
     acl_key = "webLink"
     label = _("Web link")
-    object_classes = ("webLink",)
+    object_classes = ("hrcWebLinkAccount",)
     optional = True
 
     link = Section(
         _("Web link"),
         SelectAttr(
-            "fdWebLinkProtocol",
+            "hrcWebLinkProtocol",
             _("Protocol"),
             options=[
                 ("http://", "HTTP (http://)"),
@@ -57,23 +57,23 @@ class WebLinkTab(Tab):
             default="https://",
         ),
         StringAttr(
-            "fdWebLinkURL",
+            "hrcWebLinkURL",
             _("Link URL"),
             description=_("Host, IP address, or URL path"),
         ),
-        DisplayAttr("fdWebLink", _("Web link"), compute=_compute_weblink, stored=True),
+        DisplayAttr("hrcWebLink", _("Web link"), compute=_compute_weblink, stored=True),
     )
 
     @classmethod
     def on_load(cls, ctx: TabContext) -> None:
-        if not ctx.values.get("fdWebLinkURL") and ctx.values.get("fdWebLink"):
-            full = str(ctx.values["fdWebLink"]).strip()
+        if not ctx.values.get("hrcWebLinkURL") and ctx.values.get("hrcWebLink"):
+            full = str(ctx.values["hrcWebLink"]).strip()
             if "://" in full:
                 proto, _, rest = full.partition("://")
-                ctx.values.setdefault("fdWebLinkProtocol", f"{proto}://")
-                ctx.values["fdWebLinkURL"] = rest
+                ctx.values.setdefault("hrcWebLinkProtocol", f"{proto}://")
+                ctx.values["hrcWebLinkURL"] = rest
             else:
-                ctx.values["fdWebLinkURL"] = full
+                ctx.values["hrcWebLinkURL"] = full
 
 
 class _WeblinkTabs(Sequence[TabAttachment]):
@@ -143,7 +143,7 @@ def plugin() -> Plugin:
         version="0.1.0",
         types=(),
         tabs=_WeblinkTabs(),
-        required_object_classes=("webLink",),
+        required_object_classes=("hrcWebLinkAccount",),
         settings=WeblinkSettings(),
     )
 

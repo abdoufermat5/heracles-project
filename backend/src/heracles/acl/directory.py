@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from heracles.acl._compat import (
+from heracles.acl._names import (
     ATTR_ACL_ENTRY,
     ATTR_ACL_TEMPLATE,
     OC_ACL,

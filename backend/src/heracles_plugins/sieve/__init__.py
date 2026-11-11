@@ -21,12 +21,12 @@ CONNECT_OPTIONS: tuple[tuple[str, str], ...] = (
 )
 
 MAIL_SERVICE_CLASSES: tuple[str, ...] = (
-    "fdDovecotServer",
-    "fdCyrusServer",
-    "fdPostfixServer",
-    "fdSieveServer",
-    "goSpamServer",
-    "fdZimbraServer",
+    "hrcDovecotServer",
+    "hrcCyrusServer",
+    "hrcPostfixServer",
+    "hrcSieveServer",
+    "hrcSpamAssassinServer",
+    "hrcZimbraServer",
 )
 
 
@@ -54,24 +54,24 @@ class SieveServiceTab(Tab):
     label = _("Sieve")
     description = _("ManageSieve script service")
     optional = True
-    object_classes = ("fdSieveServer",)
+    object_classes = ("hrcSieveServer",)
 
     connection = Section(
         _("Connection"),
         StringAttr(
-            "sieveConnectURL",
+            "hrcSieveConnectURL",
             _("Connect URL"),
             description=_("ManageSieve server URL or host name"),
         ),
         IntAttr(
-            "sieveConnectPort",
+            "hrcSieveConnectPort",
             _("Connect port"),
             min=1,
             max=65535,
             description=_("ManageSieve connection port"),
         ),
         SelectAttr(
-            "sieveConnectOptions",
+            "hrcSieveConnectOptions",
             _("Connection options"),
             options=CONNECT_OPTIONS,
             default="",
@@ -80,12 +80,12 @@ class SieveServiceTab(Tab):
     admin = Section(
         _("Administration"),
         StringAttr(
-            "fdSieveAdmin",
+            "hrcSieveAdmin",
             _("Admin user"),
             description=_("ManageSieve administrator login"),
         ),
         StringAttr(
-            "fdSievePassword",
+            "hrcSievePassword",
             _("Admin password"),
             description=_("ManageSieve administrator password"),
         ),

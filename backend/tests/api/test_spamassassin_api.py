@@ -54,11 +54,11 @@ def app_client() -> TestClient:
             *d.schema_object_classes(),
             "ieee802Device",
             "device",
-            "fdServer",
-            "goSpamServer",
-            "fdSpamAssassinUser",
+            "hrcServer",
+            "hrcSpamAssassinServer",
+            "hrcSpamAssassinUser",
             "ipHost",
-            "fdNetworkInterface",
+            "hrcNetworkInterface",
         ]
     )
     registry = TypeRegistry()
@@ -97,9 +97,9 @@ def test_spamassassin_server_api_flow(app_client: TestClient) -> None:
                 "spamassassin": {
                     "active": True,
                     "values": {
-                        "saRewriteHeader": "[SPAM-FLAGGED]",
-                        "saRequiredScore": "4.0",
-                        "flag_enable_bayes": True,
+                        "hrcSpamAssassinRewriteHeader": "[SPAM-FLAGGED]",
+                        "hrcSpamAssassinRequiredScore": "4.0",
+                        "hrcSpamAssassinEnableBayes": True,
                     },
                 },
             },
@@ -113,7 +113,9 @@ def test_spamassassin_server_api_flow(app_client: TestClient) -> None:
     assert r.status_code == 200
     data = r.json()
     assert data["tabs"]["spamassassin"]["active"] is True
-    assert data["tabs"]["spamassassin"]["values"]["saRewriteHeader"] == "[SPAM-FLAGGED]"
+    assert (
+        data["tabs"]["spamassassin"]["values"]["hrcSpamAssassinRewriteHeader"] == "[SPAM-FLAGGED]"
+    )
 
     # Delete server
     r = client.delete(f"/objects/server/{quote(dn, safe='')}")
@@ -139,10 +141,10 @@ def test_spamassassin_user_api_flow(app_client: TestClient) -> None:
                 "spamassassin": {
                     "active": True,
                     "values": {
-                        "fdSpamAssassinRules": [
+                        "hrcSpamAssassinRules": [
                             {
-                                "fdSpamAssassinRules_directive": "required_score",
-                                "fdSpamAssassinRules_value": "5.0",
+                                "hrcSpamAssassinRules_directive": "required_score",
+                                "hrcSpamAssassinRules_value": "5.0",
                             }
                         ]
                     },
@@ -158,8 +160,8 @@ def test_spamassassin_user_api_flow(app_client: TestClient) -> None:
     assert r.status_code == 200
     data = r.json()
     assert data["tabs"]["spamassassin"]["active"] is True
-    assert data["tabs"]["spamassassin"]["values"]["fdSpamAssassinRules"] == [
-        {"fdSpamAssassinRules_directive": "required_score", "fdSpamAssassinRules_value": "5.0"}
+    assert data["tabs"]["spamassassin"]["values"]["hrcSpamAssassinRules"] == [
+        {"hrcSpamAssassinRules_directive": "required_score", "hrcSpamAssassinRules_value": "5.0"}
     ]
 
     # Delete user

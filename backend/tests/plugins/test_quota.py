@@ -31,7 +31,7 @@ def directory() -> MemoryDirectory:
     d.add(SERVERS, {"objectClass": [b"organizationalUnit"], "ou": [b"servers"]})
     d.set_schema_object_classes(
         d.schema_object_classes()
-        | {"systemquotas", "quotaservice", "fdserver", "device", "ieee802device"}
+        | {"systemquotas", "hrcquotaservice", "hrcserver", "device", "ieee802device"}
     )
     return d
 
@@ -94,7 +94,7 @@ def test_quota_entry_composite() -> None:
     raw = [b"/dev/sda1:1000:2000:10:20:nas1"]
     parsed = attr.from_ldap(raw)
     assert parsed is not None
-    assert parsed["quotaDevice"] == "/dev/sda1"
+    assert parsed["hrcQuotaDevice"] == "/dev/sda1"
     assert parsed["quotaBlockSoftLimit"] == "1000"
     assert parsed["quotaBlockHardLimit"] == "2000"
     assert parsed["quotaInodeSoftLimit"] == 10
@@ -118,7 +118,7 @@ def test_quota_requires_posix(service: ObjectService) -> None:
                     "values": {
                         "quota": [
                             {
-                                "quotaDevice": "/dev/sda1",
+                                "hrcQuotaDevice": "/dev/sda1",
                                 "quotaBlockSoftLimit": "1000",
                                 "quotaBlockHardLimit": "2000",
                             }
@@ -156,7 +156,7 @@ def test_create_and_load_user_with_quota(
                 "values": {
                     "quota": [
                         {
-                            "quotaDevice": "/home",
+                            "hrcQuotaDevice": "/home",
                             "quotaBlockSoftLimit": "500000",
                             "quotaBlockHardLimit": "1000000",
                             "quotaInodeSoftLimit": 5000,
@@ -164,7 +164,7 @@ def test_create_and_load_user_with_quota(
                             "quotaServer": "filer01",
                         },
                         {
-                            "quotaDevice": "/var/mail",
+                            "hrcQuotaDevice": "/var/mail",
                             "quotaBlockSoftLimit": "200000",
                             "quotaBlockHardLimit": "400000",
                             "quotaInodeSoftLimit": 1000,
@@ -192,7 +192,7 @@ def test_create_and_load_user_with_quota(
     assert len(items) == 2
     first = items[0]
     assert isinstance(first, dict)
-    assert first["quotaDevice"] == "/home"
+    assert first["hrcQuotaDevice"] == "/home"
     assert first["quotaBlockSoftLimit"] == "500000"
     assert first["quotaInodeSoftLimit"] == 5000
 
@@ -209,7 +209,7 @@ def test_update_and_deactivate_user_quota(
                 "values": {
                     "quota": [
                         {
-                            "quotaDevice": "/home",
+                            "hrcQuotaDevice": "/home",
                             "quotaBlockSoftLimit": "1000",
                             "quotaBlockHardLimit": "2000",
                         }
@@ -228,7 +228,7 @@ def test_update_and_deactivate_user_quota(
                 "values": {
                     "quota": [
                         {
-                            "quotaDevice": "/home",
+                            "hrcQuotaDevice": "/home",
                             "quotaBlockSoftLimit": "2000",
                             "quotaBlockHardLimit": "4000",
                         }
@@ -264,37 +264,37 @@ def test_server_service_quota(service: ObjectService, directory: MemoryDirectory
             "serviceQuota": {
                 "active": True,
                 "values": {
-                    "quotaDevice": "/dev/sdb1",
-                    "quotaBlockSize": 4096,
-                    "quotaDesc": "Primary storage pool",
-                    "quotaMsgCharsetSupport": "UTF-8",
-                    "quotaMailCommand": "/usr/bin/mail -s",
-                    "quotaMsgFromSupport": "support@example.org",
-                    "quotaMsgContactSupport": "admin@example.org",
-                    "quotaCarbonCopyMail": "audit@example.org",
-                    "quotaMsgSubjectSupport": "Disk quota exceeded warning",
-                    "quotaMsgContentSupport": "You have exceeded your storage limit.",
-                    "quotaMsgSignatureSupport": "-- IT Team",
-                    "quotaLdapServer": "ldap://localhost:389",
-                    "quotaLdapServerUserDn": "cn=admin,dc=test",
-                    "quotaLdapServerUserPassword": "secretpassword",
+                    "hrcQuotaDevice": "/dev/sdb1",
+                    "hrcQuotaBlockSize": 4096,
+                    "hrcQuotaDesc": "Primary storage pool",
+                    "hrcQuotaMsgCharsetSupport": "UTF-8",
+                    "hrcQuotaMailCommand": "/usr/bin/mail -s",
+                    "hrcQuotaMsgFromSupport": "support@example.org",
+                    "hrcQuotaMsgContactSupport": "admin@example.org",
+                    "hrcQuotaCarbonCopyMail": "audit@example.org",
+                    "hrcQuotaMsgSubjectSupport": "Disk quota exceeded warning",
+                    "hrcQuotaMsgContentSupport": "You have exceeded your storage limit.",
+                    "hrcQuotaMsgSignatureSupport": "-- IT Team",
+                    "hrcQuotaLdapServer": "ldap://localhost:389",
+                    "hrcQuotaLdapServerUserDn": "cn=admin,dc=test",
+                    "hrcQuotaLdapServerUserPassword": "secretpassword",
                 },
             },
         },
     )
     entry = stored_entry(directory, server_dn)
-    assert entry.has_object_class("quotaService")
-    assert entry.text("quotaDevice") == "/dev/sdb1"
-    assert entry.text("quotaBlockSize") == "4096"
-    assert entry.text("quotaDesc") == "Primary storage pool"
-    assert entry.text("quotaMailCommand") == "/usr/bin/mail -s"
-    assert entry.text("quotaLdapServerUserPassword") == "secretpassword"
+    assert entry.has_object_class("hrcQuotaService")
+    assert entry.text("hrcQuotaDevice") == "/dev/sdb1"
+    assert entry.text("hrcQuotaBlockSize") == "4096"
+    assert entry.text("hrcQuotaDesc") == "Primary storage pool"
+    assert entry.text("hrcQuotaMailCommand") == "/usr/bin/mail -s"
+    assert entry.text("hrcQuotaLdapServerUserPassword") == "secretpassword"
 
     obj = service.load("server", server_dn)
     tab = obj.tabs["serviceQuota"]
     assert tab.active
-    assert tab.values["quotaBlockSize"] == 4096
-    assert tab.values["quotaMsgFromSupport"] == "support@example.org"
+    assert tab.values["hrcQuotaBlockSize"] == 4096
+    assert tab.values["hrcQuotaMsgFromSupport"] == "support@example.org"
 
     # Update serviceQuota
     service.update(
@@ -304,18 +304,18 @@ def test_server_service_quota(service: ObjectService, directory: MemoryDirectory
             "serviceQuota": {
                 "active": True,
                 "values": {
-                    "quotaBlockSize": 8192,
-                    "quotaDesc": "Updated storage pool",
+                    "hrcQuotaBlockSize": 8192,
+                    "hrcQuotaDesc": "Updated storage pool",
                 },
             }
         },
     )
     entry = stored_entry(directory, server_dn)
-    assert entry.text("quotaBlockSize") == "8192"
-    assert entry.text("quotaDesc") == "Updated storage pool"
+    assert entry.text("hrcQuotaBlockSize") == "8192"
+    assert entry.text("hrcQuotaDesc") == "Updated storage pool"
 
     # Deactivate serviceQuota
     service.update("server", server_dn, {"serviceQuota": {"active": False, "values": {}}})
     entry = stored_entry(directory, server_dn)
-    assert not entry.has_object_class("quotaService")
-    assert entry.get("quotaDevice") == []
+    assert not entry.has_object_class("hrcQuotaService")
+    assert entry.get("hrcQuotaDevice") == []

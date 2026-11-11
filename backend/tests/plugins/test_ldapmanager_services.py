@@ -88,7 +88,7 @@ def test_overwrite_replaces_and_remove_missing_deletes(directory: MemoryDirector
     dn = f"ou=paris,{BASE}"
     text = (
         f"dn: {dn}\nobjectClass: organizationalUnit\n"
-        "objectClass: gosaDepartment\nou: paris\nl: Paris\n"
+        "objectClass: hrcDepartment\nou: paris\nl: Paris\n"
     )
     [kept] = run(directory, text, overwrite=True)
     entry = directory.get(dn)

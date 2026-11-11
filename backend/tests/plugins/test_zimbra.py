@@ -16,10 +16,10 @@ SERVERS = f"ou=servers,ou=systems,{BASE}"
 ZIMBRA_CLASSES = {
     "ieee802Device",
     "device",
-    "fdServer",
-    "fdZimbraServer",
+    "hrcServer",
+    "hrcZimbraServer",
     "ipHost",
-    "fdNetworkInterface",
+    "hrcNetworkInterface",
 }
 
 
@@ -53,11 +53,11 @@ def test_zimbra_tab_registration_and_acl(service: ObjectService) -> None:
     assert tab.acl_key == "serviceZimbra"
     assert server_info.acl_object(tab) == "server/serviceZimbra"
     assert tab.optional is True
-    assert tab.object_classes == ("fdZimbraServer",)
+    assert tab.object_classes == ("hrcZimbraServer",)
 
 
 def test_zimbra_tab_dropped_without_schema(directory: MemoryDirectory) -> None:
-    directory.set_schema_object_classes(["ieee802Device", "device", "fdServer"])
+    directory.set_schema_object_classes(["ieee802Device", "device", "hrcServer"])
     registry = TypeRegistry()
     register_builtin_types(registry)
     schema_classes = {c.lower() for c in directory.schema_object_classes()}
@@ -79,17 +79,17 @@ def test_create_server_with_zimbra_service(
             "zimbra": {
                 "active": True,
                 "values": {
-                    "fdZimbraServerUri": "https://zimbra.example.com:7071/service/admin/soap",
-                    "fdZimbraServerLogin": "zimadmin",
-                    "fdZimbraServerPassword": "zimsecretpassword",
-                    "fdZimbraServerUserAgent": "Heracles-Zimbra-Client/1.0",
-                    "fdZimbraServerCreationType": "create",
-                    "fdZimbraServerDeletionType": "maintenance",
-                    "fdZimbraServerPasswordSync": True,
-                    "fdZimbraServerKeepUnknownAliases": True,
-                    "fdZimbraServerIdAttribute": "uid",
-                    "zimbraDomain": "example.com",
-                    "zimbraDomainCOS": "default",
+                    "hrcZimbraServerUri": "https://zimbra.example.com:7071/service/admin/soap",
+                    "hrcZimbraServerLogin": "zimadmin",
+                    "hrcZimbraServerPassword": "zimsecretpassword",
+                    "hrcZimbraServerUserAgent": "Heracles-Zimbra-Client/1.0",
+                    "hrcZimbraServerCreationType": "create",
+                    "hrcZimbraServerDeletionType": "maintenance",
+                    "hrcZimbraServerPasswordSync": True,
+                    "hrcZimbraServerKeepUnknownAliases": True,
+                    "hrcZimbraServerIdAttribute": "uid",
+                    "hrcZimbraDomain": "example.com",
+                    "hrcZimbraDomainCOS": "default",
                 },
             },
         },
@@ -97,28 +97,28 @@ def test_create_server_with_zimbra_service(
     assert dn == f"cn=zimbra1,{SERVERS}"
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdZimbraServer" in entry.get("objectClass")
-    assert entry.text("fdZimbraServerUri") == "https://zimbra.example.com:7071/service/admin/soap"
-    assert entry.text("fdZimbraServerLogin") == "zimadmin"
-    assert entry.text("fdZimbraServerPassword") == "zimsecretpassword"
-    assert entry.text("fdZimbraServerUserAgent") == "Heracles-Zimbra-Client/1.0"
-    assert entry.text("fdZimbraServerCreationType") == "create"
-    assert entry.text("fdZimbraServerDeletionType") == "maintenance"
-    assert entry.text("fdZimbraServerPasswordSync") == "TRUE"
-    assert entry.text("fdZimbraServerKeepUnknownAliases") == "TRUE"
-    assert entry.text("fdZimbraServerIdAttribute") == "uid"
-    assert entry.text("zimbraDomain") == "example.com"
-    assert entry.text("zimbraDomainCOS") == "default"
+    assert b"hrcZimbraServer" in entry.get("objectClass")
+    assert entry.text("hrcZimbraServerUri") == "https://zimbra.example.com:7071/service/admin/soap"
+    assert entry.text("hrcZimbraServerLogin") == "zimadmin"
+    assert entry.text("hrcZimbraServerPassword") == "zimsecretpassword"
+    assert entry.text("hrcZimbraServerUserAgent") == "Heracles-Zimbra-Client/1.0"
+    assert entry.text("hrcZimbraServerCreationType") == "create"
+    assert entry.text("hrcZimbraServerDeletionType") == "maintenance"
+    assert entry.text("hrcZimbraServerPasswordSync") == "TRUE"
+    assert entry.text("hrcZimbraServerKeepUnknownAliases") == "TRUE"
+    assert entry.text("hrcZimbraServerIdAttribute") == "uid"
+    assert entry.text("hrcZimbraDomain") == "example.com"
+    assert entry.text("hrcZimbraDomainCOS") == "default"
 
     loaded = service.load("server", dn)
     assert loaded.tabs["zimbra"].active is True
     vals = loaded.tabs["zimbra"].values
-    assert vals["fdZimbraServerUri"] == "https://zimbra.example.com:7071/service/admin/soap"
-    assert vals["fdZimbraServerLogin"] == "zimadmin"
-    assert vals["fdZimbraServerPassword"] is None  # PasswordAttr is write_only
-    assert vals["fdZimbraServerPasswordSync"] is True
-    assert vals["fdZimbraServerKeepUnknownAliases"] is True
-    assert vals["zimbraDomain"] == "example.com"
+    assert vals["hrcZimbraServerUri"] == "https://zimbra.example.com:7071/service/admin/soap"
+    assert vals["hrcZimbraServerLogin"] == "zimadmin"
+    assert vals["hrcZimbraServerPassword"] is None  # PasswordAttr is write_only
+    assert vals["hrcZimbraServerPasswordSync"] is True
+    assert vals["hrcZimbraServerKeepUnknownAliases"] is True
+    assert vals["hrcZimbraDomain"] == "example.com"
 
 
 def test_update_and_deactivate_zimbra_tab(
@@ -132,8 +132,8 @@ def test_update_and_deactivate_zimbra_tab(
             "zimbra": {
                 "active": True,
                 "values": {
-                    "fdZimbraServerUri": "https://zimbra2.example.com:7071/service/admin/soap",
-                    "fdZimbraServerCreationType": "create",
+                    "hrcZimbraServerUri": "https://zimbra2.example.com:7071/service/admin/soap",
+                    "hrcZimbraServerCreationType": "create",
                 },
             },
         },
@@ -146,22 +146,22 @@ def test_update_and_deactivate_zimbra_tab(
         {
             "zimbra": {
                 "values": {
-                    "fdZimbraServerDeletionType": "close",
-                    "zimbraDomain": "corp.test",
+                    "hrcZimbraServerDeletionType": "close",
+                    "hrcZimbraDomain": "corp.test",
                 }
             }
         },
     )
     loaded = service.load("server", dn)
-    assert loaded.tabs["zimbra"].values["fdZimbraServerDeletionType"] == "close"
-    assert loaded.tabs["zimbra"].values["zimbraDomain"] == "corp.test"
+    assert loaded.tabs["zimbra"].values["hrcZimbraServerDeletionType"] == "close"
+    assert loaded.tabs["zimbra"].values["hrcZimbraDomain"] == "corp.test"
 
     # Deactivate tab
     service.update("server", dn, {"zimbra": {"active": False}})
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdZimbraServer" not in entry.get("objectClass")
-    assert entry.get("fdZimbraServerUri") == []
+    assert b"hrcZimbraServer" not in entry.get("objectClass")
+    assert entry.get("hrcZimbraServerUri") == []
 
     loaded_deactivated = service.load("server", dn)
     assert loaded_deactivated.tabs["zimbra"].active is False
@@ -177,11 +177,11 @@ def test_zimbra_validation(service: ObjectService) -> None:
                 "main": {"values": {"cn": "badzimbra"}},
                 "zimbra": {
                     "active": True,
-                    "values": {"fdZimbraServerUri": "not-a-valid-url"},
+                    "values": {"hrcZimbraServerUri": "not-a-valid-url"},
                 },
             },
         )
-    assert "fdZimbraServerUri" in str(exc_info.value)
+    assert "hrcZimbraServerUri" in str(exc_info.value)
 
 
 def test_mail_servers_helper_zimbra(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -197,7 +197,7 @@ def test_mail_servers_helper_zimbra(service: ObjectService, directory: MemoryDir
             "main": {"values": {"cn": "zimbra-srv"}},
             "zimbra": {
                 "active": True,
-                "values": {"fdZimbraServerUri": "https://zimbra.test:7071/service/admin/soap"},
+                "values": {"hrcZimbraServerUri": "https://zimbra.test:7071/service/admin/soap"},
             },
         },
     )

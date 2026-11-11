@@ -38,23 +38,23 @@ class IpmiClientTab(Tab):
     name = "ipmi"
     acl_key = "ipmiClient"
     label = _("IPMI")
-    object_classes = ("ipmiClient",)
+    object_classes = ("hrcIpmiClient",)
     optional = True
 
     bmc = Section(
         _("BMC connection"),
         StringAttr(
-            "fdIpmiIP",
+            "hrcIpmiIP",
             _("IP address"),
             description=_("IP address or host name of the BMC"),
         ),
         StringAttr(
-            "fdIpmiLogin",
+            "hrcIpmiLogin",
             _("Login"),
             description=_("IPMI management user"),
         ),
         CleartextPasswordAttr(
-            "fdIpmiPassword",
+            "hrcIpmiPassword",
             _("Password"),
             description=_("IPMI management password"),
         ),
@@ -130,7 +130,7 @@ def plugin() -> Plugin:
         version="0.1.0",
         types=(),
         tabs=_IpmiTabs(),
-        required_object_classes=("ipmiClient",),
+        required_object_classes=("hrcIpmiClient",),
         settings=IpmiSettings(),
     )
 

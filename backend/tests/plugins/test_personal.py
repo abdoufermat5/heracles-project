@@ -29,7 +29,7 @@ PEOPLE = f"ou=people,{BASE}"
 @pytest.fixture
 def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
-    d.set_schema_object_classes(d.schema_object_classes() | {"fdpersonalinfo"})
+    d.set_schema_object_classes(d.schema_object_classes() | {"hrcpersonalinfo"})
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     d.add(PEOPLE, {"objectClass": [b"organizationalUnit"], "ou": [b"people"]})
     return d
@@ -64,7 +64,7 @@ def create_user(
 
 
 def test_date_of_birth_attr_encoding_roundtrip() -> None:
-    attr = DateOfBirthAttr("dateOfBirth", "Date of birth")
+    attr = DateOfBirthAttr("hrcDateOfBirth", "Date of birth")
     dob = date(1990, 5, 15)
 
     # LDAP text encoding YYYY-MM-DD
@@ -92,7 +92,7 @@ def test_date_of_birth_attr_encoding_roundtrip() -> None:
 
 
 def test_date_of_birth_validation(monkeypatch: pytest.MonkeyPatch) -> None:
-    attr = DateOfBirthAttr("dateOfBirth", "Date of birth")
+    attr = DateOfBirthAttr("hrcDateOfBirth", "Date of birth")
     monkeypatch.setattr(personal, "today", lambda: date(2026, 11, 7))
 
     # Past date is valid
@@ -111,8 +111,8 @@ def test_date_of_birth_validation(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_contract_dates_generalized_time_encoding() -> None:
-    start_attr = DateAttr("fdContractStartDate", "Contract start date")
-    end_attr = DateAttr("fdContractEndDate", "Contract end date")
+    start_attr = DateAttr("hrcContractStartDate", "Contract start date")
+    end_attr = DateAttr("hrcContractEndDate", "Contract end date")
     d1 = date(2024, 1, 1)
     d2 = date(2026, 12, 31)
 
@@ -158,7 +158,7 @@ def test_social_account_composite_encoding_and_first_colon_split() -> None:
 
 
 def test_social_account_list_encoding() -> None:
-    list_attr = ListAttr("fdSocialAccount", "Social accounts", SocialAccountAttr())
+    list_attr = ListAttr("hrcSocialAccount", "Social accounts", SocialAccountAttr())
     items = [
         {"site": "github", "id": "octocat"},
         {"site": "matrix", "id": "@a:b.org"},
@@ -271,7 +271,7 @@ def test_profile_url_generation() -> None:
 
 def test_social_urls_formatter() -> None:
     values: dict[str, Any] = {
-        "fdSocialAccount": [
+        "hrcSocialAccount": [
             {"site": "github", "id": "octocat"},
             {"site": "matrix", "id": "@a:b.org"},
         ]
@@ -280,7 +280,7 @@ def test_social_urls_formatter() -> None:
     assert social_urls(values) == expected
 
     assert social_urls({}) is None
-    assert social_urls({"fdSocialAccount": []}) is None
+    assert social_urls({"hrcSocialAccount": []}) is None
 
 
 # ------------------------------------------------------------------ settings
@@ -315,7 +315,7 @@ def test_plugin_disabled_when_missing_object_class() -> None:
     register_builtin_types(registry)
     status = registry.register_plugin(personal.plugin(), {"inetorgperson"})
     assert not status.enabled
-    assert status.missing_object_classes == ["fdPersonalInfo"]
+    assert status.missing_object_classes == ["hrcPersonalInfo"]
 
 
 def test_create_user_with_personal_tab(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -325,16 +325,16 @@ def test_create_user_with_personal_tab(service: ObjectService, directory: Memory
         personal_active=True,
         personal_values={
             "personalTitle": "Dr.",
-            "fdNickName": "Lex",
-            "fdBadge": "BADGE-42",
-            "dateOfBirth": "1992-06-18",
-            "gender": "M",
+            "hrcNickName": "Lex",
+            "hrcBadge": "BADGE-42",
+            "hrcDateOfBirth": "1992-06-18",
+            "hrcGender": "M",
             "co": "France",
-            "fdContractStartDate": "2024-01-01",
-            "fdContractEndDate": "2026-12-31",
-            "fdPhotoVisible": True,
-            "fdPrivateMail": ["alex@personal.example"],
-            "fdSocialAccount": [
+            "hrcContractStartDate": "2024-01-01",
+            "hrcContractEndDate": "2026-12-31",
+            "hrcPhotoVisible": True,
+            "hrcPrivateMail": ["alex@personal.example"],
+            "hrcSocialAccount": [
                 {"site": "github", "id": "octocat"},
                 {"site": "matrix", "id": "@a:b.org"},
             ],
@@ -343,18 +343,18 @@ def test_create_user_with_personal_tab(service: ObjectService, directory: Memory
 
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.has_object_class("fdPersonalInfo")
+    assert entry.has_object_class("hrcPersonalInfo")
     assert entry.text("personalTitle") == "Dr."
-    assert entry.text("fdNickName") == "Lex"
-    assert entry.text("fdBadge") == "BADGE-42"
-    assert entry.text("dateOfBirth") == "1992-06-18"  # text YYYY-MM-DD
-    assert entry.text("gender") == "M"
+    assert entry.text("hrcNickName") == "Lex"
+    assert entry.text("hrcBadge") == "BADGE-42"
+    assert entry.text("hrcDateOfBirth") == "1992-06-18"  # text YYYY-MM-DD
+    assert entry.text("hrcGender") == "M"
     assert entry.text("co") == "France"
-    assert entry.text("fdContractStartDate") == "20240101000000Z"  # GeneralizedTime
-    assert entry.text("fdContractEndDate") == "20261231000000Z"  # GeneralizedTime
-    assert entry.text("fdPhotoVisible") == "TRUE"
-    assert entry.texts("fdPrivateMail") == ["alex@personal.example"]
-    assert entry.texts("fdSocialAccount") == ["github:octocat", "matrix:@a:b.org"]
+    assert entry.text("hrcContractStartDate") == "20240101000000Z"  # GeneralizedTime
+    assert entry.text("hrcContractEndDate") == "20261231000000Z"  # GeneralizedTime
+    assert entry.text("hrcPhotoVisible") == "TRUE"
+    assert entry.texts("hrcPrivateMail") == ["alex@personal.example"]
+    assert entry.texts("hrcSocialAccount") == ["github:octocat", "matrix:@a:b.org"]
 
     # Virtual display attribute is NOT stored in directory
     assert not entry.get("socialUrls")
@@ -363,7 +363,7 @@ def test_create_user_with_personal_tab(service: ObjectService, directory: Memory
     state = service.load("user", dn)
     assert state.tabs["personal"].active is True
     assert state.tabs["personal"].values["personalTitle"] == "Dr."
-    assert state.tabs["personal"].values["dateOfBirth"] == date(1992, 6, 18)
+    assert state.tabs["personal"].values["hrcDateOfBirth"] == date(1992, 6, 18)
     assert (
         state.tabs["personal"].values["socialUrls"]
         == "https://github.com/octocat\nhttps://matrix.to/#/@a:b.org"
@@ -374,8 +374,8 @@ def test_default_photo_visible_is_true(service: ObjectService, directory: Memory
     dn = create_user(service, uid="photo_user", personal_active=True, personal_values={})
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.has_object_class("fdPersonalInfo")
-    assert entry.text("fdPhotoVisible") == "TRUE"
+    assert entry.has_object_class("hrcPersonalInfo")
+    assert entry.text("hrcPhotoVisible") == "TRUE"
 
 
 def test_tab_activation_and_deactivation(
@@ -385,7 +385,7 @@ def test_tab_activation_and_deactivation(
     dn = create_user(service, uid="bob")
     entry = directory.get(dn)
     assert entry is not None
-    assert not entry.has_object_class("fdPersonalInfo")
+    assert not entry.has_object_class("hrcPersonalInfo")
 
     # 2. Activate personal tab
     service.update(
@@ -396,28 +396,28 @@ def test_tab_activation_and_deactivation(
                 "active": True,
                 "values": {
                     "personalTitle": "Prof.",
-                    "fdNickName": "Bobby",
-                    "gender": "M",
-                    "fdPhotoVisible": False,
+                    "hrcNickName": "Bobby",
+                    "hrcGender": "M",
+                    "hrcPhotoVisible": False,
                 },
             }
         },
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.has_object_class("fdPersonalInfo")
+    assert entry.has_object_class("hrcPersonalInfo")
     assert entry.text("personalTitle") == "Prof."
-    assert entry.text("fdNickName") == "Bobby"
-    assert entry.text("fdPhotoVisible") == "FALSE"
+    assert entry.text("hrcNickName") == "Bobby"
+    assert entry.text("hrcPhotoVisible") == "FALSE"
 
     # 3. Deactivate personal tab
     service.update("user", dn, {"personal": {"active": False}})
     entry = directory.get(dn)
     assert entry is not None
-    assert not entry.has_object_class("fdPersonalInfo")
+    assert not entry.has_object_class("hrcPersonalInfo")
     assert entry.text("personalTitle") is None
-    assert entry.text("fdNickName") is None
-    assert entry.text("fdPhotoVisible") is None
+    assert entry.text("hrcNickName") is None
+    assert entry.text("hrcPhotoVisible") is None
 
 
 def test_contract_dates_validation_end_before_start(service: ObjectService) -> None:
@@ -427,11 +427,11 @@ def test_contract_dates_validation_end_before_start(service: ObjectService) -> N
             uid="bad_dates",
             personal_active=True,
             personal_values={
-                "fdContractStartDate": "2026-01-01",
-                "fdContractEndDate": "2025-01-01",
+                "hrcContractStartDate": "2026-01-01",
+                "hrcContractEndDate": "2025-01-01",
             },
         )
-    assert "personal.fdContractEndDate" in exc.value.fields
+    assert "personal.hrcContractEndDate" in exc.value.fields
 
 
 def test_contract_dates_validation_end_equal_start(service: ObjectService) -> None:
@@ -440,8 +440,8 @@ def test_contract_dates_validation_end_equal_start(service: ObjectService) -> No
         uid="same_dates",
         personal_active=True,
         personal_values={
-            "fdContractStartDate": "2025-06-01",
-            "fdContractEndDate": "2025-06-01",
+            "hrcContractStartDate": "2025-06-01",
+            "hrcContractEndDate": "2025-06-01",
         },
     )
     assert dn is not None
@@ -453,9 +453,9 @@ def test_date_of_birth_must_be_in_past(service: ObjectService) -> None:
             service,
             uid="future_born",
             personal_active=True,
-            personal_values={"dateOfBirth": "2099-01-01"},
+            personal_values={"hrcDateOfBirth": "2099-01-01"},
         )
-    assert "personal.dateOfBirth" in exc.value.fields
+    assert "personal.hrcDateOfBirth" in exc.value.fields
 
 
 def test_private_mail_validation(service: ObjectService) -> None:
@@ -464,9 +464,9 @@ def test_private_mail_validation(service: ObjectService) -> None:
             service,
             uid="bad_mail",
             personal_active=True,
-            personal_values={"fdPrivateMail": ["not-an-email"]},
+            personal_values={"hrcPrivateMail": ["not-an-email"]},
         )
-    assert "personal.fdPrivateMail" in exc.value.fields
+    assert "personal.hrcPrivateMail" in exc.value.fields
 
 
 def test_social_account_matrix_validation_error(service: ObjectService) -> None:
@@ -475,6 +475,6 @@ def test_social_account_matrix_validation_error(service: ObjectService) -> None:
             service,
             uid="bad_matrix",
             personal_active=True,
-            personal_values={"fdSocialAccount": [{"site": "matrix", "id": "not_an_mxid"}]},
+            personal_values={"hrcSocialAccount": [{"site": "matrix", "id": "not_an_mxid"}]},
         )
-    assert "personal.fdSocialAccount" in exc.value.fields
+    assert "personal.hrcSocialAccount" in exc.value.fields

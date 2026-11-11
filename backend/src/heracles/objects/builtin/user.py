@@ -25,7 +25,7 @@ from heracles.ldap.client import Modification, NoSuchObjectError, Scope
 from heracles.objects import filters
 from heracles.objects.hooks import TabContext
 from heracles.objects.model import ObjectType, Reference, Section, Tab
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 NAME_RE = r"[^\s,=+<>#;\"\\][^,=+<>#;\"\\]*"
 UID_RE = r"[A-Za-z0-9_][A-Za-z0-9._@-]*"
@@ -55,8 +55,8 @@ def _role_item() -> ObjectRefAttr:
 def roles_of(ctx: TabContext, user_dn: str) -> list[str]:
     """DNs of the roles whose occupants include ``user_dn``."""
     flt = filters.and_(
-        filters.equals("objectClass", legacy.STD_OC.ORGANIZATIONAL_ROLE),
-        filters.equals(legacy.STD_ATTR.ROLE_OCCUPANT, user_dn),
+        filters.equals("objectClass", schema.STD_OC.ORGANIZATIONAL_ROLE),
+        filters.equals(schema.STD_ATTR.ROLE_OCCUPANT, user_dn),
     )
     try:
         entries = ctx.directory.search(ctx.directory.base_dn, flt, Scope.SUBTREE, ["cn"])
@@ -173,16 +173,16 @@ class User(ObjectType):
                 if not changed:
                     continue
                 entry = ctx.directory.get(role_dn)
-                if entry is None or not entry.has_object_class(legacy.STD_OC.ORGANIZATIONAL_ROLE):
+                if entry is None or not entry.has_object_class(schema.STD_OC.ORGANIZATIONAL_ROLE):
                     ctx.error("roles", _("Not a role: {dn}").format(dn=role_dn))
                 elif not ctx.can_write_object(
-                    "role", role_dn, "main", legacy.STD_ATTR.ROLE_OCCUPANT
+                    "role", role_dn, "main", schema.STD_ATTR.ROLE_OCCUPANT
                 ):
                     ctx.error("roles", _("Cannot change the occupants of {dn}").format(dn=role_dn))
             new = {dnlib.normalize(d) for d in _dns(ctx.values.get("roles"))}
             for role_dn in _dns(ctx.original_values().get("roles")):
                 if dnlib.normalize(role_dn) not in new and not ctx.can_write_object(
-                    "role", role_dn, "main", legacy.STD_ATTR.ROLE_OCCUPANT
+                    "role", role_dn, "main", schema.STD_ATTR.ROLE_OCCUPANT
                 ):
                     ctx.error("roles", _("Cannot change the occupants of {dn}").format(dn=role_dn))
 
@@ -192,7 +192,7 @@ class User(ObjectType):
                 return
             old = {dnlib.normalize(d): d for d in _dns(ctx.original_values().get("roles"))}
             new = {dnlib.normalize(d): d for d in _dns(ctx.values.get("roles"))}
-            attr = legacy.STD_ATTR.ROLE_OCCUPANT
+            attr = schema.STD_ATTR.ROLE_OCCUPANT
             user_key = dnlib.normalize(ctx.dn)
             for key, role_dn in new.items():
                 if key not in old:

@@ -54,10 +54,10 @@ def app_client() -> TestClient:
             *d.schema_object_classes(),
             "ieee802Device",
             "device",
-            "fdServer",
-            "fdZimbraServer",
+            "hrcServer",
+            "hrcZimbraServer",
             "ipHost",
-            "fdNetworkInterface",
+            "hrcNetworkInterface",
         ]
     )
     registry = TypeRegistry()
@@ -96,10 +96,10 @@ def test_zimbra_api_flow(app_client: TestClient) -> None:
                 "zimbra": {
                     "active": True,
                     "values": {
-                        "fdZimbraServerUri": "https://zimbra.paris.example.com:7071/service/admin/soap",
-                        "fdZimbraServerLogin": "zimbraadmin",
-                        "fdZimbraServerPassword": "secretpassword",
-                        "zimbraDomain": "paris.example.com",
+                        "hrcZimbraServerUri": "https://zimbra.paris.example.com:7071/service/admin/soap",
+                        "hrcZimbraServerLogin": "zimbraadmin",
+                        "hrcZimbraServerPassword": "secretpassword",
+                        "hrcZimbraDomain": "paris.example.com",
                     },
                 },
             },
@@ -114,12 +114,12 @@ def test_zimbra_api_flow(app_client: TestClient) -> None:
     data = r.json()
     assert data["tabs"]["zimbra"]["active"] is True
     assert (
-        data["tabs"]["zimbra"]["values"]["fdZimbraServerUri"]
+        data["tabs"]["zimbra"]["values"]["hrcZimbraServerUri"]
         == "https://zimbra.paris.example.com:7071/service/admin/soap"
     )
-    assert data["tabs"]["zimbra"]["values"]["zimbraDomain"] == "paris.example.com"
+    assert data["tabs"]["zimbra"]["values"]["hrcZimbraDomain"] == "paris.example.com"
     # PasswordAttr is write-only so not returned
-    assert data["tabs"]["zimbra"]["values"]["fdZimbraServerPassword"] is None
+    assert data["tabs"]["zimbra"]["values"]["hrcZimbraServerPassword"] is None
 
     # Update server
     r = client.patch(
@@ -128,14 +128,14 @@ def test_zimbra_api_flow(app_client: TestClient) -> None:
             "tabs": {
                 "zimbra": {
                     "values": {
-                        "zimbraDomain": "updated.paris.example.com",
+                        "hrcZimbraDomain": "updated.paris.example.com",
                     }
                 }
             }
         },
     )
     assert r.status_code == 200
-    assert r.json()["tabs"]["zimbra"]["values"]["zimbraDomain"] == "updated.paris.example.com"
+    assert r.json()["tabs"]["zimbra"]["values"]["hrcZimbraDomain"] == "updated.paris.example.com"
 
     # Delete server
     r = client.delete(f"/objects/server/{quote(dn, safe='')}")

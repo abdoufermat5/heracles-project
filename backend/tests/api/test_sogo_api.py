@@ -51,7 +51,7 @@ def app_client() -> TestClient:
     d.set_schema_object_classes(
         [
             *d.schema_object_classes(),
-            "CalendarResource",
+            "hrcCalendarResource",
             "inetOrgPerson",
             "organizationalUnit",
         ]
@@ -92,8 +92,8 @@ def test_sogo_api_flow(app_client: TestClient) -> None:
                         "uid": "boardroom",
                         "mail": "boardroom@paris.example.com",
                         "description": "Boardroom Paris",
-                        "Kind": "location",
-                        "Multiplebookings": 0,
+                        "hrcResourceKind": "location",
+                        "hrcResourceMultipleBookings": 0,
                     }
                 }
             },
@@ -108,7 +108,7 @@ def test_sogo_api_flow(app_client: TestClient) -> None:
     data = r.json()
     assert data["tabs"]["main"]["values"]["uid"] == "boardroom"
     assert data["tabs"]["main"]["values"]["mail"] == "boardroom@paris.example.com"
-    assert data["tabs"]["main"]["values"]["Kind"] == "location"
+    assert data["tabs"]["main"]["values"]["hrcResourceKind"] == "location"
 
     # Update calendar resource
     r = client.patch(

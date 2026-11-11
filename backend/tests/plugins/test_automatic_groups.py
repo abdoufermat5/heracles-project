@@ -25,7 +25,7 @@ UNIX_GROUP = f"cn=unix,{GROUPS}"
 @pytest.fixture
 def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
-    d.set_schema_object_classes([*d.schema_object_classes(), "fdTasksAutomaticGroups"])
+    d.set_schema_object_classes([*d.schema_object_classes(), "hrcTasksAutomaticGroups"])
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     for dn, ou in ((PEOPLE, "people"), (GROUPS, "groups"), (TASKS, "tasks")):
         d.add(dn, {"objectClass": [b"organizationalUnit"], "ou": [ou.encode()]})
@@ -64,17 +64,17 @@ def add_task(
     group: str = GROUP,
 ) -> None:
     attrs: dict[str, list[bytes]] = {
-        "objectClass": [b"fdTasks", b"fdTasksAutomaticGroups"],
+        "objectClass": [b"hrcTasks", b"hrcTasksAutomaticGroups"],
         "cn": [b"auto"],
-        "fdTasksStatus": [b"Activated"],
-        "fdTasksRepeatable": [b"TRUE"],
-        "fdTasksRepeatableSchedule": [b"daily"],
-        "fdTasksAutomaticGroupsOfName": [group.encode()],
-        "fdTasksAutomaticGroupsMembers": [m.encode() for m in members],
-        "fdTasksAutomaticGroupsDynamicGroup": [b"TRUE" if dynamic else b"FALSE"],
+        "hrcTasksStatus": [b"Activated"],
+        "hrcTasksRepeatable": [b"TRUE"],
+        "hrcTasksRepeatableSchedule": [b"daily"],
+        "hrcTasksAutomaticGroupsOfName": [group.encode()],
+        "hrcTasksAutomaticGroupsMembers": [m.encode() for m in members],
+        "hrcTasksAutomaticGroupsDynamicGroup": [b"TRUE" if dynamic else b"FALSE"],
     }
     if pattern is not None:
-        attrs["fdTasksAutomaticGroupsRegexPattern"] = [pattern.encode()]
+        attrs["hrcTasksAutomaticGroupsRegexPattern"] = [pattern.encode()]
     d.add(TASK_DN, attrs)
 
 
@@ -185,7 +185,7 @@ def test_missing_group_and_invalid_rule_keep_the_task(directory: MemoryDirectory
     report = ag.run_automatic_groups(directory, NOW)
     assert report.tasks_run == 0 and "invalid rule" in report.errors[0]
     entry: Entry | None = directory.get(TASK_DN)
-    assert entry is not None and entry.text("fdTasksStatus") == "Activated"
+    assert entry is not None and entry.text("hrcTasksStatus") == "Activated"
 
 
 def test_task_type_and_validation(directory: MemoryDirectory) -> None:
@@ -196,30 +196,30 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
     ).enabled
     info = registry.get("automatic_groups_task")
     assert info.acl_object(info.main_tab) == "tasks/automaticGroupsTask"
-    assert info.type.filter == "(&(objectClass=fdTasks)(objectClass=fdTasksAutomaticGroups))"
+    assert info.type.filter == "(&(objectClass=hrcTasks)(objectClass=hrcTasksAutomaticGroups))"
     a = add_user(directory, "a")
     add_group(directory, [a])
     service = ObjectService(directory, registry)
     values = {
         "cn": "auto",
-        "fdTasksAutomaticGroupsOfName": GROUP,
-        "fdTasksAutomaticGroupsMembers": [a],
-        "fdTasksAutomaticGroupsRegexPattern": "mail:@x$",
-        "fdTasksAutomaticGroupsDynamicGroup": True,
+        "hrcTasksAutomaticGroupsOfName": GROUP,
+        "hrcTasksAutomaticGroupsMembers": [a],
+        "hrcTasksAutomaticGroupsRegexPattern": "mail:@x$",
+        "hrcTasksAutomaticGroupsDynamicGroup": True,
     }
     dn = service.create("automatic_groups_task", BASE, {"main": {"values": values}})
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.text("fdTasksAutomaticGroupsDynamicGroup") == "TRUE"
+    assert entry.text("hrcTasksAutomaticGroupsDynamicGroup") == "TRUE"
     with pytest.raises(ObjectValidationError):
         service.update(
             "automatic_groups_task",
             dn,
-            {"main": {"values": {"fdTasksAutomaticGroupsRegexPattern": "("}}},
+            {"main": {"values": {"hrcTasksAutomaticGroupsRegexPattern": "("}}},
         )
     with pytest.raises(ObjectValidationError):
         service.create(
             "automatic_groups_task",
             BASE,
-            {"main": {"values": {**values, "cn": "other", "fdTasksAutomaticGroupsOfName": None}}},
+            {"main": {"values": {**values, "cn": "other", "hrcTasksAutomaticGroupsOfName": None}}},
         )

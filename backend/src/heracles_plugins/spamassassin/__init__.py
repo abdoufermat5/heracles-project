@@ -49,12 +49,12 @@ SPAM_DIRECTIVES: tuple[tuple[str, str], ...] = (
 )
 
 MAIL_SERVICE_CLASSES: tuple[str, ...] = (
-    "fdDovecotServer",
-    "fdCyrusServer",
-    "fdPostfixServer",
-    "fdSieveServer",
-    "goSpamServer",
-    "fdZimbraServer",
+    "hrcDovecotServer",
+    "hrcCyrusServer",
+    "hrcPostfixServer",
+    "hrcSieveServer",
+    "hrcSpamAssassinServer",
+    "hrcZimbraServer",
 )
 
 
@@ -82,42 +82,42 @@ class SpamAssassinServiceTab(Tab):
     label = _("SpamAssassin")
     description = _("SpamAssassin spam filter service")
     optional = True
-    object_classes = ("goSpamServer",)
+    object_classes = ("hrcSpamAssassinServer",)
 
     scoring = Section(
         _("Scoring & network"),
         StringAttr(
-            "saRewriteHeader",
+            "hrcSpamAssassinRewriteHeader",
             _("Rewrite header"),
             description=_("Subject header prefix for spam messages"),
         ),
         SelectAttr(
-            "saRequiredScore",
+            "hrcSpamAssassinRequiredScore",
             _("Required score"),
             options=REQUIRED_SCORES,
             default="5.0",
             description=_("Score required to flag an email as spam"),
         ),
         StringAttr(
-            "saTrustedNetworks",
+            "hrcSpamAssassinTrustedNetworks",
             _("Trusted networks"),
             description=_("Networks or hosts considered trusted"),
         ),
     )
     plugins = Section(
         _("Filter plugins"),
-        BooleanAttr("flag_enable_bayes", _("Enable Bayes filter"), default=True),
-        BooleanAttr("flag_bayes_autolearn", _("Bayes auto-learn"), default=True),
-        BooleanAttr("flag_enable_rblcheck", _("Enable RBL checks"), default=True),
-        BooleanAttr("flag_enable_razor", _("Enable Razor"), default=False),
-        BooleanAttr("flag_enable_ddc", _("Enable DCC"), default=False),
-        BooleanAttr("flag_enable_pyzor", _("Enable Pyzor"), default=False),
+        BooleanAttr("hrcSpamAssassinEnableBayes", _("Enable Bayes filter"), default=True),
+        BooleanAttr("hrcSpamAssassinBayesAutolearn", _("Bayes auto-learn"), default=True),
+        BooleanAttr("hrcSpamAssassinEnableRblCheck", _("Enable RBL checks"), default=True),
+        BooleanAttr("hrcSpamAssassinEnableRazor", _("Enable Razor"), default=False),
+        BooleanAttr("hrcSpamAssassinEnableDcc", _("Enable DCC"), default=False),
+        BooleanAttr("hrcSpamAssassinEnablePyzor", _("Enable Pyzor"), default=False),
     )
     rules = Section(
         _("Custom rule"),
-        StringAttr("ruleName", _("Rule name"), description=_("Custom rule name")),
+        StringAttr("hrcSpamAssassinRuleName", _("Rule name"), description=_("Custom rule name")),
         TextAttr(
-            "ruleDesc",
+            "hrcSpamAssassinRuleDesc",
             _("Rule description"),
             description=_("Custom rule description"),
         ),
@@ -132,24 +132,24 @@ class SpamAssassinUserTab(Tab):
     label = _("SpamAssassin")
     description = _("User SpamAssassin spam filter settings")
     optional = True
-    object_classes = ("fdSpamAssassinUser",)
+    object_classes = ("hrcSpamAssassinUser",)
 
     settings = Section(
         _("SpamAssassin rules"),
         ListAttr(
-            "fdSpamAssassinRules",
+            "hrcSpamAssassinRules",
             _("Rules"),
             item=CompositeAttr(
                 "rule",
                 _("Rule"),
                 [
                     SelectAttr(
-                        "fdSpamAssassinRules_directive",
+                        "hrcSpamAssassinRules_directive",
                         _("Directive"),
                         options=SPAM_DIRECTIVES,
                     ),
                     StringAttr(
-                        "fdSpamAssassinRules_value",
+                        "hrcSpamAssassinRules_value",
                         _("Value"),
                         description=_("Rule value or pattern"),
                     ),

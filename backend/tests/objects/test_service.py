@@ -181,7 +181,7 @@ def test_create_department(service: ObjectService, directory: FakeDirectory) -> 
     assert dn == f"ou=Lyon,{BASE}"
     assert directory.entries[dn.lower()].attrs["objectClass"] == [
         b"organizationalUnit",
-        b"gosaDepartment",
+        b"hrcDepartment",
     ]
     with pytest.raises(ObjectValidationError):
         service.create("department_c", BASE, {"main": {"values": {"c": "FRA", "description": "x"}}})

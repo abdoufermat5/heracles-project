@@ -28,7 +28,7 @@ from heracles.objects.templates import (
     template_json,
     update_template,
 )
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 BASE = "dc=example,dc=com"
 PARIS = f"ou=paris,{BASE}"
@@ -54,7 +54,7 @@ def directory() -> MemoryDirectory:
     d.add(
         PARIS,
         {
-            "objectClass": [b"organizationalUnit", legacy.OC.DEPARTMENT.encode()],
+            "objectClass": [b"organizationalUnit", schema.OC.DEPARTMENT.encode()],
             "ou": [b"paris"],
             "description": [b"Paris"],
         },
@@ -95,8 +95,8 @@ def test_create_template_storage_format(service: ObjectService, directory: Memor
     assert dn == STAFF
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.texts("objectClass") == ["top", legacy.OC.TEMPLATE]
-    fields = entry.texts(legacy.TEMPLATE_FIELD_ATTR)
+    assert entry.texts("objectClass") == ["top", schema.OC.TEMPLATE]
+    fields = entry.texts(schema.TEMPLATE_FIELD_ATTR)
     assert fields == sorted(fields)
     assert "uid:%s[0,1]l|givenName%%l|sn%" in fields
     assert "objectClass:inetOrgPerson" in fields
@@ -112,9 +112,9 @@ def test_existing_entry_is_loaded_and_colons_survive(
     directory.add(
         STAFF,
         {
-            "objectClass": [b"top", legacy.OC.TEMPLATE.encode()],
+            "objectClass": [b"top", schema.OC.TEMPLATE.encode()],
             "cn": [b"staff"],
-            legacy.TEMPLATE_FIELD_ATTR: [
+            schema.TEMPLATE_FIELD_ATTR: [
                 b"objectClass:inetOrgPerson",
                 b"objectClass:organizationalPerson",
                 b"objectClass:person",
@@ -258,16 +258,16 @@ def test_incremental_counter_is_persisted_only_on_commit(
 ) -> None:
     dn = make_staff(service)
     values = {"main": {"givenName": "A", "sn": "B"}}
-    cfg = f"cn=config,ou=fusiondirectory,{BASE}"
+    cfg = f"cn=config,ou=heracles,{BASE}"
     preview = apply_template(service, "user", dn, values, preview=True)
     assert preview["posix"]["uidNumber"] == 2000
     assert directory.get(cfg) is None
     assert apply_template(service, "user", dn, values)["posix"]["uidNumber"] == 2000
     entry = directory.get(cfg)
     assert entry is not None
-    assert entry.texts(legacy.INCREMENTAL_STATES_ATTR) == ["uid;2000"]
+    assert entry.texts(schema.INCREMENTAL_STATES_ATTR) == ["uid;2000"]
     assert apply_template(service, "user", dn, values)["posix"]["uidNumber"] == 2001
-    directory.modify(cfg, [Modification("replace", legacy.INCREMENTAL_STATES_ATTR, [b"uid;5000"])])
+    directory.modify(cfg, [Modification("replace", schema.INCREMENTAL_STATES_ATTR, [b"uid;5000"])])
     assert apply_template(service, "user", dn, values)["posix"]["uidNumber"] == 5001
 
 

@@ -4,7 +4,7 @@ import pytest
 
 from heracles.core import config_store as cs
 from heracles.ldap.memory import MemoryDirectory
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 BASE = "dc=example,dc=test"
 
@@ -31,10 +31,10 @@ def test_save_creates_entry_and_directory_wins(directory: MemoryDirectory) -> No
     assert set(written) == {"password_min_length", "login_attribute", "recovery_enabled"}
     entry = directory.get(cs.config_dn(directory))
     assert entry is not None
-    assert entry.texts("fdPasswordMinLength") == ["12"]
-    assert entry.texts("fdPasswordRecoveryActivated") == ["TRUE"]
+    assert entry.texts("hrcPasswordMinLength") == ["12"]
+    assert entry.texts("hrcPasswordRecoveryActivated") == ["TRUE"]
     classes = {c.lower() for c in entry.texts("objectClass")}
-    assert legacy.OC.RECOVERY_CONFIG.lower() in classes
+    assert schema.OC.RECOVERY_CONFIG.lower() in classes
     cfg = cs.effective_settings(directory)  # cache invalidated by the save
     assert cfg.password_min_length == 12
     assert cfg.login_attribute == "mail"
@@ -62,8 +62,8 @@ def test_empty_value_removes_attribute(directory: MemoryDirectory) -> None:
     cs.save_config(directory, {"shells": [], "cas_host": ""})
     entry = directory.get(cs.config_dn(directory))
     assert entry is not None
-    assert entry.get("fdShells") == []
-    assert entry.get("fdCasHost") == []
+    assert entry.get("hrcShells") == []
+    assert entry.get("hrcCasHost") == []
 
 
 def test_validation_errors(directory: MemoryDirectory) -> None:
@@ -89,8 +89,8 @@ def test_stored_boolean_case_and_unparseable_int(directory: MemoryDirectory) -> 
     directory.modify(
         cs.config_dn(directory),
         [
-            Modification("add", "fdForceSSL", [b"true"]),
-            Modification("add", "fdMinId", [b"abc"]),
+            Modification("add", "hrcForceSSL", [b"true"]),
+            Modification("add", "hrcMinId", [b"abc"]),
         ],
     )
     cs.invalidate(directory)
@@ -109,5 +109,5 @@ def test_tab_hooks_roundtrip(directory: MemoryDirectory) -> None:
 
 def test_every_field_has_an_attribute() -> None:
     keys = {f.key for f in cs.CONFIG_FIELDS}
-    assert keys <= set(legacy.CONFIG_ATTRS)
+    assert keys <= set(schema.CONFIG_ATTRS)
     assert {f.section for f in cs.CONFIG_FIELDS} <= set(cs.SECTIONS)

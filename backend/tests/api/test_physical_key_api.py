@@ -57,7 +57,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 
     def _build_demo_dir() -> MemoryDirectory:
         d = orig_builder()
-        d.set_schema_object_classes(d.schema_object_classes() | {"fdphysicalkey"})
+        d.set_schema_object_classes(d.schema_object_classes() | {"hrcphysicalkey"})
         return d
 
     monkeypatch.setattr(demo, "build_demo_directory", _build_demo_dir)
@@ -95,8 +95,8 @@ def test_physical_key_api_flow(app_client: TestClient) -> None:
             "physical_key": {
                 "active": True,
                 "values": {
-                    "fdPhysicalKeyType": "rfid",
-                    "fdPhysicalKeyValue": "CARD-987654",
+                    "hrcPhysicalKeyType": "rfid",
+                    "hrcPhysicalKeyValue": "CARD-987654",
                 },
             },
         },
@@ -109,15 +109,15 @@ def test_physical_key_api_flow(app_client: TestClient) -> None:
     assert r_get.status_code == 200
     data = r_get.json()
     assert "physical_key" in data["tabs"]
-    assert data["tabs"]["physical_key"]["values"]["fdPhysicalKeyType"] == "rfid"
-    assert data["tabs"]["physical_key"]["values"]["fdPhysicalKeyValue"] == "CARD-987654"
+    assert data["tabs"]["physical_key"]["values"]["hrcPhysicalKeyType"] == "rfid"
+    assert data["tabs"]["physical_key"]["values"]["hrcPhysicalKeyValue"] == "CARD-987654"
 
     # Patch badge value
     patch_payload = {
         "tabs": {
             "physical_key": {
                 "values": {
-                    "fdPhysicalKeyValue": "CARD-112233",
+                    "hrcPhysicalKeyValue": "CARD-112233",
                 }
             }
         }
@@ -125,4 +125,4 @@ def test_physical_key_api_flow(app_client: TestClient) -> None:
     r_patch = a.patch(f"/objects/user/{q(dn)}", patch_payload)
     assert r_patch.status_code == 200, r_patch.text
     patched = r_patch.json()
-    assert patched["tabs"]["physical_key"]["values"]["fdPhysicalKeyValue"] == "CARD-112233"
+    assert patched["tabs"]["physical_key"]["values"]["hrcPhysicalKeyValue"] == "CARD-112233"

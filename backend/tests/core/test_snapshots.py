@@ -20,18 +20,18 @@ def svc(directory: MemoryDirectory) -> SnapshotService:
 
 def test_create_format(svc: SnapshotService, directory: MemoryDirectory) -> None:
     snap = svc.create(SUB, object_type="department", source="API", description="before cleanup")
-    assert snap.dn == f"gosaSnapshotTimestamp=1700000000-012345600,{BASE}"
+    assert snap.dn == f"hrcSnapshotTimestamp=1700000000-012345600,{BASE}"
     entry = directory.get(snap.dn)
     assert entry is not None
-    assert entry.text("objectClass") == "gosaSnapshotObject"
-    assert entry.text("gosaSnapshotDN") == SUB
-    assert entry.text("fdSnapshotObjectType") == "department"
-    assert entry.text("fdSnapshotDataSource") == "API"
+    assert entry.text("objectClass") == "hrcSnapshotObject"
+    assert entry.text("hrcSnapshotDN") == SUB
+    assert entry.text("hrcSnapshotObjectType") == "department"
+    assert entry.text("hrcSnapshotDataSource") == "API"
     assert entry.text("description") == "before cleanup"
-    blob = entry.first("gosaSnapshotData")
+    blob = entry.first("hrcSnapshotData")
     assert blob is not None
     raw = zlib.decompress(blob)
-    assert entry.text("fdSnapshotHash") == hashlib.md5(raw).hexdigest() == snap.hash
+    assert entry.text("hrcSnapshotHash") == hashlib.md5(raw).hexdigest() == snap.hash
     dns = [e.dn for e in parse_ldif(raw.decode())]
     assert dns == [SUB, f"uid=carol,{SUB}"]  # whole subtree, parents first
 
@@ -134,10 +134,10 @@ def test_corruption_detected(svc: SnapshotService, directory: MemoryDirectory) -
     from heracles.ldap.client import Modification
 
     snap = svc.create(ALICE)
-    directory.modify(snap.dn, [Modification("replace", "fdSnapshotHash", [b"0" * 32])])
+    directory.modify(snap.dn, [Modification("replace", "hrcSnapshotHash", [b"0" * 32])])
     with pytest.raises(SnapshotError):
         svc.ldif(snap.dn)
-    directory.modify(snap.dn, [Modification("replace", "gosaSnapshotData", [b"not zlib"])])
+    directory.modify(snap.dn, [Modification("replace", "hrcSnapshotData", [b"not zlib"])])
     with pytest.raises(SnapshotError):
         svc.ldif(snap.dn)
     assert len(list(directory.search(BASE, scope=Scope.ONE))) == 1

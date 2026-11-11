@@ -60,7 +60,7 @@ def test_default_roles_fix(directory: MemoryDirectory) -> None:
     sc.run_fix(ctx, "default_roles")
     assert sc.check_default_roles(ctx).status == "ok"
     role = directory.get(f"cn=editownpwd,ou=aclroles,{BASE}")
-    assert role is not None and role.texts("gosaAclTemplate") == ["0:user/user;s#userPassword;rw"]
+    assert role is not None and role.texts("hrcAclTemplate") == ["0:user/user;s#userPassword;rw"]
 
 
 def test_hidden_users(directory: MemoryDirectory) -> None:
@@ -96,8 +96,8 @@ def test_super_admin_fix_and_create_admin(directory: MemoryDirectory) -> None:
     directory.modify(
         BASE,
         [
-            Modification("delete", "gosaAclEntry"),
-            Modification("delete", "objectClass", [b"gosaAcl"]),
+            Modification("delete", "hrcAclEntry"),
+            Modification("delete", "objectClass", [b"hrcAcl"]),
         ],
     )
     ctx = sc.context_for(directory)
@@ -117,7 +117,7 @@ def test_super_admin_fix_and_create_admin(directory: MemoryDirectory) -> None:
     entry = directory.get(dn)
     assert entry is not None and entry.has_object_class("inetOrgPerson")
     base_entry = directory.get(BASE)
-    assert base_entry is not None and len(base_entry.texts("gosaAclEntry")) == 2
+    assert base_entry is not None and len(base_entry.texts("hrcAclEntry")) == 2
 
 
 def test_misplaced_objects_and_move(directory: MemoryDirectory) -> None:
@@ -160,7 +160,7 @@ def test_unmarked_departments(directory: MemoryDirectory) -> None:
     assert result.dns == [plain]
     sc.run_fix(ctx, "departments", [plain])
     entry = directory.get(plain)
-    assert entry is not None and entry.has_object_class("gosaDepartment")
+    assert entry is not None and entry.has_object_class("hrcDepartment")
     assert entry.text("description") == "sales"
     assert sc.check_departments(ctx).status == "ok"
 

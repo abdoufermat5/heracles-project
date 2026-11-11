@@ -1,7 +1,7 @@
 """Public forms plugin: create objects through a token-protected public page.
 
 A ``publicForm`` (``publicForm/publicForm``, ``ou=forms``) describes which kind of
-object the form creates (``fdPublicFormTemplateType``, e.g. ``user``), an optional
+object the form creates (``hrcPublicFormTemplateType``, e.g. ``user``), an optional
 template object whose values are copied, and, on the ``alteration`` tab
 (``publicForm/publicFormAlteration``), which attributes visitors see.
 
@@ -94,8 +94,8 @@ class PublicForm(ObjectType):
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=forms"
-    columns = ("cn", "fdPublicFormTitle", "fdPublicFormTemplateType")
-    search_attrs = ("cn", "fdPublicFormTitle")
+    columns = ("cn", "hrcPublicFormTitle", "hrcPublicFormTemplateType")
+    search_attrs = ("cn", "hrcPublicFormTitle")
 
     class Main(Tab):
         name = "main"
@@ -107,10 +107,10 @@ class PublicForm(ObjectType):
             _("Properties"),
             DepartmentAttr("base", _("Department")),
             StringAttr("cn", _("Name"), required=True, pattern=NAME_RE),
-            StringAttr("fdPublicFormTitle", _("Title"), required=True),
-            TextAttr("fdPublicFormText", _("Introduction")),
+            StringAttr("hrcPublicFormTitle", _("Title"), required=True),
+            TextAttr("hrcPublicFormText", _("Introduction")),
             TextAttr(
-                "fdPublicFormFinalText",
+                "hrcPublicFormFinalText",
                 _("Final text"),
                 description=_("Shown once the form was submitted"),
             ),
@@ -124,18 +124,18 @@ class PublicForm(ObjectType):
         target = Section(
             _("Created object"),
             StringAttr(
-                "fdPublicFormTemplateType",
+                "hrcPublicFormTemplateType",
                 _("Object type"),
                 required=True,
                 description=_("Type of object created by the form, for instance user"),
             ),
             StringAttr(
-                "fdPublicFormTemplateDN",
+                "hrcPublicFormTemplateDN",
                 _("Template"),
                 description=_("DN of an existing object whose values are copied (optional)"),
             ),
             BooleanAttr(
-                "fdPublicFormDefaultLocked",
+                "hrcPublicFormDefaultLocked",
                 _("Lock created accounts"),
                 description=_("New user accounts stay locked until an administrator unlocks them"),
                 default=False,
@@ -144,37 +144,37 @@ class PublicForm(ObjectType):
         access = Section(
             _("Access"),
             BooleanAttr(
-                "fdPublicFormPrivate",
+                "hrcPublicFormPrivate",
                 _("Private"),
                 description=_("Only people with an invitation can submit the form"),
                 default=False,
             ),
             BooleanAttr(
-                "fdPublicFormCaptcha",
+                "hrcPublicFormCaptcha",
                 _("Ask a captcha"),
                 default=False,
             ),
-            UrlAttr("fdPublicFormTosUrl", _("Terms of service address")),
+            UrlAttr("hrcPublicFormTosUrl", _("Terms of service address")),
         )
 
         @classmethod
         def prepare(cls, ctx: TabContext) -> None:
             values = ctx.values
-            type_name = values.get("fdPublicFormTemplateType")
+            type_name = values.get("hrcPublicFormTemplateType")
             if isinstance(type_name, str) and type_name:
                 try:
                     info = ctx.registry.get(type_name)
                 except UnknownTypeError:
-                    ctx.error("fdPublicFormTemplateType", _("Unknown object type."))
+                    ctx.error("hrcPublicFormTemplateType", _("Unknown object type."))
                     info = None
-                template = values.get("fdPublicFormTemplateDN")
+                template = values.get("hrcPublicFormTemplateDN")
                 if info is not None and isinstance(template, str) and template:
                     entry = ctx.directory.get(template, ["objectClass"])
                     if entry is None or not all(
                         entry.has_object_class(c) for c in info.main_tab.object_classes
                     ):
                         ctx.error(
-                            "fdPublicFormTemplateDN",
+                            "hrcPublicFormTemplateDN",
                             _("The template is not an object of this type."),
                         )
             if ctx.creating:
@@ -219,7 +219,7 @@ class PublicForm(ObjectType):
             raw = ctx.values.get(ALTERED_ATTR)
             if not isinstance(raw, list) or not raw:
                 return
-            type_name = ctx.main_values().get("fdPublicFormTemplateType")
+            type_name = ctx.main_values().get("hrcPublicFormTemplateType")
             if not isinstance(type_name, str) or not type_name:
                 return
             try:

@@ -1,4 +1,4 @@
-"""Personal plugin: extra personal information on users (``fdPersonalInfo``)."""
+"""Personal plugin: extra personal information on users (``hrcPersonalInfo``)."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ class PersonalSettings:
     """Settings of the personal plugin."""
 
     private_mail_for_password_recovery: bool = False
-    """When enabled, self-service password recovery may look up ``fdPrivateMail``
+    """When enabled, self-service password recovery may look up ``hrcPrivateMail``
     addresses in addition to the primary ``mail`` attribute. Currently reserved
     for future password recovery flows.
     """
@@ -158,7 +158,7 @@ def profile_url(site: str, account_id: str) -> str | None:
 
 def social_urls(values: dict[str, Any]) -> str | None:
     """Format profile URLs of configured social accounts."""
-    raw = values.get("fdSocialAccount")
+    raw = values.get("hrcSocialAccount")
     if not isinstance(raw, list):
         return None
     urls: list[str] = []
@@ -233,24 +233,24 @@ class PersonalTab(Tab):
     label = _("Personal")
     acl_key = "personalInfo"
     optional = True
-    object_classes = ("fdPersonalInfo",)
+    object_classes = ("hrcPersonalInfo",)
 
     personal_info = Section(
         _("Personal information"),
         StringAttr("personalTitle", _("Personal title")),
-        StringAttr("fdNickName", _("Nickname")),
-        StringAttr("fdBadge", _("Badge number"), description=_("Badge number")),
+        StringAttr("hrcNickName", _("Nickname")),
+        StringAttr("hrcBadge", _("Badge number"), description=_("Badge number")),
         DateOfBirthAttr(
-            "dateOfBirth",
+            "hrcDateOfBirth",
             _("Date of birth"),
             description=_("Date of birth (YYYY-MM-DD)"),
         ),
-        SelectAttr("gender", _("Gender"), options=GENDERS, default=""),
+        SelectAttr("hrcGender", _("Gender"), options=GENDERS, default=""),
         StringAttr("co", _("Country")),
-        DateAttr("fdContractStartDate", _("Contract start date")),
-        DateAttr("fdContractEndDate", _("Contract end date")),
+        DateAttr("hrcContractStartDate", _("Contract start date")),
+        DateAttr("hrcContractEndDate", _("Contract end date")),
         BooleanAttr(
-            "fdPhotoVisible",
+            "hrcPhotoVisible",
             _("Photo visible in external tools"),
             default=True,
         ),
@@ -258,12 +258,12 @@ class PersonalTab(Tab):
     contact = Section(
         _("Contact"),
         ListAttr(
-            "fdSocialAccount",
+            "hrcSocialAccount",
             _("Social accounts"),
             SocialAccountAttr("socialAccount", _("Social account")),
         ),
         ListAttr(
-            "fdPrivateMail",
+            "hrcPrivateMail",
             _("Private email addresses"),
             EmailAttr("mail", _("Email")),
         ),
@@ -279,11 +279,11 @@ class PersonalTab(Tab):
 
     @classmethod
     def prepare(cls, ctx: TabContext) -> None:
-        start = ctx.values.get("fdContractStartDate")
-        end = ctx.values.get("fdContractEndDate")
+        start = ctx.values.get("hrcContractStartDate")
+        end = ctx.values.get("hrcContractEndDate")
         if isinstance(start, date) and isinstance(end, date) and end < start:
             ctx.error(
-                "fdContractEndDate",
+                "hrcContractEndDate",
                 _("Contract end date must be on or after start date."),
             )
 
@@ -302,7 +302,7 @@ def plugin() -> Plugin:
         name=PLUGIN_NAME,
         version="0.1.0",
         tabs=(TabAttachment("user", PersonalTab),),
-        required_object_classes=("fdPersonalInfo",),
+        required_object_classes=("hrcPersonalInfo",),
         settings=PersonalSettings(),
     )
 

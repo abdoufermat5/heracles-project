@@ -54,10 +54,10 @@ def app_client() -> TestClient:
             *d.schema_object_classes(),
             "ieee802Device",
             "device",
-            "fdServer",
-            "fdPostfixServer",
+            "hrcServer",
+            "hrcPostfixServer",
             "ipHost",
-            "fdNetworkInterface",
+            "hrcNetworkInterface",
         ]
     )
     registry = TypeRegistry()
@@ -96,13 +96,13 @@ def test_postfix_api_flow(app_client: TestClient) -> None:
                 "postfix": {
                     "active": True,
                     "values": {
-                        "postfixMyHostname": "smtp.paris.example.com",
-                        "postfixMyDomain": "paris.example.com",
-                        "postfixMessageSizeLimit": 20971520,
-                        "fdPostfixCatchallTable": [
+                        "hrcPostfixMyHostname": "smtp.paris.example.com",
+                        "hrcPostfixMyDomain": "paris.example.com",
+                        "hrcPostfixMessageSizeLimit": 20971520,
+                        "hrcPostfixCatchallTable": [
                             {
-                                "fdCatchallTableDomain": "paris.example.com",
-                                "fdCatchallTableRecipient": "catchall@paris.example.com",
+                                "hrcCatchallTableDomain": "paris.example.com",
+                                "hrcCatchallTableRecipient": "catchall@paris.example.com",
                             }
                         ],
                     },
@@ -118,12 +118,12 @@ def test_postfix_api_flow(app_client: TestClient) -> None:
     assert r.status_code == 200
     data = r.json()
     assert data["tabs"]["postfix"]["active"] is True
-    assert data["tabs"]["postfix"]["values"]["postfixMyHostname"] == "smtp.paris.example.com"
-    assert data["tabs"]["postfix"]["values"]["postfixMessageSizeLimit"] == 20971520
-    assert data["tabs"]["postfix"]["values"]["fdPostfixCatchallTable"] == [
+    assert data["tabs"]["postfix"]["values"]["hrcPostfixMyHostname"] == "smtp.paris.example.com"
+    assert data["tabs"]["postfix"]["values"]["hrcPostfixMessageSizeLimit"] == 20971520
+    assert data["tabs"]["postfix"]["values"]["hrcPostfixCatchallTable"] == [
         {
-            "fdCatchallTableDomain": "paris.example.com",
-            "fdCatchallTableRecipient": "catchall@paris.example.com",
+            "hrcCatchallTableDomain": "paris.example.com",
+            "hrcCatchallTableRecipient": "catchall@paris.example.com",
         }
     ]
 
@@ -134,14 +134,14 @@ def test_postfix_api_flow(app_client: TestClient) -> None:
             "tabs": {
                 "postfix": {
                     "values": {
-                        "postfixMessageSizeLimit": 10485760,
+                        "hrcPostfixMessageSizeLimit": 10485760,
                     }
                 }
             }
         },
     )
     assert r.status_code == 200
-    assert r.json()["tabs"]["postfix"]["values"]["postfixMessageSizeLimit"] == 10485760
+    assert r.json()["tabs"]["postfix"]["values"]["hrcPostfixMessageSizeLimit"] == 10485760
 
     # Delete server
     r = client.delete(f"/objects/server/{quote(dn, safe='')}")

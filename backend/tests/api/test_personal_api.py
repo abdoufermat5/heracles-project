@@ -58,7 +58,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 
     def _build_demo_dir() -> MemoryDirectory:
         d = orig_builder()
-        d.set_schema_object_classes(d.schema_object_classes() | {"fdpersonalinfo"})
+        d.set_schema_object_classes(d.schema_object_classes() | {"hrcpersonalinfo"})
         return d
 
     monkeypatch.setattr(demo, "build_demo_directory", _build_demo_dir)
@@ -86,18 +86,18 @@ def test_user_descriptor_includes_personal_tab(app_client: TestClient) -> None:
 
     p_attrs = {attr["name"]: attr for attr in sections["personal_info"]["attributes"]}
     assert "personalTitle" in p_attrs
-    assert "fdNickName" in p_attrs
-    assert "fdBadge" in p_attrs
-    assert "dateOfBirth" in p_attrs
-    assert "gender" in p_attrs
+    assert "hrcNickName" in p_attrs
+    assert "hrcBadge" in p_attrs
+    assert "hrcDateOfBirth" in p_attrs
+    assert "hrcGender" in p_attrs
     assert "co" in p_attrs
-    assert "fdContractStartDate" in p_attrs
-    assert "fdContractEndDate" in p_attrs
-    assert "fdPhotoVisible" in p_attrs
+    assert "hrcContractStartDate" in p_attrs
+    assert "hrcContractEndDate" in p_attrs
+    assert "hrcPhotoVisible" in p_attrs
 
     c_attrs = {attr["name"]: attr for attr in sections["contact"]["attributes"]}
-    assert "fdSocialAccount" in c_attrs
-    assert "fdPrivateMail" in c_attrs
+    assert "hrcSocialAccount" in c_attrs
+    assert "hrcPrivateMail" in c_attrs
     assert "socialUrls" in c_attrs
 
 
@@ -115,16 +115,16 @@ def test_admin_patch_activate_and_read_personal_tab(app_client: TestClient) -> N
                 "active": True,
                 "values": {
                     "personalTitle": "Dr.",
-                    "fdNickName": "Alice",
-                    "fdBadge": "BADGE-1234",
-                    "dateOfBirth": "1990-03-25",
-                    "gender": "F",
+                    "hrcNickName": "Alice",
+                    "hrcBadge": "BADGE-1234",
+                    "hrcDateOfBirth": "1990-03-25",
+                    "hrcGender": "F",
                     "co": "United Kingdom",
-                    "fdContractStartDate": "2023-01-01",
-                    "fdContractEndDate": "2027-12-31",
-                    "fdPhotoVisible": True,
-                    "fdPrivateMail": ["alice@private.example.org"],
-                    "fdSocialAccount": [
+                    "hrcContractStartDate": "2023-01-01",
+                    "hrcContractEndDate": "2027-12-31",
+                    "hrcPhotoVisible": True,
+                    "hrcPrivateMail": ["alice@private.example.org"],
+                    "hrcSocialAccount": [
                         {"site": "github", "id": "alicesmith"},
                         {"site": "matrix", "id": "@alice:matrix.org"},
                     ],
@@ -138,16 +138,16 @@ def test_admin_patch_activate_and_read_personal_tab(app_client: TestClient) -> N
     ptab = res["tabs"]["personal"]
     assert ptab["active"] is True
     assert ptab["values"]["personalTitle"] == "Dr."
-    assert ptab["values"]["fdNickName"] == "Alice"
-    assert ptab["values"]["fdBadge"] == "BADGE-1234"
-    assert ptab["values"]["dateOfBirth"] == "1990-03-25"
-    assert ptab["values"]["gender"] == "F"
+    assert ptab["values"]["hrcNickName"] == "Alice"
+    assert ptab["values"]["hrcBadge"] == "BADGE-1234"
+    assert ptab["values"]["hrcDateOfBirth"] == "1990-03-25"
+    assert ptab["values"]["hrcGender"] == "F"
     assert ptab["values"]["co"] == "United Kingdom"
-    assert ptab["values"]["fdContractStartDate"] == "2023-01-01"
-    assert ptab["values"]["fdContractEndDate"] == "2027-12-31"
-    assert ptab["values"]["fdPhotoVisible"] is True
-    assert ptab["values"]["fdPrivateMail"] == ["alice@private.example.org"]
-    assert ptab["values"]["fdSocialAccount"] == [
+    assert ptab["values"]["hrcContractStartDate"] == "2023-01-01"
+    assert ptab["values"]["hrcContractEndDate"] == "2027-12-31"
+    assert ptab["values"]["hrcPhotoVisible"] is True
+    assert ptab["values"]["hrcPrivateMail"] == ["alice@private.example.org"]
+    assert ptab["values"]["hrcSocialAccount"] == [
         {"site": "github", "id": "alicesmith"},
         {"site": "matrix", "id": "@alice:matrix.org"},
     ]
@@ -161,7 +161,7 @@ def test_admin_patch_activate_and_read_personal_tab(app_client: TestClient) -> N
     ptab = obj["tabs"]["personal"]
     assert ptab["active"] is True
     assert ptab["values"]["personalTitle"] == "Dr."
-    assert ptab["values"]["fdBadge"] == "BADGE-1234"
+    assert ptab["values"]["hrcBadge"] == "BADGE-1234"
     assert (
         ptab["values"]["socialUrls"]
         == "https://github.com/alicesmith\nhttps://matrix.to/#/@alice:matrix.org"
@@ -179,8 +179,8 @@ def test_admin_patch_update_values(app_client: TestClient) -> None:
                 "personal": {
                     "active": True,
                     "values": {
-                        "fdNickName": "Initial",
-                        "fdPhotoVisible": True,
+                        "hrcNickName": "Initial",
+                        "hrcPhotoVisible": True,
                     },
                 }
             }
@@ -194,9 +194,9 @@ def test_admin_patch_update_values(app_client: TestClient) -> None:
             "tabs": {
                 "personal": {
                     "values": {
-                        "fdNickName": "Updated",
-                        "fdPhotoVisible": False,
-                        "fdSocialAccount": [{"site": "twitter", "id": "alicesmith"}],
+                        "hrcNickName": "Updated",
+                        "hrcPhotoVisible": False,
+                        "hrcSocialAccount": [{"site": "twitter", "id": "alicesmith"}],
                     }
                 }
             }
@@ -204,9 +204,9 @@ def test_admin_patch_update_values(app_client: TestClient) -> None:
     )
     assert r.status_code == 200, r.text
     ptab = r.json()["tabs"]["personal"]
-    assert ptab["values"]["fdNickName"] == "Updated"
-    assert ptab["values"]["fdPhotoVisible"] is False
-    assert ptab["values"]["fdSocialAccount"] == [{"site": "twitter", "id": "alicesmith"}]
+    assert ptab["values"]["hrcNickName"] == "Updated"
+    assert ptab["values"]["hrcPhotoVisible"] is False
+    assert ptab["values"]["hrcSocialAccount"] == [{"site": "twitter", "id": "alicesmith"}]
     assert ptab["values"]["socialUrls"] == "https://twitter.com/alicesmith"
 
 
@@ -221,15 +221,15 @@ def test_admin_patch_validation_errors(app_client: TestClient) -> None:
                 "personal": {
                     "active": True,
                     "values": {
-                        "fdContractStartDate": "2026-01-01",
-                        "fdContractEndDate": "2025-01-01",
+                        "hrcContractStartDate": "2026-01-01",
+                        "hrcContractEndDate": "2025-01-01",
                     },
                 }
             }
         },
     )
     assert r1.status_code == 422
-    assert "personal.fdContractEndDate" in r1.json()["error"]["fields"]
+    assert "personal.hrcContractEndDate" in r1.json()["error"]["fields"]
 
     # 2. Date of birth in the future
     r2 = a.patch(
@@ -239,14 +239,14 @@ def test_admin_patch_validation_errors(app_client: TestClient) -> None:
                 "personal": {
                     "active": True,
                     "values": {
-                        "dateOfBirth": "2099-01-01",
+                        "hrcDateOfBirth": "2099-01-01",
                     },
                 }
             }
         },
     )
     assert r2.status_code == 422
-    assert "personal.dateOfBirth" in r2.json()["error"]["fields"]
+    assert "personal.hrcDateOfBirth" in r2.json()["error"]["fields"]
 
     # 3. Invalid social account (matrix missing @)
     r3 = a.patch(
@@ -256,14 +256,14 @@ def test_admin_patch_validation_errors(app_client: TestClient) -> None:
                 "personal": {
                     "active": True,
                     "values": {
-                        "fdSocialAccount": [{"site": "matrix", "id": "no_at_server"}],
+                        "hrcSocialAccount": [{"site": "matrix", "id": "no_at_server"}],
                     },
                 }
             }
         },
     )
     assert r3.status_code == 422
-    assert "personal.fdSocialAccount" in r3.json()["error"]["fields"]
+    assert "personal.hrcSocialAccount" in r3.json()["error"]["fields"]
 
     # 4. Invalid private mail
     r4 = a.patch(
@@ -273,14 +273,14 @@ def test_admin_patch_validation_errors(app_client: TestClient) -> None:
                 "personal": {
                     "active": True,
                     "values": {
-                        "fdPrivateMail": ["not-an-email"],
+                        "hrcPrivateMail": ["not-an-email"],
                     },
                 }
             }
         },
     )
     assert r4.status_code == 422
-    assert "personal.fdPrivateMail" in r4.json()["error"]["fields"]
+    assert "personal.hrcPrivateMail" in r4.json()["error"]["fields"]
 
 
 def test_admin_patch_deactivate_personal_tab(app_client: TestClient) -> None:
@@ -293,7 +293,7 @@ def test_admin_patch_deactivate_personal_tab(app_client: TestClient) -> None:
             "tabs": {
                 "personal": {
                     "active": True,
-                    "values": {"fdNickName": "AliceToDeactivate"},
+                    "values": {"hrcNickName": "AliceToDeactivate"},
                 }
             }
         },
@@ -333,10 +333,10 @@ def test_create_user_with_personal_tab_via_api(app_client: TestClient) -> None:
                     "active": True,
                     "values": {
                         "personalTitle": "Ms.",
-                        "fdNickName": "Newbie",
-                        "dateOfBirth": "1998-12-05",
-                        "gender": "F",
-                        "fdSocialAccount": [{"site": "matrix", "id": "@newbie:example.com"}],
+                        "hrcNickName": "Newbie",
+                        "hrcDateOfBirth": "1998-12-05",
+                        "hrcGender": "F",
+                        "hrcSocialAccount": [{"site": "matrix", "id": "@newbie:example.com"}],
                     },
                 },
             },
@@ -349,7 +349,7 @@ def test_create_user_with_personal_tab_via_api(app_client: TestClient) -> None:
     obj = a.get(f"/objects/user/{q(dn)}").json()
     ptab = obj["tabs"]["personal"]
     assert ptab["active"] is True
-    assert ptab["values"]["fdNickName"] == "Newbie"
-    assert ptab["values"]["gender"] == "F"
-    assert ptab["values"]["dateOfBirth"] == "1998-12-05"
+    assert ptab["values"]["hrcNickName"] == "Newbie"
+    assert ptab["values"]["hrcGender"] == "F"
+    assert ptab["values"]["hrcDateOfBirth"] == "1998-12-05"
     assert ptab["values"]["socialUrls"] == "https://matrix.to/#/@newbie:example.com"

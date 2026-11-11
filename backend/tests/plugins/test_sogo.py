@@ -16,7 +16,7 @@ SOGO_CLASSES = {
     "inetOrgPerson",
     "organizationalPerson",
     "person",
-    "CalendarResource",
+    "hrcCalendarResource",
     "organizationalUnit",
 }
 
@@ -48,7 +48,7 @@ def test_sogo_type_registration_and_acl(service: ObjectService) -> None:
     assert res_info.type.acl_category == "sogo"
     assert res_info.main_tab.acl_key == "sogoResource"
     assert res_info.acl_object(res_info.main_tab) == "sogo/sogoResource"
-    assert res_info.main_tab.object_classes == ("inetOrgPerson", "CalendarResource")
+    assert res_info.main_tab.object_classes == ("inetOrgPerson", "hrcCalendarResource")
     assert res_info.type.rdn == "ou=resources"
 
 
@@ -72,8 +72,8 @@ def test_create_sogo_resource(service: ObjectService, directory: MemoryDirectory
                     "uid": "room-101",
                     "mail": "room101@example.com",
                     "description": "Conference room with 12 seats and projector",
-                    "Kind": "location",
-                    "Multiplebookings": 0,
+                    "hrcResourceKind": "location",
+                    "hrcResourceMultipleBookings": 0,
                 }
             }
         },
@@ -81,23 +81,23 @@ def test_create_sogo_resource(service: ObjectService, directory: MemoryDirectory
     assert dn == f"uid=room-101,{RESOURCES}"
     entry = directory.get(dn)
     assert entry is not None
-    assert b"CalendarResource" in entry.get("objectClass")
+    assert b"hrcCalendarResource" in entry.get("objectClass")
     assert b"inetOrgPerson" in entry.get("objectClass")
     assert entry.text("uid") == "room-101"
     assert entry.text("cn") == "room-101"
     assert entry.text("sn") == "room-101"
     assert entry.text("mail") == "room101@example.com"
     assert entry.text("description") == "Conference room with 12 seats and projector"
-    assert entry.text("Kind") == "location"
-    assert entry.text("Multiplebookings") == "0"
+    assert entry.text("hrcResourceKind") == "location"
+    assert entry.text("hrcResourceMultipleBookings") == "0"
 
     loaded = service.load("sogo_resource", dn)
     vals = loaded.tabs["main"].values
     assert vals["uid"] == "room-101"
     assert vals["mail"] == "room101@example.com"
     assert vals["description"] == "Conference room with 12 seats and projector"
-    assert vals["Kind"] == "location"
-    assert vals["Multiplebookings"] == 0
+    assert vals["hrcResourceKind"] == "location"
+    assert vals["hrcResourceMultipleBookings"] == 0
 
 
 def test_create_equipment_resource_with_multiple_bookings(
@@ -112,16 +112,16 @@ def test_create_equipment_resource_with_multiple_bookings(
                     "uid": "projector-pool",
                     "mail": "projectors@example.com",
                     "description": "Shared video projectors (5 available)",
-                    "Kind": "thing",
-                    "Multiplebookings": 5,
+                    "hrcResourceKind": "thing",
+                    "hrcResourceMultipleBookings": 5,
                 }
             }
         },
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.text("Kind") == "thing"
-    assert entry.text("Multiplebookings") == "5"
+    assert entry.text("hrcResourceKind") == "thing"
+    assert entry.text("hrcResourceMultipleBookings") == "5"
 
 
 def test_update_and_delete_sogo_resource(
@@ -135,7 +135,7 @@ def test_update_and_delete_sogo_resource(
                 "values": {
                     "uid": "room-202",
                     "description": "Small meeting room",
-                    "Kind": "location",
+                    "hrcResourceKind": "location",
                 }
             }
         },
@@ -149,14 +149,14 @@ def test_update_and_delete_sogo_resource(
             "main": {
                 "values": {
                     "description": "Renovated executive boardroom",
-                    "Multiplebookings": 2,
+                    "hrcResourceMultipleBookings": 2,
                 }
             }
         },
     )
     loaded = service.load("sogo_resource", dn)
     assert loaded.tabs["main"].values["description"] == "Renovated executive boardroom"
-    assert loaded.tabs["main"].values["Multiplebookings"] == 2
+    assert loaded.tabs["main"].values["hrcResourceMultipleBookings"] == 2
 
     # Listing
     listing = service.list("sogo_resource", BASE)
@@ -182,6 +182,6 @@ def test_sogo_validation(service: ObjectService) -> None:
         service.create(
             "sogo_resource",
             BASE,
-            {"main": {"values": {"uid": "bad-room", "Multiplebookings": -1}}},
+            {"main": {"values": {"uid": "bad-room", "hrcResourceMultipleBookings": -1}}},
         )
-    assert "Multiplebookings" in str(exc_info2.value)
+    assert "hrcResourceMultipleBookings" in str(exc_info2.value)

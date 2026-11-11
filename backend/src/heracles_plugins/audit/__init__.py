@@ -3,7 +3,7 @@
 Provides:
 
 * the read-only ``audit_event`` type (entries below ``ou=audit``, ACL ``auditEvent/auditEvent``);
-* the ``audit_task`` type (``fdTasks`` + ``fdAuditTasks``) that purges old events and can
+* the ``audit_task`` type (``hrcTasks`` + ``hrcAuditTasks``) that purges old events and can
   forward new ones to syslog, run with :func:`run_audit`;
 * the read-only ``auditSecurity`` tab on users listing the events concerning them;
 * :class:`AuditEvents`, an ``ObjectEvents`` implementation writing the events.
@@ -68,23 +68,23 @@ class AuditTask(TaskObjectType):
         name = "main"
         acl_key = "auditTask"
         label = _("Audit")
-        object_classes = ("fdTasks", TASK_CLASS)
+        object_classes = ("hrcTasks", TASK_CLASS)
 
         audit = Section(
             _("Audit"),
             IntAttr(
-                "fdAuditTasksRetention",
+                "hrcAuditTasksRetention",
                 _("Retention (days)"),
                 min=0,
                 description=_("Events older than this are deleted; empty uses the default"),
             ),
             BooleanAttr(
-                "fdAuditSyslogEnabled",
+                "hrcAuditSyslogEnabled",
                 _("Forward events to syslog"),
                 default=False,
             ),
             StringAttr(
-                "fdAuditSyslogPrefix",
+                "hrcAuditSyslogPrefix",
                 _("Syslog prefix"),
                 description=_("Text put before every forwarded event"),
             ),
@@ -105,20 +105,20 @@ class AuditEvent(ObjectType):
     name_attr = "cn"
     rdn = AUDIT_RDN
     columns = (
-        "fdAuditDateTime",
-        "fdAuditAction",
-        "fdAuditObjectType",
-        "fdAuditObject",
-        "fdAuditResult",
+        "hrcAuditDateTime",
+        "hrcAuditAction",
+        "hrcAuditObjectType",
+        "hrcAuditObject",
+        "hrcAuditResult",
     )
     search_attrs = (
-        "fdAuditAction",
-        "fdAuditAuthorDN",
-        "fdAuditAuthorIP",
-        "fdAuditObjectType",
-        "fdAuditObject",
-        "fdAuditAttributes",
-        "fdAuditResult",
+        "hrcAuditAction",
+        "hrcAuditAuthorDN",
+        "hrcAuditAuthorIP",
+        "hrcAuditObjectType",
+        "hrcAuditObject",
+        "hrcAuditAttributes",
+        "hrcAuditResult",
     )
 
     class Main(Tab):
@@ -131,19 +131,19 @@ class AuditEvent(ObjectType):
             _("Event"),
             DepartmentAttr("base", _("Department")),
             StringAttr("cn", _("Identifier"), readonly=True),
-            DateTimeAttr("fdAuditDateTime", _("Date"), readonly=True),
-            StringAttr("fdAuditAction", _("Action"), readonly=True),
-            ObjectRefAttr("fdAuditAuthorDN", _("Author"), ref_type="user", readonly=True),
-            StringAttr("fdAuditAuthorIP", _("Author address"), readonly=True),
-            StringAttr("fdAuditObjectType", _("Object type"), readonly=True),
-            StringAttr("fdAuditObject", _("Object"), readonly=True),
+            DateTimeAttr("hrcAuditDateTime", _("Date"), readonly=True),
+            StringAttr("hrcAuditAction", _("Action"), readonly=True),
+            ObjectRefAttr("hrcAuditAuthorDN", _("Author"), ref_type="user", readonly=True),
+            StringAttr("hrcAuditAuthorIP", _("Author address"), readonly=True),
+            StringAttr("hrcAuditObjectType", _("Object type"), readonly=True),
+            StringAttr("hrcAuditObject", _("Object"), readonly=True),
             ListAttr(
-                "fdAuditAttributes",
+                "hrcAuditAttributes",
                 _("Attributes"),
                 StringAttr("attribute", _("Attribute")),
                 readonly=True,
             ),
-            StringAttr("fdAuditResult", _("Result"), readonly=True),
+            StringAttr("hrcAuditResult", _("Result"), readonly=True),
         )
 
         @classmethod
@@ -162,7 +162,7 @@ class AuditSecurityTab(Tab):
         _("Security audit"),
         virtual(
             ListAttr(
-                "fdAuditSecurityLog",
+                "hrcAuditSecurityLog",
                 _("Latest events"),
                 StringAttr("event", _("Event")),
                 readonly=True,
@@ -175,7 +175,7 @@ class AuditSecurityTab(Tab):
     def on_load(cls, ctx: TabContext) -> None:
         if ctx.dn is None:
             return
-        ctx.values["fdAuditSecurityLog"] = [
+        ctx.values["hrcAuditSecurityLog"] = [
             format_event(e) for e in events_for(ctx.directory, ctx.dn)
         ] or None
 

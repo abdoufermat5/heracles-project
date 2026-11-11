@@ -28,14 +28,14 @@ from heracles.ldap.client import (
     Scope,
 )
 from heracles.ldap.filter import escape_filter_value
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 log = structlog.get_logger(__name__)
 
 type Status = Literal["ok", "warning", "error"]
 
-_OC = legacy.OC
-_STD = legacy.STD_OC
+_OC = schema.OC
+_STD = schema.STD_OC
 
 #: Default ACL roles: ``(cn, description, template value)``.
 DEFAULT_ROLES: Final[tuple[tuple[str, str, str], ...]] = (
@@ -83,7 +83,7 @@ _CONTAINER_NAMES: Final = frozenset(
         "tokens",
         "recovery",
         "snapshots",
-        legacy.APP_OU.split("=", 1)[1],  # application container, e.g. "fusiondirectory"
+        schema.APP_OU.split("=", 1)[1],  # application container, e.g. "heracles"
         "mail",
         "netgroups",
         "automount",
@@ -362,8 +362,8 @@ def _roles_granting_everything(ctx: CheckContext) -> set[str]:
 def _super_assignments(ctx: CheckContext) -> list[tuple[str, AclAssignment]]:
     roles = _roles_granting_everything(ctx)
     out: list[tuple[str, AclAssignment]] = []
-    for entry in ctx.search(f"(objectClass={_OC.ACL_ASSIGNMENT})", [legacy.ATTR.ACL_ENTRY]):
-        for value in entry.texts(legacy.ATTR.ACL_ENTRY):
+    for entry in ctx.search(f"(objectClass={_OC.ACL_ASSIGNMENT})", [schema.ATTR.ACL_ENTRY]):
+        for value in entry.texts(schema.ATTR.ACL_ENTRY):
             parsed = parse_assignment(value)
             if (
                 not isinstance(parsed, Ignored)
@@ -409,16 +409,16 @@ def _ensure_role(ctx: CheckContext, cn: str, description: str, template: str) ->
             "objectClass": [_OC.ACL_ROLE.encode()],
             "cn": [cn.encode()],
             "description": [description.encode()],
-            legacy.ATTR.ACL_TEMPLATE: [template.encode()],
+            schema.ATTR.ACL_TEMPLATE: [template.encode()],
         },
     )
     return dn
 
 
 def _add_base_assignment(ctx: CheckContext, role_dn: str, member_dn: str) -> None:
-    entry = ctx.directory.get(ctx.base, ["objectClass", legacy.ATTR.ACL_ENTRY])
+    entry = ctx.directory.get(ctx.base, ["objectClass", schema.ATTR.ACL_ENTRY])
     assert entry is not None
-    existing = entry.texts(legacy.ATTR.ACL_ENTRY)
+    existing = entry.texts(schema.ATTR.ACL_ENTRY)
     indices = [
         p.index for p in (parse_assignment(v) for v in existing) if isinstance(p, AclAssignment)
     ]
@@ -428,7 +428,7 @@ def _add_base_assignment(ctx: CheckContext, role_dn: str, member_dn: str) -> Non
     mods: list[Modification] = []
     if not entry.has_object_class(_OC.ACL_ASSIGNMENT):
         mods.append(Modification("add", "objectClass", [_OC.ACL_ASSIGNMENT.encode()]))
-    mods.append(Modification("add", legacy.ATTR.ACL_ENTRY, [value.encode()]))
+    mods.append(Modification("add", schema.ATTR.ACL_ENTRY, [value.encode()]))
     ctx.directory.modify(ctx.base, mods)
 
 
@@ -520,7 +520,7 @@ def _misplaced(ctx: CheckContext, flt: str, container_rdn: str) -> list[str]:
         for e in ctx.search(flt, ["1.1"])
         if not _in_container(e.dn, container_rdn)
         and not dnlib.normalize(e.dn).endswith(
-            ",ou=" + legacy.APP_OU.partition("=")[2].lower() + "," + dnlib.normalize(ctx.base)
+            ",ou=" + schema.APP_OU.partition("=")[2].lower() + "," + dnlib.normalize(ctx.base)
         )
     ]
 

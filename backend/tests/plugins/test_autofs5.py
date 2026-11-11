@@ -10,7 +10,7 @@ import heracles_plugins.autofs5 as autofs5
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
-from heracles.schema.legacy import OC
+from heracles.schema.names import OC
 
 BASE = "dc=test"
 PARIS = f"ou=paris,{BASE}"

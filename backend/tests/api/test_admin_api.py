@@ -422,10 +422,10 @@ def test_task_retry_requeues_failed_subtasks(client: TestClient, admin: Api) -> 
         directory.add(
             sub_dn,
             {
-                "objectClass": [b"fdTasksGranular"],
+                "objectClass": [b"hrcTasksGranular"],
                 "cn": [sub_dn.split(",")[0].split("=")[1].encode()],
-                "fdTasksGranularMaster": [task_dn.encode()],
-                "fdTasksGranularStatus": [status.encode()],
+                "hrcTasksGranularMaster": [task_dn.encode()],
+                "hrcTasksGranularStatus": [status.encode()],
             },
         )
     row = admin.get("/tasks").json()["tasks"][0]
@@ -435,10 +435,10 @@ def test_task_retry_requeues_failed_subtasks(client: TestClient, admin: Api) -> 
     retried = admin.post(f"/tasks/{dnp(task_dn)}/retry").json()
     assert retried["retried"] == [failed_dn]
     entry = directory.get(failed_dn)
-    assert entry is not None and entry.text("fdTasksGranularStatus") == "Activated"
-    assert entry.text("fdTasksGranularNextExec")
+    assert entry is not None and entry.text("hrcTasksGranularStatus") == "Activated"
+    assert entry.text("hrcTasksGranularNextExec")
     untouched = directory.get(done_dn)
-    assert untouched is not None and untouched.text("fdTasksGranularStatus") == "Done"
+    assert untouched is not None and untouched.text("hrcTasksGranularStatus") == "Done"
     assert admin.get("/tasks").json()["tasks"][0]["subtasks"]["failed"] == 0
 
 

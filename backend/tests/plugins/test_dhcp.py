@@ -10,7 +10,7 @@ import heracles_plugins.dhcp as dhcp
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
-from heracles.schema.legacy import OC, PLUGIN_OBJECT_CLASSES
+from heracles.schema.names import OC, PLUGIN_OBJECT_CLASSES
 
 BASE = "dc=test"
 PARIS = f"ou=paris,{BASE}"

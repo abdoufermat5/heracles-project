@@ -49,7 +49,7 @@ class Api:
 @pytest.fixture
 def app_client() -> Iterator[TestClient]:
     directory = build_demo_directory()
-    directory.set_schema_object_classes([*directory.schema_object_classes(), "ipmiClient"])
+    directory.set_schema_object_classes([*directory.schema_object_classes(), "hrcIpmiClient"])
     settings = ApiSettings(admin_dns=[], directory_labels={"main": "Demo directory"})
     settings.session.cookie_secure = False
     with TestClient(create_full_app(settings, {"main": directory})) as client:
@@ -74,9 +74,9 @@ def test_ipmi_server_api(app_client: TestClient) -> None:
                 "ipmi": {
                     "active": True,
                     "values": {
-                        "fdIpmiIP": "192.168.1.100",
-                        "fdIpmiLogin": "admin",
-                        "fdIpmiPassword": "ipmipassword",
+                        "hrcIpmiIP": "192.168.1.100",
+                        "hrcIpmiLogin": "admin",
+                        "hrcIpmiPassword": "ipmipassword",
                     },
                 },
             },
@@ -90,10 +90,10 @@ def test_ipmi_server_api(app_client: TestClient) -> None:
     assert r.status_code == 200
     ipmi_tab = r.json()["tabs"]["ipmi"]
     assert ipmi_tab["active"] is True
-    assert ipmi_tab["values"]["fdIpmiIP"] == "192.168.1.100"
-    assert ipmi_tab["values"]["fdIpmiLogin"] == "admin"
+    assert ipmi_tab["values"]["hrcIpmiIP"] == "192.168.1.100"
+    assert ipmi_tab["values"]["hrcIpmiLogin"] == "admin"
     # Password must not be leaked over API
-    assert ipmi_tab["values"].get("fdIpmiPassword") is None
+    assert ipmi_tab["values"].get("hrcIpmiPassword") is None
 
     # Cleanup
     r = a.delete(f"/objects/server/{dn}")

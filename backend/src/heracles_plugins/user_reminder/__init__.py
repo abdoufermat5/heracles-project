@@ -84,35 +84,35 @@ class ReminderTask(TaskObjectType):
         name = "main"
         acl_key = "reminderTask"
         label = _("Reminder")
-        object_classes = ("fdTasks", "fdTasksReminder")
+        object_classes = ("hrcTasks", "hrcTasksReminder")
 
         reminder = Section(
             _("Reminder"),
             IntAttr(
-                "fdTasksReminderFirstCall",
+                "hrcTasksReminderFirstCall",
                 _("First reminder (days before expiration)"),
                 required=True,
                 min=0,
             ),
             IntAttr(
-                "fdTasksReminderSecondCall",
+                "hrcTasksReminderSecondCall",
                 _("Second reminder (days before expiration)"),
                 min=0,
             ),
             BooleanAttr(
-                "fdTasksReminderPosix",
+                "hrcTasksReminderPosix",
                 _("Monitor the Unix account expiration date"),
                 description=_("Always enabled"),
                 default=True,
                 readonly=True,
             ),
             BooleanAttr(
-                "fdTasksReminderAccountProlongation",
+                "hrcTasksReminderAccountProlongation",
                 _("Include an account prolongation link"),
                 default=False,
             ),
             ObjectRefAttr(
-                "fdTasksReminderMailTemplate",
+                "hrcTasksReminderMailTemplate",
                 _("Mail template"),
                 ref_type="mail_template",
                 required=True,
@@ -121,19 +121,19 @@ class ReminderTask(TaskObjectType):
                     "{expiration_date} {days_left} {prolongation_url}"
                 ),
             ),
-            EmailAttr("fdTasksReminderEmailSender", _("Sender address"), required=True),
+            EmailAttr("hrcTasksReminderEmailSender", _("Sender address"), required=True),
         )
         members = Section(
             _("Recipients"),
             ListAttr(
-                "fdTasksReminderMembers",
+                "hrcTasksReminderMembers",
                 _("Monitored users, groups or roles"),
                 ObjectRefAttr("member", _("Member"), ref_type="user"),
                 required=True,
                 description=_("Users, or groups and roles that are expanded to their users"),
             ),
             ListAttr(
-                "fdTasksReminderRecipientsMembers",
+                "hrcTasksReminderRecipientsMembers",
                 _("Copy recipients"),
                 ObjectRefAttr("recipient", _("Recipient"), ref_type="user"),
                 description=_("Users, groups or roles receiving a copy of every reminder"),
@@ -142,7 +142,7 @@ class ReminderTask(TaskObjectType):
 
         @classmethod
         def prepare(cls, ctx: TabContext) -> None:
-            ctx.values["fdTasksReminderPosix"] = True
+            ctx.values["hrcTasksReminderPosix"] = True
             super().prepare(ctx)
 
 
@@ -155,26 +155,26 @@ class MailTemplate(ObjectType):
     label_plural = _("Mail templates")
     icon = "mail"
     category = "mail"
-    filter = "(objectClass=fdMailTemplate)"
+    filter = "(objectClass=hrcMailTemplate)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=mailTemplate"
-    columns = ("cn", "fdMailTemplateSubject")
-    search_attrs = ("cn", "fdMailTemplateSubject")
+    columns = ("cn", "hrcMailTemplateSubject")
+    search_attrs = ("cn", "hrcMailTemplateSubject")
 
     class Main(Tab):
         name = "main"
         acl_key = "mailTemplate"
         label = _("Mail template")
-        object_classes = ("fdMailTemplate",)
+        object_classes = ("hrcMailTemplate",)
 
         properties = Section(
             _("Properties"),
             DepartmentAttr("base", _("Department")),
             StringAttr("cn", _("Name"), required=True, pattern=NAME_RE),
-            StringAttr("fdMailTemplateSubject", _("Subject"), required=True),
+            StringAttr("hrcMailTemplateSubject", _("Subject"), required=True),
             TextAttr(
-                "fdMailTemplateBody",
+                "hrcMailTemplateBody",
                 _("Body"),
                 required=True,
                 description=_(
@@ -196,7 +196,7 @@ def plugin() -> Plugin:
         name=PLUGIN_NAME,
         version="0.1.0",
         types=(ReminderTask, MailTemplate),
-        required_object_classes=("fdTasks", "fdTasksReminder"),
+        required_object_classes=("hrcTasks", "hrcTasksReminder"),
         settings=UserReminderSettings(),
         public_routers=(_prolong_router,),
     )

@@ -98,7 +98,7 @@ def test_create_and_patch_user_quota(app_client: TestClient) -> None:
                     "values": {
                         "quota": [
                             {
-                                "quotaDevice": "/home",
+                                "hrcQuotaDevice": "/home",
                                 "quotaBlockSoftLimit": "50000",
                                 "quotaBlockHardLimit": "100000",
                                 "quotaInodeSoftLimit": 1000,
@@ -119,6 +119,6 @@ def test_create_and_patch_user_quota(app_client: TestClient) -> None:
     tab = read_res.json()["tabs"]["quota"]
     assert tab["active"] is True
     assert len(tab["values"]["quota"]) == 1
-    assert tab["values"]["quota"][0]["quotaDevice"] == "/home"
+    assert tab["values"]["quota"][0]["hrcQuotaDevice"] == "/home"
     assert tab["values"]["quota"][0]["quotaBlockSoftLimit"] == "50000"
     assert tab["values"]["quota"][0]["quotaInodeSoftLimit"] == 1000

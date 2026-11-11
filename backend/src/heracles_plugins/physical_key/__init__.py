@@ -1,4 +1,4 @@
-"""Physical key plugin: badge and hardware key identifiers on users (``fdPhysicalKey``)."""
+"""Physical key plugin: badge and hardware key identifiers on users (``hrcPhysicalKey``)."""
 
 from __future__ import annotations
 
@@ -48,17 +48,17 @@ class PhysicalKeyAccountTab(Tab):
     acl_key = "PhysicalKeyAccount"
     label = _("Physical key")
     optional = True
-    object_classes = ("fdPhysicalKey",)
+    object_classes = ("hrcPhysicalKey",)
 
     key_info = Section(
         _("Physical key"),
         SelectAttr(
-            "fdPhysicalKeyType",
+            "hrcPhysicalKeyType",
             _("Key type"),
             options=PHYSICAL_KEY_TYPES,
         ),
         StringAttr(
-            "fdPhysicalKeyValue",
+            "hrcPhysicalKeyValue",
             _("Identifier / Badge number"),
             description=_("Hex, decimal or serial identifier of the badge or token"),
         ),
@@ -66,10 +66,10 @@ class PhysicalKeyAccountTab(Tab):
 
     @classmethod
     def prepare(cls, ctx: TabContext) -> None:
-        if ctx.creating and not ctx.values.get("fdPhysicalKeyType"):
+        if ctx.creating and not ctx.values.get("hrcPhysicalKeyType"):
             settings = settings_of(ctx)
             if settings.default_type:
-                ctx.values["fdPhysicalKeyType"] = settings.default_type
+                ctx.values["hrcPhysicalKeyType"] = settings.default_type
 
 
 def plugin() -> Plugin:

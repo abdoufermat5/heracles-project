@@ -14,7 +14,7 @@ from datetime import datetime
 
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, Entry, Modification
-from heracles.schema import legacy
+from heracles.schema import names as schema
 from heracles_plugins._tasks import (
     TaskReport,
     bool_of,
@@ -24,7 +24,7 @@ from heracles_plugins._tasks import (
     utc,
 )
 
-TASK_CLASS = "fdTasksAutomaticGroups"
+TASK_CLASS = "hrcTasksAutomaticGroups"
 TASK_FILTER = task_filter(TASK_CLASS)
 _RULE = re.compile(r"(?P<attr>[A-Za-z][A-Za-z0-9-]*):(?P<regex>.*)", re.DOTALL)
 
@@ -67,7 +67,7 @@ def _matches(user: Entry, attribute: str, regex: re.Pattern[str]) -> bool:
 
 
 def _uses_dn(group: Entry) -> bool:
-    return group.has_object_class("groupOfNames") or group.has_object_class(legacy.OC.OBJECT_GROUP)
+    return group.has_object_class("groupOfNames") or group.has_object_class(schema.OC.OBJECT_GROUP)
 
 
 def _key(user: Entry, uses_dn: bool) -> str:
@@ -120,7 +120,7 @@ def run_automatic_groups(
 ) -> AutomaticGroupsReport:
     """Run every due automatic groups task once.
 
-    The group (``fdTasksAutomaticGroupsOfName``) is a ``groupOfNames`` or a POSIX group
+    The group (``hrcTasksAutomaticGroupsOfName``) is a ``groupOfNames`` or a POSIX group
     (``memberUid``). Users already in the group are left alone; a task whose group is
     missing or whose rule is invalid is reported and left to be retried.
     """
@@ -129,20 +129,20 @@ def run_automatic_groups(
     report = AutomaticGroupsReport()
 
     def process(task: Entry) -> bool:
-        group_dn = task.text("fdTasksAutomaticGroupsOfName")
+        group_dn = task.text("hrcTasksAutomaticGroupsOfName")
         group = directory.get(group_dn) if group_dn else None
         if group is None:
             report.errors.append(f"{task.dn}: group not found")
             return False
         try:
             attribute, regex = parse_rule(
-                task.text("fdTasksAutomaticGroupsRegexPattern") or ".*",
+                task.text("hrcTasksAutomaticGroupsRegexPattern") or ".*",
                 settings.default_attribute,
             )
         except re.error:
             report.errors.append(f"{task.dn}: invalid rule")
             return False
-        users = expand_members(directory, task.texts("fdTasksAutomaticGroupsMembers"), [attribute])
+        users = expand_members(directory, task.texts("hrcTasksAutomaticGroupsMembers"), [attribute])
         uses_dn = _uses_dn(group)
         matching = {_key(u, uses_dn) for u in users if _matches(u, attribute, regex)}
         _apply(
@@ -151,7 +151,7 @@ def run_automatic_groups(
             group,
             users,
             matching,
-            bool_of(task, "fdTasksAutomaticGroupsDynamicGroup") is True,
+            bool_of(task, "hrcTasksAutomaticGroupsDynamicGroup") is True,
             report,
         )
         return True

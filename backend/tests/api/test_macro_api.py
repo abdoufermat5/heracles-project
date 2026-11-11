@@ -57,7 +57,9 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 
     def _build_demo_dir() -> MemoryDirectory:
         d = orig_builder()
-        d.set_schema_object_classes(d.schema_object_classes() | {"fdphonemacro"})
+        d.set_schema_object_classes(
+            d.schema_object_classes() | {"hrcphonemacro", "hrcphonemacrouser"}
+        )
         return d
 
     monkeypatch.setattr(demo, "build_demo_directory", _build_demo_dir)
@@ -74,7 +76,7 @@ def test_user_descriptor_has_macro_tab(app_client: TestClient) -> None:
     u_desc = a.get("/types/user").json()
     u_tabs = {t["name"]: t for t in u_desc["tabs"]}
     assert "macro" in u_tabs
-    assert u_tabs["macro"]["optional"] is False
+    assert u_tabs["macro"]["optional"] is True
     assert u_tabs["macro"]["label"] == "Macro"
 
 
@@ -98,9 +100,10 @@ def test_create_and_patch_user_macro(app_client: TestClient) -> None:
                     "values": {"uid": "muser", "givenName": "Macro", "sn": "User"},
                 },
                 "macro": {
+                    "active": True,
                     "values": {
-                        "phoneMacro": "stdexten",
-                        "macroParameter": "100",
+                        "hrcPhoneMacroContent": "stdexten",
+                        "hrcPhoneMacroParameter": "100",
                     },
                 },
             },
@@ -112,21 +115,22 @@ def test_create_and_patch_user_macro(app_client: TestClient) -> None:
     read_res = a.get(f"/objects/user/{q(dn)}")
     assert read_res.status_code == 200
     tab = read_res.json()["tabs"]["macro"]
-    assert tab["values"]["phoneMacro"] == "stdexten"
-    assert tab["values"]["macroParameter"] == "100"
+    assert tab["values"]["hrcPhoneMacroContent"] == "stdexten"
+    assert tab["values"]["hrcPhoneMacroParameter"] == "100"
 
     patch_res = a.patch(
         f"/objects/user/{q(dn)}",
         {
             "tabs": {
                 "macro": {
+                    "active": True,
                     "values": {
-                        "phoneMacro": "vm-check",
-                    }
+                        "hrcPhoneMacroContent": "vm-check",
+                    },
                 }
             }
         },
     )
     assert patch_res.status_code == 200
     tab = patch_res.json()["tabs"]["macro"]
-    assert tab["values"]["phoneMacro"] == "vm-check"
+    assert tab["values"]["hrcPhoneMacroContent"] == "vm-check"

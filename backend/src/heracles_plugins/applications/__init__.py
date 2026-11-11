@@ -1,7 +1,7 @@
 """Applications plugin: portal applications and the roles allowed to use them.
 
-* ``application`` (``fdDesktopApplication``) and ``web_application``
-  (``fdWebApplication``) live in ``ou=apps``.
+* ``application`` (``hrcDesktopApplication``) and ``web_application``
+  (``hrcWebApplication``) live in ``ou=apps``.
 * The ``applications`` tab on ``role`` lists the applications allowed for the
   role (ACL key ``role/applicationRights``).
 * ``GET /api/v2/me/applications`` returns the applications granted to the
@@ -80,8 +80,8 @@ class Application(ObjectType):
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=apps"
-    columns = ("cn", "fdApplicationTitle", "description")
-    search_attrs = ("cn", "fdApplicationTitle", "description")
+    columns = ("cn", "hrcApplicationTitle", "description")
+    search_attrs = ("cn", "hrcApplicationTitle", "description")
 
     class Main(Tab):
         name = "main"
@@ -93,14 +93,14 @@ class Application(ObjectType):
             _("Properties"),
             DepartmentAttr("base", _("Department")),
             StringAttr("cn", _("Name"), required=True, pattern=NAME_RE),
-            StringAttr("fdApplicationTitle", _("Title"), description=_("Name shown to users")),
+            StringAttr("hrcApplicationTitle", _("Title"), description=_("Name shown to users")),
             TextAttr("description", _("Description")),
             StringAttr(
-                "fdApplicationExecutePath",
+                "hrcApplicationExecutePath",
                 _("Command"),
                 description=_("Command line that starts the application"),
             ),
-            ImageAttr("fdApplicationImage", _("Icon"), max_size=(128, 128)),
+            ImageAttr("hrcApplicationImage", _("Icon"), max_size=(128, 128)),
         )
         flags = Section(
             _("Options"),
@@ -140,8 +140,8 @@ class WebApplication(ObjectType):
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=apps"
-    columns = ("cn", "fdApplicationTitle", "labeledURI")
-    search_attrs = ("cn", "fdApplicationTitle", "description", "labeledURI")
+    columns = ("cn", "hrcApplicationTitle", "labeledURI")
+    search_attrs = ("cn", "hrcApplicationTitle", "description", "labeledURI")
 
     class Main(Tab):
         name = "main"
@@ -153,12 +153,12 @@ class WebApplication(ObjectType):
             _("Properties"),
             DepartmentAttr("base", _("Department")),
             StringAttr("cn", _("Name"), required=True, pattern=NAME_RE),
-            StringAttr("fdApplicationTitle", _("Title"), description=_("Name shown to users")),
+            StringAttr("hrcApplicationTitle", _("Title"), description=_("Name shown to users")),
             TextAttr("description", _("Description")),
             UrlAttr("labeledURI", _("Address"), required=True),
-            ImageAttr("fdApplicationImage", _("Icon"), max_size=(128, 128)),
+            ImageAttr("hrcApplicationImage", _("Icon"), max_size=(128, 128)),
             StringAttr(
-                "fdApplicationImageLocation",
+                "hrcApplicationImageLocation",
                 _("Icon address"),
                 description=_("Address of an icon, used when no icon is uploaded"),
             ),
@@ -194,7 +194,7 @@ class ApplicationRightsTab(Tab):
     allowed = Section(
         _("Applications"),
         ListAttr(
-            "fdApplicationAllowed",
+            "hrcApplicationAllowed",
             _("Applications allowed for this role"),
             ApplicationRefAttr("application", _("Application"), ref_type="application"),
             description=_("Desktop or web applications the occupants of the role may use"),
@@ -203,7 +203,7 @@ class ApplicationRightsTab(Tab):
 
     @classmethod
     def prepare(cls, ctx: TabContext) -> None:
-        wanted: Any = ctx.values.get("fdApplicationAllowed")
+        wanted: Any = ctx.values.get("hrcApplicationAllowed")
         if not isinstance(wanted, list):
             return
         seen: set[str] = set()
@@ -217,9 +217,9 @@ class ApplicationRightsTab(Tab):
             if entry is None or not (
                 entry.has_object_class(DESKTOP_CLASS) or entry.has_object_class(WEB_CLASS)
             ):
-                ctx.error("fdApplicationAllowed", _("Not an application: {dn}").format(dn=app_dn))
+                ctx.error("hrcApplicationAllowed", _("Not an application: {dn}").format(dn=app_dn))
                 return
-        ctx.values["fdApplicationAllowed"] = unique or None
+        ctx.values["hrcApplicationAllowed"] = unique or None
 
 
 def plugin() -> Plugin:

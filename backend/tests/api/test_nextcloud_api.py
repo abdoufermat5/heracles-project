@@ -57,7 +57,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 
     def _build_demo_dir() -> MemoryDirectory:
         d = orig_builder()
-        d.set_schema_object_classes(d.schema_object_classes() | {"fdnextcloudaccount"})
+        d.set_schema_object_classes(d.schema_object_classes() | {"hrcnextcloudaccount"})
         return d
 
     monkeypatch.setattr(demo, "build_demo_directory", _build_demo_dir)
@@ -92,8 +92,8 @@ def test_create_and_read_user_with_nextcloud(app_client: TestClient) -> None:
                 "nextcloud": {
                     "active": True,
                     "values": {
-                        "fdNextCloudQuota": "20 GB",
-                        "fdNextCloudHomeFolder": "/srv/cloud/ncuser",
+                        "hrcNextCloudQuota": "20 GB",
+                        "hrcNextCloudHomeFolder": "/srv/cloud/ncuser",
                     },
                 },
             },
@@ -106,5 +106,5 @@ def test_create_and_read_user_with_nextcloud(app_client: TestClient) -> None:
     assert read_res.status_code == 200
     tab = read_res.json()["tabs"]["nextcloud"]
     assert tab["active"] is True
-    assert tab["values"]["fdNextCloudQuota"] == "20 GB"
-    assert tab["values"]["fdNextCloudHomeFolder"] == "/srv/cloud/ncuser"
+    assert tab["values"]["hrcNextCloudQuota"] == "20 GB"
+    assert tab["values"]["hrcNextCloudHomeFolder"] == "/srv/cloud/ncuser"

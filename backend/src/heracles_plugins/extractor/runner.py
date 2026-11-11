@@ -13,7 +13,7 @@ from heracles.auth.mail import Mailer
 from heracles.ldap.client import DirectoryClient, Entry
 from heracles_plugins._tasks import TaskReport, expand_members, run_tasks, task_filter, utc
 
-TASK_CLASS = "fdExtractorTasks"
+TASK_CLASS = "hrcExtractorTasks"
 TASK_FILTER = task_filter(TASK_CLASS)
 FORBIDDEN_ATTRIBUTES = frozenset({"userpassword", "sambantpassword", "sambalmpassword"})
 FORMATS = {"csv": ",", "tsv": "\t"}
@@ -92,7 +92,7 @@ def export_attributes(task: Entry, settings: ExtractorSettings) -> list[str]:
     """The task's attributes allowed by the settings (secrets are always dropped)."""
     allowed = {a.lower() for a in settings.attributes} - FORBIDDEN_ATTRIBUTES
     return [
-        a for a in dict.fromkeys(task.texts("fdExtractorTaskAttributes")) if a.lower() in allowed
+        a for a in dict.fromkeys(task.texts("hrcExtractorTaskAttributes")) if a.lower() in allowed
     ]
 
 
@@ -112,16 +112,16 @@ def _process_task(
         mail
         for mail in dict.fromkeys(
             e.text("mail")
-            for e in expand_members(directory, task.texts("fdExtractorRecipientsMembers"))
+            for e in expand_members(directory, task.texts("hrcExtractorRecipientsMembers"))
         )
         if mail
     ]
     if not settings.export_directory and not recipients:
         report.errors.append(f"{task.dn}: no destination (export directory or recipients)")
         return False
-    users = expand_members(directory, task.texts("fdExtractorTaskMembers"), attributes)
+    users = expand_members(directory, task.texts("hrcExtractorTaskMembers"), attributes)
     users.sort(key=lambda u: (u.text("uid") or "", u.dn))
-    fmt = (task.text("fdExtractorTaskFormat") or "csv").lower()
+    fmt = (task.text("hrcExtractorTaskFormat") or "csv").lower()
     content = render_csv(
         users,
         attributes,
@@ -145,7 +145,7 @@ def _process_task(
             return False
         path = str(file)
     sent: list[str] = []
-    sender = task.text("fdExtractorEmailSender") or None
+    sender = task.text("hrcExtractorEmailSender") or None
     subject = settings.mail_subject.replace("{name}", name)
     for address in recipients:
         try:

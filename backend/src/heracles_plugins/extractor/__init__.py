@@ -1,6 +1,6 @@
 """Extractor plugin: export attributes of users as CSV.
 
-Provides the ``extractor_task`` type (``fdTasks`` + ``fdExtractorTasks``, ACL
+Provides the ``extractor_task`` type (``hrcTasks`` + ``hrcExtractorTasks``, ACL
 ``tasks/extractorTask``) and the pure runner :func:`run_extractor`.
 
 A task exports chosen attributes of its members (users, or groups and roles expanded to
@@ -45,12 +45,12 @@ class ExtractorTask(TaskObjectType):
         name = "main"
         acl_key = "extractorTask"
         label = _("Extractor")
-        object_classes = ("fdTasks", TASK_CLASS)
+        object_classes = ("hrcTasks", TASK_CLASS)
 
         extraction = Section(
             _("Extraction"),
             MultiSelectAttr(
-                "fdExtractorTaskAttributes",
+                "hrcExtractorTaskAttributes",
                 _("Exported attributes"),
                 options=[
                     (a, a)
@@ -60,13 +60,13 @@ class ExtractorTask(TaskObjectType):
                 required=True,
             ),
             SelectAttr(
-                "fdExtractorTaskFormat",
+                "hrcExtractorTaskFormat",
                 _("Format"),
                 options=[("csv", _("CSV (comma)")), ("tsv", _("TSV (tab)"))],
                 default="csv",
             ),
             ListAttr(
-                "fdExtractorTaskMembers",
+                "hrcExtractorTaskMembers",
                 _("Exported users, groups or roles"),
                 ObjectRefAttr("member", _("Member"), ref_type="user"),
                 required=True,
@@ -76,12 +76,12 @@ class ExtractorTask(TaskObjectType):
         delivery = Section(
             _("Delivery"),
             ListAttr(
-                "fdExtractorRecipientsMembers",
+                "hrcExtractorRecipientsMembers",
                 _("Mail recipients"),
                 ObjectRefAttr("recipient", _("Recipient"), ref_type="user"),
                 description=_("Users, groups or roles receiving the export by mail"),
             ),
-            EmailAttr("fdExtractorEmailSender", _("Sender address")),
+            EmailAttr("hrcExtractorEmailSender", _("Sender address")),
         )
 
 
@@ -91,7 +91,7 @@ def plugin() -> Plugin:
         name=PLUGIN_NAME,
         version="0.1.0",
         types=(ExtractorTask,),
-        required_object_classes=("fdTasks", TASK_CLASS),
+        required_object_classes=("hrcTasks", TASK_CLASS),
         settings=ExtractorSettings(),
     )
 

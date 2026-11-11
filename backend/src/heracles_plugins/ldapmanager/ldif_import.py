@@ -9,7 +9,7 @@ from typing import Literal
 from heracles.core import config_store
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Entry, Modification
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 Action = Literal["add", "modify", "unchanged", "exists", "error"]
 
@@ -46,13 +46,13 @@ def configuration_entry(directory: DirectoryClient) -> Callable[[Entry], bool]:
     a raw import is equivalent to code execution.
     """
     config_dn = dnlib.normalize(config_store.config_dn(directory))
-    classes = {c.lower() for c in legacy.CONFIG_ENTRY_CLASSES}
+    classes = {c.lower() for c in schema.CONFIG_ENTRY_CLASSES}
 
     def check(entry: Entry) -> bool:
         if dnlib.normalize(entry.dn) == config_dn:
             return True
         names = {name.lower() for name in entry.attrs}
-        if legacy.TAB_HOOK_ATTR.lower() in names:
+        if schema.TAB_HOOK_ATTR.lower() in names:
             return True
         return any(
             value.decode("utf-8", "replace").lower() in classes

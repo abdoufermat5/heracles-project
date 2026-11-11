@@ -16,10 +16,10 @@ SERVERS = f"ou=servers,ou=systems,{BASE}"
 DOVECOT_CLASSES = {
     "ieee802Device",
     "device",
-    "fdServer",
-    "fdDovecotServer",
+    "hrcServer",
+    "hrcDovecotServer",
     "ipHost",
-    "fdNetworkInterface",
+    "hrcNetworkInterface",
 }
 
 
@@ -53,11 +53,11 @@ def test_dovecot_tab_registration_and_acl(service: ObjectService) -> None:
     assert tab.acl_key == "serviceDovecot"
     assert server_info.acl_object(tab) == "server/serviceDovecot"
     assert tab.optional is True
-    assert tab.object_classes == ("fdDovecotServer",)
+    assert tab.object_classes == ("hrcDovecotServer",)
 
 
 def test_dovecot_tab_dropped_without_schema(directory: MemoryDirectory) -> None:
-    directory.set_schema_object_classes(["ieee802Device", "device", "fdServer"])
+    directory.set_schema_object_classes(["ieee802Device", "device", "hrcServer"])
     registry = TypeRegistry()
     register_builtin_types(registry)
     schema_classes = {c.lower() for c in directory.schema_object_classes()}
@@ -79,12 +79,12 @@ def test_create_server_with_dovecot_service(
             "dovecot": {
                 "active": True,
                 "values": {
-                    "dovecotConnectURL": "imap.example.com",
-                    "dovecotConnectPort": 993,
-                    "dovecotConnectOptions1": "/ssl",
-                    "dovecotConnectOptions2": "/novalidate-cert",
-                    "fdDovecotAdmin": "dovecotadmin",
-                    "fdDovecotPassword": "secretpassword",
+                    "hrcDovecotConnectURL": "imap.example.com",
+                    "hrcDovecotConnectPort": 993,
+                    "hrcDovecotConnectOptions1": "/ssl",
+                    "hrcDovecotConnectOptions2": "/novalidate-cert",
+                    "hrcDovecotAdmin": "dovecotadmin",
+                    "hrcDovecotPassword": "secretpassword",
                 },
             },
         },
@@ -92,23 +92,23 @@ def test_create_server_with_dovecot_service(
     assert dn == f"cn=mail1,{SERVERS}"
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdDovecotServer" in entry.get("objectClass")
-    assert entry.text("dovecotConnectURL") == "imap.example.com"
-    assert entry.text("dovecotConnectPort") == "993"
-    assert entry.text("dovecotConnectOptions1") == "/ssl"
-    assert entry.text("dovecotConnectOptions2") == "/novalidate-cert"
-    assert entry.text("fdDovecotAdmin") == "dovecotadmin"
-    assert entry.text("fdDovecotPassword") == "secretpassword"
+    assert b"hrcDovecotServer" in entry.get("objectClass")
+    assert entry.text("hrcDovecotConnectURL") == "imap.example.com"
+    assert entry.text("hrcDovecotConnectPort") == "993"
+    assert entry.text("hrcDovecotConnectOptions1") == "/ssl"
+    assert entry.text("hrcDovecotConnectOptions2") == "/novalidate-cert"
+    assert entry.text("hrcDovecotAdmin") == "dovecotadmin"
+    assert entry.text("hrcDovecotPassword") == "secretpassword"
 
     loaded = service.load("server", dn)
     assert loaded.tabs["dovecot"].active is True
     vals = loaded.tabs["dovecot"].values
-    assert vals["dovecotConnectURL"] == "imap.example.com"
-    assert vals["dovecotConnectPort"] == 993
-    assert vals["dovecotConnectOptions1"] == "/ssl"
-    assert vals["dovecotConnectOptions2"] == "/novalidate-cert"
-    assert vals["fdDovecotAdmin"] == "dovecotadmin"
-    assert vals["fdDovecotPassword"] == "secretpassword"
+    assert vals["hrcDovecotConnectURL"] == "imap.example.com"
+    assert vals["hrcDovecotConnectPort"] == 993
+    assert vals["hrcDovecotConnectOptions1"] == "/ssl"
+    assert vals["hrcDovecotConnectOptions2"] == "/novalidate-cert"
+    assert vals["hrcDovecotAdmin"] == "dovecotadmin"
+    assert vals["hrcDovecotPassword"] == "secretpassword"
 
 
 def test_update_and_deactivate_dovecot_tab(
@@ -122,9 +122,9 @@ def test_update_and_deactivate_dovecot_tab(
             "dovecot": {
                 "active": True,
                 "values": {
-                    "dovecotConnectURL": "imap2.example.com",
-                    "dovecotConnectPort": 143,
-                    "dovecotConnectOptions1": "/tls",
+                    "hrcDovecotConnectURL": "imap2.example.com",
+                    "hrcDovecotConnectPort": 143,
+                    "hrcDovecotConnectOptions1": "/tls",
                 },
             },
         },
@@ -137,23 +137,23 @@ def test_update_and_deactivate_dovecot_tab(
         {
             "dovecot": {
                 "values": {
-                    "dovecotConnectPort": 993,
-                    "dovecotConnectOptions1": "/ssl",
+                    "hrcDovecotConnectPort": 993,
+                    "hrcDovecotConnectOptions1": "/ssl",
                 }
             }
         },
     )
     loaded = service.load("server", dn)
-    assert loaded.tabs["dovecot"].values["dovecotConnectPort"] == 993
-    assert loaded.tabs["dovecot"].values["dovecotConnectOptions1"] == "/ssl"
+    assert loaded.tabs["dovecot"].values["hrcDovecotConnectPort"] == 993
+    assert loaded.tabs["dovecot"].values["hrcDovecotConnectOptions1"] == "/ssl"
 
     # Deactivate tab
     service.update("server", dn, {"dovecot": {"active": False}})
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdDovecotServer" not in entry.get("objectClass")
-    assert entry.get("dovecotConnectURL") == []
-    assert entry.get("dovecotConnectPort") == []
+    assert b"hrcDovecotServer" not in entry.get("objectClass")
+    assert entry.get("hrcDovecotConnectURL") == []
+    assert entry.get("hrcDovecotConnectPort") == []
 
     loaded_deactivated = service.load("server", dn)
     assert loaded_deactivated.tabs["dovecot"].active is False
@@ -169,11 +169,11 @@ def test_dovecot_validation(service: ObjectService) -> None:
                 "main": {"values": {"cn": "badmail"}},
                 "dovecot": {
                     "active": True,
-                    "values": {"dovecotConnectPort": 0},
+                    "values": {"hrcDovecotConnectPort": 0},
                 },
             },
         )
-    assert "dovecotConnectPort" in str(exc_info.value)
+    assert "hrcDovecotConnectPort" in str(exc_info.value)
 
     # Invalid port (> 65535)
     with pytest.raises(ObjectValidationError) as exc_info2:
@@ -184,11 +184,11 @@ def test_dovecot_validation(service: ObjectService) -> None:
                 "main": {"values": {"cn": "badmail2"}},
                 "dovecot": {
                     "active": True,
-                    "values": {"dovecotConnectPort": 70000},
+                    "values": {"hrcDovecotConnectPort": 70000},
                 },
             },
         )
-    assert "dovecotConnectPort" in str(exc_info2.value)
+    assert "hrcDovecotConnectPort" in str(exc_info2.value)
 
 
 def test_mail_servers_helper(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -204,7 +204,7 @@ def test_mail_servers_helper(service: ObjectService, directory: MemoryDirectory)
         BASE,
         {
             "main": {"values": {"cn": "mail-a"}},
-            "dovecot": {"active": True, "values": {"dovecotConnectURL": "mail-a.test"}},
+            "dovecot": {"active": True, "values": {"hrcDovecotConnectURL": "mail-a.test"}},
         },
     )
     assert dovecot.mail_servers(directory) == ["mail-a"]
@@ -215,7 +215,7 @@ def test_mail_servers_helper(service: ObjectService, directory: MemoryDirectory)
         BASE,
         {
             "main": {"values": {"cn": "mail-b"}},
-            "dovecot": {"active": True, "values": {"dovecotConnectURL": "mail-b.test"}},
+            "dovecot": {"active": True, "values": {"hrcDovecotConnectURL": "mail-b.test"}},
         },
     )
     assert dovecot.mail_servers(directory) == ["mail-a", "mail-b"]

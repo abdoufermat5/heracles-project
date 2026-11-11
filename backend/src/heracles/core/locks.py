@@ -24,9 +24,9 @@ from heracles.ldap.client import (
     Scope,
 )
 from heracles.ldap.filter import escape_filter_value
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
-_A = legacy.ATTR
+_A = schema.ATTR
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +68,7 @@ class LockService:
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._dir = directory
-        self.locks_base = locks_base or dnlib.join(legacy.RDN.LOCKS, directory.base_dn)
+        self.locks_base = locks_base or dnlib.join(schema.RDN.LOCKS, directory.base_dn)
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def acquire(self, object_dn: str, user_dn: str) -> Lock:
@@ -89,7 +89,7 @@ class LockService:
             self._dir.add(
                 entry_dn,
                 {
-                    "objectClass": [legacy.OC.LOCK.encode()],
+                    "objectClass": [schema.OC.LOCK.encode()],
                     "cn": [lock_cn(object_dn).encode()],
                     _A.LOCK_USER_DN: [user_dn.encode("utf-8")],
                     _A.LOCK_OBJECT_DN: [encode_object_dn(object_dn).encode()],
@@ -112,7 +112,7 @@ class LockService:
     def get(self, object_dn: str) -> Lock | None:
         """Return the lock on ``object_dn`` if any."""
         flt = (
-            f"(&(objectClass={legacy.OC.LOCK})"
+            f"(&(objectClass={schema.OC.LOCK})"
             f"({_A.LOCK_OBJECT_DN}={escape_filter_value(encode_object_dn(object_dn))}))"
         )
         try:
@@ -126,12 +126,12 @@ class LockService:
 
     def list_by_user(self, user_dn: str) -> list[Lock]:
         """All locks held by ``user_dn``."""
-        flt = f"(&(objectClass={legacy.OC.LOCK})({_A.LOCK_USER_DN}={escape_filter_value(user_dn)}))"
+        flt = f"(&(objectClass={schema.OC.LOCK})({_A.LOCK_USER_DN}={escape_filter_value(user_dn)}))"
         return self._search(flt)
 
     def list_all(self) -> list[Lock]:
         """All locks in the directory."""
-        return self._search(f"(objectClass={legacy.OC.LOCK})")
+        return self._search(f"(objectClass={schema.OC.LOCK})")
 
     def release(self, object_dn: str, user_dn: str) -> bool:
         """Release the lock on ``object_dn`` if held by ``user_dn``.

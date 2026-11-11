@@ -15,7 +15,7 @@ from heracles.server import create_full_app
 
 PARIS = f"ou=paris,{BASE}"
 BMARTIN = f"uid=bmartin,ou=people,{PARIS}"
-CLASSES = ["fdDesktopApplication", "fdWebApplication", "fdApplicationRights"]
+CLASSES = ["hrcDesktopApplication", "hrcWebApplication", "hrcApplicationRights"]
 
 
 class Api:
@@ -72,7 +72,7 @@ def test_user_sees_the_applications_of_their_roles(app_client: TestClient) -> No
     terminal = create(
         admin,
         "application",
-        {"main": {"values": {"cn": "terminal", "fdApplicationTitle": "Terminal"}}},
+        {"main": {"values": {"cn": "terminal", "hrcApplicationTitle": "Terminal"}}},
     )
     wiki = create(
         admin,
@@ -85,7 +85,7 @@ def test_user_sees_the_applications_of_their_roles(app_client: TestClient) -> No
         "role",
         {
             "main": {"values": {"cn": "staff", "roleOccupant": [BMARTIN]}},
-            "applications": {"values": {"fdApplicationAllowed": [wiki, terminal]}},
+            "applications": {"values": {"hrcApplicationAllowed": [wiki, terminal]}},
         },
     )
 

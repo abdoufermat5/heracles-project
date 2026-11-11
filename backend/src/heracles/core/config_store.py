@@ -31,7 +31,7 @@ from heracles.ldap.client import (
     Modification,
     NoSuchObjectError,
 )
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 type Kind = Literal["str", "text", "int", "bool", "list", "select", "path"]
 
@@ -73,7 +73,7 @@ class ConfigField:
 
     @property
     def attr(self) -> str:
-        return legacy.CONFIG_ATTRS[self.key]
+        return schema.CONFIG_ATTRS[self.key]
 
 
 def _f(
@@ -238,7 +238,7 @@ class ConfigError(ValueError):
 
 def config_dn(directory: DirectoryClient) -> str:
     """DN of the main configuration entry."""
-    return f"{legacy.CONFIG_RDN},{legacy.APP_OU},{directory.base_dn}"
+    return f"{schema.CONFIG_RDN},{schema.APP_OU},{directory.base_dn}"
 
 
 # --------------------------------------------------------------------- YAML side
@@ -597,16 +597,16 @@ def save_config(directory: DirectoryClient, changes: Mapping[str, Any]) -> list[
     if not mods:
         return []
     needed_classes = [
-        legacy.CONFIG_ATTR_CLASS[m.attr]
+        schema.CONFIG_ATTR_CLASS[m.attr]
         for m in mods
-        if m.op == "replace" and m.attr in legacy.CONFIG_ATTR_CLASS
+        if m.op == "replace" and m.attr in schema.CONFIG_ATTR_CLASS
     ]
     if entry is None:
-        ensure_container(directory, f"{legacy.APP_OU},{directory.base_dn}")
-        classes = [legacy.OC.MAIN_CONFIG, *dict.fromkeys(needed_classes)]
+        ensure_container(directory, f"{schema.APP_OU},{directory.base_dn}")
+        classes = [schema.OC.MAIN_CONFIG, *dict.fromkeys(needed_classes)]
         attrs: dict[str, list[bytes]] = {
-            legacy.STD_ATTR.OBJECT_CLASS: [c.encode() for c in classes],
-            legacy.STD_ATTR.CN: [b"config"],
+            schema.STD_ATTR.OBJECT_CLASS: [c.encode() for c in classes],
+            schema.STD_ATTR.CN: [b"config"],
         }
         for m in mods:
             if m.op == "replace":
@@ -626,7 +626,7 @@ def _class_mods(entry: Entry | None, needed: Sequence[str]) -> list[Modification
     have: set[str] = {c.lower() for c in entry.texts("objectClass")} if entry is not None else set()
     missing = [c for c in dict.fromkeys(needed) if c.lower() not in have]
     return (
-        [Modification("add", legacy.STD_ATTR.OBJECT_CLASS, [c.encode() for c in missing])]
+        [Modification("add", schema.STD_ATTR.OBJECT_CLASS, [c.encode() for c in missing])]
         if missing
         else []
     )

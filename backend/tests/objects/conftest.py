@@ -42,7 +42,7 @@ def directory() -> FakeDirectory:
     d.put(f"ou=groups,{BASE}", objectClass="organizationalUnit", ou="groups")
     d.put(
         PARIS,
-        objectClass=["organizationalUnit", "gosaDepartment"],
+        objectClass=["organizationalUnit", "hrcDepartment"],
         ou="Paris",
         description="Paris office",
     )

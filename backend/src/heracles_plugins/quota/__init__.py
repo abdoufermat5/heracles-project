@@ -59,7 +59,7 @@ class QuotaEntryAttr(CompositeAttr):
             name,
             label or _("Quota entry"),
             fields=(
-                StringAttr("quotaDevice", _("Device / mount point"), required=True),
+                StringAttr("hrcQuotaDevice", _("Device / mount point"), required=True),
                 BlockLimitAttr("quotaBlockSoftLimit", _("Block soft limit")),
                 BlockLimitAttr("quotaBlockHardLimit", _("Block hard limit")),
                 IntAttr("quotaInodeSoftLimit", _("Inode soft limit"), min=0),
@@ -91,24 +91,24 @@ class QuotaAccountTab(Tab):
 
 
 class ServiceQuotaTab(Tab):
-    """Server quota service tab (quotaService)."""
+    """Server quota service tab (hrcQuotaService)."""
 
     name = "serviceQuota"
     acl_key = "serviceQuota"
     label = _("Quota service")
     optional = True
-    object_classes = ("quotaService",)
+    object_classes = ("hrcQuotaService",)
 
     properties = Section(
         _("Properties"),
-        StringAttr("quotaDevice", _("Device")),
-        IntAttr("quotaBlockSize", _("Block size"), min=0, default=1024),
-        StringAttr("quotaDesc", _("Description")),
+        StringAttr("hrcQuotaDevice", _("Device")),
+        IntAttr("hrcQuotaBlockSize", _("Block size"), min=0, default=1024),
+        StringAttr("hrcQuotaDesc", _("Description")),
     )
     warning_messages = Section(
         _("Warning messages"),
         SelectAttr(
-            "quotaMsgCharsetSupport",
+            "hrcQuotaMsgCharsetSupport",
             _("Message charset"),
             options=[
                 ("UTF-8", "UTF-8"),
@@ -117,19 +117,19 @@ class ServiceQuotaTab(Tab):
             ],
             default="UTF-8",
         ),
-        StringAttr("quotaMailCommand", _("Mail command")),
-        StringAttr("quotaMsgFromSupport", _("From address")),
-        StringAttr("quotaMsgContactSupport", _("Support contact")),
-        StringAttr("quotaCarbonCopyMail", _("Carbon copy address")),
-        StringAttr("quotaMsgSubjectSupport", _("Subject")),
-        TextAttr("quotaMsgContentSupport", _("Message body")),
-        StringAttr("quotaMsgSignatureSupport", _("Signature")),
+        StringAttr("hrcQuotaMailCommand", _("Mail command")),
+        StringAttr("hrcQuotaMsgFromSupport", _("From address")),
+        StringAttr("hrcQuotaMsgContactSupport", _("Support contact")),
+        StringAttr("hrcQuotaCarbonCopyMail", _("Carbon copy address")),
+        StringAttr("hrcQuotaMsgSubjectSupport", _("Subject")),
+        TextAttr("hrcQuotaMsgContentSupport", _("Message body")),
+        StringAttr("hrcQuotaMsgSignatureSupport", _("Signature")),
     )
     ldap_access = Section(
         _("LDAP access"),
-        StringAttr("quotaLdapServer", _("LDAP server")),
-        StringAttr("quotaLdapServerUserDn", _("LDAP user DN")),
-        StringAttr("quotaLdapServerUserPassword", _("LDAP password")),
+        StringAttr("hrcQuotaLdapServer", _("LDAP server")),
+        StringAttr("hrcQuotaLdapServerUserDn", _("LDAP user DN")),
+        StringAttr("hrcQuotaLdapServerUserPassword", _("LDAP password")),
     )
 
 

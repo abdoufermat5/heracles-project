@@ -14,7 +14,7 @@ from heracles.ldap import filter as ldapfilter
 from heracles.ldap.client import DirectoryClient, Entry, NoSuchObjectError, Scope
 from heracles.objects import filters
 from heracles.objects.registry import TypeInfo, TypeRegistry
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 #: Standard DN-valued attributes searched in addition to the registry's.
 STANDARD_DN_ATTRIBUTES = (
@@ -29,7 +29,7 @@ STANDARD_DN_ATTRIBUTES = (
 #: Name under which ACL assignments are reported (they are embedded in a longer value).
 ACL_ASSIGNMENT = "acl_assignment"
 
-_SKIPPED_CLASSES = (legacy.OC.SNAPSHOT, legacy.OC.LOCK, legacy.OC.TEMPLATE, legacy.OC.TOKEN)
+_SKIPPED_CLASSES = (schema.OC.SNAPSHOT, schema.OC.LOCK, schema.OC.TEMPLATE, schema.OC.TOKEN)
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +91,7 @@ def find_references(
     attrs = dn_attributes(registry)
     escaped = filters.escape_filter_value(target_dn)
     clauses = [f"({a}={escaped})" for a in attrs]
-    clauses.append(f"({legacy.ATTR.ACL_ENTRY}=*)")  # DNs are encoded inside the values
+    clauses.append(f"({schema.ATTR.ACL_ENTRY}=*)")  # DNs are encoded inside the values
     try:
         entries = list(directory.search(directory.base_dn, filters.or_(clauses), Scope.SUBTREE))
     except NoSuchObjectError:
@@ -121,7 +121,7 @@ def _matched_attributes(
     for attr in attrs:
         if any(dnlib.normalize(v) == wanted for v in entry.texts(attr)):
             found.append(attr)
-    for value in entry.texts(legacy.ATTR.ACL_ENTRY):
+    for value in entry.texts(schema.ATTR.ACL_ENTRY):
         parsed = parse_assignment(value)
         if isinstance(parsed, AclAssignment) and wanted in {
             dnlib.normalize(d) for d in (parsed.role_dn, *parsed.members) if d != "*"

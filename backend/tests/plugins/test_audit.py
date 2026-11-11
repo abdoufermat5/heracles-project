@@ -25,7 +25,7 @@ ADMIN = f"uid=admin,{PEOPLE}"
 @pytest.fixture
 def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
-    d.set_schema_object_classes([*d.schema_object_classes(), "fdAuditEvent", "fdAuditTasks"])
+    d.set_schema_object_classes([*d.schema_object_classes(), "hrcAuditEvent", "hrcAuditTasks"])
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     d.add(PEOPLE, {"objectClass": [b"organizationalUnit"], "ou": [b"people"]})
     return d
@@ -49,10 +49,10 @@ def service(directory: MemoryDirectory) -> ObjectService:
 
 
 def events(directory: MemoryDirectory) -> list[dict[str, list[str]]]:
-    found = directory.search(AUDIT, "(objectClass=fdAuditEvent)")
+    found = directory.search(AUDIT, "(objectClass=hrcAuditEvent)")
     return sorted(
         ({k: [v.decode() for v in vs] for k, vs in e.attrs.items()} for e in found),
-        key=lambda e: e["fdAuditAction"],
+        key=lambda e: e["hrcAuditAction"],
     )
 
 
@@ -60,11 +60,11 @@ def add_task(directory: MemoryDirectory, **extra: str) -> str:
     if directory.get(TASKS) is None:
         directory.add(TASKS, {"objectClass": [b"organizationalUnit"], "ou": [b"tasks"]})
     attrs = {
-        "objectClass": [b"fdTasks", b"fdAuditTasks"],
+        "objectClass": [b"hrcTasks", b"hrcAuditTasks"],
         "cn": [b"purge"],
-        "fdTasksStatus": [b"Activated"],
-        "fdTasksRepeatable": [b"TRUE"],
-        "fdTasksRepeatableSchedule": [b"daily"],
+        "hrcTasksStatus": [b"Activated"],
+        "hrcTasksRepeatable": [b"TRUE"],
+        "hrcTasksRepeatableSchedule": [b"daily"],
     }
     attrs.update({k: [v.encode()] for k, v in extra.items()})
     dn = f"cn=purge,{TASKS}"
@@ -84,18 +84,18 @@ def test_create_modify_delete_are_recorded(
     service.update("user", dn, {"main": {"values": {"mail": "j@example.com"}}})
     service.delete("user", dn)
     found = events(directory)
-    assert [e["fdAuditAction"][0] for e in found] == ["create", "delete", "modify"]
+    assert [e["hrcAuditAction"][0] for e in found] == ["create", "delete", "modify"]
     create, delete, modify = found
-    assert create["fdAuditObject"] == [dn]
-    assert create["fdAuditObjectType"] == ["user"]
-    assert create["fdAuditAuthorDN"] == [ADMIN]
-    assert create["fdAuditAuthorIP"] == ["10.1.2.3"]
-    assert create["fdAuditResult"] == ["success"]
-    assert "uid: jdoe" in create["fdAuditAttributes"]
-    assert "fdAuditAttributes" not in delete
-    assert modify["fdAuditAttributes"] == ["replace mail: j@example.com"]
-    assert all(e["objectClass"] == ["fdAuditEvent"] for e in found)
-    assert all(len(e["fdAuditDateTime"][0]) == 15 for e in found)
+    assert create["hrcAuditObject"] == [dn]
+    assert create["hrcAuditObjectType"] == ["user"]
+    assert create["hrcAuditAuthorDN"] == [ADMIN]
+    assert create["hrcAuditAuthorIP"] == ["10.1.2.3"]
+    assert create["hrcAuditResult"] == ["success"]
+    assert "uid: jdoe" in create["hrcAuditAttributes"]
+    assert "hrcAuditAttributes" not in delete
+    assert modify["hrcAuditAttributes"] == ["replace mail: j@example.com"]
+    assert all(e["objectClass"] == ["hrcAuditEvent"] for e in found)
+    assert all(len(e["hrcAuditDateTime"][0]) == 15 for e in found)
 
 
 def test_hidden_values_and_actions_filter(directory: MemoryDirectory) -> None:
@@ -116,7 +116,7 @@ def test_hidden_values_and_actions_filter(directory: MemoryDirectory) -> None:
     svc.delete("user", dn)
     found = events(directory)
     assert len(found) == 1
-    attrs = found[0]["fdAuditAttributes"]
+    attrs = found[0]["hrcAuditAttributes"]
     assert "mail: ***" in attrs
     assert not any("s3cret" in a for a in attrs)
 
@@ -168,7 +168,7 @@ def test_purge_old_events_default_and_task_retention(directory: MemoryDirectory)
 
 
 def test_task_retention_overrides_setting_and_zero_keeps(directory: MemoryDirectory) -> None:
-    dn = add_task(directory, fdAuditTasksRetention="30")
+    dn = add_task(directory, hrcAuditTasksRetention="30")
     write_event(
         directory,
         action="create",
@@ -179,7 +179,7 @@ def test_task_retention_overrides_setting_and_zero_keeps(directory: MemoryDirect
     )
     assert audit.run_audit(directory, NOW).events_purged == 1
     directory.delete(dn)
-    add_task(directory, fdAuditTasksRetention="0")
+    add_task(directory, hrcAuditTasksRetention="0")
     write_event(
         directory,
         action="create",
@@ -207,9 +207,9 @@ def test_runner_without_containers(directory: MemoryDirectory) -> None:
 def test_syslog_forwarding(directory: MemoryDirectory, caplog: pytest.LogCaptureFixture) -> None:
     add_task(
         directory,
-        fdAuditSyslogEnabled="TRUE",
-        fdAuditSyslogPrefix="[heracles] ",
-        fdTasksLastExec=format_generalized_time(NOW - timedelta(hours=1)),
+        hrcAuditSyslogEnabled="TRUE",
+        hrcAuditSyslogPrefix="[heracles] ",
+        hrcTasksLastExec=format_generalized_time(NOW - timedelta(hours=1)),
     )
     for minutes, obj in ((120, "old"), (30, "recent")):
         write_event(
@@ -234,7 +234,7 @@ def test_syslog_forwarding(directory: MemoryDirectory, caplog: pytest.LogCapture
 def test_plugin_disabled_without_schema() -> None:
     registry = TypeRegistry()
     status = registry.register_plugin(audit.plugin(), set())
-    assert not status.enabled and status.missing_object_classes == ["fdAuditEvent"]
+    assert not status.enabled and status.missing_object_classes == ["hrcAuditEvent"]
 
 
 def test_acl_keys_and_containers(directory: MemoryDirectory) -> None:
@@ -242,7 +242,7 @@ def test_acl_keys_and_containers(directory: MemoryDirectory) -> None:
     task = registry.get("audit_task")
     assert task.acl_object(task.main_tab) == "tasks/auditTask"
     assert task.type.rdn == "ou=tasks" and task.type.category == "workflow"
-    assert task.type.filter == "(&(objectClass=fdTasks)(objectClass=fdAuditTasks))"
+    assert task.type.filter == "(&(objectClass=hrcTasks)(objectClass=hrcAuditTasks))"
     event = registry.get("audit_event")
     assert event.acl_object(event.main_tab) == "auditEvent/auditEvent"
     assert event.type.rdn == "ou=audit"
@@ -259,9 +259,9 @@ def test_audit_task_crud(service: ObjectService, directory: MemoryDirectory) -> 
             "main": {
                 "values": {
                     "cn": "purge",
-                    "fdAuditTasksRetention": 90,
-                    "fdAuditSyslogEnabled": True,
-                    "fdAuditSyslogPrefix": "hrc ",
+                    "hrcAuditTasksRetention": 90,
+                    "hrcAuditSyslogEnabled": True,
+                    "hrcAuditSyslogPrefix": "hrc ",
                 }
             }
         },
@@ -269,14 +269,14 @@ def test_audit_task_crud(service: ObjectService, directory: MemoryDirectory) -> 
     assert dn == f"cn=purge,{TASKS}"
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.has_object_class("fdTasks") and entry.has_object_class("fdAuditTasks")
-    assert entry.text("fdAuditTasksRetention") == "90"
-    assert entry.text("fdAuditSyslogEnabled") == "TRUE"
+    assert entry.has_object_class("hrcTasks") and entry.has_object_class("hrcAuditTasks")
+    assert entry.text("hrcAuditTasksRetention") == "90"
+    assert entry.text("hrcAuditSyslogEnabled") == "TRUE"
     with pytest.raises(ObjectValidationError):
         service.create(
             "audit_task",
             BASE,
-            {"main": {"values": {"cn": "bad", "fdTasksRepeatable": True}}},
+            {"main": {"values": {"cn": "bad", "hrcTasksRepeatable": True}}},
         )
 
 
@@ -293,10 +293,10 @@ def test_audit_events_are_read_only_in_the_object_layer(
     )
     state = service.load("audit_event", dn)
     values = state.tabs["main"].values
-    assert values["fdAuditAction"] == "create"
-    assert values["fdAuditAttributes"] == ["uid: a"]
+    assert values["hrcAuditAction"] == "create"
+    assert values["hrcAuditAttributes"] == ["uid: a"]
     with pytest.raises(ObjectValidationError):
-        service.update("audit_event", dn, {"main": {"values": {"fdAuditResult": "failure"}}})
+        service.update("audit_event", dn, {"main": {"values": {"hrcAuditResult": "failure"}}})
     with pytest.raises(ObjectValidationError):
         service.create("audit_event", BASE, {"main": {"values": {"cn": "x"}}})
 
@@ -315,12 +315,12 @@ def test_security_tab_lists_events_about_and_by_the_user(
         directory, action="modify", object_type="group", object_dn=f"cn=g,{BASE}", author_dn=ADMIN
     )
     state = service.load("user", dn)
-    log = state.tabs["auditSecurity"].values["fdAuditSecurityLog"]
+    log = state.tabs["auditSecurity"].values["hrcAuditSecurityLog"]
     assert len(log) == 3
     assert all(dn in line for line in log)
     stamps = [line.split()[0] for line in log]
     assert stamps == sorted(stamps, reverse=True)
     # the tab is never written to the entry
     entry = directory.get(dn)
-    assert entry is not None and not entry.get("fdAuditSecurityLog")
+    assert entry is not None and not entry.get("hrcAuditSecurityLog")
     service.update("user", dn, {"main": {"values": {"mail": "k@example.com"}}})

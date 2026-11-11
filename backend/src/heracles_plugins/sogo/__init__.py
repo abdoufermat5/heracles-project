@@ -46,7 +46,7 @@ class SogoResourceTab(Tab):
     name = "main"
     acl_key = "sogoResource"
     label = _("Resource")
-    object_classes = ("inetOrgPerson", "CalendarResource")
+    object_classes = ("inetOrgPerson", "hrcCalendarResource")
 
     identity = Section(
         _("Identity"),
@@ -73,14 +73,14 @@ class SogoResourceTab(Tab):
     booking = Section(
         _("Booking settings"),
         SelectAttr(
-            "Kind",
+            "hrcResourceKind",
             _("Kind"),
             options=RESOURCE_KINDS,
             default="location",
             description=_("Type of resource (room, equipment, etc.)"),
         ),
         IntAttr(
-            "Multiplebookings",
+            "hrcResourceMultipleBookings",
             _("Multiple bookings"),
             min=0,
             default=0,
@@ -109,12 +109,12 @@ class SogoResource(ObjectType):
     label_plural = _("Calendar resources")
     icon = "calendar"
     category = "mail"
-    filter = "(objectClass=CalendarResource)"
+    filter = "(objectClass=hrcCalendarResource)"
     main_attr = "uid"
     name_attr = "uid"
     rdn = "ou=resources"
-    columns = ("uid", "mail", "Kind", "description")
-    search_attrs = ("uid", "mail", "description", "Kind")
+    columns = ("uid", "mail", "hrcResourceKind", "description")
+    search_attrs = ("uid", "mail", "description", "hrcResourceKind")
     required_object_classes = ("inetOrgPerson",)
 
     Main = SogoResourceTab

@@ -24,7 +24,7 @@ TASK_DN = f"cn=export,{TASKS}"
 @pytest.fixture
 def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
-    d.set_schema_object_classes([*d.schema_object_classes(), "fdExtractorTasks"])
+    d.set_schema_object_classes([*d.schema_object_classes(), "hrcExtractorTasks"])
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     for dn, ou in ((PEOPLE, "people"), (GROUPS, "groups"), (TASKS, "tasks")):
         d.add(dn, {"objectClass": [b"organizationalUnit"], "ou": [ou.encode()]})
@@ -47,11 +47,11 @@ def add_user(d: MemoryDirectory, uid: str, **extra: list[str]) -> str:
 
 def add_task(d: MemoryDirectory, members: list[str], attributes: list[str], **extra: str) -> None:
     attrs: dict[str, list[bytes]] = {
-        "objectClass": [b"fdTasks", b"fdExtractorTasks"],
+        "objectClass": [b"hrcTasks", b"hrcExtractorTasks"],
         "cn": [b"export"],
-        "fdTasksStatus": [b"Activated"],
-        "fdExtractorTaskMembers": [m.encode() for m in members],
-        "fdExtractorTaskAttributes": [a.encode() for a in attributes],
+        "hrcTasksStatus": [b"Activated"],
+        "hrcExtractorTaskMembers": [m.encode() for m in members],
+        "hrcExtractorTaskAttributes": [a.encode() for a in attributes],
     }
     for key, value in extra.items():
         attrs[key] = [v.encode() for v in value.split("|")]
@@ -87,9 +87,9 @@ def test_mail_delivery_and_expansion(directory: MemoryDirectory) -> None:
         directory,
         [f"cn=team,{GROUPS}"],
         ["uid", "sn"],
-        fdExtractorRecipientsMembers=boss,
-        fdExtractorEmailSender="noreply@example.com",
-        fdExtractorTaskFormat="tsv",
+        hrcExtractorRecipientsMembers=boss,
+        hrcExtractorEmailSender="noreply@example.com",
+        hrcExtractorTaskFormat="tsv",
     )
     mailer = MemoryMailer()
     report = ex.run_extractor(directory, mailer, NOW, ex.ExtractorSettings())
@@ -160,7 +160,7 @@ def test_task_runs_once_and_is_deactivated_when_not_repeatable(
     assert ex.run_extractor(directory, MemoryMailer(), NOW, settings).tasks_run == 1
     assert ex.run_extractor(directory, MemoryMailer(), NOW, settings).tasks_run == 0
     entry = directory.get(TASK_DN)
-    assert entry is not None and entry.text("fdTasksStatus") == "Deactivated"
+    assert entry is not None and entry.text("hrcTasksStatus") == "Deactivated"
 
 
 def test_render_csv_quotes_values() -> None:
@@ -178,7 +178,7 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
     ).enabled
     info = registry.get("extractor_task")
     assert info.acl_object(info.main_tab) == "tasks/extractorTask"
-    assert info.type.filter == "(&(objectClass=fdTasks)(objectClass=fdExtractorTasks))"
+    assert info.type.filter == "(&(objectClass=hrcTasks)(objectClass=hrcExtractorTasks))"
     a = add_user(directory, "alice")
     service = ObjectService(directory, registry)
     dn = service.create(
@@ -188,15 +188,15 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
             "main": {
                 "values": {
                     "cn": "export",
-                    "fdExtractorTaskMembers": [a],
-                    "fdExtractorTaskAttributes": ["uid", "mail"],
-                    "fdExtractorTaskFormat": "csv",
+                    "hrcExtractorTaskMembers": [a],
+                    "hrcExtractorTaskAttributes": ["uid", "mail"],
+                    "hrcExtractorTaskFormat": "csv",
                 }
             }
         },
     )
     entry = directory.get(dn)
-    assert entry is not None and entry.texts("fdExtractorTaskAttributes") == ["uid", "mail"]
+    assert entry is not None and entry.texts("hrcExtractorTaskAttributes") == ["uid", "mail"]
     with pytest.raises(ObjectValidationError):
         service.create(
             "extractor_task",
@@ -205,8 +205,8 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
                 "main": {
                     "values": {
                         "cn": "bad",
-                        "fdExtractorTaskMembers": [a],
-                        "fdExtractorTaskAttributes": ["userPassword"],
+                        "hrcExtractorTaskMembers": [a],
+                        "hrcExtractorTaskAttributes": ["userPassword"],
                     }
                 }
             },

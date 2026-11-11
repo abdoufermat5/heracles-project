@@ -1,7 +1,7 @@
 """Notifications runner: mail when monitored attributes of members change.
 
 Each task keeps a snapshot of the monitored values of every member, one child entry per
-member below the task (``cn=<hash>``, objectClass ``fdTasks``, JSON in ``description``).
+member below the task (``cn=<hash>``, objectClass ``hrcTasks``, JSON in ``description``).
 A run compares the current values with the snapshot, mails the differences and stores
 the new snapshot. The first time a member is seen, only the snapshot is stored.
 """
@@ -23,7 +23,7 @@ from heracles.ldap.client import (
     NoSuchObjectError,
     Scope,
 )
-from heracles.schema import legacy
+from heracles.schema import names as schema
 from heracles_plugins._tasks import (
     TaskReport,
     expand_members,
@@ -33,7 +33,7 @@ from heracles_plugins._tasks import (
     utc,
 )
 
-TASK_CLASS = "fdTasksNotifications"
+TASK_CLASS = "hrcTasksNotifications"
 TASK_FILTER = task_filter(TASK_CLASS)
 SNAPSHOT_PREFIX = "snapshot-"
 #: Never monitored: their values are secrets.
@@ -99,7 +99,7 @@ def load_snapshots(directory: DirectoryClient, task_dn: str) -> dict[str, Values
     """Stored snapshots of a task by normalised user DN."""
     out: dict[str, Values] = {}
     try:
-        found = list(directory.search(task_dn, "(objectClass=fdTasks)", Scope.ONE))
+        found = list(directory.search(task_dn, "(objectClass=hrcTasks)", Scope.ONE))
     except NoSuchObjectError:
         return out
     for entry in found:
@@ -130,7 +130,7 @@ def _store_snapshot(directory: DirectoryClient, task_dn: str, user_dn: str, valu
     directory.add(
         dn,
         {
-            "objectClass": [legacy.OC.TASKS.encode()],
+            "objectClass": [schema.OC.TASKS.encode()],
             "cn": [dn.split(",", 1)[0].partition("=")[2].encode()],
             "description": [payload],
         },
@@ -140,7 +140,7 @@ def _store_snapshot(directory: DirectoryClient, task_dn: str, user_dn: str, valu
 def delete_snapshots(directory: DirectoryClient, task_dn: str) -> None:
     """Remove every snapshot of a task (before the task is deleted)."""
     try:
-        for entry in list(directory.search(task_dn, "(objectClass=fdTasks)", Scope.ONE)):
+        for entry in list(directory.search(task_dn, "(objectClass=hrcTasks)", Scope.ONE)):
             directory.delete(entry.dn)
     except NoSuchObjectError:
         return
@@ -169,7 +169,7 @@ def monitored_attributes(task: Entry, settings: NotificationsSettings) -> list[s
     allowed = {a.lower() for a in settings.attributes} - FORBIDDEN_ATTRIBUTES
     return [
         a
-        for a in dict.fromkeys(task.texts("fdTasksNotificationsAttributes"))
+        for a in dict.fromkeys(task.texts("hrcTasksNotificationsAttributes"))
         if a.lower() in allowed
     ]
 
@@ -185,10 +185,10 @@ def _process_task(
     if not attributes:
         report.errors.append(f"{task.dn}: no monitored attribute")
         return False
-    template_dn = task.text("fdTasksNotificationsMailTemplate")
+    template_dn = task.text("hrcTasksNotificationsMailTemplate")
     template = (
         directory.get(
-            template_dn, [legacy.ATTR.MAIL_TEMPLATE_SUBJECT, legacy.ATTR.MAIL_TEMPLATE_BODY]
+            template_dn, [schema.ATTR.MAIL_TEMPLATE_SUBJECT, schema.ATTR.MAIL_TEMPLATE_BODY]
         )
         if template_dn
         else None
@@ -196,21 +196,21 @@ def _process_task(
     if template is None:
         report.errors.append(f"{task.dn}: mail template not found")
         return False
-    subject_tpl = template.text(legacy.ATTR.MAIL_TEMPLATE_SUBJECT) or ""
-    body_tpl = template.text(legacy.ATTR.MAIL_TEMPLATE_BODY) or ""
-    sender = task.text("fdTasksNotificationsEmailSender") or None
+    subject_tpl = template.text(schema.ATTR.MAIL_TEMPLATE_SUBJECT) or ""
+    body_tpl = template.text(schema.ATTR.MAIL_TEMPLATE_BODY) or ""
+    sender = task.text("hrcTasksNotificationsEmailSender") or None
     recipients = [
         mail
         for mail in dict.fromkeys(
             e.text("mail")
-            for e in expand_members(directory, task.texts("fdTasksNotificationsRecipientsMembers"))
+            for e in expand_members(directory, task.texts("hrcTasksNotificationsRecipientsMembers"))
         )
         if mail
     ]
     previous = load_snapshots(directory, task.dn)
     seen: set[str] = set()
     for user in expand_members(
-        directory, task.texts("fdTasksNotificationsMonitoredMembers"), attributes
+        directory, task.texts("hrcTasksNotificationsMonitoredMembers"), attributes
     ):
         key = dnlib.normalize(user.dn)
         seen.add(key)

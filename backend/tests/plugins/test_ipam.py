@@ -10,7 +10,7 @@ import heracles_plugins.ipam as ipam
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
-from heracles.schema.legacy import OC
+from heracles.schema.names import OC
 
 BASE = "dc=test"
 PARIS = f"ou=paris,{BASE}"
@@ -30,8 +30,8 @@ def directory() -> MemoryDirectory:
     d.set_schema_object_classes(
         [
             *d.schema_object_classes(),
-            "fdIpamVlan",
-            "fdIpamSubnet",
+            "hrcIpamVlan",
+            "hrcIpamSubnet",
             "ipHost",
         ]
     )
@@ -60,7 +60,7 @@ def test_ipam_plugin_schema_requirement() -> None:
     # Without the schema classes, the plugin should report disabled
     status = reg.register_plugin(ipam.plugin(), {"inetorgperson", "posixaccount"})
     assert not status.enabled
-    assert "fdIpamVlan" in status.missing_object_classes or "fdipamvlan" in [
+    assert "hrcIpamVlan" in status.missing_object_classes or "hrcipamvlan" in [
         c.lower() for c in status.missing_object_classes
     ]
 
@@ -69,9 +69,9 @@ def test_vlan_crud(service: ObjectService, directory: MemoryDirectory) -> None:
     values: dict[str, Any] = {
         "cn": "vlan100",
         "description": "Production VLAN",
-        "fdIpamActive": True,
-        "fdIpamVlanInnerId": 100,
-        "fdIpamVlanQinQId": 10,
+        "hrcIpamActive": True,
+        "hrcIpamVlanInnerId": 100,
+        "hrcIpamVlanQinQId": 10,
         "o": "Acme Corp",
     }
     dn = service.create("ipamVlan", PARIS, {"main": {"values": values}})
@@ -81,12 +81,12 @@ def test_vlan_crud(service: ObjectService, directory: MemoryDirectory) -> None:
     assert entry is not None
     assert entry.text("cn") == "vlan100"
     assert entry.text("description") == "Production VLAN"
-    assert entry.text("fdIpamVlanInnerId") == "100"
-    assert entry.text("fdIpamVlanQinQId") == "10"
-    assert entry.text("fdIpamActive") == "TRUE"
+    assert entry.text("hrcIpamVlanInnerId") == "100"
+    assert entry.text("hrcIpamVlanQinQId") == "10"
+    assert entry.text("hrcIpamActive") == "TRUE"
 
     loaded = service.load("ipamVlan", dn)
-    assert loaded.tabs["main"].values["fdIpamVlanInnerId"] == 100
+    assert loaded.tabs["main"].values["hrcIpamVlanInnerId"] == 100
 
     # Update
     service.update("ipamVlan", dn, {"main": {"values": {"description": "Updated VLAN"}}})
@@ -105,18 +105,18 @@ def test_vlan_validation(service: ObjectService) -> None:
         service.create(
             "ipamVlan",
             PARIS,
-            {"main": {"values": {"cn": "invalid-vlan", "fdIpamVlanInnerId": 5000}}},
+            {"main": {"values": {"cn": "invalid-vlan", "hrcIpamVlanInnerId": 5000}}},
         )
-    assert "main.fdIpamVlanInnerId" in exc_info.value.fields
+    assert "main.hrcIpamVlanInnerId" in exc_info.value.fields
 
     # Invalid VLAN ID (< 1)
     with pytest.raises(ObjectValidationError) as exc_info:
         service.create(
             "ipamVlan",
             PARIS,
-            {"main": {"values": {"cn": "invalid-vlan", "fdIpamVlanInnerId": 0}}},
+            {"main": {"values": {"cn": "invalid-vlan", "hrcIpamVlanInnerId": 0}}},
         )
-    assert "main.fdIpamVlanInnerId" in exc_info.value.fields
+    assert "main.hrcIpamVlanInnerId" in exc_info.value.fields
 
 
 def test_subnet_crud_and_vlan_reference(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -124,17 +124,17 @@ def test_subnet_crud_and_vlan_reference(service: ObjectService, directory: Memor
     vlan_dn = service.create(
         "ipamVlan",
         PARIS,
-        {"main": {"values": {"cn": "vlan20", "fdIpamVlanInnerId": 20}}},
+        {"main": {"values": {"cn": "vlan20", "hrcIpamVlanInnerId": 20}}},
     )
 
     # Create Subnet referencing the VLAN
     subnet_values: dict[str, Any] = {
         "cn": "servers-net",
-        "fdIpamSubnetCIDR": "10.100.0.0/24",
+        "hrcIpamSubnetCIDR": "10.100.0.0/24",
         "description": "Server Subnet",
-        "fdIpamVlanDN": vlan_dn,
-        "fdIpamActive": True,
-        "fdIpamType": "IPv4",
+        "hrcIpamVlanDN": vlan_dn,
+        "hrcIpamActive": True,
+        "hrcIpamType": "IPv4",
     }
     subnet_dn = service.create("ipamSubnet", PARIS, {"main": {"values": subnet_values}})
     assert subnet_dn == f"cn=servers-net,ou=ipam,{PARIS}"
@@ -142,12 +142,12 @@ def test_subnet_crud_and_vlan_reference(service: ObjectService, directory: Memor
     entry = directory.get(subnet_dn)
     assert entry is not None
     assert entry.text("cn") == "servers-net"
-    assert entry.text("fdIpamSubnetCIDR") == "10.100.0.0/24"
-    assert entry.text("fdIpamVlanDN") == vlan_dn
+    assert entry.text("hrcIpamSubnetCIDR") == "10.100.0.0/24"
+    assert entry.text("hrcIpamVlanDN") == vlan_dn
 
     loaded = service.load("ipamSubnet", subnet_dn)
-    assert loaded.tabs["main"].values["fdIpamSubnetCIDR"] == "10.100.0.0/24"
-    assert loaded.tabs["main"].values["fdIpamVlanDN"] == vlan_dn
+    assert loaded.tabs["main"].values["hrcIpamSubnetCIDR"] == "10.100.0.0/24"
+    assert loaded.tabs["main"].values["hrcIpamVlanDN"] == vlan_dn
 
     # Delete subnet
     service.delete("ipamSubnet", subnet_dn)
@@ -160,15 +160,15 @@ def test_subnet_cidr_validation(service: ObjectService) -> None:
         service.create(
             "ipamSubnet",
             PARIS,
-            {"main": {"values": {"cn": "bad-subnet", "fdIpamSubnetCIDR": "not-a-cidr"}}},
+            {"main": {"values": {"cn": "bad-subnet", "hrcIpamSubnetCIDR": "not-a-cidr"}}},
         )
-    assert "main.fdIpamSubnetCIDR" in exc_info.value.fields
+    assert "main.hrcIpamSubnetCIDR" in exc_info.value.fields
 
     # Valid IPv6 CIDR succeeds
     dn = service.create(
         "ipamSubnet",
         PARIS,
-        {"main": {"values": {"cn": "v6-subnet", "fdIpamSubnetCIDR": "2001:db8::/64"}}},
+        {"main": {"values": {"cn": "v6-subnet", "hrcIpamSubnetCIDR": "2001:db8::/64"}}},
     )
     assert "cn=v6-subnet" in dn
 

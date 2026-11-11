@@ -47,7 +47,7 @@ from heracles.objects.masks import CounterState, MaskEnv
 from heracles.objects.model import Tab
 from heracles.objects.registry import TypeInfo
 from heracles.objects.service import ObjectService, department_of
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 _OBJECT_CLASS = "objectclass"
 _MAX_UNIQUE_SUFFIX = 1000
@@ -89,7 +89,7 @@ def container_rdn(info: TypeInfo) -> str:
     """Template container RDNs below a department, e.g. ``ou=templates,ou=people``."""
     if not info.type.rdn:
         raise ObjectValidationError({"": _("This type does not support templates.")})
-    return dnlib.join(legacy.TEMPLATES_RDN, info.type.rdn)
+    return dnlib.join(schema.TEMPLATES_RDN, info.type.rdn)
 
 
 def supports_templates(info: TypeInfo) -> bool:
@@ -108,11 +108,11 @@ def _encode_fields(fields: Mapping[str, Sequence[str]]) -> list[bytes]:
 
 def _read(info: TypeInfo, entry: Entry) -> Template:
     fields: dict[str, list[str]] = {}
-    for raw in entry.texts(legacy.TEMPLATE_FIELD_ATTR):
+    for raw in entry.texts(schema.TEMPLATE_FIELD_ATTR):
         parsed = _split_field(raw)
         if parsed is not None:
             fields.setdefault(parsed[0], []).append(parsed[1])
-    name = entry.text(legacy.STD_ATTR.CN) or dnlib.rdn(entry.dn).partition("=")[2]
+    name = entry.text(schema.STD_ATTR.CN) or dnlib.rdn(entry.dn).partition("=")[2]
     base = department_of(entry.dn, container_rdn(info))
     return Template(TemplateInfo(entry.dn, name, info.name, base), fields)
 
@@ -128,7 +128,7 @@ def _load(ctx: ObjectService, info: TypeInfo, dn: str) -> Template:
     entry = ctx.directory.get(dn)
     if (
         entry is None
-        or not entry.has_object_class(legacy.OC.TEMPLATE)
+        or not entry.has_object_class(schema.OC.TEMPLATE)
         or not _is_template_of(info, entry.dn)
     ):
         raise ObjectNotFoundError(dn)
@@ -173,11 +173,11 @@ def list_templates(
     info = ctx.registry.get(type_name)
     if not supports_templates(info):
         return []
-    flt = filters.equals("objectClass", legacy.OC.TEMPLATE)
+    flt = filters.equals("objectClass", schema.OC.TEMPLATE)
     try:
         entries = list(
             ctx.directory.search(
-                base or ctx.directory.base_dn, flt, Scope.SUBTREE, [legacy.STD_ATTR.CN]
+                base or ctx.directory.base_dn, flt, Scope.SUBTREE, [schema.STD_ATTR.CN]
             )
         )
     except NoSuchObjectError:
@@ -380,12 +380,12 @@ def create_template(
     dn = template_dn(info, base, cleaned)
     ensure_container(ctx.directory, dnlib.join(container_rdn(info), base))
     attrs: dict[str, list[bytes]] = {
-        "objectClass": [b"top", legacy.OC.TEMPLATE.encode()],
-        legacy.STD_ATTR.CN: [cleaned.encode("utf-8")],
+        "objectClass": [b"top", schema.OC.TEMPLATE.encode()],
+        schema.STD_ATTR.CN: [cleaned.encode("utf-8")],
     }
     encoded = _encode_fields(fields)
     if encoded:
-        attrs[legacy.TEMPLATE_FIELD_ATTR] = encoded
+        attrs[schema.TEMPLATE_FIELD_ATTR] = encoded
     try:
         ctx.directory.add(dn, attrs)
     except AlreadyExistsError:
@@ -415,9 +415,9 @@ def update_template(
     if tpl.fields != fields:
         encoded = _encode_fields(fields)
         mod = (
-            Modification("replace", legacy.TEMPLATE_FIELD_ATTR, encoded)
+            Modification("replace", schema.TEMPLATE_FIELD_ATTR, encoded)
             if encoded
-            else Modification("delete", legacy.TEMPLATE_FIELD_ATTR)
+            else Modification("delete", schema.TEMPLATE_FIELD_ATTR)
         )
         ctx.directory.modify(new_dn, [mod])
     return Template(TemplateInfo(new_dn, new_name, type_name, tpl.info.base), fields)
@@ -490,26 +490,26 @@ def _clean_supplied(values: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[s
 
 
 def _counters(directory: DirectoryClient) -> tuple[str, CounterState]:
-    dn = dnlib.join(legacy.CONFIG_RDN, legacy.APP_OU, directory.base_dn)
+    dn = dnlib.join(schema.CONFIG_RDN, schema.APP_OU, directory.base_dn)
     entry = directory.get(dn)
-    states = entry.texts(legacy.INCREMENTAL_STATES_ATTR) if entry is not None else []
+    states = entry.texts(schema.INCREMENTAL_STATES_ATTR) if entry is not None else []
     return dn, CounterState.parse(states)
 
 
 def _save_counters(directory: DirectoryClient, dn: str, state: CounterState) -> None:
     values = [v.encode("utf-8") for v in state.serialise()]
     if directory.get(dn, ["objectClass"]) is None:
-        ensure_container(directory, dnlib.join(legacy.APP_OU, directory.base_dn))
+        ensure_container(directory, dnlib.join(schema.APP_OU, directory.base_dn))
         directory.add(
             dn,
             {
-                "objectClass": [legacy.OC.MAIN_CONFIG.encode()],
-                legacy.STD_ATTR.CN: [b"config"],
-                legacy.INCREMENTAL_STATES_ATTR: values,
+                "objectClass": [schema.OC.MAIN_CONFIG.encode()],
+                schema.STD_ATTR.CN: [b"config"],
+                schema.INCREMENTAL_STATES_ATTR: values,
             },
         )
         return
-    directory.modify(dn, [Modification("replace", legacy.INCREMENTAL_STATES_ATTR, values)])
+    directory.modify(dn, [Modification("replace", schema.INCREMENTAL_STATES_ATTR, values)])
 
 
 def _exists(ctx: ObjectService, info: TypeInfo, value: str) -> bool:

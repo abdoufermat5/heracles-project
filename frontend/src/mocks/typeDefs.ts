@@ -52,7 +52,7 @@ export const typeDescriptors: TypeDescriptor[] = [
                 image: { max_width: 200, max_height: 200 },
               },
               {
-                name: 'dateOfBirth',
+                name: 'hrcDateOfBirth',
                 label: 'Date of birth',
                 kind: 'date',
               },

@@ -62,10 +62,10 @@ class MailDemoDirectory(MemoryDirectory):
 
     def schema_object_classes(self) -> set[str]:
         return super().schema_object_classes() | {
-            "gosamailaccount",
-            "fdgroupmail",
-            "mailaliasdistribution",
-            "mailaliasredirection",
+            "hrcmailaccount",
+            "hrcgroupmail",
+            "hrcmailaliasdistribution",
+            "hrcmailaliasredirection",
         }
 
 
@@ -115,16 +115,16 @@ def test_user_type_descriptor_has_mail_tab(app_client: TestClient) -> None:
     # the primary address belongs to the main tab, not to the mail tab
     assert "mail" not in attrs
     assert {
-        "gosaMailServer",
-        "gosaMailQuota",
-        "gosaMailAlternateAddress",
-        "gosaMailForwardingAddress",
+        "hrcMailServer",
+        "hrcMailQuota",
+        "hrcMailAlternateAddress",
+        "hrcMailForwardingAddress",
         "flag_vacation",
         "flag_localonly",
         "flag_ownmailbox",
-        "gosaVacationStart",
-        "gosaVacationStop",
-        "gosaVacationMessage",
+        "hrcVacationStart",
+        "hrcVacationStop",
+        "hrcVacationMessage",
     } <= attrs
 
 
@@ -139,15 +139,15 @@ def test_patch_user_mail_account(app_client: TestClient) -> None:
             "mail": {
                 "active": True,
                 "values": {
-                    "gosaMailServer": "mail.heracles.test",
-                    "gosaMailQuota": 512,
-                    "gosaMailAlternateAddress": ["john.doe@heracles.test"],
-                    "gosaMailForwardingAddress": ["jdoe.personal@example.com"],
+                    "hrcMailServer": "mail.heracles.test",
+                    "hrcMailQuota": 512,
+                    "hrcMailAlternateAddress": ["john.doe@heracles.test"],
+                    "hrcMailForwardingAddress": ["jdoe.personal@example.com"],
                     "flag_localonly": True,
                     "flag_vacation": True,
-                    "gosaVacationStart": "2026-11-10",
-                    "gosaVacationStop": "2026-11-20",
-                    "gosaVacationMessage": "Away on business",
+                    "hrcVacationStart": "2026-11-10",
+                    "hrcVacationStop": "2026-11-20",
+                    "hrcVacationMessage": "Away on business",
                 },
             },
         }
@@ -158,18 +158,18 @@ def test_patch_user_mail_account(app_client: TestClient) -> None:
     mail_tab = state["tabs"]["mail"]
     assert mail_tab["active"] is True
     assert state["tabs"]["main"]["values"]["mail"] == "jdoe@heracles.test"
-    assert mail_tab["values"]["gosaMailServer"] == "mail.heracles.test"
-    assert mail_tab["values"]["gosaMailQuota"] == 512
+    assert mail_tab["values"]["hrcMailServer"] == "mail.heracles.test"
+    assert mail_tab["values"]["hrcMailQuota"] == 512
     assert mail_tab["values"]["flag_localonly"] is True
     assert mail_tab["values"]["flag_vacation"] is True
     assert mail_tab["values"]["flag_ownmailbox"] is False
-    assert mail_tab["values"]["gosaVacationStart"] == "2026-11-10"
-    assert mail_tab["values"]["gosaVacationStop"] == "2026-11-20"
-    assert mail_tab["values"]["gosaVacationMessage"] == "Away on business"
+    assert mail_tab["values"]["hrcVacationStart"] == "2026-11-10"
+    assert mail_tab["values"]["hrcVacationStop"] == "2026-11-20"
+    assert mail_tab["values"]["hrcVacationMessage"] == "Away on business"
 
     # GET confirms persistence
     get_res = a.get(f"/objects/user/{q(user_dn)}").json()
-    assert get_res["tabs"]["mail"]["values"]["gosaMailQuota"] == 512
+    assert get_res["tabs"]["mail"]["values"]["hrcMailQuota"] == 512
 
 
 def test_patch_user_mail_turn_off_vacation(app_client: TestClient) -> None:
@@ -186,9 +186,9 @@ def test_patch_user_mail_turn_off_vacation(app_client: TestClient) -> None:
                     "active": True,
                     "values": {
                         "flag_vacation": True,
-                        "gosaVacationStart": "2026-11-10",
-                        "gosaVacationStop": "2026-11-20",
-                        "gosaVacationMessage": "Away",
+                        "hrcVacationStart": "2026-11-10",
+                        "hrcVacationStop": "2026-11-20",
+                        "hrcVacationMessage": "Away",
                     },
                 },
             }
@@ -211,9 +211,9 @@ def test_patch_user_mail_turn_off_vacation(app_client: TestClient) -> None:
     assert r.status_code == 200, r.text
     mail_vals = r.json()["tabs"]["mail"]["values"]
     assert mail_vals["flag_vacation"] is False
-    assert mail_vals["gosaVacationStart"] is None
-    assert mail_vals["gosaVacationStop"] is None
-    assert mail_vals["gosaVacationMessage"] is None
+    assert mail_vals["hrcVacationStart"] is None
+    assert mail_vals["hrcVacationStop"] is None
+    assert mail_vals["hrcVacationMessage"] is None
 
 
 def test_patch_user_mail_uniqueness_validation(app_client: TestClient) -> None:
@@ -230,7 +230,7 @@ def test_patch_user_mail_uniqueness_validation(app_client: TestClient) -> None:
                 "mail": {
                     "active": True,
                     "values": {
-                        "gosaMailAlternateAddress": ["alias1@heracles.test"],
+                        "hrcMailAlternateAddress": ["alias1@heracles.test"],
                     },
                 },
             }
@@ -278,9 +278,9 @@ def test_alias_distribution_crud_api(app_client: TestClient) -> None:
                     "cn": "api-dist",
                     "description": "API distribution list",
                     "mail": "api-dist@heracles.test",
-                    "gosaMailAlternateAddress": ["api-alias@heracles.test"],
-                    "gosaMailServer": "mail.heracles.test",
-                    "aliasExpirationDate": "2027-06-30",
+                    "hrcMailAlternateAddress": ["api-alias@heracles.test"],
+                    "hrcMailServer": "mail.heracles.test",
+                    "hrcMailAliasExpirationDate": "2027-06-30",
                 }
             }
         },
@@ -297,7 +297,7 @@ def test_alias_distribution_crud_api(app_client: TestClient) -> None:
     vals = get_res.json()["tabs"]["main"]["values"]
     assert vals["cn"] == "api-dist"
     assert vals["mail"] == "api-dist@heracles.test"
-    assert vals["aliasExpirationDate"] == "2027-06-30"
+    assert vals["hrcMailAliasExpirationDate"] == "2027-06-30"
 
     # PATCH
     patch_res = a.patch(
@@ -326,14 +326,14 @@ def test_alias_redirection_crud_api(app_client: TestClient) -> None:
                     "values": {
                         "cn": "api-redir-bad",
                         "mail": "bad-redir@heracles.test",
-                        "gosaMailForwardingAddress": [],
+                        "hrcMailForwardingAddress": [],
                     }
                 }
             },
         },
     )
     assert r_bad.status_code == 422
-    assert "main.gosaMailForwardingAddress" in r_bad.json()["error"]["fields"]
+    assert "main.hrcMailForwardingAddress" in r_bad.json()["error"]["fields"]
 
     # Valid create
     r = a.post(
@@ -346,8 +346,8 @@ def test_alias_redirection_crud_api(app_client: TestClient) -> None:
                         "cn": "api-redir",
                         "description": "API redirection list",
                         "mail": "api-redir@heracles.test",
-                        "gosaMailForwardingAddress": ["target-api@example.com"],
-                        "aliasExpirationDate": "2027-12-31",
+                        "hrcMailForwardingAddress": ["target-api@example.com"],
+                        "hrcMailAliasExpirationDate": "2027-12-31",
                     }
                 }
             },
@@ -361,7 +361,7 @@ def test_alias_redirection_crud_api(app_client: TestClient) -> None:
     assert res.status_code == 200
     vals = res.json()["tabs"]["main"]["values"]
     assert vals["mail"] == "api-redir@heracles.test"
-    assert vals["gosaMailForwardingAddress"] == ["target-api@example.com"]
+    assert vals["hrcMailForwardingAddress"] == ["target-api@example.com"]
 
     # DELETE
     assert a.delete(f"/objects/mail_alias_redirection/{q(dn)}").status_code == 204

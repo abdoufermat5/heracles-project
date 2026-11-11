@@ -64,7 +64,7 @@ class World:
 
     def acl_role(self, cn: str, *values: str) -> str:
         dn = f"cn={cn},{ROLES}"
-        self.client.put(dn, objectClass=["gosaRole"], gosaAclTemplate=list(values))
+        self.client.put(dn, objectClass=["hrcRole"], hrcAclTemplate=list(values))
         return dn
 
     def assign(
@@ -94,9 +94,9 @@ class World:
         entry = self.client.get(on)
         assert entry is not None
         classes = entry.attrs.setdefault("objectClass", [])
-        if b"gosaAcl" not in classes:
-            classes.append(b"gosaAcl")
-        entry.attrs.setdefault("gosaAclEntry", []).append(value.encode())
+        if b"hrcAcl" not in classes:
+            classes.append(b"hrcAcl")
+        entry.attrs.setdefault("hrcAclEntry", []).append(value.encode())
 
     # -- resolution ------------------------------------------------------
     def resolve(

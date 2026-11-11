@@ -22,7 +22,7 @@ def directory() -> MemoryDirectory:
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     for ou in ("certificates", "people"):
         d.add(f"ou={ou},{BASE}", {"objectClass": [b"organizationalUnit"], "ou": [ou.encode()]})
-    d.set_schema_object_classes([*d.schema_object_classes(), "fdEjbcaCertificates"])
+    d.set_schema_object_classes([*d.schema_object_classes(), "hrcEjbcaCertificates"])
     return d
 
 
@@ -77,12 +77,12 @@ def test_user_references_and_summary(service: ObjectService, directory: MemoryDi
         BASE,
         {
             "main": {"values": {"uid": "bob", "givenName": "Bob", "sn": "B"}},
-            "ejbca": {"active": True, "values": {"fdEjbcaCertDN": [cert]}},
+            "ejbca": {"active": True, "values": {"hrcEjbcaCertDN": [cert]}},
         },
     )
     entry = directory.get(user)
-    assert entry is not None and entry.has_object_class("fdEjbcaCertificates")
-    assert entry.texts("fdEjbcaCertDN") == [cert]
+    assert entry is not None and entry.has_object_class("hrcEjbcaCertificates")
+    assert entry.texts("hrcEjbcaCertDN") == [cert]
     summary = service.load("user", user).tabs["ejbca"].values["ejbcaSummary"]
     assert summary.startswith("vpn-bob: Subject:")
 
@@ -92,7 +92,7 @@ def test_acl_keys_and_attachment_to_systems() -> None:
     assert {a.type_name for a in plugin.tabs} == set(ejbca.REFERENCING_TYPES)
     registry = TypeRegistry()
     register_builtin_types(registry)
-    registry.register_plugin(plugin, {"fdejbcacertificates"})
+    registry.register_plugin(plugin, {"hrcejbcacertificates"})
     info = registry.get("ejbca_certificate")
     assert info.acl_object(info.main_tab) == "ejbcaCertificate/ejbcaCertificate"
     user = registry.get("user")

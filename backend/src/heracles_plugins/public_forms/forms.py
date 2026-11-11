@@ -35,9 +35,9 @@ from heracles_plugins.invitations.tokens import (
     release_token,
 )
 
-FORM_CLASS = "fdPublicForm"
+FORM_CLASS = "hrcPublicForm"
 FORMS_RDN = "ou=forms"
-ALTERED_ATTR = "fdPublicFormAlteredAttributes"
+ALTERED_ATTR = "hrcPublicFormAlteredAttributes"
 #: Tab of the invitations plugin that marks users created through a form.
 REGISTRATION_TAB = "registration"
 
@@ -90,7 +90,7 @@ def _bool(entry: Entry, attr: str) -> bool:
 
 
 def parse_rules(values: list[str]) -> tuple[FieldRule, ...]:
-    """Decode ``fdPublicFormAlteredAttributes`` values (``tab.attr|M|R|I|H`` booleans)."""
+    """Decode ``hrcPublicFormAlteredAttributes`` values (``tab.attr|M|R|I|H`` booleans)."""
     rules: list[FieldRule] = []
     for raw in values:
         parts = raw.split("|", 4)
@@ -107,15 +107,15 @@ def form_from_entry(entry: Entry) -> FormDefinition:
     return FormDefinition(
         dn=entry.dn,
         name=entry.text("cn") or "",
-        title=entry.text("fdPublicFormTitle") or entry.text("cn") or "",
-        text=entry.text("fdPublicFormText") or "",
-        final_text=entry.text("fdPublicFormFinalText") or "",
-        type_name=entry.text("fdPublicFormTemplateType") or "",
-        template_dn=entry.text("fdPublicFormTemplateDN"),
-        private=_bool(entry, "fdPublicFormPrivate"),
-        tos_url=entry.text("fdPublicFormTosUrl"),
-        default_locked=_bool(entry, "fdPublicFormDefaultLocked"),
-        captcha=_bool(entry, "fdPublicFormCaptcha"),
+        title=entry.text("hrcPublicFormTitle") or entry.text("cn") or "",
+        text=entry.text("hrcPublicFormText") or "",
+        final_text=entry.text("hrcPublicFormFinalText") or "",
+        type_name=entry.text("hrcPublicFormTemplateType") or "",
+        template_dn=entry.text("hrcPublicFormTemplateDN"),
+        private=_bool(entry, "hrcPublicFormPrivate"),
+        tos_url=entry.text("hrcPublicFormTosUrl"),
+        default_locked=_bool(entry, "hrcPublicFormDefaultLocked"),
+        captcha=_bool(entry, "hrcPublicFormCaptcha"),
         rules=parse_rules(entry.texts(ALTERED_ATTR)),
     )
 

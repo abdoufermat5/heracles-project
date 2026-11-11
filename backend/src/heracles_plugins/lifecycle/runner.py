@@ -24,7 +24,7 @@ from heracles_plugins._tasks import (
     utc,
 )
 
-TASK_CLASS = "fdTasksLifeCycle"
+TASK_CLASS = "hrcTasksLifeCycle"
 TASK_FILTER = task_filter(TASK_CLASS)
 USER_CONTAINER_RDN = "ou=people"
 
@@ -104,7 +104,7 @@ def _apply(
     hooks: Sequence[AccountLockHook],
 ) -> LifecycleRecord | None:
     done: list[str] = []
-    closure = bool_of(task, "fdTasksLifeCycleEnableAccountClosure") is True
+    closure = bool_of(task, "hrcTasksLifeCycleEnableAccountClosure") is True
     if (settings.action == "lock" or closure) and _lock(directory, entry, hooks):
         done.append("lock")
     if (
@@ -134,9 +134,9 @@ def run_lifecycle(
     """Run every due lifecycle task once.
 
     A task looks at its member accounts (users, or groups and roles expanded to users) whose
-    login matches ``fdTasksLifeCycleRegexPattern`` (all when empty) and whose end date plus
-    the grace period ``fdTasksLifeCyclePostEndDate`` (days) is today or past, and applies
-    ``settings.action``. With ``fdTasksLifeCycleEnableAccountClosure`` the account is also
+    login matches ``hrcTasksLifeCycleRegexPattern`` (all when empty) and whose end date plus
+    the grace period ``hrcTasksLifeCyclePostEndDate`` (days) is today or past, and applies
+    ``settings.action``. With ``hrcTasksLifeCycleEnableAccountClosure`` the account is also
     locked. Every action is idempotent, so an account already processed is not reported
     again. ``lock_hooks`` is ``registry.account_lock_hooks`` (they run on lock).
     """
@@ -146,16 +146,16 @@ def run_lifecycle(
     report = LifecycleReport()
 
     def process(task: Entry) -> bool:
-        pattern = (task.text("fdTasksLifeCycleRegexPattern") or "").strip()
+        pattern = (task.text("hrcTasksLifeCycleRegexPattern") or "").strip()
         try:
             regex = re.compile(pattern) if pattern else None
         except re.error:
             report.errors.append(f"{task.dn}: invalid login pattern")
             return False
-        grace = timedelta(days=max(int_of(task, "fdTasksLifeCyclePostEndDate") or 0, 0))
+        grace = timedelta(days=max(int_of(task, "hrcTasksLifeCyclePostEndDate") or 0, 0))
         members = expand_members(
             directory,
-            task.texts("fdTasksLifeCycleMembers"),
+            task.texts("hrcTasksLifeCycleMembers"),
             [settings.end_date_attribute],
         )
         for member in members:

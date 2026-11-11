@@ -30,31 +30,31 @@ from heracles.ldap.client import (
 )
 from heracles.ldap.filter import Filter, matches, parse_filter
 from heracles.ldap.ldif import dump_ldif, parse_ldif
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 _DEFAULT_SCHEMA: frozenset[str] = frozenset(
-    {v.lower() for v in legacy.COMPAT_OBJECT_CLASSES}
+    {v.lower() for v in schema.CORE_OBJECT_CLASSES}
     | {
         v.lower()
         for v in (
-            legacy.STD_OC.INET_ORG_PERSON,
-            legacy.STD_OC.ORGANIZATIONAL_PERSON,
-            legacy.STD_OC.PERSON,
-            legacy.STD_OC.GROUP_OF_NAMES,
-            legacy.STD_OC.POSIX_GROUP,
-            legacy.STD_OC.ORGANIZATIONAL_ROLE,
-            legacy.STD_OC.ORGANIZATIONAL_UNIT,
-            legacy.STD_OC.ORGANIZATION,
-            legacy.STD_OC.LOCALITY,
-            legacy.STD_OC.COUNTRY,
-            legacy.STD_OC.DC_OBJECT,
-            legacy.STD_OC.DOMAIN,
-            legacy.STD_OC.POSIX_ACCOUNT,
-            legacy.STD_OC.SHADOW_ACCOUNT,
-            legacy.STD_OC.PUBLIC_KEY,
-            legacy.STD_OC.SUDO_ROLE,
-            legacy.STD_OC.PWD_POLICY,
-            legacy.STD_OC.TOP,
+            schema.STD_OC.INET_ORG_PERSON,
+            schema.STD_OC.ORGANIZATIONAL_PERSON,
+            schema.STD_OC.PERSON,
+            schema.STD_OC.GROUP_OF_NAMES,
+            schema.STD_OC.POSIX_GROUP,
+            schema.STD_OC.ORGANIZATIONAL_ROLE,
+            schema.STD_OC.ORGANIZATIONAL_UNIT,
+            schema.STD_OC.ORGANIZATION,
+            schema.STD_OC.LOCALITY,
+            schema.STD_OC.COUNTRY,
+            schema.STD_OC.DC_OBJECT,
+            schema.STD_OC.DOMAIN,
+            schema.STD_OC.POSIX_ACCOUNT,
+            schema.STD_OC.SHADOW_ACCOUNT,
+            schema.STD_OC.PUBLIC_KEY,
+            schema.STD_OC.SUDO_ROLE,
+            schema.STD_OC.PWD_POLICY,
+            schema.STD_OC.TOP,
         )
     }
 )

@@ -26,9 +26,9 @@ from heracles.ldap.client import (
 )
 from heracles.ldap.filter import escape_filter_value
 from heracles.ldap.ldif import dump_ldif, parse_ldif
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
-_A = legacy.ATTR
+_A = schema.ATTR
 _MAX_ATTEMPTS = 50
 _ZLIB_LEVEL = 6
 
@@ -100,7 +100,7 @@ class SnapshotService:
         clock: Callable[[], float] | None = None,
     ) -> None:
         self._dir = directory
-        self.snapshot_base = snapshot_base or dnlib.join(legacy.RDN.SNAPSHOTS, directory.base_dn)
+        self.snapshot_base = snapshot_base or dnlib.join(schema.RDN.SNAPSHOTS, directory.base_dn)
         self._clock = clock or time.time
 
     def create(
@@ -129,7 +129,7 @@ class SnapshotService:
             stamp = _timestamp(now, bump)
             snap_dn = f"{_A.SNAPSHOT_TIMESTAMP}={stamp},{self.snapshot_base}"
             attrs: dict[str, list[bytes]] = {
-                "objectClass": [legacy.OC.SNAPSHOT.encode()],
+                "objectClass": [schema.OC.SNAPSHOT.encode()],
                 _A.SNAPSHOT_TIMESTAMP: [stamp.encode()],
                 _A.SNAPSHOT_DN: [object_dn.encode("utf-8")],
                 _A.SNAPSHOT_DATA: [blob],
@@ -139,7 +139,7 @@ class SnapshotService:
             if object_type:
                 attrs[_A.SNAPSHOT_OBJECT_TYPE] = [object_type.encode("utf-8")]
             if description:
-                attrs[legacy.STD_ATTR.DESCRIPTION] = [description.encode("utf-8")]
+                attrs[schema.STD_ATTR.DESCRIPTION] = [description.encode("utf-8")]
             try:
                 self._dir.add(snap_dn, attrs)
             except AlreadyExistsError:
@@ -157,11 +157,11 @@ class SnapshotService:
                 _A.SNAPSHOT_HASH,
                 _A.SNAPSHOT_DATA_SOURCE,
                 _A.SNAPSHOT_OBJECT_TYPE,
-                legacy.STD_ATTR.DESCRIPTION,
+                schema.STD_ATTR.DESCRIPTION,
                 "objectClass",
             ],
         )
-        if entry is None or not entry.has_object_class(legacy.OC.SNAPSHOT):
+        if entry is None or not entry.has_object_class(schema.OC.SNAPSHOT):
             return None
         return self._to_snapshot(entry)
 
@@ -258,14 +258,14 @@ class SnapshotService:
         return removed
 
     def _list(self, flt: str) -> list[Snapshot]:
-        full = f"(&(objectClass={legacy.OC.SNAPSHOT}){flt})"
+        full = f"(&(objectClass={schema.OC.SNAPSHOT}){flt})"
         attrs = [
             _A.SNAPSHOT_TIMESTAMP,
             _A.SNAPSHOT_DN,
             _A.SNAPSHOT_HASH,
             _A.SNAPSHOT_DATA_SOURCE,
             _A.SNAPSHOT_OBJECT_TYPE,
-            legacy.STD_ATTR.DESCRIPTION,
+            schema.STD_ATTR.DESCRIPTION,
         ]
         try:
             entries = list(self._dir.search(self.snapshot_base, full, Scope.ONE, attrs))
@@ -282,7 +282,7 @@ class SnapshotService:
             object_dn=entry.text(_A.SNAPSHOT_DN) or "",
             object_type=entry.text(_A.SNAPSHOT_OBJECT_TYPE),
             source=entry.text(_A.SNAPSHOT_DATA_SOURCE) or "",
-            description=entry.text(legacy.STD_ATTR.DESCRIPTION),
+            description=entry.text(schema.STD_ATTR.DESCRIPTION),
             hash=entry.text(_A.SNAPSHOT_HASH),
         )
 

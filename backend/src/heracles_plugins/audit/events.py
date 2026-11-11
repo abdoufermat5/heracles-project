@@ -25,7 +25,7 @@ from heracles.objects.policy import EventContext, NullEvents
 
 log = structlog.get_logger(__name__)
 
-EVENT_CLASS = "fdAuditEvent"
+EVENT_CLASS = "hrcAuditEvent"
 AUDIT_RDN = "ou=audit"
 ACTIONS = ("create", "modify", "delete")
 #: Attribute values longer than this are cut in the log.
@@ -95,17 +95,17 @@ def write_event(
     attrs: dict[str, list[bytes]] = {
         "objectClass": [EVENT_CLASS.encode()],
         "cn": [cn.encode()],
-        "fdAuditDateTime": [format_generalized_time(moment).encode()],
-        "fdAuditAction": [action.encode()],
-        "fdAuditAuthorDN": [author_dn.encode()],
-        "fdAuditObjectType": [object_type.encode()],
-        "fdAuditObject": [object_dn.encode()],
-        "fdAuditResult": [result.encode()],
+        "hrcAuditDateTime": [format_generalized_time(moment).encode()],
+        "hrcAuditAction": [action.encode()],
+        "hrcAuditAuthorDN": [author_dn.encode()],
+        "hrcAuditObjectType": [object_type.encode()],
+        "hrcAuditObject": [object_dn.encode()],
+        "hrcAuditResult": [result.encode()],
     }
     if author_ip:
-        attrs["fdAuditAuthorIP"] = [author_ip.encode()]
+        attrs["hrcAuditAuthorIP"] = [author_ip.encode()]
     if attributes:
-        attrs["fdAuditAttributes"] = [a.encode() for a in attributes[:MAX_ATTRIBUTES]]
+        attrs["hrcAuditAttributes"] = [a.encode() for a in attributes[:MAX_ATTRIBUTES]]
     dn = f"cn={cn},{container}"
     directory.add(dn, attrs)
     return dn
@@ -182,14 +182,14 @@ class AuditEvents(NullEvents):
 
 def format_event(entry: Entry) -> str:
     """One line summary of an event entry."""
-    stamp = entry.text("fdAuditDateTime") or ""
+    stamp = entry.text("hrcAuditDateTime") or ""
     parts = [
         stamp,
-        entry.text("fdAuditAction") or "",
-        entry.text("fdAuditObjectType") or "",
-        entry.text("fdAuditObject") or "",
-        f"by {entry.text('fdAuditAuthorDN') or '?'}",
-        entry.text("fdAuditResult") or "",
+        entry.text("hrcAuditAction") or "",
+        entry.text("hrcAuditObjectType") or "",
+        entry.text("hrcAuditObject") or "",
+        f"by {entry.text('hrcAuditAuthorDN') or '?'}",
+        entry.text("hrcAuditResult") or "",
     ]
     return " ".join(p for p in parts if p)
 
@@ -197,15 +197,15 @@ def format_event(entry: Entry) -> str:
 def events_for(directory: DirectoryClient, dn: str, limit: int = 50) -> list[Entry]:
     """Latest events about ``dn`` or made by it, newest first."""
     quoted = escape_filter_value(dn)
-    flt = f"(&(objectClass={EVENT_CLASS})(|(fdAuditObject={quoted})(fdAuditAuthorDN={quoted})))"
+    flt = f"(&(objectClass={EVENT_CLASS})(|(hrcAuditObject={quoted})(hrcAuditAuthorDN={quoted})))"
     try:
         found = [
             e
             for e in directory.search(audit_container(directory), flt, Scope.ONE)
-            if dnlib.normalize(e.text("fdAuditObject") or "") == dnlib.normalize(dn)
-            or dnlib.normalize(e.text("fdAuditAuthorDN") or "") == dnlib.normalize(dn)
+            if dnlib.normalize(e.text("hrcAuditObject") or "") == dnlib.normalize(dn)
+            or dnlib.normalize(e.text("hrcAuditAuthorDN") or "") == dnlib.normalize(dn)
         ]
     except NoSuchObjectError:
         return []
-    found.sort(key=lambda e: (e.text("fdAuditDateTime") or "", e.dn), reverse=True)
+    found.sort(key=lambda e: (e.text("hrcAuditDateTime") or "", e.dn), reverse=True)
     return found[:limit]

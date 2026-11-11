@@ -27,7 +27,7 @@ HR = f"uid=hr,{PEOPLE}"
 def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
     d.set_schema_object_classes(
-        [*d.schema_object_classes(), "fdTasksNotifications", "fdMailTemplate"]
+        [*d.schema_object_classes(), "hrcTasksNotifications", "hrcMailTemplate"]
     )
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     for dn, ou in (
@@ -40,10 +40,10 @@ def directory() -> MemoryDirectory:
     d.add(
         TEMPLATE_DN,
         {
-            "objectClass": [b"fdMailTemplate"],
+            "objectClass": [b"hrcMailTemplate"],
             "cn": [b"changed"],
-            "fdMailTemplateSubject": [b"{uid} changed: {attributes}"],
-            "fdMailTemplateBody": [b"{cn} <{mail}>\n{changes}\n{unknown}"],
+            "hrcMailTemplateSubject": [b"{uid} changed: {attributes}"],
+            "hrcMailTemplateBody": [b"{cn} <{mail}>\n{changes}\n{unknown}"],
         },
     )
     d.add(
@@ -79,16 +79,16 @@ def add_task(
     d.add(
         TASK_DN,
         {
-            "objectClass": [b"fdTasks", b"fdTasksNotifications"],
+            "objectClass": [b"hrcTasks", b"hrcTasksNotifications"],
             "cn": [b"watch"],
-            "fdTasksStatus": [b"Activated"],
-            "fdTasksRepeatable": [b"TRUE"],
-            "fdTasksRepeatableSchedule": [b"hourly"],
-            "fdTasksNotificationsAttributes": [a.encode() for a in attributes.split("|")],
-            "fdTasksNotificationsMailTemplate": [TEMPLATE_DN.encode()],
-            "fdTasksNotificationsEmailSender": [b"noreply@example.com"],
-            "fdTasksNotificationsMonitoredMembers": [m.encode() for m in monitored],
-            "fdTasksNotificationsRecipientsMembers": [HR.encode()],
+            "hrcTasksStatus": [b"Activated"],
+            "hrcTasksRepeatable": [b"TRUE"],
+            "hrcTasksRepeatableSchedule": [b"hourly"],
+            "hrcTasksNotificationsAttributes": [a.encode() for a in attributes.split("|")],
+            "hrcTasksNotificationsMailTemplate": [TEMPLATE_DN.encode()],
+            "hrcTasksNotificationsEmailSender": [b"noreply@example.com"],
+            "hrcTasksNotificationsMonitoredMembers": [m.encode() for m in monitored],
+            "hrcTasksNotificationsRecipientsMembers": [HR.encode()],
         },
     )
 
@@ -211,18 +211,18 @@ def test_task_type_validation_and_snapshot_cleanup_on_delete(directory: MemoryDi
     ).enabled
     info = registry.get("notifications_task")
     assert info.acl_object(info.main_tab) == "tasks/notificationsTask"
-    assert info.type.filter == "(&(objectClass=fdTasks)(objectClass=fdTasksNotifications))"
+    assert info.type.filter == "(&(objectClass=hrcTasks)(objectClass=hrcTasksNotifications))"
     a = add_user(directory, "alice")
     service = ObjectService(directory, registry)
     values = {
         "cn": "watch",
-        "fdTasksNotificationsAttributes": ["mail"],
-        "fdTasksNotificationsMailTemplate": TEMPLATE_DN,
-        "fdTasksNotificationsEmailSender": "noreply@example.com",
-        "fdTasksNotificationsMonitoredMembers": [a],
-        "fdTasksNotificationsRecipientsMembers": [HR],
-        "fdTasksRepeatable": True,
-        "fdTasksRepeatableSchedule": "daily",
+        "hrcTasksNotificationsAttributes": ["mail"],
+        "hrcTasksNotificationsMailTemplate": TEMPLATE_DN,
+        "hrcTasksNotificationsEmailSender": "noreply@example.com",
+        "hrcTasksNotificationsMonitoredMembers": [a],
+        "hrcTasksNotificationsRecipientsMembers": [HR],
+        "hrcTasksRepeatable": True,
+        "hrcTasksRepeatableSchedule": "daily",
     }
     dn = service.create("notifications_task", BASE, {"main": {"values": values}})
     assert dn == TASK_DN
@@ -234,5 +234,5 @@ def test_task_type_validation_and_snapshot_cleanup_on_delete(directory: MemoryDi
         service.create(
             "notifications_task",
             BASE,
-            {"main": {"values": {**values, "fdTasksNotificationsAttributes": ["userPassword"]}}},
+            {"main": {"values": {**values, "hrcTasksNotificationsAttributes": ["userPassword"]}}},
         )

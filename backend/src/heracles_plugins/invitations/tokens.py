@@ -1,7 +1,7 @@
 """Registrations and single-use invitation tokens.
 
 An invitation is sent to an e-mail address. Sending creates (or reuses) a
-``fdRegistration`` entry for the address and a hashed single-use token entry
+``hrcRegistration`` entry for the address and a hashed single-use token entry
 that points to it. The clear token only travels in the e-mailed link.
 """
 
@@ -26,12 +26,12 @@ from heracles.ldap.client import (
     Scope,
 )
 from heracles.ldap.filter import escape_filter_value
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 TOKEN_TYPE_INVITATION = "invitation"  # noqa: S105
-INVITATION_TOKENS_RDN = f"ou=invitation,{legacy.RDN.TOKENS}"
-REGISTRATION_CLASS = "fdRegistration"
-INVITATION_CLASS = "fdInvitation"
+INVITATION_TOKENS_RDN = f"ou=invitation,{schema.RDN.TOKENS}"
+REGISTRATION_CLASS = "hrcRegistration"
+INVITATION_CLASS = "hrcInvitation"
 REGISTRATIONS_RDN = "ou=registrations"
 INVITATIONS_RDN = "ou=invitations"
 
@@ -77,38 +77,38 @@ def upsert_registration(
     """
     flt = (
         f"(&(objectClass={REGISTRATION_CLASS})"
-        f"(fdRegistrationEmailAddress={escape_filter_value(email)}))"
+        f"(hrcRegistrationEmailAddress={escape_filter_value(email)}))"
     )
     stamp = format_generalized_time(_utc(now)).encode()
     try:
         found = list(
-            directory.search(directory.base_dn, flt, Scope.SUBTREE, ["fdRegistrationState"])
+            directory.search(directory.base_dn, flt, Scope.SUBTREE, ["hrcRegistrationState"])
         )
     except NoSuchObjectError:
         found = []
     if found:
         existing = found[0]
-        if existing.text("fdRegistrationState") == STATE_REGISTERED:
+        if existing.text("hrcRegistrationState") == STATE_REGISTERED:
             raise ValueError("This address is already registered.")
         directory.modify(
             existing.dn,
             [
-                Modification("replace", "fdRegistrationInvitationDN", [invitation_dn.encode()]),
-                Modification("replace", "fdRegistrationLastChange", [stamp]),
+                Modification("replace", "hrcRegistrationInvitationDN", [invitation_dn.encode()]),
+                Modification("replace", "hrcRegistrationLastChange", [stamp]),
             ],
         )
         return existing.dn
     container = dnlib.join(REGISTRATIONS_RDN, container_base)
     ensure_container(directory, container)
-    dn = f"fdRegistrationEmailAddress={dnlib.escape_rdn_value(email)},{container}"
+    dn = f"hrcRegistrationEmailAddress={dnlib.escape_rdn_value(email)},{container}"
     directory.add(
         dn,
         {
             "objectClass": [REGISTRATION_CLASS.encode()],
-            "fdRegistrationEmailAddress": [email.encode()],
-            "fdRegistrationState": [STATE_INVITED.encode()],
-            "fdRegistrationLastChange": [stamp],
-            "fdRegistrationInvitationDN": [invitation_dn.encode()],
+            "hrcRegistrationEmailAddress": [email.encode()],
+            "hrcRegistrationState": [STATE_INVITED.encode()],
+            "hrcRegistrationLastChange": [stamp],
+            "hrcRegistrationInvitationDN": [invitation_dn.encode()],
         },
     )
     return dn
@@ -122,9 +122,9 @@ def complete_registration(
     directory.modify(
         context.registration_dn,
         [
-            Modification("replace", "fdRegistrationState", [STATE_REGISTERED.encode()]),
-            Modification("replace", "fdRegistrationUserDN", [user_dn.encode()]),
-            Modification("replace", "fdRegistrationLastChange", [stamp]),
+            Modification("replace", "hrcRegistrationState", [STATE_REGISTERED.encode()]),
+            Modification("replace", "hrcRegistrationUserDN", [user_dn.encode()]),
+            Modification("replace", "hrcRegistrationLastChange", [stamp]),
         ],
     )
     with contextlib.suppress(NoSuchObjectError):
@@ -144,12 +144,12 @@ def create_invitation_token(
     container = tokens_container(directory)
     ensure_container(directory, container)
     flt = (
-        f"(&(objectClass={legacy.OC.TOKEN})({legacy.ATTR.TOKEN_TYPE}={TOKEN_TYPE_INVITATION})"
-        f"({legacy.ATTR.TOKEN_USER_DN}={escape_filter_value(registration_dn)}))"
+        f"(&(objectClass={schema.OC.TOKEN})({schema.ATTR.TOKEN_TYPE}={TOKEN_TYPE_INVITATION})"
+        f"({schema.ATTR.TOKEN_USER_DN}={escape_filter_value(registration_dn)}))"
     )
     try:
-        for old in list(directory.search(container, flt, attrs=[legacy.ATTR.TOKEN_USER_DN])):
-            owner = old.text(legacy.ATTR.TOKEN_USER_DN) or ""
+        for old in list(directory.search(container, flt, attrs=[schema.ATTR.TOKEN_USER_DN])):
+            owner = old.text(schema.ATTR.TOKEN_USER_DN) or ""
             if dnlib.normalize(owner) == dnlib.normalize(registration_dn):
                 directory.delete(old.dn)
     except NoSuchObjectError:
@@ -160,12 +160,12 @@ def create_invitation_token(
     directory.add(
         f"cn={hashed},{container}",
         {
-            "objectClass": [legacy.OC.TOKEN.encode()],
+            "objectClass": [schema.OC.TOKEN.encode()],
             "cn": [hashed.encode()],
-            legacy.ATTR.TOKEN: [hashed.encode()],
-            legacy.ATTR.TOKEN_TYPE: [TOKEN_TYPE_INVITATION.encode()],
-            legacy.ATTR.TOKEN_USER_DN: [registration_dn.encode()],
-            legacy.ATTR.TOKEN_TIMESTAMP: [str(expires).encode()],
+            schema.ATTR.TOKEN: [hashed.encode()],
+            schema.ATTR.TOKEN_TYPE: [TOKEN_TYPE_INVITATION.encode()],
+            schema.ATTR.TOKEN_USER_DN: [registration_dn.encode()],
+            schema.ATTR.TOKEN_TIMESTAMP: [str(expires).encode()],
         },
     )
     return token
@@ -202,8 +202,8 @@ def release_token(directory: DirectoryClient, claimed: Entry) -> None:
 def _token_entry(directory: DirectoryClient, token: str) -> Entry | None:
     hashed = hash_token(token)
     flt = (
-        f"(&(objectClass={legacy.OC.TOKEN})({legacy.ATTR.TOKEN_TYPE}={TOKEN_TYPE_INVITATION})"
-        f"({legacy.ATTR.TOKEN}={escape_filter_value(hashed)}))"
+        f"(&(objectClass={schema.OC.TOKEN})({schema.ATTR.TOKEN_TYPE}={TOKEN_TYPE_INVITATION})"
+        f"({schema.ATTR.TOKEN}={escape_filter_value(hashed)}))"
     )
     try:
         found = list(directory.search(tokens_container(directory), flt))
@@ -213,7 +213,7 @@ def _token_entry(directory: DirectoryClient, token: str) -> Entry | None:
         (
             e
             for e in found
-            if hmac.compare_digest((e.text(legacy.ATTR.TOKEN) or "").encode(), hashed.encode())
+            if hmac.compare_digest((e.text(schema.ATTR.TOKEN) or "").encode(), hashed.encode())
         ),
         None,
     )
@@ -230,24 +230,24 @@ def resolve_invitation_token(
     if entry is None:
         return None
     try:
-        expires = int(entry.text(legacy.ATTR.TOKEN_TIMESTAMP) or "0")
+        expires = int(entry.text(schema.ATTR.TOKEN_TIMESTAMP) or "0")
     except ValueError:
         return None
     if _utc(now).timestamp() > expires:
         return None
-    registration_dn = entry.text(legacy.ATTR.TOKEN_USER_DN) or ""
+    registration_dn = entry.text(schema.ATTR.TOKEN_USER_DN) or ""
     registration = directory.get(registration_dn) if registration_dn else None
-    if registration is None or registration.text("fdRegistrationState") == STATE_REGISTERED:
+    if registration is None or registration.text("hrcRegistrationState") == STATE_REGISTERED:
         return None
-    invitation_dn = registration.text("fdRegistrationInvitationDN") or ""
-    invitation = directory.get(invitation_dn, ["fdInvitationFormDN"]) if invitation_dn else None
-    form_dn = invitation.text("fdInvitationFormDN") if invitation is not None else None
+    invitation_dn = registration.text("hrcRegistrationInvitationDN") or ""
+    invitation = directory.get(invitation_dn, ["hrcInvitationFormDN"]) if invitation_dn else None
+    form_dn = invitation.text("hrcInvitationFormDN") if invitation is not None else None
     if not form_dn:
         return None
     return InvitationContext(
         token_dn=entry.dn,
         registration_dn=registration.dn,
-        email=registration.text("fdRegistrationEmailAddress") or "",
+        email=registration.text("hrcRegistrationEmailAddress") or "",
         invitation_dn=invitation_dn,
         form_dn=form_dn,
     )

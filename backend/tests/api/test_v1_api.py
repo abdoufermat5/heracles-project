@@ -364,7 +364,7 @@ def test_archive(v1: V1, client: TestClient) -> None:
     assert v1.get(f"/objects/USER/{ASMITH}").status_code == 404
     directory = directory_of(client)
     archived = list(directory.search(f"ou=archive,{BASE}", "(objectClass=*)"))
-    assert any(e.text("fdArchivedOriginDn") == ASMITH for e in archived)
+    assert any(e.text("hrcArchivedOriginDn") == ASMITH for e in archived)
 
 
 def test_archive_errors(client: TestClient, v1: V1) -> None:

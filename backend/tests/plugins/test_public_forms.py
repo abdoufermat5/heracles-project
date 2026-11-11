@@ -33,7 +33,7 @@ from heracles_plugins.public_forms.forms import (
 
 BASE = "dc=test"
 NOW = datetime(2030, 6, 15, 8, 0, tzinfo=UTC)
-CLASSES = ["fdPublicForm", "fdInvitation", "fdRegistration", "fdUserRegistration"]
+CLASSES = ["hrcPublicForm", "hrcInvitation", "hrcRegistration", "hrcUserRegistration"]
 
 FIELDS: list[dict[str, Any]] = [
     {"field": "main.uid", "mandatory": True},
@@ -94,18 +94,18 @@ def new_form(
 ) -> str:
     values: dict[str, object] = {
         "cn": "join",
-        "fdPublicFormTitle": "Join us",
-        "fdPublicFormTemplateType": "user",
+        "hrcPublicFormTitle": "Join us",
+        "hrcPublicFormTemplateType": "user",
         **main,
     }
     if template_dn:
-        values["fdPublicFormTemplateDN"] = template_dn
+        values["hrcPublicFormTemplateDN"] = template_dn
     return service.create(
         "public_form",
         BASE,
         {
             "main": {"values": values},
-            "alteration": {"values": {"fdPublicFormAlteredAttributes": fields or FIELDS}},
+            "alteration": {"values": {"hrcPublicFormAlteredAttributes": fields or FIELDS}},
         },
     )
 
@@ -138,10 +138,10 @@ def test_type_acl_keys_and_container(service: ObjectService) -> None:
 def test_rules_roundtrip_through_the_directory(
     service: ObjectService, directory: MemoryDirectory, template: str
 ) -> None:
-    dn = new_form(service, template, fdPublicFormCaptcha=True, fdPublicFormPrivate=True)
+    dn = new_form(service, template, hrcPublicFormCaptcha=True, hrcPublicFormPrivate=True)
     assert dn == f"cn=join,ou=forms,{BASE}"
     entry = directory.get(dn) or pytest.fail()
-    assert "main.uid|TRUE|||" in entry.texts("fdPublicFormAlteredAttributes")
+    assert "main.uid|TRUE|||" in entry.texts("hrcPublicFormAlteredAttributes")
     form = load(service)
     assert form.captcha and form.private and form.template_dn == template
     keys = {r.key: r for r in form.rules}
@@ -153,14 +153,14 @@ def test_rules_roundtrip_through_the_directory(
 
 def test_form_validation(service: ObjectService, template: str) -> None:
     with pytest.raises(ObjectValidationError) as unknown_type:
-        new_form(service, fdPublicFormTemplateType="nothing")
-    assert "main.fdPublicFormTemplateType" in unknown_type.value.fields
+        new_form(service, hrcPublicFormTemplateType="nothing")
+    assert "main.hrcPublicFormTemplateType" in unknown_type.value.fields
     with pytest.raises(ObjectValidationError) as bad_template:
         new_form(service, f"cn=x,{BASE}")
-    assert "main.fdPublicFormTemplateDN" in bad_template.value.fields
+    assert "main.hrcPublicFormTemplateDN" in bad_template.value.fields
     with pytest.raises(ObjectValidationError) as bad_field:
         new_form(service, fields=[{"field": "main.nope"}])
-    assert "alteration.fdPublicFormAlteredAttributes" in bad_field.value.fields
+    assert "alteration.hrcPublicFormAlteredAttributes" in bad_field.value.fields
     with pytest.raises(ObjectValidationError):
         new_form(service, fields=[{"field": "main.uid"}, {"field": "main.uid"}])
     with pytest.raises(ObjectValidationError):
@@ -198,7 +198,7 @@ def test_definition_lists_visible_fields_only(service: ObjectService, template: 
 def test_submission_creates_the_object_from_template_and_values(
     service: ObjectService, directory: MemoryDirectory, template: str
 ) -> None:
-    new_form(service, template, fdPublicFormDefaultLocked=True)
+    new_form(service, template, hrcPublicFormDefaultLocked=True)
     dn = submit_form(
         directory,
         service.registry,
@@ -214,13 +214,13 @@ def test_submission_creates_the_object_from_template_and_values(
     assert entry.text("mail") == "jdoe@example.com"
     password = entry.text("userPassword") or ""
     assert is_locked(password) and "s3cretpass1" not in password
-    assert entry.has_object_class("fdUserRegistration")
+    assert entry.has_object_class("hrcUserRegistration")
 
 
 def test_invitation_context_imports_the_address_and_completes_the_registration(
     service: ObjectService, directory: MemoryDirectory, template: str
 ) -> None:
-    form_dn = new_form(service, template, fdPublicFormPrivate=True)
+    form_dn = new_form(service, template, hrcPublicFormPrivate=True)
     invitation = service.create(
         "invitation",
         BASE,
@@ -228,8 +228,8 @@ def test_invitation_context_imports_the_address_and_completes_the_registration(
             "main": {
                 "values": {
                     "cn": "welcome",
-                    "fdInvitationFormDN": form_dn,
-                    "fdInvitationEmailSubject": "Welcome",
+                    "hrcInvitationFormDN": form_dn,
+                    "hrcInvitationEmailSubject": "Welcome",
                 }
             }
         },
@@ -251,13 +251,13 @@ def test_invitation_context_imports_the_address_and_completes_the_registration(
     )
     assert (directory.get(dn) or pytest.fail()).text("mail") == "new@example.com"
     registration = directory.get(context.registration_dn) or pytest.fail()
-    assert registration.text("fdRegistrationState") == "registered"
-    assert registration.text("fdRegistrationUserDN") == dn
+    assert registration.text("hrcRegistrationState") == "registered"
+    assert registration.text("hrcRegistrationUserDN") == dn
     assert resolve_invitation_token(directory, token, NOW) is None
 
 
 def _invite(service: ObjectService, directory: MemoryDirectory, template: str) -> tuple[Any, str]:
-    form_dn = new_form(service, template, fdPublicFormPrivate=True)
+    form_dn = new_form(service, template, hrcPublicFormPrivate=True)
     invitation = service.create(
         "invitation",
         BASE,
@@ -265,8 +265,8 @@ def _invite(service: ObjectService, directory: MemoryDirectory, template: str) -
             "main": {
                 "values": {
                     "cn": "welcome",
-                    "fdInvitationFormDN": form_dn,
-                    "fdInvitationEmailSubject": "Welcome",
+                    "hrcInvitationFormDN": form_dn,
+                    "hrcInvitationEmailSubject": "Welcome",
                 }
             }
         },

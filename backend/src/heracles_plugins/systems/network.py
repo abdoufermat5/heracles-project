@@ -23,7 +23,7 @@ from heracles.ldap.client import (
 from heracles.ldap.filter import escape_filter_value
 from heracles_plugins.systems.attrs import IpAttr, MacAttr
 
-INTERFACE_CLASS = "fdNetworkInterface"
+INTERFACE_CLASS = "hrcNetworkInterface"
 IP_HOST_CLASS = "ipHost"
 INTERFACE_FILTER = f"(objectClass={INTERFACE_CLASS})"
 ATTR = "networkInterfaces"
@@ -31,9 +31,9 @@ ATTR = "networkInterfaces"
 FIELD_NAME = "cn"
 FIELD_MAC = "macAddress"
 FIELD_IPS = "ipHostNumber"
-FIELD_VLAN = "fdNetworkInterfaceVlanDN"
-FIELD_TAGGED = "fdNetworkInterfaceVlanTagged"
-FIELD_SUBNET = "fdNetworkInterfaceSubnetDN"
+FIELD_VLAN = "hrcNetworkInterfaceVlanDN"
+FIELD_TAGGED = "hrcNetworkInterfaceVlanTagged"
+FIELD_SUBNET = "hrcNetworkInterfaceSubnetDN"
 
 
 def interface_attribute() -> ListAttr[dict[str, Any]]:

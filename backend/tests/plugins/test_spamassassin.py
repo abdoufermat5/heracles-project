@@ -20,11 +20,11 @@ SPAMASSASSIN_CLASSES = {
     "person",
     "ieee802Device",
     "device",
-    "fdServer",
-    "goSpamServer",
-    "fdSpamAssassinUser",
+    "hrcServer",
+    "hrcSpamAssassinServer",
+    "hrcSpamAssassinUser",
     "ipHost",
-    "fdNetworkInterface",
+    "hrcNetworkInterface",
 }
 
 
@@ -59,7 +59,7 @@ def test_spamassassin_registration_and_acls(service: ObjectService) -> None:
     assert s_tab.acl_key == "serviceSpamAssassin"
     assert server_info.acl_object(s_tab) == "server/serviceSpamAssassin"
     assert s_tab.optional is True
-    assert s_tab.object_classes == ("goSpamServer",)
+    assert s_tab.object_classes == ("hrcSpamAssassinServer",)
 
     user_info = service.registry.get("user")
     u_tab = user_info.tab("spamassassin")
@@ -67,12 +67,12 @@ def test_spamassassin_registration_and_acls(service: ObjectService) -> None:
     assert u_tab.acl_key == "spamAssassinAccount"
     assert user_info.acl_object(u_tab) == "user/spamAssassinAccount"
     assert u_tab.optional is True
-    assert u_tab.object_classes == ("fdSpamAssassinUser",)
+    assert u_tab.object_classes == ("hrcSpamAssassinUser",)
 
 
 def test_spamassassin_tabs_dropped_without_schema(directory: MemoryDirectory) -> None:
     directory.set_schema_object_classes(
-        ["inetOrgPerson", "organizationalPerson", "person", "ieee802Device", "device", "fdServer"]
+        ["inetOrgPerson", "organizationalPerson", "person", "ieee802Device", "device", "hrcServer"]
     )
     registry = TypeRegistry()
     register_builtin_types(registry)
@@ -93,17 +93,17 @@ def test_server_service_tab_crud(service: ObjectService, directory: MemoryDirect
             "spamassassin": {
                 "active": True,
                 "values": {
-                    "saRewriteHeader": "[SPAM]",
-                    "saRequiredScore": "4.0",
-                    "saTrustedNetworks": "192.168.1.0/24 10.0.0.0/8",
-                    "flag_enable_bayes": True,
-                    "flag_bayes_autolearn": True,
-                    "flag_enable_rblcheck": True,
-                    "flag_enable_razor": False,
-                    "flag_enable_ddc": False,
-                    "flag_enable_pyzor": True,
-                    "ruleName": "LOCAL_RULE",
-                    "ruleDesc": "Custom local spam rule",
+                    "hrcSpamAssassinRewriteHeader": "[SPAM]",
+                    "hrcSpamAssassinRequiredScore": "4.0",
+                    "hrcSpamAssassinTrustedNetworks": "192.168.1.0/24 10.0.0.0/8",
+                    "hrcSpamAssassinEnableBayes": True,
+                    "hrcSpamAssassinBayesAutolearn": True,
+                    "hrcSpamAssassinEnableRblCheck": True,
+                    "hrcSpamAssassinEnableRazor": False,
+                    "hrcSpamAssassinEnableDcc": False,
+                    "hrcSpamAssassinEnablePyzor": True,
+                    "hrcSpamAssassinRuleName": "LOCAL_RULE",
+                    "hrcSpamAssassinRuleDesc": "Custom local spam rule",
                 },
             },
         },
@@ -111,23 +111,23 @@ def test_server_service_tab_crud(service: ObjectService, directory: MemoryDirect
     assert dn == f"cn=spam1,{SERVERS}"
     entry = directory.get(dn)
     assert entry is not None
-    assert b"goSpamServer" in entry.get("objectClass")
-    assert entry.text("saRewriteHeader") == "[SPAM]"
-    assert entry.text("saRequiredScore") == "4.0"
-    assert entry.text("saTrustedNetworks") == "192.168.1.0/24 10.0.0.0/8"
-    assert entry.text("flag_enable_bayes") == "TRUE"
-    assert entry.text("flag_enable_pyzor") == "TRUE"
-    assert entry.text("flag_enable_razor") == "FALSE"
-    assert entry.text("ruleName") == "LOCAL_RULE"
-    assert entry.text("ruleDesc") == "Custom local spam rule"
+    assert b"hrcSpamAssassinServer" in entry.get("objectClass")
+    assert entry.text("hrcSpamAssassinRewriteHeader") == "[SPAM]"
+    assert entry.text("hrcSpamAssassinRequiredScore") == "4.0"
+    assert entry.text("hrcSpamAssassinTrustedNetworks") == "192.168.1.0/24 10.0.0.0/8"
+    assert entry.text("hrcSpamAssassinEnableBayes") == "TRUE"
+    assert entry.text("hrcSpamAssassinEnablePyzor") == "TRUE"
+    assert entry.text("hrcSpamAssassinEnableRazor") == "FALSE"
+    assert entry.text("hrcSpamAssassinRuleName") == "LOCAL_RULE"
+    assert entry.text("hrcSpamAssassinRuleDesc") == "Custom local spam rule"
 
     loaded = service.load("server", dn)
     assert loaded.tabs["spamassassin"].active is True
     vals = loaded.tabs["spamassassin"].values
-    assert vals["saRewriteHeader"] == "[SPAM]"
-    assert vals["saRequiredScore"] == "4.0"
-    assert vals["flag_enable_bayes"] is True
-    assert vals["flag_enable_pyzor"] is True
+    assert vals["hrcSpamAssassinRewriteHeader"] == "[SPAM]"
+    assert vals["hrcSpamAssassinRequiredScore"] == "4.0"
+    assert vals["hrcSpamAssassinEnableBayes"] is True
+    assert vals["hrcSpamAssassinEnablePyzor"] is True
 
     # Update
     service.update(
@@ -136,22 +136,22 @@ def test_server_service_tab_crud(service: ObjectService, directory: MemoryDirect
         {
             "spamassassin": {
                 "values": {
-                    "saRequiredScore": "5.0",
-                    "flag_enable_razor": True,
+                    "hrcSpamAssassinRequiredScore": "5.0",
+                    "hrcSpamAssassinEnableRazor": True,
                 }
             }
         },
     )
     loaded2 = service.load("server", dn)
-    assert loaded2.tabs["spamassassin"].values["saRequiredScore"] == "5.0"
-    assert loaded2.tabs["spamassassin"].values["flag_enable_razor"] is True
+    assert loaded2.tabs["spamassassin"].values["hrcSpamAssassinRequiredScore"] == "5.0"
+    assert loaded2.tabs["spamassassin"].values["hrcSpamAssassinEnableRazor"] is True
 
     # Deactivate
     service.update("server", dn, {"spamassassin": {"active": False}})
     entry2 = directory.get(dn)
     assert entry2 is not None
-    assert b"goSpamServer" not in entry2.get("objectClass")
-    assert entry2.get("saRewriteHeader") == []
+    assert b"hrcSpamAssassinServer" not in entry2.get("objectClass")
+    assert entry2.get("hrcSpamAssassinRewriteHeader") == []
 
 
 def test_user_tab_crud(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -163,18 +163,18 @@ def test_user_tab_crud(service: ObjectService, directory: MemoryDirectory) -> No
             "spamassassin": {
                 "active": True,
                 "values": {
-                    "fdSpamAssassinRules": [
+                    "hrcSpamAssassinRules": [
                         {
-                            "fdSpamAssassinRules_directive": "required_score",
-                            "fdSpamAssassinRules_value": "4.5",
+                            "hrcSpamAssassinRules_directive": "required_score",
+                            "hrcSpamAssassinRules_value": "4.5",
                         },
                         {
-                            "fdSpamAssassinRules_directive": "whitelist_from",
-                            "fdSpamAssassinRules_value": "*@trustedcorp.com",
+                            "hrcSpamAssassinRules_directive": "whitelist_from",
+                            "hrcSpamAssassinRules_value": "*@trustedcorp.com",
                         },
                         {
-                            "fdSpamAssassinRules_directive": "blacklist_from",
-                            "fdSpamAssassinRules_value": "spammer@evil.org",
+                            "hrcSpamAssassinRules_directive": "blacklist_from",
+                            "hrcSpamAssassinRules_value": "spammer@evil.org",
                         },
                     ]
                 },
@@ -183,8 +183,8 @@ def test_user_tab_crud(service: ObjectService, directory: MemoryDirectory) -> No
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdSpamAssassinUser" in entry.get("objectClass")
-    assert entry.texts("fdSpamAssassinRules") == [
+    assert b"hrcSpamAssassinUser" in entry.get("objectClass")
+    assert entry.texts("hrcSpamAssassinRules") == [
         "required_score 4.5",
         "whitelist_from *@trustedcorp.com",
         "blacklist_from spammer@evil.org",
@@ -192,15 +192,15 @@ def test_user_tab_crud(service: ObjectService, directory: MemoryDirectory) -> No
 
     loaded = service.load("user", dn)
     assert loaded.tabs["spamassassin"].active is True
-    rules = loaded.tabs["spamassassin"].values["fdSpamAssassinRules"]
+    rules = loaded.tabs["spamassassin"].values["hrcSpamAssassinRules"]
     assert len(rules) == 3
     assert rules[0] == {
-        "fdSpamAssassinRules_directive": "required_score",
-        "fdSpamAssassinRules_value": "4.5",
+        "hrcSpamAssassinRules_directive": "required_score",
+        "hrcSpamAssassinRules_value": "4.5",
     }
     assert rules[1] == {
-        "fdSpamAssassinRules_directive": "whitelist_from",
-        "fdSpamAssassinRules_value": "*@trustedcorp.com",
+        "hrcSpamAssassinRules_directive": "whitelist_from",
+        "hrcSpamAssassinRules_value": "*@trustedcorp.com",
     }
 
     # Update user rules
@@ -210,10 +210,10 @@ def test_user_tab_crud(service: ObjectService, directory: MemoryDirectory) -> No
         {
             "spamassassin": {
                 "values": {
-                    "fdSpamAssassinRules": [
+                    "hrcSpamAssassinRules": [
                         {
-                            "fdSpamAssassinRules_directive": "required_score",
-                            "fdSpamAssassinRules_value": "6.0",
+                            "hrcSpamAssassinRules_directive": "required_score",
+                            "hrcSpamAssassinRules_value": "6.0",
                         }
                     ]
                 }
@@ -221,16 +221,16 @@ def test_user_tab_crud(service: ObjectService, directory: MemoryDirectory) -> No
         },
     )
     loaded2 = service.load("user", dn)
-    rules2 = loaded2.tabs["spamassassin"].values["fdSpamAssassinRules"]
+    rules2 = loaded2.tabs["spamassassin"].values["hrcSpamAssassinRules"]
     assert len(rules2) == 1
-    assert rules2[0]["fdSpamAssassinRules_value"] == "6.0"
+    assert rules2[0]["hrcSpamAssassinRules_value"] == "6.0"
 
     # Deactivate user tab
     service.update("user", dn, {"spamassassin": {"active": False}})
     entry2 = directory.get(dn)
     assert entry2 is not None
-    assert b"fdSpamAssassinUser" not in entry2.get("objectClass")
-    assert entry2.get("fdSpamAssassinRules") == []
+    assert b"hrcSpamAssassinUser" not in entry2.get("objectClass")
+    assert entry2.get("hrcSpamAssassinRules") == []
 
 
 def test_mail_servers_helper_spamassassin(
@@ -246,7 +246,7 @@ def test_mail_servers_helper_spamassassin(
         BASE,
         {
             "main": {"values": {"cn": "spam-srv"}},
-            "spamassassin": {"active": True, "values": {"saRewriteHeader": "[SPAM]"}},
+            "spamassassin": {"active": True, "values": {"hrcSpamAssassinRewriteHeader": "[SPAM]"}},
         },
     )
     assert spamassassin.mail_servers(directory) == ["spam-srv"]

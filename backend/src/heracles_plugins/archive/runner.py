@@ -13,7 +13,7 @@ from heracles_plugins.archive.service import (
     archive_container,
 )
 
-TASK_CLASS = "fdArchiveTasks"
+TASK_CLASS = "hrcArchiveTasks"
 TASK_FILTER = task_filter(TASK_CLASS)
 
 
@@ -38,7 +38,7 @@ def run_archive(
                 directory,
                 archive_container(directory),
                 ARCHIVE_CLASS,
-                "fdArchivedDateTime",
+                "hrcArchivedDateTime",
                 now - timedelta(days=settings.retention_days),
                 report.errors,
             )

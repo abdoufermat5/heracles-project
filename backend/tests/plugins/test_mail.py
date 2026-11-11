@@ -15,7 +15,7 @@ from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
 from heracles.objects.errors import UnknownTypeError
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 BASE = "dc=test"
 PEOPLE = f"ou=people,{BASE}"
@@ -23,27 +23,27 @@ GROUPS = f"ou=groups,{BASE}"
 ALIAS = f"ou=alias,{BASE}"
 
 MAIL_CLASSES = {
-    "gosamailaccount",
-    "fdgroupmail",
-    "mailaliasdistribution",
-    "mailaliasredirection",
+    "hrcmailaccount",
+    "hrcgroupmail",
+    "hrcmailaliasdistribution",
+    "hrcmailaliasredirection",
 }
 
 
 @pytest.fixture
 def directory() -> MemoryDirectory:
     all_classes = {
-        *legacy.COMPAT_OBJECT_CLASSES,
+        *schema.CORE_OBJECT_CLASSES,
         "inetOrgPerson",
         "organizationalPerson",
         "person",
         "groupOfNames",
         "domain",
         "organizationalUnit",
-        "gosaMailAccount",
-        "fdGroupMail",
-        "mailAliasDistribution",
-        "mailAliasRedirection",
+        "hrcMailAccount",
+        "hrcGroupMail",
+        "hrcMailAliasDistribution",
+        "hrcMailAliasRedirection",
     }
     d = MemoryDirectory(BASE, object_classes=all_classes)
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
@@ -222,7 +222,7 @@ def test_plugin_conditional_types(directory: MemoryDirectory) -> None:
     # 1. When alias classes are missing
     reg1 = TypeRegistry()
     register_builtin_types(reg1)
-    st1 = reg1.register_plugin(mail.plugin(), {"gosamailaccount"})
+    st1 = reg1.register_plugin(mail.plugin(), {"hrcmailaccount"})
     assert st1.enabled
     with pytest.raises(UnknownTypeError):
         reg1.get("mail_alias_distribution")
@@ -234,23 +234,23 @@ def test_plugin_conditional_types(directory: MemoryDirectory) -> None:
     register_builtin_types(reg2)
     st2 = reg2.register_plugin(
         mail.plugin(),
-        {"gosamailaccount", "mailaliasdistribution", "mailaliasredirection"},
+        {"hrcmailaccount", "hrcmailaliasdistribution", "hrcmailaliasredirection"},
     )
     assert st2.enabled
     assert reg2.get("mail_alias_distribution").name == "mail_alias_distribution"
     assert reg2.get("mail_alias_redirection").name == "mail_alias_redirection"
 
-    # 3. When gosaMailAccount is missing
+    # 3. When hrcMailAccount is missing
     reg3 = TypeRegistry()
     register_builtin_types(reg3)
-    st3 = reg3.register_plugin(mail.plugin(), {"mailaliasdistribution"})
+    st3 = reg3.register_plugin(mail.plugin(), {"hrcmailaliasdistribution"})
     assert not st3.enabled
-    assert "gosaMailAccount" in st3.missing_object_classes
+    assert "hrcMailAccount" in st3.missing_object_classes
 
     # 4. Each alias type depends only on its own objectClass
     reg4 = TypeRegistry()
     register_builtin_types(reg4)
-    reg4.register_plugin(mail.plugin(), {"gosamailaccount", "mailaliasredirection"})
+    reg4.register_plugin(mail.plugin(), {"hrcmailaccount", "hrcmailaliasredirection"})
     assert reg4.get("mail_alias_redirection").name == "mail_alias_redirection"
     with pytest.raises(UnknownTypeError):
         reg4.get("mail_alias_distribution")
@@ -276,31 +276,31 @@ def test_user_mail_tab_creation_and_load(
         uid="alice",
         mail_values={
             "mail": "alice@example.com",
-            "gosaMailServer": "imap.example.com",
-            "gosaMailQuota": 500,
-            "gosaMailAlternateAddress": ["alice.alias@example.com"],
-            "gosaMailForwardingAddress": ["alice.work@example.com"],
+            "hrcMailServer": "imap.example.com",
+            "hrcMailQuota": 500,
+            "hrcMailAlternateAddress": ["alice.alias@example.com"],
+            "hrcMailForwardingAddress": ["alice.work@example.com"],
             "flag_localonly": True,
             "flag_vacation": True,
-            "gosaVacationStart": "2026-11-01",
-            "gosaVacationStop": "2026-11-15",
-            "gosaVacationMessage": "Out of office",
+            "hrcVacationStart": "2026-11-01",
+            "hrcVacationStop": "2026-11-15",
+            "hrcVacationMessage": "Out of office",
         },
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.has_object_class("gosaMailAccount")
+    assert entry.has_object_class("hrcMailAccount")
     assert entry.text("mail") == "alice@example.com"
-    assert entry.text("gosaMailServer") == "imap.example.com"
-    assert entry.text("gosaMailQuota") == "500"
-    assert entry.text("gosaMailDeliveryMode") == "[VL]"
-    assert entry.text("gosaVacationStart") == str(
+    assert entry.text("hrcMailServer") == "imap.example.com"
+    assert entry.text("hrcMailQuota") == "500"
+    assert entry.text("hrcMailDeliveryMode") == "[VL]"
+    assert entry.text("hrcVacationStart") == str(
         int(mail.datetime(2026, 11, 1, 0, 0, tzinfo=mail.UTC).timestamp())
     )
-    assert entry.text("gosaVacationStop") == str(
+    assert entry.text("hrcVacationStop") == str(
         int(mail.datetime(2026, 11, 15, 0, 0, tzinfo=mail.UTC).timestamp())
     )
-    assert entry.text("gosaVacationMessage") == "Out of office"
+    assert entry.text("hrcVacationMessage") == "Out of office"
 
     # Verify loaded state
     state = service.load("user", dn)
@@ -310,8 +310,8 @@ def test_user_mail_tab_creation_and_load(
     assert mail_state.values["flag_vacation"] is True
     assert mail_state.values["flag_localonly"] is True
     assert mail_state.values["flag_ownmailbox"] is False
-    assert mail_state.values["gosaVacationStart"] == date(2026, 11, 1)
-    assert mail_state.values["gosaVacationStop"] == date(2026, 11, 15)
+    assert mail_state.values["hrcVacationStart"] == date(2026, 11, 1)
+    assert mail_state.values["hrcVacationStop"] == date(2026, 11, 15)
 
 
 def test_user_mail_quota_negative_rejected(service: ObjectService) -> None:
@@ -319,9 +319,9 @@ def test_user_mail_quota_negative_rejected(service: ObjectService) -> None:
         new_user(
             service,
             uid="badquota",
-            mail_values={"mail": "bad@example.com", "gosaMailQuota": -10},
+            mail_values={"mail": "bad@example.com", "hrcMailQuota": -10},
         )
-    assert "mail.gosaMailQuota" in exc_info.value.fields
+    assert "mail.hrcMailQuota" in exc_info.value.fields
 
 
 def test_user_mail_vacation_stop_before_start_rejected(service: ObjectService) -> None:
@@ -332,11 +332,11 @@ def test_user_mail_vacation_stop_before_start_rejected(service: ObjectService) -
             mail_values={
                 "mail": "badtimes@example.com",
                 "flag_vacation": True,
-                "gosaVacationStart": "2026-11-20",
-                "gosaVacationStop": "2026-11-10",
+                "hrcVacationStart": "2026-11-20",
+                "hrcVacationStop": "2026-11-10",
             },
         )
-    assert "mail.gosaVacationStop" in exc_info.value.fields
+    assert "mail.hrcVacationStop" in exc_info.value.fields
 
 
 def test_user_mail_vacation_cleared_when_flag_off(
@@ -349,14 +349,14 @@ def test_user_mail_vacation_cleared_when_flag_off(
         mail_values={
             "mail": "vac@example.com",
             "flag_vacation": True,
-            "gosaVacationStart": "2026-11-01",
-            "gosaVacationStop": "2026-11-10",
-            "gosaVacationMessage": "I am away",
+            "hrcVacationStart": "2026-11-01",
+            "hrcVacationStop": "2026-11-10",
+            "hrcVacationMessage": "I am away",
         },
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.text("gosaVacationMessage") == "I am away"
+    assert entry.text("hrcVacationMessage") == "I am away"
 
     # 2. Turn off vacation
     service.update(
@@ -372,10 +372,10 @@ def test_user_mail_vacation_cleared_when_flag_off(
     )
     updated = directory.get(dn)
     assert updated is not None
-    assert updated.get("gosaVacationStart") == []
-    assert updated.get("gosaVacationStop") == []
-    assert updated.get("gosaVacationMessage") == []
-    assert updated.text("gosaMailDeliveryMode") == "[]"
+    assert updated.get("hrcVacationStart") == []
+    assert updated.get("hrcVacationStop") == []
+    assert updated.get("hrcVacationMessage") == []
+    assert updated.text("hrcMailDeliveryMode") == "[]"
 
 
 def test_user_mail_unknown_delivery_flags_preserved(
@@ -389,7 +389,7 @@ def test_user_mail_unknown_delivery_flags_preserved(
     # Inject unknown flag X into LDAP directly
     directory.modify(
         dn,
-        [Modification("replace", "gosaMailDeliveryMode", [b"[VX]"])],
+        [Modification("replace", "hrcMailDeliveryMode", [b"[VX]"])],
     )
 
     # Load and update flag_localonly = True
@@ -406,7 +406,7 @@ def test_user_mail_unknown_delivery_flags_preserved(
     )
     entry = directory.get(dn)
     assert entry is not None
-    mode = entry.text("gosaMailDeliveryMode") or ""
+    mode = entry.text("hrcMailDeliveryMode") or ""
     # X and V and L should be in mode
     assert "X" in mode
     assert "V" in mode
@@ -461,7 +461,7 @@ def test_uniqueness_user_vs_user(service: ObjectService) -> None:
         uid="u1",
         mail_values={
             "mail": "u1@example.com",
-            "gosaMailAlternateAddress": ["u1-alt@example.com"],
+            "hrcMailAlternateAddress": ["u1-alt@example.com"],
         },
     )
 
@@ -477,10 +477,10 @@ def test_uniqueness_user_vs_user(service: ObjectService) -> None:
             uid="u3",
             mail_values={
                 "mail": "u3@example.com",
-                "gosaMailAlternateAddress": ["u1@example.com"],
+                "hrcMailAlternateAddress": ["u1@example.com"],
             },
         )
-    assert "mail.gosaMailAlternateAddress" in exc.value.fields
+    assert "mail.hrcMailAlternateAddress" in exc.value.fields
 
     # Conflict on primary mail matching existing alternate address
     with pytest.raises(ObjectValidationError) as exc:
@@ -494,10 +494,10 @@ def test_uniqueness_user_vs_user(service: ObjectService) -> None:
             uid="u5",
             mail_values={
                 "mail": "u5@example.com",
-                "gosaMailAlternateAddress": ["u1-alt@example.com"],
+                "hrcMailAlternateAddress": ["u1-alt@example.com"],
             },
         )
-    assert "mail.gosaMailAlternateAddress" in exc.value.fields
+    assert "mail.hrcMailAlternateAddress" in exc.value.fields
 
 
 def test_uniqueness_within_same_entry(service: ObjectService) -> None:
@@ -508,10 +508,10 @@ def test_uniqueness_within_same_entry(service: ObjectService) -> None:
             uid="selfdup",
             mail_values={
                 "mail": "same@example.com",
-                "gosaMailAlternateAddress": ["same@example.com"],
+                "hrcMailAlternateAddress": ["same@example.com"],
             },
         )
-    assert "mail.gosaMailAlternateAddress" in exc.value.fields
+    assert "mail.hrcMailAlternateAddress" in exc.value.fields
 
     # Duplicate alternate addresses
     with pytest.raises(ObjectValidationError) as exc:
@@ -520,10 +520,10 @@ def test_uniqueness_within_same_entry(service: ObjectService) -> None:
             uid="listdup",
             mail_values={
                 "mail": "listdup@example.com",
-                "gosaMailAlternateAddress": ["dup@example.com", "dup@example.com"],
+                "hrcMailAlternateAddress": ["dup@example.com", "dup@example.com"],
             },
         )
-    assert "mail.gosaMailAlternateAddress" in exc.value.fields
+    assert "mail.hrcMailAlternateAddress" in exc.value.fields
 
 
 def test_uniqueness_user_vs_group(service: ObjectService) -> None:
@@ -545,7 +545,7 @@ def test_uniqueness_user_vs_group(service: ObjectService) -> None:
         cn="g2",
         mail_values={
             "mail": "group2@example.com",
-            "gosaMailAlternateAddress": ["group2-alias@example.com"],
+            "hrcMailAlternateAddress": ["group2-alias@example.com"],
         },
         member=u_dn,
     )
@@ -563,7 +563,7 @@ def test_uniqueness_self_update_allowed(service: ObjectService) -> None:
         uid="selfupdate",
         mail_values={
             "mail": "self@example.com",
-            "gosaMailAlternateAddress": ["self-alt@example.com"],
+            "hrcMailAlternateAddress": ["self-alt@example.com"],
         },
     )
     # Updating unrelated field or keeping same mail succeeds
@@ -574,14 +574,14 @@ def test_uniqueness_self_update_allowed(service: ObjectService) -> None:
             "main": {"values": {"mail": "self@example.com"}},
             "mail": {
                 "values": {
-                    "gosaMailServer": "imap.updated.org",
-                    "gosaMailAlternateAddress": ["self-alt@example.com"],
+                    "hrcMailServer": "imap.updated.org",
+                    "hrcMailAlternateAddress": ["self-alt@example.com"],
                 }
             },
         },
     )
     state = service.load("user", dn)
-    assert state.tabs["mail"].values["gosaMailServer"] == "imap.updated.org"
+    assert state.tabs["mail"].values["hrcMailServer"] == "imap.updated.org"
 
 
 # ------------------------------------------------------- group mail tab
@@ -594,21 +594,21 @@ def test_group_mail_tab(service: ObjectService, directory: MemoryDirectory) -> N
         cn="devops",
         mail_values={
             "mail": "devops@example.com",
-            "gosaMailServer": "mail.example.com",
-            "gosaMailAlternateAddress": ["infra@example.com"],
-            "gosaMailForwardingAddress": ["external@cloud.com"],
-            "fdGroupMailLocalOnly": True,
+            "hrcMailServer": "mail.example.com",
+            "hrcMailAlternateAddress": ["infra@example.com"],
+            "hrcMailForwardingAddress": ["external@cloud.com"],
+            "hrcGroupMailLocalOnly": True,
         },
         member=u_dn,
     )
     entry = directory.get(g_dn)
     assert entry is not None
-    assert entry.has_object_class("fdGroupMail")
+    assert entry.has_object_class("hrcGroupMail")
     assert entry.text("mail") == "devops@example.com"
-    assert entry.text("gosaMailServer") == "mail.example.com"
-    assert entry.text("fdGroupMailLocalOnly") == "TRUE"
-    assert entry.texts("gosaMailAlternateAddress") == ["infra@example.com"]
-    assert entry.texts("gosaMailForwardingAddress") == ["external@cloud.com"]
+    assert entry.text("hrcMailServer") == "mail.example.com"
+    assert entry.text("hrcGroupMailLocalOnly") == "TRUE"
+    assert entry.texts("hrcMailAlternateAddress") == ["infra@example.com"]
+    assert entry.texts("hrcMailForwardingAddress") == ["external@cloud.com"]
 
 
 # ----------------------------------------------------------- alias types
@@ -625,9 +625,9 @@ def test_mail_alias_distribution_crud(service: ObjectService, directory: MemoryD
                     "cn": "marketing-dist",
                     "description": "Marketing distribution list",
                     "mail": "marketing@example.com",
-                    "gosaMailAlternateAddress": ["mktg@example.com"],
-                    "gosaMailServer": "relay.example.com",
-                    "aliasExpirationDate": "2026-12-31",
+                    "hrcMailAlternateAddress": ["mktg@example.com"],
+                    "hrcMailServer": "relay.example.com",
+                    "hrcMailAliasExpirationDate": "2026-12-31",
                 }
             }
         },
@@ -635,18 +635,18 @@ def test_mail_alias_distribution_crud(service: ObjectService, directory: MemoryD
     assert dnlib.parent(dn) == ALIAS
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.has_object_class("mailAliasDistribution")
+    assert entry.has_object_class("hrcMailAliasDistribution")
     assert entry.text("cn") == "marketing-dist"
     assert entry.text("mail") == "marketing@example.com"
-    assert entry.texts("gosaMailAlternateAddress") == ["mktg@example.com"]
-    assert entry.text("aliasExpirationDate") == str(
+    assert entry.texts("hrcMailAlternateAddress") == ["mktg@example.com"]
+    assert entry.text("hrcMailAliasExpirationDate") == str(
         int(mail.datetime(2026, 12, 31, 0, 0, tzinfo=mail.UTC).timestamp())
     )
 
     # Read
     state = service.load("mail_alias_distribution", dn)
     assert state.tabs["main"].values["cn"] == "marketing-dist"
-    assert state.tabs["main"].values["aliasExpirationDate"] == date(2026, 12, 31)
+    assert state.tabs["main"].values["hrcMailAliasExpirationDate"] == date(2026, 12, 31)
 
     # Update
     service.update(
@@ -656,14 +656,14 @@ def test_mail_alias_distribution_crud(service: ObjectService, directory: MemoryD
             "main": {
                 "values": {
                     "description": "Updated description",
-                    "aliasExpirationDate": "2027-01-15",
+                    "hrcMailAliasExpirationDate": "2027-01-15",
                 }
             }
         },
     )
     updated = service.load("mail_alias_distribution", dn)
     assert updated.tabs["main"].values["description"] == "Updated description"
-    assert updated.tabs["main"].values["aliasExpirationDate"] == date(2027, 1, 15)
+    assert updated.tabs["main"].values["hrcMailAliasExpirationDate"] == date(2027, 1, 15)
 
     # Delete
     service.delete("mail_alias_distribution", dn)
@@ -681,12 +681,12 @@ def test_mail_alias_redirection_crud(service: ObjectService, directory: MemoryDi
                     "values": {
                         "cn": "empty-fwd",
                         "mail": "empty@example.com",
-                        "gosaMailForwardingAddress": [],
+                        "hrcMailForwardingAddress": [],
                     }
                 }
             },
         )
-    assert "main.gosaMailForwardingAddress" in exc.value.fields
+    assert "main.hrcMailForwardingAddress" in exc.value.fields
 
     # Create valid redirection
     dn = service.create(
@@ -698,18 +698,18 @@ def test_mail_alias_redirection_crud(service: ObjectService, directory: MemoryDi
                     "cn": "leads-redir",
                     "description": "Lead redirection",
                     "mail": "leads@example.com",
-                    "gosaMailForwardingAddress": ["target@example.com"],
-                    "aliasExpirationDate": "2026-12-31",
+                    "hrcMailForwardingAddress": ["target@example.com"],
+                    "hrcMailAliasExpirationDate": "2026-12-31",
                 }
             }
         },
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.has_object_class("mailAliasRedirection")
+    assert entry.has_object_class("hrcMailAliasRedirection")
     assert entry.text("cn") == "leads-redir"
     assert entry.text("mail") == "leads@example.com"
-    assert entry.texts("gosaMailForwardingAddress") == ["target@example.com"]
+    assert entry.texts("hrcMailForwardingAddress") == ["target@example.com"]
 
     # Delete
     service.delete("mail_alias_redirection", dn)
@@ -741,7 +741,7 @@ def test_alias_uniqueness_across_types(service: ObjectService) -> None:
                     "values": {
                         "cn": "redir1",
                         "mail": "dist1@example.com",
-                        "gosaMailForwardingAddress": ["dst@example.com"],
+                        "hrcMailForwardingAddress": ["dst@example.com"],
                     }
                 }
             },
@@ -783,7 +783,7 @@ def test_single_modification_of_mail_per_save(
         dn,
         {
             "main": {"values": {"mail": "single@example.com"}},
-            "mail": {"active": True, "values": {"gosaMailServer": "imap"}},
+            "mail": {"active": True, "values": {"hrcMailServer": "imap"}},
         },
     )
     assert len(calls) == 1
@@ -791,7 +791,7 @@ def test_single_modification_of_mail_per_save(
     entry = directory.get(dn)
     assert entry is not None
     assert entry.text("mail") == "single@example.com"
-    assert entry.has_object_class("gosaMailAccount")
+    assert entry.has_object_class("hrcMailAccount")
 
 
 def test_mail_required_while_mail_tab_active(service: ObjectService) -> None:
@@ -806,14 +806,14 @@ def test_deactivating_mail_tab_keeps_mail(
     dn = new_user(
         service,
         uid="keeper",
-        mail_values={"mail": "keeper@example.com", "gosaMailServer": "imap"},
+        mail_values={"mail": "keeper@example.com", "hrcMailServer": "imap"},
     )
     service.update("user", dn, {"mail": {"active": False}})
     entry = directory.get(dn)
     assert entry is not None
-    assert not entry.has_object_class("gosaMailAccount")
+    assert not entry.has_object_class("hrcMailAccount")
     assert entry.text("mail") == "keeper@example.com"
-    assert entry.get("gosaMailServer") == []
+    assert entry.get("hrcMailServer") == []
     state = service.load("user", dn)
     assert not state.tabs["mail"].active
     assert state.tabs["main"].values["mail"] == "keeper@example.com"

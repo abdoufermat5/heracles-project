@@ -32,7 +32,7 @@ class PhoneMacro(ObjectType):
     rdn = "ou=macros,ou=asterisk,ou=configs,ou=systems"
     main_attr = "cn"
     name_attr = "cn"
-    filter = "(objectClass=fdPhoneMacro)"
+    filter = "(objectClass=hrcPhoneMacro)"
     columns = ("cn", "description")
     search_attrs = ("cn", "description")
     required_object_classes = ("top",)
@@ -41,7 +41,7 @@ class PhoneMacro(ObjectType):
         name = "main"
         acl_key = "phoneMacro"
         label = _("Phone macro")
-        object_classes = ("fdPhoneMacro",)
+        object_classes = ("hrcPhoneMacro",)
 
         properties = Section(
             _("Properties"),
@@ -54,7 +54,7 @@ class PhoneMacro(ObjectType):
             ),
             TextAttr("description", _("Description")),
             TextAttr(
-                "fdMacroAction",
+                "hrcMacroAction",
                 _("Macro action"),
                 description=_("Macro dialplan commands or actions"),
             ),
@@ -67,18 +67,18 @@ class MacroTab(Tab):
     name = "macro"
     acl_key = "Macro"
     label = _("Macro")
-    object_classes = ()
-    optional = False
+    object_classes = ("hrcPhoneMacroUser",)
+    optional = True
 
     macros = Section(
         _("Macros"),
         StringAttr(
-            "phoneMacro",
+            "hrcPhoneMacroContent",
             _("Phone macro"),
             description=_("Telephony macro assigned to this user"),
         ),
         StringAttr(
-            "macroParameter",
+            "hrcPhoneMacroParameter",
             _("Macro parameter"),
             description=_("Parameters passed to the macro"),
         ),

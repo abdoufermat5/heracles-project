@@ -50,7 +50,7 @@ class Api:
 def app_client() -> Iterator[TestClient]:
     directory = build_demo_directory()
     directory.set_schema_object_classes(
-        [*directory.schema_object_classes(), "fdIpamVlan", "fdIpamSubnet"]
+        [*directory.schema_object_classes(), "hrcIpamVlan", "hrcIpamSubnet"]
     )
     settings = ApiSettings(admin_dns=[], directory_labels={"main": "Demo directory"})
     settings.session.cookie_secure = False
@@ -70,9 +70,9 @@ def test_ipam_vlan_and_subnet_api_flow(app_client: TestClient) -> None:
                 "main": {
                     "values": {
                         "cn": "dmz-vlan",
-                        "fdIpamVlanInnerId": 50,
+                        "hrcIpamVlanInnerId": 50,
                         "description": "DMZ network",
-                        "fdIpamActive": True,
+                        "hrcIpamActive": True,
                     }
                 }
             },
@@ -85,7 +85,7 @@ def test_ipam_vlan_and_subnet_api_flow(app_client: TestClient) -> None:
     # 2. Get VLAN
     r = a.get(f"/objects/ipamVlan/{vlan_dn}")
     assert r.status_code == 200
-    assert r.json()["tabs"]["main"]["values"]["fdIpamVlanInnerId"] == 50
+    assert r.json()["tabs"]["main"]["values"]["hrcIpamVlanInnerId"] == 50
 
     # 3. Create Subnet referencing VLAN
     r = a.post(
@@ -96,8 +96,8 @@ def test_ipam_vlan_and_subnet_api_flow(app_client: TestClient) -> None:
                 "main": {
                     "values": {
                         "cn": "dmz-subnet",
-                        "fdIpamSubnetCIDR": "192.168.50.0/24",
-                        "fdIpamVlanDN": vlan_dn,
+                        "hrcIpamSubnetCIDR": "192.168.50.0/24",
+                        "hrcIpamVlanDN": vlan_dn,
                         "description": "DMZ Subnet",
                     }
                 }

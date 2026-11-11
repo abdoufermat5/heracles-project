@@ -16,10 +16,10 @@ SERVERS = f"ou=servers,ou=systems,{BASE}"
 CYRUS_CLASSES = {
     "ieee802Device",
     "device",
-    "fdServer",
-    "fdCyrusServer",
+    "hrcServer",
+    "hrcCyrusServer",
     "ipHost",
-    "fdNetworkInterface",
+    "hrcNetworkInterface",
 }
 
 
@@ -53,11 +53,11 @@ def test_cyrus_tab_registration_and_acl(service: ObjectService) -> None:
     assert tab.acl_key == "serviceCyrus"
     assert server_info.acl_object(tab) == "server/serviceCyrus"
     assert tab.optional is True
-    assert tab.object_classes == ("fdCyrusServer",)
+    assert tab.object_classes == ("hrcCyrusServer",)
 
 
 def test_cyrus_tab_dropped_without_schema(directory: MemoryDirectory) -> None:
-    directory.set_schema_object_classes(["ieee802Device", "device", "fdServer"])
+    directory.set_schema_object_classes(["ieee802Device", "device", "hrcServer"])
     registry = TypeRegistry()
     register_builtin_types(registry)
     schema_classes = {c.lower() for c in directory.schema_object_classes()}
@@ -79,14 +79,14 @@ def test_create_server_with_cyrus_service(
             "cyrus": {
                 "active": True,
                 "values": {
-                    "cyrusConnectURL": "cyrus.example.com",
-                    "cyrusConnectPort": 993,
-                    "cyrusConnectOptions1": "/ssl",
-                    "cyrusConnectOptions2": "/validate-cert",
-                    "fdCyrusAdmin": "cyrusadmin",
-                    "fdCyrusPassword": "cyruspassword",
-                    "fdCyrusUseSlashes": True,
-                    "fdCyrusAutocreateFolders": "Drafts,Sent,Trash,Archive",
+                    "hrcCyrusConnectURL": "cyrus.example.com",
+                    "hrcCyrusConnectPort": 993,
+                    "hrcCyrusConnectOptions1": "/ssl",
+                    "hrcCyrusConnectOptions2": "/validate-cert",
+                    "hrcCyrusAdmin": "cyrusadmin",
+                    "hrcCyrusPassword": "cyruspassword",
+                    "hrcCyrusUseSlashes": True,
+                    "hrcCyrusAutocreateFolders": "Drafts,Sent,Trash,Archive",
                 },
             },
         },
@@ -94,27 +94,27 @@ def test_create_server_with_cyrus_service(
     assert dn == f"cn=cyrus1,{SERVERS}"
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdCyrusServer" in entry.get("objectClass")
-    assert entry.text("cyrusConnectURL") == "cyrus.example.com"
-    assert entry.text("cyrusConnectPort") == "993"
-    assert entry.text("cyrusConnectOptions1") == "/ssl"
-    assert entry.text("cyrusConnectOptions2") == "/validate-cert"
-    assert entry.text("fdCyrusAdmin") == "cyrusadmin"
-    assert entry.text("fdCyrusPassword") == "cyruspassword"
-    assert entry.text("fdCyrusUseSlashes") == "TRUE"
-    assert entry.text("fdCyrusAutocreateFolders") == "Drafts,Sent,Trash,Archive"
+    assert b"hrcCyrusServer" in entry.get("objectClass")
+    assert entry.text("hrcCyrusConnectURL") == "cyrus.example.com"
+    assert entry.text("hrcCyrusConnectPort") == "993"
+    assert entry.text("hrcCyrusConnectOptions1") == "/ssl"
+    assert entry.text("hrcCyrusConnectOptions2") == "/validate-cert"
+    assert entry.text("hrcCyrusAdmin") == "cyrusadmin"
+    assert entry.text("hrcCyrusPassword") == "cyruspassword"
+    assert entry.text("hrcCyrusUseSlashes") == "TRUE"
+    assert entry.text("hrcCyrusAutocreateFolders") == "Drafts,Sent,Trash,Archive"
 
     loaded = service.load("server", dn)
     assert loaded.tabs["cyrus"].active is True
     vals = loaded.tabs["cyrus"].values
-    assert vals["cyrusConnectURL"] == "cyrus.example.com"
-    assert vals["cyrusConnectPort"] == 993
-    assert vals["cyrusConnectOptions1"] == "/ssl"
-    assert vals["cyrusConnectOptions2"] == "/validate-cert"
-    assert vals["fdCyrusAdmin"] == "cyrusadmin"
-    assert vals["fdCyrusPassword"] == "cyruspassword"
-    assert vals["fdCyrusUseSlashes"] is True
-    assert vals["fdCyrusAutocreateFolders"] == "Drafts,Sent,Trash,Archive"
+    assert vals["hrcCyrusConnectURL"] == "cyrus.example.com"
+    assert vals["hrcCyrusConnectPort"] == 993
+    assert vals["hrcCyrusConnectOptions1"] == "/ssl"
+    assert vals["hrcCyrusConnectOptions2"] == "/validate-cert"
+    assert vals["hrcCyrusAdmin"] == "cyrusadmin"
+    assert vals["hrcCyrusPassword"] == "cyruspassword"
+    assert vals["hrcCyrusUseSlashes"] is True
+    assert vals["hrcCyrusAutocreateFolders"] == "Drafts,Sent,Trash,Archive"
 
 
 def test_update_and_deactivate_cyrus_tab(
@@ -128,10 +128,10 @@ def test_update_and_deactivate_cyrus_tab(
             "cyrus": {
                 "active": True,
                 "values": {
-                    "cyrusConnectURL": "cyrus2.example.com",
-                    "cyrusConnectPort": 143,
-                    "cyrusConnectOptions1": "/tls",
-                    "fdCyrusUseSlashes": False,
+                    "hrcCyrusConnectURL": "cyrus2.example.com",
+                    "hrcCyrusConnectPort": 143,
+                    "hrcCyrusConnectOptions1": "/tls",
+                    "hrcCyrusUseSlashes": False,
                 },
             },
         },
@@ -144,26 +144,26 @@ def test_update_and_deactivate_cyrus_tab(
         {
             "cyrus": {
                 "values": {
-                    "cyrusConnectPort": 993,
-                    "cyrusConnectOptions1": "/ssl",
-                    "fdCyrusUseSlashes": True,
+                    "hrcCyrusConnectPort": 993,
+                    "hrcCyrusConnectOptions1": "/ssl",
+                    "hrcCyrusUseSlashes": True,
                 }
             }
         },
     )
     loaded = service.load("server", dn)
-    assert loaded.tabs["cyrus"].values["cyrusConnectPort"] == 993
-    assert loaded.tabs["cyrus"].values["cyrusConnectOptions1"] == "/ssl"
-    assert loaded.tabs["cyrus"].values["fdCyrusUseSlashes"] is True
+    assert loaded.tabs["cyrus"].values["hrcCyrusConnectPort"] == 993
+    assert loaded.tabs["cyrus"].values["hrcCyrusConnectOptions1"] == "/ssl"
+    assert loaded.tabs["cyrus"].values["hrcCyrusUseSlashes"] is True
 
     # Deactivate tab
     service.update("server", dn, {"cyrus": {"active": False}})
     entry = directory.get(dn)
     assert entry is not None
-    assert b"fdCyrusServer" not in entry.get("objectClass")
-    assert entry.get("cyrusConnectURL") == []
-    assert entry.get("cyrusConnectPort") == []
-    assert entry.get("fdCyrusUseSlashes") == []
+    assert b"hrcCyrusServer" not in entry.get("objectClass")
+    assert entry.get("hrcCyrusConnectURL") == []
+    assert entry.get("hrcCyrusConnectPort") == []
+    assert entry.get("hrcCyrusUseSlashes") == []
 
     loaded_deactivated = service.load("server", dn)
     assert loaded_deactivated.tabs["cyrus"].active is False
@@ -178,11 +178,11 @@ def test_cyrus_validation(service: ObjectService) -> None:
                 "main": {"values": {"cn": "badcyrus"}},
                 "cyrus": {
                     "active": True,
-                    "values": {"cyrusConnectPort": 0},
+                    "values": {"hrcCyrusConnectPort": 0},
                 },
             },
         )
-    assert "cyrusConnectPort" in str(exc_info.value)
+    assert "hrcCyrusConnectPort" in str(exc_info.value)
 
 
 def test_mail_servers_helper_cyrus(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -196,7 +196,7 @@ def test_mail_servers_helper_cyrus(service: ObjectService, directory: MemoryDire
         BASE,
         {
             "main": {"values": {"cn": "cyrus-mail"}},
-            "cyrus": {"active": True, "values": {"cyrusConnectURL": "cyrus.test"}},
+            "cyrus": {"active": True, "values": {"hrcCyrusConnectURL": "cyrus.test"}},
         },
     )
     assert cyrus.mail_servers(directory) == ["cyrus-mail"]

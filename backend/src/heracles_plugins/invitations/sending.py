@@ -74,7 +74,7 @@ def send_invitation(
     invitation = directory.get(invitation_dn)
     if invitation is None or not invitation.has_object_class(INVITATION_CLASS):
         raise InvitationError("Unknown invitation.")
-    form_dn = invitation.text("fdInvitationFormDN") or ""
+    form_dn = invitation.text("hrcInvitationFormDN") or ""
     form = directory.get(form_dn) if form_dn else None
     if form is None:
         raise InvitationError("The form of this invitation does not exist.")
@@ -83,14 +83,14 @@ def send_invitation(
         raise InvitationError("No address given.")
     if len(wanted) > MAX_RECIPIENTS:
         raise InvitationError(f"At most {MAX_RECIPIENTS} addresses at a time.")
-    if author_dn and not invitation.text("fdInvitationAuthor"):
+    if author_dn and not invitation.text("hrcInvitationAuthor"):
         directory.modify(
-            invitation.dn, [Modification("replace", "fdInvitationAuthor", [author_dn.encode()])]
+            invitation.dn, [Modification("replace", "hrcInvitationAuthor", [author_dn.encode()])]
         )
     form_name = form.text("cn") or ""
-    form_title = form.text("fdPublicFormTitle") or form_name
-    subject = invitation.text("fdInvitationEmailSubject") or form_title
-    content = invitation.text("fdInvitationEmailContent") or DEFAULT_CONTENT
+    form_title = form.text("hrcPublicFormTitle") or form_name
+    subject = invitation.text("hrcInvitationEmailSubject") or form_title
+    content = invitation.text("hrcInvitationEmailContent") or DEFAULT_CONTENT
     container_base = department_of(invitation.dn, INVITATIONS_RDN)
     report = SendReport()
     expires = (now.date() + timedelta(days=valid_days)).isoformat()

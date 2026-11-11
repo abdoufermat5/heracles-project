@@ -15,7 +15,7 @@ from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
-from heracles.schema.legacy import PLUGIN_OBJECT_CLASSES
+from heracles.schema.names import PLUGIN_OBJECT_CLASSES
 from heracles_plugins import systems
 from heracles_plugins.samba.flags import (
     LogonHoursAttr,
@@ -202,7 +202,7 @@ def test_user_tab_computes_sid_and_primary_group(
     assert entry.text("sambaSID") == f"{DOMAIN_SID}-{uid_number * 2 + 1000}"
     assert entry.text("sambaPrimaryGroupSID") == f"{DOMAIN_SID}-513"
     assert entry.text("sambaAcctFlags") == "[U          ]"
-    for virtual in ("flag_disabled", "fd_pwdCantChange", "wellKnownRid", "primaryGroupStatus"):
+    for virtual in ("flag_disabled", "hrc_pwdCantChange", "wellKnownRid", "primaryGroupStatus"):
         assert not entry.get(virtual)
 
 
@@ -338,11 +338,11 @@ def test_unrelated_update_keeps_hashes(service: ObjectService, directory: Memory
 
 
 def test_password_cannot_change_flag(service: ObjectService, directory: MemoryDirectory) -> None:
-    dn = new_user(service, samba_values={"fd_pwdCantChange": True}, main={"userPassword": "pw"})
+    dn = new_user(service, samba_values={"hrc_pwdCantChange": True}, main={"userPassword": "pw"})
     assert entry_of(directory, dn).text("sambaPwdLastSet") == "4294967295"
     state = service.load("user", dn)
-    assert state.tabs["samba"].values["fd_pwdCantChange"] is True
-    service.update("user", dn, {"samba": {"values": {"fd_pwdCantChange": False}}})
+    assert state.tabs["samba"].values["hrc_pwdCantChange"] is True
+    service.update("user", dn, {"samba": {"values": {"hrc_pwdCantChange": False}}})
     assert entry_of(directory, dn).text("sambaPwdLastSet") == str(NOW)
 
 

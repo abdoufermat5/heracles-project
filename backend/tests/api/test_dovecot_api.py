@@ -54,10 +54,10 @@ def app_client() -> TestClient:
             *d.schema_object_classes(),
             "ieee802Device",
             "device",
-            "fdServer",
-            "fdDovecotServer",
+            "hrcServer",
+            "hrcDovecotServer",
             "ipHost",
-            "fdNetworkInterface",
+            "hrcNetworkInterface",
         ]
     )
     registry = TypeRegistry()
@@ -96,10 +96,10 @@ def test_dovecot_api_flow(app_client: TestClient) -> None:
                 "dovecot": {
                     "active": True,
                     "values": {
-                        "dovecotConnectURL": "dovecot.paris.example.com",
-                        "dovecotConnectPort": 993,
-                        "dovecotConnectOptions1": "/ssl",
-                        "fdDovecotAdmin": "dadmin",
+                        "hrcDovecotConnectURL": "dovecot.paris.example.com",
+                        "hrcDovecotConnectPort": 993,
+                        "hrcDovecotConnectOptions1": "/ssl",
+                        "hrcDovecotAdmin": "dadmin",
                     },
                 },
             },
@@ -113,8 +113,8 @@ def test_dovecot_api_flow(app_client: TestClient) -> None:
     assert r.status_code == 200
     data = r.json()
     assert data["tabs"]["dovecot"]["active"] is True
-    assert data["tabs"]["dovecot"]["values"]["dovecotConnectURL"] == "dovecot.paris.example.com"
-    assert data["tabs"]["dovecot"]["values"]["dovecotConnectPort"] == 993
+    assert data["tabs"]["dovecot"]["values"]["hrcDovecotConnectURL"] == "dovecot.paris.example.com"
+    assert data["tabs"]["dovecot"]["values"]["hrcDovecotConnectPort"] == 993
 
     # Update server
     r = client.patch(
@@ -123,14 +123,14 @@ def test_dovecot_api_flow(app_client: TestClient) -> None:
             "tabs": {
                 "dovecot": {
                     "values": {
-                        "dovecotConnectPort": 143,
+                        "hrcDovecotConnectPort": 143,
                     }
                 }
             }
         },
     )
     assert r.status_code == 200
-    assert r.json()["tabs"]["dovecot"]["values"]["dovecotConnectPort"] == 143
+    assert r.json()["tabs"]["dovecot"]["values"]["hrcDovecotConnectPort"] == 143
 
     # Delete server
     r = client.delete(f"/objects/server/{quote(dn, safe='')}")

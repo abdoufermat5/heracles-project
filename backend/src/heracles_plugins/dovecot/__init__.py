@@ -34,12 +34,12 @@ CONNECT_OPTIONS_2: tuple[tuple[str, str], ...] = (
 )
 
 MAIL_SERVICE_CLASSES: tuple[str, ...] = (
-    "fdDovecotServer",
-    "fdCyrusServer",
-    "fdPostfixServer",
-    "fdSieveServer",
-    "goSpamServer",
-    "fdZimbraServer",
+    "hrcDovecotServer",
+    "hrcCyrusServer",
+    "hrcPostfixServer",
+    "hrcSieveServer",
+    "hrcSpamAssassinServer",
+    "hrcZimbraServer",
 )
 
 
@@ -67,30 +67,30 @@ class DovecotServiceTab(Tab):
     label = _("Dovecot")
     description = _("Dovecot IMAP/POP3 service")
     optional = True
-    object_classes = ("fdDovecotServer",)
+    object_classes = ("hrcDovecotServer",)
 
     connection = Section(
         _("Connection"),
         StringAttr(
-            "dovecotConnectURL",
+            "hrcDovecotConnectURL",
             _("Connect URL"),
             description=_("Dovecot server URL or host name"),
         ),
         IntAttr(
-            "dovecotConnectPort",
+            "hrcDovecotConnectPort",
             _("Connect port"),
             min=1,
             max=65535,
             description=_("Dovecot connection port"),
         ),
         SelectAttr(
-            "dovecotConnectOptions1",
+            "hrcDovecotConnectOptions1",
             _("Connection options 1"),
             options=CONNECT_OPTIONS_1,
             default="",
         ),
         SelectAttr(
-            "dovecotConnectOptions2",
+            "hrcDovecotConnectOptions2",
             _("Connection options 2"),
             options=CONNECT_OPTIONS_2,
             default="",
@@ -99,12 +99,12 @@ class DovecotServiceTab(Tab):
     admin = Section(
         _("Administration"),
         StringAttr(
-            "fdDovecotAdmin",
+            "hrcDovecotAdmin",
             _("Admin user"),
             description=_("Dovecot administrator login"),
         ),
         StringAttr(
-            "fdDovecotPassword",
+            "hrcDovecotPassword",
             _("Admin password"),
             description=_("Dovecot administrator password"),
         ),

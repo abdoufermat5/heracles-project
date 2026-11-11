@@ -34,12 +34,12 @@ CONNECT_OPTIONS_2: tuple[tuple[str, str], ...] = (
 )
 
 MAIL_SERVICE_CLASSES: tuple[str, ...] = (
-    "fdDovecotServer",
-    "fdCyrusServer",
-    "fdPostfixServer",
-    "fdSieveServer",
-    "goSpamServer",
-    "fdZimbraServer",
+    "hrcDovecotServer",
+    "hrcCyrusServer",
+    "hrcPostfixServer",
+    "hrcSieveServer",
+    "hrcSpamAssassinServer",
+    "hrcZimbraServer",
 )
 
 
@@ -67,30 +67,30 @@ class CyrusServiceTab(Tab):
     label = _("Cyrus")
     description = _("Cyrus IMAP service")
     optional = True
-    object_classes = ("fdCyrusServer",)
+    object_classes = ("hrcCyrusServer",)
 
     connection = Section(
         _("Connection"),
         StringAttr(
-            "cyrusConnectURL",
+            "hrcCyrusConnectURL",
             _("Connect URL"),
             description=_("Cyrus IMAP server URL or host name"),
         ),
         IntAttr(
-            "cyrusConnectPort",
+            "hrcCyrusConnectPort",
             _("Connect port"),
             min=1,
             max=65535,
             description=_("Cyrus IMAP connection port"),
         ),
         SelectAttr(
-            "cyrusConnectOptions1",
+            "hrcCyrusConnectOptions1",
             _("Connection options 1"),
             options=CONNECT_OPTIONS_1,
             default="",
         ),
         SelectAttr(
-            "cyrusConnectOptions2",
+            "hrcCyrusConnectOptions2",
             _("Connection options 2"),
             options=CONNECT_OPTIONS_2,
             default="",
@@ -99,12 +99,12 @@ class CyrusServiceTab(Tab):
     admin = Section(
         _("Administration"),
         StringAttr(
-            "fdCyrusAdmin",
+            "hrcCyrusAdmin",
             _("Admin user"),
             description=_("Cyrus administrator login"),
         ),
         StringAttr(
-            "fdCyrusPassword",
+            "hrcCyrusPassword",
             _("Admin password"),
             description=_("Cyrus administrator password"),
         ),
@@ -112,13 +112,13 @@ class CyrusServiceTab(Tab):
     options = Section(
         _("Options"),
         BooleanAttr(
-            "fdCyrusUseSlashes",
+            "hrcCyrusUseSlashes",
             _("Use slashes"),
             default=False,
             description=_("Use / as hierarchy separator instead of . in mailbox names"),
         ),
         StringAttr(
-            "fdCyrusAutocreateFolders",
+            "hrcCyrusAutocreateFolders",
             _("Autocreate folders"),
             description=_(
                 "Comma-separated list of folders to automatically create for new mailboxes"

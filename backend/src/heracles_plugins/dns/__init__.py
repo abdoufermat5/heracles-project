@@ -409,7 +409,7 @@ class DnsZone(ObjectType):
 
 
 class DnsAcl(ObjectType):
-    """An address match list (``fdDNSAcl``)."""
+    """An address match list (``hrcDNSAcl``)."""
 
     name = "dns_acl"
     acl_category = "dnsAcl"
@@ -417,7 +417,7 @@ class DnsAcl(ObjectType):
     label_plural = _("DNS access lists")
     icon = "shield"
     category = "network"
-    filter = "(objectClass=fdDNSAcl)"
+    filter = "(objectClass=hrcDNSAcl)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=dns"
@@ -428,14 +428,14 @@ class DnsAcl(ObjectType):
         name = "main"
         acl_key = "dnsAcl"
         label = _("DNS access list")
-        object_classes = ("fdDNSAcl",)
+        object_classes = ("hrcDNSAcl",)
 
         properties = Section(
             _("Properties"),
             DepartmentAttr("base", _("Department")),
             StringAttr("cn", _("Name"), required=True, pattern=r"[A-Za-z0-9_][A-Za-z0-9_.-]*"),
             ListAttr(
-                "fdDNSAclMatchList",
+                "hrcDNSAclMatchList",
                 _("Address match list"),
                 StringAttr(
                     "element",
@@ -454,7 +454,7 @@ class DnsAcl(ObjectType):
 
 
 class DnsView(ObjectType):
-    """A server view (``fdDNSView``)."""
+    """A server view (``hrcDNSView``)."""
 
     name = "dns_view"
     acl_category = "dnsView"
@@ -462,7 +462,7 @@ class DnsView(ObjectType):
     label_plural = _("DNS views")
     icon = "eye"
     category = "network"
-    filter = "(objectClass=fdDNSView)"
+    filter = "(objectClass=hrcDNSView)"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=dns"
@@ -473,24 +473,24 @@ class DnsView(ObjectType):
         name = "main"
         acl_key = "dnsView"
         label = _("DNS view")
-        object_classes = ("fdDNSView",)
+        object_classes = ("hrcDNSView",)
 
         properties = Section(
             _("Properties"),
             DepartmentAttr("base", _("Department")),
             StringAttr("cn", _("Name"), required=True, pattern=r"[A-Za-z0-9_][A-Za-z0-9_.-]*"),
-            BooleanAttr("fdDNSViewMatchRecursiveOnly", _("Match recursive queries only")),
+            BooleanAttr("hrcDNSViewMatchRecursiveOnly", _("Match recursive queries only")),
         )
         matching = Section(
             _("Matching"),
             ListAttr(
-                "fdDNSViewMatchClientsAcl",
+                "hrcDNSViewMatchClientsAcl",
                 _("Clients"),
                 ObjectRefAttr("client", _("Access list"), ref_type="dns_acl"),
                 description=_("Access lists the client must match"),
             ),
             ListAttr(
-                "fdDNSViewMatchDestinationsAcl",
+                "hrcDNSViewMatchDestinationsAcl",
                 _("Destinations"),
                 ObjectRefAttr("destination", _("Access list"), ref_type="dns_acl"),
                 description=_("Access lists the destination must match"),
@@ -499,7 +499,7 @@ class DnsView(ObjectType):
         zones = Section(
             _("Zones"),
             ListAttr(
-                "fdDNSZoneDn",
+                "hrcDNSZoneDn",
                 _("Zones"),
                 ObjectRefAttr("zone", _("Zone"), ref_type="dns_zone"),
             ),

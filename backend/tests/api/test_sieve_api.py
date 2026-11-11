@@ -54,10 +54,10 @@ def app_client() -> TestClient:
             *d.schema_object_classes(),
             "ieee802Device",
             "device",
-            "fdServer",
-            "fdSieveServer",
+            "hrcServer",
+            "hrcSieveServer",
             "ipHost",
-            "fdNetworkInterface",
+            "hrcNetworkInterface",
         ]
     )
     registry = TypeRegistry()
@@ -96,10 +96,10 @@ def test_sieve_api_flow(app_client: TestClient) -> None:
                 "sieve": {
                     "active": True,
                     "values": {
-                        "sieveConnectURL": "sieve.paris.example.com",
-                        "sieveConnectPort": 4190,
-                        "sieveConnectOptions": "/tls",
-                        "fdSieveAdmin": "sieveadmin",
+                        "hrcSieveConnectURL": "sieve.paris.example.com",
+                        "hrcSieveConnectPort": 4190,
+                        "hrcSieveConnectOptions": "/tls",
+                        "hrcSieveAdmin": "sieveadmin",
                     },
                 },
             },
@@ -113,8 +113,8 @@ def test_sieve_api_flow(app_client: TestClient) -> None:
     assert r.status_code == 200
     data = r.json()
     assert data["tabs"]["sieve"]["active"] is True
-    assert data["tabs"]["sieve"]["values"]["sieveConnectURL"] == "sieve.paris.example.com"
-    assert data["tabs"]["sieve"]["values"]["sieveConnectPort"] == 4190
+    assert data["tabs"]["sieve"]["values"]["hrcSieveConnectURL"] == "sieve.paris.example.com"
+    assert data["tabs"]["sieve"]["values"]["hrcSieveConnectPort"] == 4190
 
     # Update server
     r = client.patch(
@@ -123,14 +123,14 @@ def test_sieve_api_flow(app_client: TestClient) -> None:
             "tabs": {
                 "sieve": {
                     "values": {
-                        "sieveConnectPort": 2000,
+                        "hrcSieveConnectPort": 2000,
                     }
                 }
             }
         },
     )
     assert r.status_code == 200
-    assert r.json()["tabs"]["sieve"]["values"]["sieveConnectPort"] == 2000
+    assert r.json()["tabs"]["sieve"]["values"]["hrcSieveConnectPort"] == 2000
 
     # Delete server
     r = client.delete(f"/objects/server/{quote(dn, safe='')}")

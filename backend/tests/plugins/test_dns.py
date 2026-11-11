@@ -41,7 +41,7 @@ def fixed_today(monkeypatch: pytest.MonkeyPatch) -> None:
 def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
-    d.set_schema_object_classes([*d.schema_object_classes(), "dNSZone", "fdDNSView", "fdDNSAcl"])
+    d.set_schema_object_classes([*d.schema_object_classes(), "dNSZone", "hrcDNSView", "hrcDNSAcl"])
     return d
 
 
@@ -125,11 +125,11 @@ def test_plugin_registers_view_and_acl_only_with_their_classes() -> None:
     assert [t.name for t in registry.list()] == ["dns_zone"]
 
     registry = TypeRegistry()
-    registry.register_plugin(dns.plugin(), {"dnszone", "fddnsview", "fddnsacl"})
+    registry.register_plugin(dns.plugin(), {"dnszone", "hrcdnsview", "hrcdnsacl"})
     assert [t.name for t in registry.list()] == ["dns_zone", "dns_view", "dns_acl"]
 
     registry = TypeRegistry()
-    status = registry.register_plugin(dns.plugin(), {"fddnsview"})
+    status = registry.register_plugin(dns.plugin(), {"hrcdnsview"})
     assert not status.enabled
     assert registry.list() == []
 
@@ -612,7 +612,7 @@ def test_acl_and_view_roundtrip(service: ObjectService, directory: MemoryDirecto
             "main": {
                 "values": {
                     "cn": "internal",
-                    "fdDNSAclMatchList": ["10.0.0.0/8", "!192.0.2.1", "localhost"],
+                    "hrcDNSAclMatchList": ["10.0.0.0/8", "!192.0.2.1", "localhost"],
                 }
             }
         },
@@ -626,19 +626,19 @@ def test_acl_and_view_roundtrip(service: ObjectService, directory: MemoryDirecto
             "main": {
                 "values": {
                     "cn": "inside",
-                    "fdDNSViewMatchClientsAcl": [acl_dn],
-                    "fdDNSViewMatchDestinationsAcl": [acl_dn],
-                    "fdDNSViewMatchRecursiveOnly": True,
-                    "fdDNSZoneDn": [zone_dn],
+                    "hrcDNSViewMatchClientsAcl": [acl_dn],
+                    "hrcDNSViewMatchDestinationsAcl": [acl_dn],
+                    "hrcDNSViewMatchRecursiveOnly": True,
+                    "hrcDNSZoneDn": [zone_dn],
                 }
             }
         },
     )
     entry = attrs(directory, view_dn)
-    assert entry["objectClass"] == ["fdDNSView"]
-    assert entry["fdDNSViewMatchRecursiveOnly"] == ["TRUE"]
-    assert entry["fdDNSZoneDn"] == [zone_dn]
-    assert attrs(directory, acl_dn)["fdDNSAclMatchList"] == [
+    assert entry["objectClass"] == ["hrcDNSView"]
+    assert entry["hrcDNSViewMatchRecursiveOnly"] == ["TRUE"]
+    assert entry["hrcDNSZoneDn"] == [zone_dn]
+    assert attrs(directory, acl_dn)["hrcDNSAclMatchList"] == [
         "!192.0.2.1",
         "10.0.0.0/8",
         "localhost",
@@ -653,5 +653,5 @@ def test_view_rejects_unknown_references(service: ObjectService) -> None:
         service.create(
             "dns_view",
             BASE,
-            {"main": {"values": {"cn": "v", "fdDNSViewMatchClientsAcl": [f"cn=x,{DNS_OU}"]}}},
+            {"main": {"values": {"cn": "v", "hrcDNSViewMatchClientsAcl": [f"cn=x,{DNS_OU}"]}}},
         )

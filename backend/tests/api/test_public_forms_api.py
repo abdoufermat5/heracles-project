@@ -25,7 +25,7 @@ from heracles.server import create_full_app
 from heracles_plugins.public_forms import Captcha, PublicFormsSettings, build_public_router
 from heracles_plugins.public_forms.router import SubmissionWindow
 
-CLASSES = ["fdPublicForm", "fdInvitation", "fdRegistration", "fdUserRegistration"]
+CLASSES = ["hrcPublicForm", "hrcInvitation", "hrcRegistration", "hrcUserRegistration"]
 PATH = "/api/v2/public/forms"
 
 FIELDS: list[dict[str, Any]] = [
@@ -90,11 +90,11 @@ class Env:
     def form(self, **main: object) -> str:
         values: dict[str, object] = {
             "cn": "join",
-            "fdPublicFormTitle": "Join us",
-            "fdPublicFormText": "Welcome",
-            "fdPublicFormFinalText": "Thank you",
-            "fdPublicFormTemplateType": "user",
-            "fdPublicFormTemplateDN": self.template(),
+            "hrcPublicFormTitle": "Join us",
+            "hrcPublicFormText": "Welcome",
+            "hrcPublicFormFinalText": "Thank you",
+            "hrcPublicFormTemplateType": "user",
+            "hrcPublicFormTemplateDN": self.template(),
             **main,
         }
         return self.service.create(
@@ -102,7 +102,7 @@ class Env:
             BASE,
             {
                 "main": {"values": values},
-                "alteration": {"values": {"fdPublicFormAlteredAttributes": FIELDS}},
+                "alteration": {"values": {"hrcPublicFormAlteredAttributes": FIELDS}},
             },
         )
 
@@ -190,14 +190,14 @@ def test_validation_errors_use_the_api_error_format(env: Env) -> None:
 
 
 def test_default_locked_accounts(env: Env) -> None:
-    env.form(fdPublicFormDefaultLocked=True)
+    env.form(hrcPublicFormDefaultLocked=True)
     assert env.post({"values": person()}).status_code == 201
     entry = env.directory.get(f"uid=jdoe,ou=people,{BASE}") or pytest.fail()
     assert is_locked(entry.text("userPassword") or "")
 
 
 def test_terms_and_captcha(env: Env) -> None:
-    env.form(fdPublicFormCaptcha=True, fdPublicFormTosUrl="https://example.com/terms")
+    env.form(hrcPublicFormCaptcha=True, hrcPublicFormTosUrl="https://example.com/terms")
     assert env.client.get(f"{PATH}/join").json()["tos_url"] == "https://example.com/terms"
     challenge = env.client.get(f"{PATH}/join/captcha").json()
     a, _plus, b = challenge["question"].split()
@@ -278,7 +278,7 @@ def test_large_bodies_are_refused(hasher: None) -> None:
 
 
 def test_private_form_needs_an_invitation(env: Env) -> None:
-    form_dn = env.form(fdPublicFormPrivate=True)
+    form_dn = env.form(hrcPublicFormPrivate=True)
     assert env.client.get(f"{PATH}/join").status_code == 404
     assert env.client.get(f"{PATH}/join", params={"token": "nope"}).status_code == 404
     assert env.post({"values": person()}).status_code == 404
@@ -290,8 +290,8 @@ def test_private_form_needs_an_invitation(env: Env) -> None:
             "main": {
                 "values": {
                     "cn": "welcome",
-                    "fdInvitationFormDN": form_dn,
-                    "fdInvitationEmailSubject": "Welcome",
+                    "hrcInvitationFormDN": form_dn,
+                    "hrcInvitationEmailSubject": "Welcome",
                 }
             }
         },
@@ -322,7 +322,7 @@ def test_private_form_needs_an_invitation(env: Env) -> None:
 
 def test_private_definition_can_be_shown_when_allowed(hasher: None) -> None:
     env = Env(PublicFormsSettings(allow_private_without_invitations=True))
-    env.form(fdPublicFormPrivate=True)
+    env.form(hrcPublicFormPrivate=True)
     r = env.client.get(f"{PATH}/join")
     assert r.status_code == 200 and r.json()["invitation_required"] is True
     assert env.post({"values": person()}).status_code == 404
@@ -375,13 +375,13 @@ def test_invitation_flow_on_the_full_application(full_client: TestClient) -> Non
             "main": {
                 "values": {
                     "cn": "guests",
-                    "fdPublicFormTitle": "Guests",
-                    "fdPublicFormTemplateType": "user",
-                    "fdPublicFormTemplateDN": template,
-                    "fdPublicFormPrivate": True,
+                    "hrcPublicFormTitle": "Guests",
+                    "hrcPublicFormTemplateType": "user",
+                    "hrcPublicFormTemplateDN": template,
+                    "hrcPublicFormPrivate": True,
                 }
             },
-            "alteration": {"values": {"fdPublicFormAlteredAttributes": FIELDS}},
+            "alteration": {"values": {"hrcPublicFormAlteredAttributes": FIELDS}},
         },
     )
     invitation = admin.create(
@@ -390,8 +390,8 @@ def test_invitation_flow_on_the_full_application(full_client: TestClient) -> Non
             "main": {
                 "values": {
                     "cn": "guests",
-                    "fdInvitationFormDN": form,
-                    "fdInvitationEmailSubject": "Hello",
+                    "hrcInvitationFormDN": form,
+                    "hrcInvitationEmailSubject": "Hello",
                 }
             }
         },

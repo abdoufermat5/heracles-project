@@ -35,7 +35,7 @@ from heracles.objects import (
     transfer,
 )
 from heracles.objects.service import encode_cursor
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
 log = structlog.get_logger(__name__)
 
@@ -366,7 +366,7 @@ def _snapshot_service(user: CurrentUserDep, domain: DomainDep) -> SnapshotServic
     config = effective_settings(user.directory)
     service = domain.snapshots(user.directory_id, user.directory)
     service.snapshot_base = config.snapshot_base or dnlib.join(
-        legacy.RDN.SNAPSHOTS, user.directory.base_dn
+        schema.RDN.SNAPSHOTS, user.directory.base_dn
     )
     return service
 

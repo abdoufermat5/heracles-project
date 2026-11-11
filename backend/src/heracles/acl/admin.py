@@ -12,7 +12,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-from heracles.acl._compat import (
+from heracles.acl._names import (
     ATTR_ACL_ENTRY,
     ATTR_ACL_TEMPLATE,
     OC_ACL,
@@ -45,9 +45,9 @@ from heracles.ldap.client import (
     NoSuchObjectError,
     Scope,
 )
-from heracles.schema import legacy
+from heracles.schema import names as schema
 
-DEFAULT_ROLE_RDN = legacy.RDN.ACL_ROLES
+DEFAULT_ROLE_RDN = schema.RDN.ACL_ROLES
 _FORBIDDEN_IN_NAMES = set(",#;:\n")
 
 
@@ -288,9 +288,9 @@ def _member_kind(directory: DirectoryClient, member: str) -> str:
     entry = directory.get(member, ["objectClass", "cn", "uid"])
     if entry is None:
         return "missing"
-    if entry.has_object_class(legacy.STD_OC.INET_ORG_PERSON):
+    if entry.has_object_class(schema.STD_OC.INET_ORG_PERSON):
         return "user"
-    if entry.has_object_class(legacy.STD_OC.ORGANIZATIONAL_ROLE):
+    if entry.has_object_class(schema.STD_OC.ORGANIZATIONAL_ROLE):
         return "role"
     return "group"
 

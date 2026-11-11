@@ -31,7 +31,7 @@ def days(d: date) -> str:
 @pytest.fixture
 def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
-    d.set_schema_object_classes([*d.schema_object_classes(), "fdTasksLifeCycle"])
+    d.set_schema_object_classes([*d.schema_object_classes(), "hrcTasksLifeCycle"])
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     for dn, ou in ((PEOPLE, "people"), (GROUPS, "groups"), (TASKS, "tasks")):
         d.add(dn, {"objectClass": [b"organizationalUnit"], "ou": [ou.encode()]})
@@ -57,12 +57,12 @@ def add_user(d: MemoryDirectory, uid: str, end: date | None, **extra: str) -> st
 
 def add_task(d: MemoryDirectory, members: list[str], **extra: str) -> None:
     attrs: dict[str, list[bytes]] = {
-        "objectClass": [b"fdTasks", b"fdTasksLifeCycle"],
+        "objectClass": [b"hrcTasks", b"hrcTasksLifeCycle"],
         "cn": [b"ends"],
-        "fdTasksStatus": [b"Activated"],
-        "fdTasksRepeatable": [b"TRUE"],
-        "fdTasksRepeatableSchedule": [b"daily"],
-        "fdTasksLifeCycleMembers": [m.encode() for m in members],
+        "hrcTasksStatus": [b"Activated"],
+        "hrcTasksRepeatable": [b"TRUE"],
+        "hrcTasksRepeatableSchedule": [b"daily"],
+        "hrcTasksLifeCycleMembers": [m.encode() for m in members],
     }
     attrs.update({k: [v.encode()] for k, v in extra.items()})
     d.add(TASK_DN, attrs)
@@ -106,8 +106,8 @@ def test_grace_period_and_login_pattern(directory: MemoryDirectory) -> None:
     add_task(
         directory,
         [a, b, c],
-        fdTasksLifeCyclePostEndDate="10",
-        fdTasksLifeCycleRegexPattern="^stu-",
+        hrcTasksLifeCyclePostEndDate="10",
+        hrcTasksLifeCycleRegexPattern="^stu-",
     )
     report = lc.run_lifecycle(directory, NOW)
     assert [r.user_dn for r in report.accounts] == [b]
@@ -138,7 +138,7 @@ def test_move_to_department(directory: MemoryDirectory) -> None:
 
 def test_set_attribute_and_closure_lock(directory: MemoryDirectory) -> None:
     a = add_user(directory, "a", TODAY - timedelta(days=1), employeeType="staff")
-    add_task(directory, [a], fdTasksLifeCycleEnableAccountClosure="TRUE")
+    add_task(directory, [a], hrcTasksLifeCycleEnableAccountClosure="TRUE")
     settings = lc.LifecycleSettings(
         action="set_attribute", attribute="employeeType", value="alumni"
     )
@@ -169,7 +169,7 @@ def test_end_date_attribute_as_generalized_time(directory: MemoryDirectory) -> N
 
 def test_invalid_pattern_task_is_reported_and_kept(directory: MemoryDirectory) -> None:
     a = add_user(directory, "a", TODAY - timedelta(days=1))
-    add_task(directory, [a], fdTasksLifeCycleRegexPattern="(")
+    add_task(directory, [a], hrcTasksLifeCycleRegexPattern="(")
     report = lc.run_lifecycle(directory, NOW)
     assert report.tasks_run == 0 and report.errors and report.accounts == []
 
@@ -188,7 +188,7 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
     ).enabled
     info = registry.get("lifecycle_task")
     assert info.acl_object(info.main_tab) == "tasks/lifeCycleTask"
-    assert info.type.filter == "(&(objectClass=fdTasks)(objectClass=fdTasksLifeCycle))"
+    assert info.type.filter == "(&(objectClass=hrcTasks)(objectClass=hrcTasksLifeCycle))"
     a = add_user(directory, "a", None)
     service = ObjectService(directory, registry)
     dn = service.create(
@@ -198,21 +198,21 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
             "main": {
                 "values": {
                     "cn": "ends",
-                    "fdTasksLifeCycleMembers": [a],
-                    "fdTasksLifeCyclePostEndDate": 7,
-                    "fdTasksLifeCycleRegexPattern": "^stu",
-                    "fdTasksLifeCycleEnableAccountClosure": True,
+                    "hrcTasksLifeCycleMembers": [a],
+                    "hrcTasksLifeCyclePostEndDate": 7,
+                    "hrcTasksLifeCycleRegexPattern": "^stu",
+                    "hrcTasksLifeCycleEnableAccountClosure": True,
                 }
             }
         },
     )
     assert dn == TASK_DN
     e = entry(directory, dn)
-    assert e.text("fdTasksLifeCyclePostEndDate") == "7"
-    assert e.text("fdTasksLifeCycleEnableAccountClosure") == "TRUE"
+    assert e.text("hrcTasksLifeCyclePostEndDate") == "7"
+    assert e.text("hrcTasksLifeCycleEnableAccountClosure") == "TRUE"
     with pytest.raises(ObjectValidationError):
         service.update(
-            "lifecycle_task", dn, {"main": {"values": {"fdTasksLifeCycleRegexPattern": "("}}}
+            "lifecycle_task", dn, {"main": {"values": {"hrcTasksLifeCycleRegexPattern": "("}}}
         )
     with pytest.raises(ObjectValidationError):
         service.create("lifecycle_task", BASE, {"main": {"values": {"cn": "nomembers"}}})
@@ -220,4 +220,4 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
 
 def test_plugin_disabled_without_schema() -> None:
     registry = TypeRegistry()
-    assert not registry.register_plugin(lc.plugin(), {"fdtasks"}).enabled
+    assert not registry.register_plugin(lc.plugin(), {"hrctasks"}).enabled

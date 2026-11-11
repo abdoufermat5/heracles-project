@@ -1,6 +1,6 @@
 """Notifications plugin: mail people when monitored attributes of users change.
 
-Provides the ``notifications_task`` type (``fdTasks`` + ``fdTasksNotifications``, ACL
+Provides the ``notifications_task`` type (``hrcTasks`` + ``hrcTasksNotifications``, ACL
 ``tasks/notificationsTask``) and the pure runner :func:`run_notifications`.
 
 A task monitors some attributes of its members (users, or groups and roles expanded to
@@ -54,12 +54,12 @@ class NotificationsTask(TaskObjectType):
         name = "main"
         acl_key = "notificationsTask"
         label = _("Notifications")
-        object_classes = ("fdTasks", TASK_CLASS)
+        object_classes = ("hrcTasks", TASK_CLASS)
 
         notifications = Section(
             _("Notifications"),
             MultiSelectAttr(
-                "fdTasksNotificationsAttributes",
+                "hrcTasksNotificationsAttributes",
                 _("Monitored attributes"),
                 options=[
                     (a, a)
@@ -69,25 +69,25 @@ class NotificationsTask(TaskObjectType):
                 required=True,
             ),
             ObjectRefAttr(
-                "fdTasksNotificationsMailTemplate",
+                "hrcTasksNotificationsMailTemplate",
                 _("Mail template"),
                 ref_type="mail_template",
                 required=True,
                 description=_("Placeholders: ") + _PLACEHOLDERS,
             ),
-            EmailAttr("fdTasksNotificationsEmailSender", _("Sender address"), required=True),
+            EmailAttr("hrcTasksNotificationsEmailSender", _("Sender address"), required=True),
         )
         members = Section(
             _("People"),
             ListAttr(
-                "fdTasksNotificationsMonitoredMembers",
+                "hrcTasksNotificationsMonitoredMembers",
                 _("Monitored users, groups or roles"),
                 ObjectRefAttr("member", _("Member"), ref_type="user"),
                 required=True,
                 description=_("Users, or groups and roles that are expanded to their users"),
             ),
             ListAttr(
-                "fdTasksNotificationsRecipientsMembers",
+                "hrcTasksNotificationsRecipientsMembers",
                 _("Recipients"),
                 ObjectRefAttr("recipient", _("Recipient"), ref_type="user"),
                 required=True,
@@ -107,7 +107,7 @@ def plugin() -> Plugin:
         name=PLUGIN_NAME,
         version="0.1.0",
         types=(NotificationsTask,),
-        required_object_classes=("fdTasks", TASK_CLASS),
+        required_object_classes=("hrcTasks", TASK_CLASS),
         settings=NotificationsSettings(),
     )
 

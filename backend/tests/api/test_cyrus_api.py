@@ -54,10 +54,10 @@ def app_client() -> TestClient:
             *d.schema_object_classes(),
             "ieee802Device",
             "device",
-            "fdServer",
-            "fdCyrusServer",
+            "hrcServer",
+            "hrcCyrusServer",
             "ipHost",
-            "fdNetworkInterface",
+            "hrcNetworkInterface",
         ]
     )
     registry = TypeRegistry()
@@ -96,11 +96,11 @@ def test_cyrus_api_flow(app_client: TestClient) -> None:
                 "cyrus": {
                     "active": True,
                     "values": {
-                        "cyrusConnectURL": "cyrus.paris.example.com",
-                        "cyrusConnectPort": 993,
-                        "cyrusConnectOptions1": "/ssl",
-                        "fdCyrusAdmin": "cyradmin",
-                        "fdCyrusUseSlashes": True,
+                        "hrcCyrusConnectURL": "cyrus.paris.example.com",
+                        "hrcCyrusConnectPort": 993,
+                        "hrcCyrusConnectOptions1": "/ssl",
+                        "hrcCyrusAdmin": "cyradmin",
+                        "hrcCyrusUseSlashes": True,
                     },
                 },
             },
@@ -114,8 +114,8 @@ def test_cyrus_api_flow(app_client: TestClient) -> None:
     assert r.status_code == 200
     data = r.json()
     assert data["tabs"]["cyrus"]["active"] is True
-    assert data["tabs"]["cyrus"]["values"]["cyrusConnectURL"] == "cyrus.paris.example.com"
-    assert data["tabs"]["cyrus"]["values"]["fdCyrusUseSlashes"] is True
+    assert data["tabs"]["cyrus"]["values"]["hrcCyrusConnectURL"] == "cyrus.paris.example.com"
+    assert data["tabs"]["cyrus"]["values"]["hrcCyrusUseSlashes"] is True
 
     # Update server
     r = client.patch(
@@ -124,16 +124,16 @@ def test_cyrus_api_flow(app_client: TestClient) -> None:
             "tabs": {
                 "cyrus": {
                     "values": {
-                        "cyrusConnectPort": 143,
-                        "fdCyrusUseSlashes": False,
+                        "hrcCyrusConnectPort": 143,
+                        "hrcCyrusUseSlashes": False,
                     }
                 }
             }
         },
     )
     assert r.status_code == 200
-    assert r.json()["tabs"]["cyrus"]["values"]["cyrusConnectPort"] == 143
-    assert r.json()["tabs"]["cyrus"]["values"]["fdCyrusUseSlashes"] is False
+    assert r.json()["tabs"]["cyrus"]["values"]["hrcCyrusConnectPort"] == 143
+    assert r.json()["tabs"]["cyrus"]["values"]["hrcCyrusUseSlashes"] is False
 
     # Delete server
     r = client.delete(f"/objects/server/{quote(dn, safe='')}")

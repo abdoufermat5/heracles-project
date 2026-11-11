@@ -22,12 +22,12 @@ CREATION_TYPES: tuple[tuple[str, str], ...] = (
 )
 
 MAIL_SERVICE_CLASSES: tuple[str, ...] = (
-    "fdDovecotServer",
-    "fdCyrusServer",
-    "fdPostfixServer",
-    "fdSieveServer",
-    "goSpamServer",
-    "fdZimbraServer",
+    "hrcDovecotServer",
+    "hrcCyrusServer",
+    "hrcPostfixServer",
+    "hrcSieveServer",
+    "hrcSpamAssassinServer",
+    "hrcZimbraServer",
 )
 
 
@@ -55,28 +55,28 @@ class ZimbraServiceTab(Tab):
     label = _("Zimbra")
     description = _("Zimbra collaboration suite service")
     optional = True
-    object_classes = ("fdZimbraServer",)
+    object_classes = ("hrcZimbraServer",)
 
     connection = Section(
         _("Server connection"),
         UrlAttr(
-            "fdZimbraServerUri",
+            "hrcZimbraServerUri",
             _("Server URI"),
             description=_("Zimbra server administration SOAP URL"),
         ),
         StringAttr(
-            "fdZimbraServerLogin",
+            "hrcZimbraServerLogin",
             _("Admin login"),
             description=_("Zimbra administrator login"),
         ),
         PasswordAttr(
-            "fdZimbraServerPassword",
+            "hrcZimbraServerPassword",
             _("Admin password"),
             hasher=lambda p: p,
             description=_("Zimbra administrator password"),
         ),
         StringAttr(
-            "fdZimbraServerUserAgent",
+            "hrcZimbraServerUserAgent",
             _("User agent"),
             description=_("HTTP user agent for Zimbra SOAP API"),
         ),
@@ -84,40 +84,40 @@ class ZimbraServiceTab(Tab):
     provisioning = Section(
         _("Account provisioning"),
         SelectAttr(
-            "fdZimbraServerCreationType",
+            "hrcZimbraServerCreationType",
             _("Creation type"),
             options=CREATION_TYPES,
             default="create",
         ),
         SelectAttr(
-            "fdZimbraServerDeletionType",
+            "hrcZimbraServerDeletionType",
             _("Deletion type"),
             options=DELETION_TYPES,
             default="delete",
         ),
         BooleanAttr(
-            "fdZimbraServerPasswordSync",
+            "hrcZimbraServerPasswordSync",
             _("Password sync"),
             default=True,
             description=_("Synchronize user passwords with Zimbra"),
         ),
         BooleanAttr(
-            "fdZimbraServerKeepUnknownAliases",
+            "hrcZimbraServerKeepUnknownAliases",
             _("Keep unknown aliases"),
             default=False,
             description=_("Preserve aliases that are unknown to the directory"),
         ),
         StringAttr(
-            "fdZimbraServerIdAttribute",
+            "hrcZimbraServerIdAttribute",
             _("ID attribute"),
             description=_("LDAP attribute used as Zimbra identifier"),
         ),
     )
     defaults = Section(
         _("Defaults"),
-        StringAttr("zimbraDomain", _("Domain"), description=_("Default Zimbra domain")),
+        StringAttr("hrcZimbraDomain", _("Domain"), description=_("Default Zimbra domain")),
         StringAttr(
-            "zimbraDomainCOS",
+            "hrcZimbraDomainCOS",
             _("Class of Service"),
             description=_("Default Class of Service (COS) for Zimbra accounts"),
         ),

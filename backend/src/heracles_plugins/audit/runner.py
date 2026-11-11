@@ -25,7 +25,7 @@ from heracles_plugins.audit.events import (
     format_event,
 )
 
-TASK_CLASS = "fdAuditTasks"
+TASK_CLASS = "hrcAuditTasks"
 TASK_FILTER = task_filter(TASK_CLASS)
 #: Standard library logger receiving the forwarded events; bind a syslog handler to it.
 SYSLOG_LOGGER = "heracles.audit"
@@ -40,16 +40,16 @@ class AuditReport(TaskReport):
 
 
 def _forward(directory: DirectoryClient, task: Entry, since: datetime, report: AuditReport) -> None:
-    prefix = task.text("fdAuditSyslogPrefix") or ""
+    prefix = task.text("hrcAuditSyslogPrefix") or ""
     logger = logging.getLogger(SYSLOG_LOGGER)
-    flt = f"(&(objectClass={EVENT_CLASS})(fdAuditDateTime>={format_generalized_time(since)}))"
+    flt = f"(&(objectClass={EVENT_CLASS})(hrcAuditDateTime>={format_generalized_time(since)}))"
     try:
         events = list(directory.search(audit_container(directory), flt, Scope.ONE))
     except NoSuchObjectError:
         return
-    events.sort(key=lambda e: (e.text("fdAuditDateTime") or "", e.dn))
+    events.sort(key=lambda e: (e.text("hrcAuditDateTime") or "", e.dn))
     for event in events:
-        stamp = time_of(event, "fdAuditDateTime")
+        stamp = time_of(event, "hrcAuditDateTime")
         if stamp is None or stamp <= since:
             continue
         logger.info("%s%s", prefix, format_event(event))
@@ -63,7 +63,7 @@ def run_audit(
 ) -> AuditReport:
     """Run every due audit task once.
 
-    A task purges the events older than its retention (``fdAuditTasksRetention`` days, or
+    A task purges the events older than its retention (``hrcAuditTasksRetention`` days, or
     ``settings.retention_days``; 0 keeps everything) and, when syslog forwarding is enabled,
     logs the events recorded since its previous execution to the ``heracles.audit`` logger.
     """
@@ -72,17 +72,19 @@ def run_audit(
     report = AuditReport()
 
     def process(task: Entry) -> bool:
-        if bool_of(task, "fdAuditSyslogEnabled") is True:
-            since = time_of(task, "fdTasksLastExec") or time_of(task, "fdTasksCreationDate") or now
+        if bool_of(task, "hrcAuditSyslogEnabled") is True:
+            since = (
+                time_of(task, "hrcTasksLastExec") or time_of(task, "hrcTasksCreationDate") or now
+            )
             _forward(directory, task, since, report)
-        days = int_of(task, "fdAuditTasksRetention")
+        days = int_of(task, "hrcAuditTasksRetention")
         days = settings.retention_days if days is None else days
         if days > 0:
             report.events_purged += purge_older_than(
                 directory,
                 audit_container(directory),
                 EVENT_CLASS,
-                "fdAuditDateTime",
+                "hrcAuditDateTime",
                 now - timedelta(days=days),
                 report.errors,
             )

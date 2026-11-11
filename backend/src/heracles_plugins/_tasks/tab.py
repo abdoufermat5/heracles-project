@@ -1,4 +1,4 @@
-"""Base tab and base type of a task kind (``fdTasks`` entries below ``ou=tasks``)."""
+"""Base tab and base type of a task kind (``hrcTasks`` entries below ``ou=tasks``)."""
 
 from __future__ import annotations
 
@@ -32,14 +32,14 @@ class TaskObjectType(ObjectType):
     main_attr = "cn"
     name_attr = "cn"
     rdn = TASKS_RDN
-    columns = ("cn", "fdTasksStatus", "fdTasksNextExec")
+    columns = ("cn", "hrcTasksStatus", "hrcTasksNextExec")
     search_attrs = ("cn", "description")
 
 
 class TaskTab(Tab):
     """Properties and schedule sections common to every task kind.
 
-    Subclass it, set ``name``, ``acl_key`` and ``object_classes`` (``fdTasks`` plus the
+    Subclass it, set ``name``, ``acl_key`` and ``object_classes`` (``hrcTasks`` plus the
     kind's auxiliary class) and add the sections of the kind; override ``prepare`` and
     call ``super().prepare(ctx)`` to add checks.
     """
@@ -50,7 +50,7 @@ class TaskTab(Tab):
         StringAttr("cn", _("Name"), required=True, pattern=NAME_RE),
         TextAttr("description", _("Description")),
         SelectAttr(
-            "fdTasksStatus",
+            "hrcTasksStatus",
             _("Status"),
             options=[
                 (STATUS_ACTIVATED, _("Activated")),
@@ -61,17 +61,17 @@ class TaskTab(Tab):
     )
     schedule = Section(
         _("Schedule"),
-        DateTimeAttr("fdTasksCreationDate", _("Creation date"), readonly=True),
+        DateTimeAttr("hrcTasksCreationDate", _("Creation date"), readonly=True),
         DateTimeAttr(
-            "fdTasksScheduleDate",
+            "hrcTasksScheduleDate",
             _("Scheduled date"),
             description=_("First execution; leave empty to run at the next scheduler pass"),
         ),
-        DateTimeAttr("fdTasksLastExec", _("Last execution"), readonly=True),
-        DateTimeAttr("fdTasksNextExec", _("Next execution")),
-        BooleanAttr("fdTasksRepeatable", _("Repeatable"), default=False),
+        DateTimeAttr("hrcTasksLastExec", _("Last execution"), readonly=True),
+        DateTimeAttr("hrcTasksNextExec", _("Next execution")),
+        BooleanAttr("hrcTasksRepeatable", _("Repeatable"), default=False),
         SelectAttr(
-            "fdTasksRepeatableSchedule",
+            "hrcTasksRepeatableSchedule",
             _("Repeat"),
             options=[
                 ("hourly", _("Hourly")),
@@ -86,12 +86,12 @@ class TaskTab(Tab):
     @classmethod
     def prepare(cls, ctx: TabContext) -> None:
         values = ctx.values
-        if not values.get("fdTasksStatus"):
-            values["fdTasksStatus"] = STATUS_ACTIVATED
-        if values.get("fdTasksRepeatable") and not values.get("fdTasksRepeatableSchedule"):
-            ctx.error("fdTasksRepeatableSchedule", _("Required for a repeatable task."))
+        if not values.get("hrcTasksStatus"):
+            values["hrcTasksStatus"] = STATUS_ACTIVATED
+        if values.get("hrcTasksRepeatable") and not values.get("hrcTasksRepeatableSchedule"):
+            ctx.error("hrcTasksRepeatableSchedule", _("Required for a repeatable task."))
         if ctx.creating:
             ensure_container(ctx.directory, dnlib.join(ctx.info.type.rdn, ctx.base))
-            values["fdTasksCreationDate"] = datetime.now(UTC).replace(microsecond=0)
-            if not values.get("fdTasksNextExec") and values.get("fdTasksScheduleDate"):
-                values["fdTasksNextExec"] = values["fdTasksScheduleDate"]
+            values["hrcTasksCreationDate"] = datetime.now(UTC).replace(microsecond=0)
+            if not values.get("hrcTasksNextExec") and values.get("hrcTasksScheduleDate"):
+                values["hrcTasksNextExec"] = values["hrcTasksScheduleDate"]

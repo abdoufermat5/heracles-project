@@ -110,11 +110,11 @@ def test_list_assignments_and_members(directory: MemoryDirectory) -> None:
 def test_set_assignments_roundtrip_and_reorder(directory: MemoryDirectory) -> None:
     before = directory.get(BASE)
     assert before is not None
-    stored = before.texts("gosaAclEntry")
+    stored = before.texts("hrcAclEntry")
     items = admin.list_assignments(directory, BASE)
     admin.set_assignments(directory, BASE, items)  # unchanged
     after = directory.get(BASE)
-    assert after is not None and sorted(after.texts("gosaAclEntry")) == sorted(stored)
+    assert after is not None and sorted(after.texts("hrcAclEntry")) == sorted(stored)
 
     reordered = admin.reorder(items, [2, 0, 1])
     result = admin.set_assignments(directory, BASE, reordered)
@@ -132,15 +132,15 @@ def test_set_assignments_adds_and_removes_class(directory: MemoryDirectory) -> N
     }
     admin.set_assignments(directory, PARIS, [new])
     entry = directory.get(PARIS)
-    assert entry is not None and entry.has_object_class("gosaAcl")
-    parsed = parse_assignment(entry.texts("gosaAclEntry")[0])
+    assert entry is not None and entry.has_object_class("hrcAcl")
+    parsed = parse_assignment(entry.texts("hrcAclEntry")[0])
     assert isinstance(parsed, AclAssignment)
     assert parsed.scope.value == "base"
     assert parsed.user_filter == "(uid=*)"
     admin.set_assignments(directory, PARIS, [])
     entry = directory.get(PARIS)
-    assert entry is not None and not entry.has_object_class("gosaAcl")
-    assert entry.get("gosaAclEntry") == []
+    assert entry is not None and not entry.has_object_class("hrcAcl")
+    assert entry.get("hrcAclEntry") == []
 
 
 def test_ignored_assignment_survives_and_can_be_removed(directory: MemoryDirectory) -> None:
@@ -150,18 +150,18 @@ def test_ignored_assignment_survives_and_can_be_removed(directory: MemoryDirecto
     directory.modify(
         PARIS,
         [
-            Modification("add", "objectClass", [b"gosaAcl"]),
-            Modification("add", "gosaAclEntry", [legacy_value.encode()]),
+            Modification("add", "objectClass", [b"hrcAcl"]),
+            Modification("add", "hrcAclEntry", [legacy_value.encode()]),
         ],
     )
     items = admin.list_assignments(directory, PARIS)
     assert items[0]["ignored"] is True
     admin.set_assignments(directory, PARIS, items)
     entry = directory.get(PARIS)
-    assert entry is not None and legacy_value in entry.texts("gosaAclEntry")
+    assert entry is not None and legacy_value in entry.texts("hrcAclEntry")
     admin.set_assignments(directory, PARIS, [])
     entry = directory.get(PARIS)
-    assert entry is not None and entry.get("gosaAclEntry") == []
+    assert entry is not None and entry.get("hrcAclEntry") == []
 
 
 @pytest.mark.parametrize(
