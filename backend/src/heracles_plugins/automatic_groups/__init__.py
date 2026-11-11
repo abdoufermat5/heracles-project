@@ -40,6 +40,7 @@ class AutomaticGroupsTask(TaskObjectType):
     name = "automatic_groups_task"
     label = _("Automatic groups task")
     label_plural = _("Automatic groups tasks")
+    nav = "hidden"
     icon = "users"
     filter = TASK_FILTER
 

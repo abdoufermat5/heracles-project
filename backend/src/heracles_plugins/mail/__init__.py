@@ -408,8 +408,8 @@ class MailAliasDistribution(ObjectType):
     """Temporary mail distribution alias."""
 
     name = "mail_alias_distribution"
-    label = _("Temporary mail distribution")
-    label_plural = _("Temporary mail distributions")
+    label = _("Mail distribution")
+    label_plural = _("Mail distributions")
     icon = "mail"
     category = "mail"
     acl_category = "alias"
@@ -423,7 +423,7 @@ class MailAliasDistribution(ObjectType):
     class Main(Tab):
         name = "main"
         acl_key = "mailAliasDistribution"
-        label = _("Temporary mail distribution")
+        label = _("Mail distribution")
         object_classes = ("hrcMailAliasDistribution",)
 
         properties = Section(
@@ -453,9 +453,9 @@ class MailAliasRedirection(ObjectType):
     """Temporary mail redirection alias."""
 
     name = "mail_alias_redirection"
-    label = _("Temporary mail redirection")
-    label_plural = _("Temporary mail redirections")
-    icon = "mail"
+    label = _("Mail redirection")
+    label_plural = _("Mail redirections")
+    icon = "forward"
     category = "mail"
     acl_category = "alias"
     filter = "(objectClass=hrcMailAliasRedirection)"
@@ -468,7 +468,7 @@ class MailAliasRedirection(ObjectType):
     class Main(Tab):
         name = "main"
         acl_key = "mailAliasRedirection"
-        label = _("Temporary mail redirection")
+        label = _("Mail redirection")
         object_classes = ("hrcMailAliasRedirection",)
 
         properties = Section(

@@ -77,6 +77,7 @@ class ReminderTask(TaskObjectType):
     name = "reminder_task"
     label = _("Reminder task")
     label_plural = _("Reminder tasks")
+    nav = "hidden"
     icon = "bell"
     filter = TASK_FILTER
 
@@ -153,7 +154,7 @@ class MailTemplate(ObjectType):
     acl_category = "mailTemplate"
     label = _("Mail template")
     label_plural = _("Mail templates")
-    icon = "mail"
+    icon = "file"
     category = "mail"
     filter = "(objectClass=hrcMailTemplate)"
     main_attr = "cn"

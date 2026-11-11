@@ -88,7 +88,9 @@ class PublicForm(ObjectType):
     acl_category = "publicForm"
     label = _("Public form")
     label_plural = _("Public forms")
-    icon = "clipboard-list"
+    nav = "secondary"
+    nav_group = "people"
+    icon = "file"
     category = "workflow"
     filter = f"(objectClass={FORM_CLASS})"
     main_attr = "cn"

@@ -465,6 +465,8 @@ class PosixGroup(ObjectType):
     acl_category = "group"
     label = _("POSIX group")
     label_plural = _("POSIX groups")
+    nav = "secondary"
+    nav_group = "people"
     icon = "users-round"
     category = "directory"
     filter = POSIX_GROUP_FILTER

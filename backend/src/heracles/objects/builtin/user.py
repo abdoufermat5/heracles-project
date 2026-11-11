@@ -75,6 +75,9 @@ class User(ObjectType):
     name = "user"
     label = _("User")
     label_plural = _("Users")
+    nav = "primary"
+    nav_group = "people"
+    count_key = "user"
     icon = "user"
     category = "directory"
     filter = "(objectClass=inetOrgPerson)"

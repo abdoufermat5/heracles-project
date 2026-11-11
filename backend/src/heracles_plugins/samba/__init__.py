@@ -587,7 +587,9 @@ class SambaDomain(ObjectType):
     acl_category = "sambaDomain"
     label = _("Samba domain")
     label_plural = _("Samba domains")
-    icon = "network"
+    nav = "secondary"
+    nav_group = "settings"
+    icon = "database"
     category = "systems"
     filter = "(objectClass=sambaDomain)"
     main_attr = "sambaDomainName"

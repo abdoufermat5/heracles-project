@@ -179,6 +179,8 @@ class DnsZone(ObjectType):
     acl_category = "dnsZone"
     label = _("DNS zone")
     label_plural = _("DNS zones")
+    nav = "primary"
+    nav_group = "infrastructure"
     icon = "globe"
     category = "network"
     filter = ZONE_FILTER
@@ -415,7 +417,7 @@ class DnsAcl(ObjectType):
     acl_category = "dnsAcl"
     label = _("DNS access list")
     label_plural = _("DNS access lists")
-    icon = "shield"
+    icon = "filter"
     category = "network"
     filter = "(objectClass=hrcDNSAcl)"
     main_attr = "cn"

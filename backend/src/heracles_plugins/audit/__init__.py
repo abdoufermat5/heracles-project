@@ -61,6 +61,7 @@ class AuditTask(TaskObjectType):
     name = "audit_task"
     label = _("Audit task")
     label_plural = _("Audit tasks")
+    nav = "hidden"
     icon = "shield"
     filter = TASK_FILTER
 
@@ -98,6 +99,7 @@ class AuditEvent(ObjectType):
     acl_category = "auditEvent"
     label = _("Audit event")
     label_plural = _("Audit events")
+    nav = "hidden"
     icon = "shield"
     category = "workflow"
     filter = f"(objectClass={EVENT_CLASS})"

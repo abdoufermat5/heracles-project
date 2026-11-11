@@ -65,7 +65,7 @@ class IpamVlan(ObjectType):
     acl_category = "ipamVlan"
     label = _("IPAM VLAN")
     label_plural = _("IPAM VLANs")
-    icon = "network"
+    icon = "layers"
     category = "network"
     filter = "(objectClass=hrcIpamVlan)"
     main_attr = "cn"

@@ -87,7 +87,9 @@ class Invitation(ObjectType):
     acl_category = "invitation"
     label = _("Invitation")
     label_plural = _("Invitations")
-    icon = "mail-plus"
+    nav = "secondary"
+    nav_group = "people"
+    icon = "send"
     category = "workflow"
     filter = f"(objectClass={INVITATION_CLASS})"
     main_attr = "cn"
@@ -152,7 +154,9 @@ class Registration(ObjectType):
     acl_category = "registration"
     label = _("Registration")
     label_plural = _("Registrations")
-    icon = "user-plus"
+    nav = "hidden"
+    nav_group = "people"
+    icon = "clipboard-list"
     category = "workflow"
     filter = f"(objectClass={REGISTRATION_CLASS})"
     main_attr = "hrcRegistrationEmailAddress"

@@ -168,6 +168,8 @@ class Server(ObjectType):
     name = "server"
     label = _("Server")
     label_plural = _("Servers")
+    nav = "primary"
+    nav_group = "infrastructure"
     icon = "server"
     category = "systems"
     filter = "(objectClass=hrcServer)"

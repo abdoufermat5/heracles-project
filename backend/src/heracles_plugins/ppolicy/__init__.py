@@ -208,6 +208,7 @@ class Ppolicy(ObjectType):
     """Password policy entry."""
 
     name = "ppolicy"
+    icon = "lock"
     acl_category = "ppolicy"
     category = "access"
     rdn = "ou=ppolicies"

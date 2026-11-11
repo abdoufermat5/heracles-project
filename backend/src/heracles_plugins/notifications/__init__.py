@@ -47,6 +47,7 @@ class NotificationsTask(TaskObjectType):
     name = "notifications_task"
     label = _("Notifications task")
     label_plural = _("Notifications tasks")
+    nav = "hidden"
     icon = "bell"
     filter = TASK_FILTER
 
