@@ -43,6 +43,8 @@ class AclEvaluator:
         self._tabs = {k: tuple(v) for k, v in (category_tabs or {}).items()}
         self._ignore = ignore_acl
         self._cache: dict[tuple[str, str, str], Rights] = {}
+        #: Rights of the entries below a view holder: (holder, object, attribute).
+        self._inherited: dict[tuple[str, str, str], Rights] = {}
 
     @property
     def user_dn(self) -> str:
@@ -72,8 +74,22 @@ class AclEvaluator:
         nearest = self._resolved.nearest_view(ndn)
         if nearest is None:
             return NO_RIGHTS
-        _, view = nearest
+        holder, view = nearest
         own = ndn == self._user
+        if own or holder == ndn:
+            return self._evaluate(view, ndn, obj, attribute, own=own)
+        # Any other entry only inherits from the holder: base-scope rules stay on the
+        # holder and self-only blocks on the user, so every such entry gets the same
+        # rights. Listings of thousands of siblings evaluate the rules once.
+        key = (holder, obj, attribute.lower())
+        shared = self._inherited.get(key)
+        if shared is None:
+            shared = self._inherited[key] = self._evaluate(view, ndn, obj, attribute, own=False)
+        return shared
+
+    def _evaluate(
+        self, view: tuple[Rule, ...], ndn: str, obj: str, attribute: str, *, own: bool
+    ) -> Rights:
         result = NO_RIGHTS
         for rule in view:
             if result.is_full:

@@ -6,6 +6,8 @@ compared; keep its behaviour stable.
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 _SPECIAL = ',+"\\<>;='
 
 
@@ -24,6 +26,8 @@ def escape_rdn_value(value: str) -> str:
 
 def split(dn: str) -> list[str]:
     """Split a DN into RDN strings, honouring backslash escapes."""
+    if "\\" not in dn:  # nothing escaped: every comma separates
+        return [p for p in (part.strip() for part in dn.split(",")) if p]
     parts: list[str] = []
     current: list[str] = []
     escaped = False
@@ -45,8 +49,12 @@ def split(dn: str) -> list[str]:
     return [p for p in parts if p]
 
 
+@lru_cache(maxsize=32768)
 def normalize(dn: str) -> str:
-    """Canonical form for comparisons: trimmed RDNs, lower-cased, ``,`` joined."""
+    """Canonical form for comparisons: trimmed RDNs, lower-cased, ``,`` joined.
+
+    Memoised: the same DNs are compared over and over (ACL evaluation, sorting).
+    """
     normalized: list[str] = []
     for rdn in split(dn):
         attr, sep, value = rdn.partition("=")

@@ -38,6 +38,9 @@ class Entry:
 
     def get(self, name: str) -> AttrValues:
         """Return values of ``name`` (case-insensitive), or an empty list."""
+        exact = self.attrs.get(name)
+        if exact is not None:
+            return exact
         lname = name.lower()
         for key, values in self.attrs.items():
             if key.lower() == lname:

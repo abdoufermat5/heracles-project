@@ -331,11 +331,13 @@ class MemoryDirectory:
 
     @staticmethod
     def _project(entry: Entry, attrs: Sequence[str] | None) -> Entry:
-        copied = _copy_attrs(entry.attrs)
         if attrs is None or "*" in attrs:
-            return Entry(entry.dn, copied)
+            return Entry(entry.dn, _copy_attrs(entry.attrs))
         wanted = {a.lower() for a in attrs}
-        return Entry(entry.dn, {k: v for k, v in copied.items() if k.lower() in wanted})
+        return Entry(
+            entry.dn,
+            {k: [bytes(v) for v in vals] for k, vals in entry.attrs.items() if k.lower() in wanted},
+        )
 
     @staticmethod
     def _ensure_rdn_value(attrs: Attributes, rdn: str) -> None:

@@ -119,8 +119,16 @@ class Domain:
         return out
 
     def evaluator(self, user: CurrentUser) -> AclEvaluator:
-        """ACL evaluator of the connected user (resolution cached in the session)."""
+        """ACL evaluator of the connected user (resolution cached in the session).
+
+        One evaluator serves the whole request, so its permission cache is shared by
+        every service and check of that request. It is rebuilt when the session's
+        resolution was invalidated in between (ACL or membership change).
+        """
         resolved = _cached_resolution(user.session)
+        memo = cast("tuple[ResolvedAcl, AclEvaluator] | None", user.acl)
+        if memo is not None and memo[0] is resolved:
+            return memo[1]
         if resolved is None:
             entry = user.directory.get(user.dn)
             attrs: dict[str, list[str]] = {}
@@ -136,9 +144,12 @@ class Domain:
             )
             resolved = resolver.resolve(user.dn, uid=uid, user_attrs=attrs)
             user.session.cache[_ACL_CACHE_KEY] = resolved
-        return AclEvaluator(
+        evaluator = AclEvaluator(
             resolved, category_tabs=self.category_tabs(), ignore_acl=self.is_admin(user.dn)
         )
+        # ``CurrentUser`` is frozen: the memo lives in a field only this method writes.
+        object.__setattr__(user, "acl", (resolved, evaluator))
+        return evaluator
 
     def service(self, user: CurrentUser, type_name: str) -> tuple[ObjectService, TypeAclPolicy]:
         """Object service for one type, enforcing the user's ACLs."""

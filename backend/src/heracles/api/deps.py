@@ -66,6 +66,8 @@ class CurrentUser:
     client_ip: str = ""
     #: Object events of this request (created on first use by the domain).
     events: Any = field(default=None, compare=False, repr=False)
+    #: ACL evaluator of this request and the resolution it was built from.
+    acl: Any = field(default=None, compare=False, repr=False)
 
     @property
     def dn(self) -> str:
