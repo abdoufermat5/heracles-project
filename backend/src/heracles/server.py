@@ -45,6 +45,8 @@ from heracles.objects import TypeRegistry
 from heracles.objects.activation import LOCKED_PLUGINS, PluginManager, PluginOverrideStore
 from heracles.objects.builtin import register_builtin_types
 from heracles.objects.registry import PluginRouterContext, discover_plugins
+from heracles.setup.mode import status_router
+from heracles.setup.service import default_static_dir
 from heracles.storage import Database
 from heracles.tasks.syslog import configure_audit_syslog
 
@@ -58,6 +60,7 @@ def create_full_app(
     registry: TypeRegistry | None = None,
     load_plugins: bool = True,
     mailer: Mailer | None = None,
+    config_path: Path | None = None,
 ) -> FastAPI:
     """Wire domain services and object routers on top of :func:`create_app`."""
     manager: PluginManager | None = None
@@ -102,6 +105,7 @@ def create_full_app(
         ]
     else:
         public, plugin_api = _plugin_routers(manager, directories)
+    public = [*public, status_router(config_path)]
     app = create_app(
         settings,
         directories,
@@ -183,6 +187,8 @@ def load_config(
     if api_settings.database.path is None:
         data_dir = Path(os.environ.get("HERACLES_DATA_DIR", "/var/lib/heracles"))
         api_settings.database.path = data_dir / "heracles.db"
+    if api_settings.static_dir is None:
+        api_settings.static_dir = default_static_dir()
     if "plugins" in raw and "plugins" not in raw.get("api", {}):
         api_settings.plugins = PluginsSettings.model_validate(raw["plugins"])
     if not api_settings.directory_labels:
@@ -203,7 +209,14 @@ def build_app(
     raw, api_settings, directories = load_config(config_path)
     mailer = MailSettings.model_validate(raw.get("mail") or {}).build()
     configure_audit_syslog(raw.get("audit"))
-    app = create_full_app(api_settings, directories, mailer=mailer)
+    app = create_full_app(
+        api_settings,
+        directories,
+        mailer=mailer,
+        config_path=Path(shown)
+        if (shown := config_path or os.environ.get("HERACLES_CONFIG"))
+        else None,
+    )
     if with_worker is None:
         with_worker = bool(os.environ.get("HERACLES_WITH_WORKER"))
     if with_worker:
