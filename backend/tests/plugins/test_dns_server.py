@@ -78,6 +78,14 @@ def directory() -> MemoryDirectory:
         child_entry(FORWARD, "alias", cNAMERecord="www.example.com."),
     )
     d.add(
+        f"relativeDomainName=quoted,{FORWARD_DN}",
+        child_entry(FORWARD, "quoted", tXTRecord='say "hi" \\ done'),
+    )
+    d.add(
+        f"relativeDomainName=long,{FORWARD_DN}",
+        child_entry(FORWARD, "long", tXTRecord="x" * 300),
+    )
+    d.add(
         f"relativeDomainName=*,{FORWARD_DN}",
         child_entry(FORWARD, "*", aRecord="192.0.2.99"),
     )
@@ -147,7 +155,28 @@ def test_udp_answers_pseudo_spf_record_as_txt(server: DnsServer) -> None:
 
     record = cast("dns.rdata.Rdata", rrset[0])
     assert isinstance(record, TXT)
-    assert b" ".join(record.strings) == b"v=spf1 -all"
+    assert record.strings == (b"v=spf1 -all",)
+
+
+def test_udp_answers_txt_with_quote_and_backslash(server: DnsServer) -> None:
+    response = udp_query(server, "quoted.example.com", "TXT")
+    rrset = response.answer[0]
+    assert rrset.rdtype == dns.rdatatype.TXT
+
+    record = cast("dns.rdata.Rdata", rrset[0])
+    assert isinstance(record, TXT)
+    assert record.strings == (b'say "hi" \\ done',)
+
+
+def test_udp_splits_long_txt_into_255_byte_chunks(server: DnsServer) -> None:
+    response = udp_query(server, "long.example.com", "TXT")
+    rrset = response.answer[0]
+    assert rrset.rdtype == dns.rdatatype.TXT
+
+    record = cast("dns.rdata.Rdata", rrset[0])
+    assert isinstance(record, TXT)
+    assert record.strings == (b"x" * 255, b"x" * 45)
+    assert b"".join(record.strings) == b"x" * 300
 
 
 def test_udp_answers_ptr_in_reverse_zone(server: DnsServer) -> None:

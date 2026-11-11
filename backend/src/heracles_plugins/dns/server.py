@@ -32,6 +32,8 @@ from heracles_plugins.dns.records import PSEUDO_TYPES, Record
 log = structlog.get_logger(__name__)
 
 _TCP_TIMEOUT: Final = 5.0
+#: Maximum payload of one DNS character-string (its wire length octet is one byte).
+_TXT_CHUNK: Final = 255
 
 
 def _import_dns() -> ModuleType:
@@ -73,17 +75,49 @@ def _wire_type(rtype: str) -> str:
     return "TXT" if rtype in PSEUDO_TYPES else rtype
 
 
+def _txt_quote(chunk: str) -> str:
+    """One character-string in zone-file form (``\\`` and ``"`` escaped, then quoted)."""
+    escaped = chunk.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _txt_zone_value(value: str) -> str:
+    """Stored TXT text as quoted character-strings of at most 255 bytes each.
+
+    Chunks are cut on character boundaries, so a UTF-8 sequence is never split.
+    """
+    chunks: list[str] = []
+    current: list[str] = []
+    width = 0
+    for char in value:
+        size = len(char.encode("utf-8"))
+        if width + size > _TXT_CHUNK:
+            chunks.append(_txt_quote("".join(current)))
+            current = []
+            width = 0
+        current.append(char)
+        width += size
+    chunks.append(_txt_quote("".join(current)))
+    return " ".join(chunks)
+
+
 def _append(
     dns: Any, section: list[Any], records: Sequence[Record], ttl: int, zone: str | None
 ) -> None:
-    """Append one RRset per (owner, type), keeping the record order."""
+    """Append one RRset per (owner, type), keeping the record order.
+
+    Stored values are raw text, so TXT (including the pseudo types) is quoted as
+    a single character-string; long values are split into 255-byte chunks. Every
+    other type is already in zone-file form and is parsed as written.
+    """
     grouped: dict[tuple[str, str], list[str]] = {}
     for record in records:
         key = (_absolute(record.name, zone), _wire_type(record.type))
         grouped.setdefault(key, []).append(record.value)
     for (target, rtype), values in grouped.items():
         try:
-            rrset = dns.rrset.from_text_list(target, ttl, "IN", rtype, values)
+            text = [_txt_zone_value(value) for value in values] if rtype == "TXT" else values
+            rrset = dns.rrset.from_text_list(target, ttl, "IN", rtype, text)
         except Exception:
             log.warning("dns_record_skipped", name=target, type=rtype, exc_info=True)
             continue
