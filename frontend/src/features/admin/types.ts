@@ -201,10 +201,45 @@ export interface TaskRow {
   subtasks: { total: number; done: number; failed: number }
   failed_subtasks: string[]
   can_run: boolean
+  /** Latest scheduler run of this kind of task, when the run history is available. */
+  last_report?: TaskReport | null
+}
+
+export interface TaskReport {
+  time: string
+  status: 'ok' | 'error' | 'skipped' | string
+  summary: string
+  errors: string[]
+}
+
+export interface TaskRun {
+  id: number
+  directory: string
+  runner: string
+  kind: string
+  started: string
+  finished: string
+  status: 'ok' | 'error' | 'skipped' | string
+  counts: Record<string, number>
+  errors: string[]
+  summary: string
+}
+
+export interface TaskCapabilities {
+  syslog_configured: boolean
+  scheduler_in_process: boolean
+  run_history: boolean
+}
+
+export interface TaskRunOutcome {
+  dn: string
+  queued: boolean
+  runs: TaskRun[]
 }
 
 export interface TasksView {
   tasks: TaskRow[]
   kinds: { name: string; label: string }[]
   summary: { total: number; active: number; failed_subtasks: number }
+  capabilities?: TaskCapabilities
 }

@@ -13,6 +13,7 @@ export const ak = {
   checks: ['admin', 'checks'] as const,
   plugins: ['admin', 'plugins'] as const,
   tasks: (kind: string, status: string) => ['admin', 'tasks', kind, status] as const,
+  taskRuns: ['admin', 'tasks', 'runs'] as const,
 }
 
 export function useCapabilities() {
@@ -130,6 +131,10 @@ export function useTasks(kind: string, status: string) {
     queryKey: ak.tasks(kind, status),
     queryFn: () => adminApi.tasks({ kind: kind || undefined, status: status || undefined }),
   })
+}
+
+export function useTaskRuns() {
+  return useQuery({ queryKey: ak.taskRuns, queryFn: () => adminApi.taskRuns() })
 }
 
 export function useTaskActions() {

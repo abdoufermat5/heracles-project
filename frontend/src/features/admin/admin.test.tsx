@@ -327,6 +327,29 @@ describe('tasks dashboard', () => {
     )
   })
 
+  it('shows the last report, the recent runs and the scheduler notes', async () => {
+    signIn()
+    renderApp('/admin/tasks')
+    const row = (await screen.findByText('purge-audit')).closest('tr') as HTMLElement
+    expect(within(row).getByText(/events_purged 5/)).toBeInTheDocument()
+    expect(within(screen.getByText('old-reminder').closest('tr') as HTMLElement).getByText('Not run by the scheduler yet')).toBeInTheDocument()
+    const runs = await screen.findByRole('region', { name: 'Recent runs' })
+    expect(within(runs).getByText('user_reminder')).toBeInTheDocument()
+    expect(within(runs).getByText('Skipped')).toBeInTheDocument()
+    expect(screen.getByText(/not forwarded to syslog/)).toBeInTheDocument()
+  })
+
+  it('offers a kind picker for new tasks', async () => {
+    signIn()
+    renderApp('/admin/tasks')
+    await screen.findByText('purge-audit')
+    const create = screen.getByRole('button', { name: 'New task' })
+    expect(create).toBeDisabled()
+    await userEvent.click(screen.getByRole('combobox', { name: 'Kind of task' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Reminder' }))
+    expect(create).toBeEnabled()
+  })
+
   it('does not let the user run tasks they cannot write', async () => {
     signIn()
     renderApp('/admin/tasks')

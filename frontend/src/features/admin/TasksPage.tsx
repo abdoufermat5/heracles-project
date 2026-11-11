@@ -4,10 +4,13 @@ import {
   MinusCircle,
   PauseCircle,
   Play,
+  Plus,
+  RefreshCw,
   RotateCcw,
   Search,
   X,
 } from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -37,8 +40,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatDateTime } from './format'
-import { useTaskActions, useTasks } from './hooks'
-import type { TaskRow } from './types'
+import { useTaskActions, useTaskRuns, useTasks } from './hooks'
+import type { TaskReport, TaskRow, TaskRun } from './types'
 
 const ALL = '__all__'
 const KNOWN_STATUSES = ['Activated', 'Deactivated']
@@ -66,6 +69,123 @@ function TaskStatusBadge({ status }: { status: string }) {
       <MinusCircle className="size-3" aria-hidden />
       {status || '—'}
     </Badge>
+  )
+}
+
+function RunStatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation()
+  const label = t(`tasks.runStatus.${status}`, { defaultValue: status })
+  const variant = status === 'ok' ? 'success' : status === 'error' ? 'destructive' : 'warning'
+  return <Badge variant={variant}>{label}</Badge>
+}
+
+function LastReport({ report }: { report: TaskReport | null | undefined }) {
+  const { t, i18n } = useTranslation()
+  if (!report) return <span className="text-muted-foreground">{t('tasks.noReport')}</span>
+  return (
+    <div className="space-y-0.5" title={report.errors.join('\n') || undefined}>
+      <RunStatusBadge status={report.status} />
+      <p className="text-caption text-muted-foreground">
+        {report.summary} · {formatDateTime(report.time, i18n.language)}
+      </p>
+    </div>
+  )
+}
+
+function NewTaskButton({ kinds }: { kinds: { name: string; label: string }[] }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [kind, setKind] = useState('')
+  return (
+    <div className="flex items-end gap-2">
+      <div className="space-y-1">
+        <Label htmlFor="tasks-new-kind" className="text-caption font-medium">
+          {t('tasks.newTaskKind')}
+        </Label>
+        <Select value={kind} onValueChange={setKind}>
+          <SelectTrigger id="tasks-new-kind" className="h-8 w-56 text-small">
+            <SelectValue placeholder={t('tasks.newTaskPick')} />
+          </SelectTrigger>
+          <SelectContent>
+            {kinds.map((k) => (
+              <SelectItem key={k.name} value={k.name}>
+                {k.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <Button
+        size="sm"
+        className="h-8"
+        disabled={!kind}
+        onClick={() => void navigate({ to: '/types/$type/new', params: { type: kind } })}
+      >
+        <Plus className="size-3.5 mr-1" aria-hidden />
+        {t('tasks.newTask')}
+      </Button>
+    </div>
+  )
+}
+
+function RecentRuns({ history }: { history: boolean }) {
+  const { t, i18n } = useTranslation()
+  const runs = useTaskRuns()
+  const list: TaskRun[] = runs.data?.runs ?? []
+  return (
+    <section className="space-y-2" aria-labelledby="tasks-runs-title">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 id="tasks-runs-title" className="text-h3 font-semibold">
+            {t('tasks.recentRuns')}
+          </h2>
+          <p className="text-caption text-muted-foreground">{t('tasks.recentRunsHelp')}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => void runs.refetch()}>
+          <RefreshCw className="size-3.5 mr-1" aria-hidden />
+          {t('tasks.refresh')}
+        </Button>
+      </div>
+      {runs.isPending ? (
+        <Skeleton className="h-24 w-full" />
+      ) : list.length === 0 ? (
+        <p className="rounded-md border bg-card p-3 text-small text-muted-foreground">
+          {history ? t('tasks.runsNone') : t('tasks.runsNoHistory')}
+        </p>
+      ) : (
+        <div className="rounded-md border bg-card shadow-2xs">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('tasks.started')}</TableHead>
+                <TableHead>{t('tasks.runner')}</TableHead>
+                <TableHead>{t('tasks.status')}</TableHead>
+                <TableHead>{t('tasks.result')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.map((r) => (
+                <TableRow key={r.id} data-run={r.runner}>
+                  <TableCell className="tabular-nums text-muted-foreground">
+                    {formatDateTime(r.started, i18n.language)}
+                  </TableCell>
+                  <TableCell className="font-medium">{r.runner}</TableCell>
+                  <TableCell>
+                    <RunStatusBadge status={r.status} />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {r.summary}
+                    {r.errors.length > 0 && (
+                      <span className="block text-caption text-destructive">{r.errors[0]}</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -125,8 +245,13 @@ export function TasksPage() {
   const act = async (kindOfAction: 'run' | 'retry', row: TaskRow) => {
     try {
       if (kindOfAction === 'run') {
-        await run.mutateAsync(row.dn)
-        toast.success(t('tasks.queued', { name: row.name }))
+        const out = await run.mutateAsync(row.dn)
+        const mine = out.runs.find((r) => r.kind === row.kind)
+        toast.success(
+          out.queued || !mine
+            ? t('tasks.queued', { name: row.name })
+            : t('tasks.ran', { name: row.name, summary: mine.summary }),
+        )
       } else {
         const out = await retry.mutateAsync(row.dn)
         toast.success(t('tasks.retried', { count: out.retried.length }))
@@ -141,6 +266,12 @@ export function TasksPage() {
   return (
     <div className="space-y-4">
       <PageHeader title={t('tasks.title')} description={t('tasks.description')} />
+      {everything.data?.capabilities && !everything.data.capabilities.scheduler_in_process && (
+        <p className="rounded-md border bg-card p-3 text-small text-muted-foreground" role="note">
+          {t('tasks.noScheduler')}
+        </p>
+      )}
+      {(everything.data?.kinds.length ?? 0) > 0 && <NewTaskButton kinds={everything.data?.kinds ?? []} />}
       {filtered.isError ? (
         <ErrorState error={filtered.error} onRetry={() => void filtered.refetch()} />
       ) : (
@@ -280,6 +411,7 @@ export function TasksPage() {
                     <TableHead>{t('tasks.status')}</TableHead>
                     <TableHead>{t('tasks.lastRun')}</TableHead>
                     <TableHead>{t('tasks.nextRun')}</TableHead>
+                    <TableHead>{t('tasks.lastReport')}</TableHead>
                     <TableHead>{t('tasks.subtasks')}</TableHead>
                     <TableHead className="w-28 text-right" />
                   </TableRow>
@@ -301,6 +433,9 @@ export function TasksPage() {
                       </TableCell>
                       <TableCell className="text-body tabular-nums text-muted-foreground">
                         {formatDateTime(row.next_run, i18n.language)}
+                      </TableCell>
+                      <TableCell>
+                        <LastReport report={row.last_report} />
                       </TableCell>
                       <TableCell>
                         <Progression row={row} />
@@ -334,6 +469,13 @@ export function TasksPage() {
                 </TableBody>
               </Table>
             </div>
+          )}
+
+          <RecentRuns history={everything.data?.capabilities?.run_history ?? false} />
+          {everything.data?.capabilities && (
+            <p className="text-caption text-muted-foreground">
+              {everything.data.capabilities.syslog_configured ? t('tasks.syslogOn') : t('tasks.syslogOff')}
+            </p>
           )}
         </div>
       )}
