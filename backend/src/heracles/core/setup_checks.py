@@ -26,6 +26,7 @@ from heracles.ldap.client import (
     Modification,
     NoSuchObjectError,
     Scope,
+    SizeLimitExceededError,
 )
 from heracles.ldap.filter import escape_filter_value
 from heracles.schema import names as schema
@@ -139,6 +140,9 @@ class CheckContext:
     config: RuntimeConfig
     #: Normalised DNs of the bootstrap administrators (outside the directory ACLs).
     bootstrap_admins: frozenset[str] = frozenset()
+    #: ``(plugin name, required objectClasses)`` of the plugins that are available in the
+    #: schema but switched off.
+    disabled_plugins: Sequence[tuple[str, Sequence[str]]] = ()
 
     @property
     def base(self) -> str:
@@ -169,11 +173,16 @@ class CheckContext:
         return self.config.acl_role_rdn
 
 
-def context_for(directory: DirectoryClient, bootstrap_admins: Sequence[str] = ()) -> CheckContext:
+def context_for(
+    directory: DirectoryClient,
+    bootstrap_admins: Sequence[str] = (),
+    disabled_plugins: Sequence[tuple[str, Sequence[str]]] = (),
+) -> CheckContext:
     return CheckContext(
         directory,
         effective_settings(directory),
         frozenset(dnlib.normalize(d) for d in bootstrap_admins),
+        disabled_plugins,
     )
 
 
@@ -658,6 +667,47 @@ def check_duplicate_ids(ctx: CheckContext) -> CheckResult:
     )
 
 
+#: Entries counted per disabled plugin (more is reported as "at least").
+PLUGIN_DATA_LIMIT: Final = 1000
+
+
+def _plugin_entry_count(ctx: CheckContext, classes: Sequence[str]) -> tuple[int, bool]:
+    """``(count, truncated)`` of the entries using any of ``classes`` (size-bounded)."""
+    terms = "".join(f"(objectClass={escape_filter_value(c)})" for c in classes)
+    flt = f"(|{terms})" if len(classes) > 1 else terms
+    count = 0
+    try:
+        for _entry in ctx.directory.search(
+            ctx.base, flt, Scope.SUBTREE, ["1.1"], size_limit=PLUGIN_DATA_LIMIT
+        ):
+            count += 1
+    except NoSuchObjectError:
+        return 0, False
+    except SizeLimitExceededError:
+        return PLUGIN_DATA_LIMIT, True
+    return count, False
+
+
+def check_plugin_data(ctx: CheckContext) -> CheckResult:
+    """Entries that use the classes of a plugin switched off (its tabs are hidden)."""
+    found: list[str] = []
+    for name, classes in ctx.disabled_plugins:
+        if not classes:
+            continue
+        count, truncated = _plugin_entry_count(ctx, classes)
+        if count:
+            found.append(f"{name} ({'at least ' if truncated else ''}{count})")
+    if not found:
+        return CheckResult("plugin_data", "ok", "No data belongs to a disabled plugin.")
+    return CheckResult(
+        "plugin_data",
+        "warning",
+        "Entries use the schema of disabled plugins, which hides them in the console: "
+        + ", ".join(found)
+        + ".",
+    )
+
+
 type CheckFn = Callable[[CheckContext], CheckResult]
 type FixFn = Callable[[CheckContext, Sequence[str], Mapping[str, str]], FixResult]
 
@@ -686,6 +736,7 @@ CHECKS: Final[tuple[tuple[str, CheckFn, FixFn | None], ...]] = (
     ),
     ("departments", check_departments, fix_departments),
     ("duplicate_ids", check_duplicate_ids, None),
+    ("plugin_data", check_plugin_data, None),
 )
 CHECK_IDS: Final = tuple(c[0] for c in CHECKS)
 
