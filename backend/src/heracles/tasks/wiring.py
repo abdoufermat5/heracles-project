@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
@@ -34,8 +35,9 @@ def attach_scheduler(
     state: AppState = app.state.heracles
     store = task_store(app) or TaskStore(Database(MEMORY))
     app.state.task_store = store
+    domain = app.state.domain
     scheduler = Scheduler(
-        app.state.domain.registry,
+        lambda: domain.registry,
         state.directories,
         store,
         mailer=mailer,
@@ -65,16 +67,28 @@ def task_store(app: FastAPI) -> TaskStore | None:
 def build_worker(config_path: str | os.PathLike[str] | None = None) -> Scheduler:
     """A scheduler for the stand-alone ``heracles worker`` from the configuration file."""
     from heracles.objects import TypeRegistry
+    from heracles.objects.activation import PluginManager, PluginOverrideStore
     from heracles.objects.builtin import register_builtin_types
+    from heracles.objects.registry import discover_plugins
     from heracles.server import load_config
 
     raw, api_settings, directories = load_config(config_path)
     configure_audit_syslog(raw.get("audit"))
-    registry = TypeRegistry()
-    register_builtin_types(registry)
-    if directories:
-        registry.load_plugins(next(iter(directories.values())))
     database = Database(api_settings.database.path or MEMORY)
+    registry: TypeRegistry | Callable[[], TypeRegistry]
+    if directories:
+        # same enabled set as the console (configuration + stored overrides), re-read at
+        # every pass so a plugin switched in the console is honoured by this process too
+        manager = PluginManager(
+            discover_plugins(),
+            next(iter(directories.values())).schema_object_classes(),
+            configured=api_settings.plugins.enabled,
+            store=PluginOverrideStore(database),
+        )
+        registry = manager.build_registry
+    else:
+        registry = TypeRegistry()
+        register_builtin_types(registry)
     return Scheduler(
         registry,
         directories,

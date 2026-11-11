@@ -231,7 +231,7 @@ class Scheduler:
 
     def __init__(
         self,
-        registry: TypeRegistry,
+        registry: TypeRegistry | Callable[[], TypeRegistry],
         directories: Mapping[str, DirectoryClient],
         store: TaskStore,
         *,
@@ -240,13 +240,21 @@ class Scheduler:
         lease_seconds: float = DEFAULT_LEASE_SECONDS,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
-        self.registry = registry
+        # A callable is read at every pass, so plugins switched on or off since start-up
+        # (the console swaps the registry) are honoured without a restart.
+        self._registry = registry
         self.directories = directories
         self.store = store
         self.mailer = mailer
         self.base_url = base_url
         self._lease_seconds = lease_seconds
         self._now = now
+
+    @property
+    def registry(self) -> TypeRegistry:
+        """The registry of the current pass (re-read from the provider when there is one)."""
+        source = self._registry
+        return source if isinstance(source, TypeRegistry) else source()
 
     def run_pass(self, directory_ids: Iterable[str] | None = None) -> list[RunRecord] | None:
         """One pass; ``None`` when another worker holds the lease (nothing was run)."""
@@ -256,12 +264,13 @@ class Scheduler:
             return None
         try:
             wanted = None if directory_ids is None else set(directory_ids)
+            registry = self.registry
             runs: list[RunRecord] = []
             for dir_id, directory in self.directories.items():
                 if wanted is not None and dir_id not in wanted:
                     continue
-                for plugin_name, runner in self.registry.task_runners:
-                    run = self._run_one(dir_id, directory, plugin_name, runner)
+                for plugin_name, runner in registry.task_runners:
+                    run = self._run_one(registry, dir_id, directory, plugin_name, runner)
                     self.store.record(run)
                     runs.append(run)
             return runs
@@ -269,7 +278,12 @@ class Scheduler:
             self.store.release_lease(owner)
 
     def _run_one(
-        self, dir_id: str, directory: DirectoryClient, plugin_name: str, runner: TaskRunner
+        self,
+        registry: TypeRegistry,
+        dir_id: str,
+        directory: DirectoryClient,
+        plugin_name: str,
+        runner: TaskRunner,
     ) -> RunRecord:
         started = self._now()
         if runner.needs_mailer and self.mailer is None:
@@ -286,9 +300,9 @@ class Scheduler:
         ctx = TaskRunContext(
             directory=directory,
             now=started,
-            settings=self.registry.settings.get(plugin_name),
+            settings=registry.settings.get(plugin_name),
             mailer=self.mailer,
-            registry=self.registry,
+            registry=registry,
             base_url=self.base_url,
         )
         try:

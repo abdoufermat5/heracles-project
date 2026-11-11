@@ -153,3 +153,24 @@ def test_runners_run_against_an_empty_directory() -> None:
     runs = scheduler.run_pass()
     assert runs is not None and len(runs) == len(PLUGINS)
     assert [r.errors for r in runs if r.status != "ok"] == []
+
+
+def test_registry_provider_is_read_at_every_pass() -> None:
+    """A plugin switched off in the console (registry swapped) stops running its tasks."""
+    calls: list[str] = []
+
+    def run(_ctx: TaskRunContext) -> FakeReport:
+        calls.append("run")
+        return FakeReport()
+
+    with_runner = TypeRegistry()
+    with_runner.task_runners.append(("demo", TaskRunner("one", run, kind="k")))
+    current = {"registry": with_runner}
+    scheduler = Scheduler(
+        lambda: current["registry"],
+        {"a": MemoryDirectory("dc=a")},
+        TaskStore(Database(":memory:")),
+    )
+    assert scheduler.run_pass() is not None and calls == ["run"]
+    current["registry"] = TypeRegistry()  # the plugin was disabled
+    assert scheduler.run_pass() == [] and calls == ["run"]
