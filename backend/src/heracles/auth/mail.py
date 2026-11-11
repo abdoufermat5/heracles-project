@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from email.message import EmailMessage
 from typing import Protocol
 
+from pydantic import BaseModel
+
 
 class Mailer(Protocol):
     def send(self, to: str, subject: str, body: str, *, sender: str | None = None) -> None:
@@ -79,3 +81,30 @@ class SmtpMailer:
         if self._username is not None and self._password is not None:
             smtp.login(self._username, self._password)
         smtp.send_message(msg)
+
+
+class MailSettings(BaseModel):
+    """The ``mail`` section of the configuration file (no ``host``: no mail is sent)."""
+
+    host: str = ""
+    port: int = 25
+    sender: str = "heracles@localhost"
+    username: str | None = None
+    password: str | None = None
+    starttls: bool = False
+    use_ssl: bool = False
+    timeout: float = 10.0
+
+    def build(self) -> SmtpMailer | None:
+        if not self.host:
+            return None
+        return SmtpMailer(
+            self.host,
+            self.port,
+            sender=self.sender,
+            username=self.username,
+            password=self.password,
+            starttls=self.starttls,
+            use_ssl=self.use_ssl,
+            timeout=self.timeout,
+        )
