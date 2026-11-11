@@ -109,6 +109,15 @@ def _check_not_locked_by_other(domain: DomainDep, user: CurrentUserDep, dn: str)
 # --------------------------------------------------------------- metadata
 
 
+def _capabilities(info: Any) -> dict[str, JSON]:
+    """Capability flags of a type (``creatable`` / ``editable`` / ``deletable``)."""
+    return {
+        "creatable": info.type.creatable,
+        "editable": info.type.editable,
+        "deletable": info.type.deletable,
+    }
+
+
 @router.get("/types")
 def list_types(user: CurrentUserDep, domain: DomainDep) -> list[JSON]:
     base = user.directory.base_dn
@@ -116,16 +125,25 @@ def list_types(user: CurrentUserDep, domain: DomainDep) -> list[JSON]:
 
     def can_create(name: str) -> bool:
         info = domain.registry.get(name)
+        if not info.type.creatable:
+            return False
         return evaluator.permissions(base, info.acl_object(info.main_tab)).create
 
-    return list(domain.registry.summaries(can_create=can_create))
+    return [
+        {**t.summary(can_create=can_create(t.name)), **_capabilities(t)}
+        for t in domain.registry.list()
+    ]
 
 
 @router.get("/types/{type_name}")
 def describe_type(type_name: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
     del user
     with object_errors():
-        return domain.registry.describe(type_name)
+        body = domain.registry.describe(type_name)
+        info = domain.registry.get(type_name)
+    body.update(_capabilities(info))
+    body["supports_templates"] = bool(body["supports_templates"]) and info.type.creatable
+    return body
 
 
 # ---------------------------------------------------------------- templates

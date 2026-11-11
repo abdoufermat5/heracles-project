@@ -69,6 +69,8 @@ class ArchivedObject(ObjectType):
     label_plural = _("Archived objects")
     icon = "archive"
     category = "workflow"
+    creatable = False
+    editable = False
     filter = f"(objectClass={ARCHIVE_CLASS})"
     main_attr = "cn"
     name_attr = "cn"

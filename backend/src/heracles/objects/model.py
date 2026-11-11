@@ -166,6 +166,11 @@ class ObjectType:
     columns: ClassVar[Sequence[str]] = ()
     search_attrs: ClassVar[Sequence[str]] = ()
     references: ClassVar[Sequence[Reference]] = ()
+    #: Capability flags: types written by Heracles itself turn these off. The
+    #: object service refuses the operation and the descriptor tells the UI.
+    creatable: ClassVar[bool] = True
+    editable: ClassVar[bool] = True
+    deletable: ClassVar[bool] = True
     tabs: ClassVar[tuple[type[Tab], ...]] = ()
 
     def __init_subclass__(cls, **kwargs: Any) -> None:

@@ -154,6 +154,7 @@ class Registration(ObjectType):
     label_plural = _("Registrations")
     icon = "user-plus"
     category = "workflow"
+    creatable = False
     filter = f"(objectClass={REGISTRATION_CLASS})"
     main_attr = "hrcRegistrationEmailAddress"
     name_attr = "hrcRegistrationEmailAddress"

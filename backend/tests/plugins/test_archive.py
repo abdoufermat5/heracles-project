@@ -9,7 +9,11 @@ import pytest
 import heracles_plugins.archive as archive
 from heracles.ldap.client import NoSuchObjectError
 from heracles.ldap.memory import MemoryDirectory
-from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
+from heracles.objects import (
+    ObjectService,
+    PermissionDeniedError,
+    TypeRegistry,
+)
 from heracles.objects.builtin import register_builtin_types
 from heracles_plugins.archive.service import ARCHIVE_CLASS
 
@@ -180,7 +184,7 @@ def test_types_acl_keys_and_read_only(directory: MemoryDirectory) -> None:
     dn = archive.archive(directory, JDOE, "user", now=NOW)
     state = service.load("archived_object", dn)
     assert state.tabs["main"].values["hrcArchivedObjectType"] == "user"
-    with pytest.raises(ObjectValidationError):
+    with pytest.raises(PermissionDeniedError):
         service.update(
             "archived_object", dn, {"main": {"values": {"hrcArchivedObjectType": "group"}}}
         )
