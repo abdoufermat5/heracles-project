@@ -105,6 +105,33 @@ def test_listing_and_search(app_client: TestClient) -> None:
     assert [i["dn"] for i in found["items"]] == [CDUPONT]
 
 
+def test_listing_round_trips_do_not_grow_with_the_page(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A page of users costs the same number of directory operations whatever its size."""
+    a = api(app_client, "admin")
+    a.get("/types")  # resolves the ACLs of the session once
+    state = cast(AppState, cast(FastAPI, app_client.app).state.heracles)
+    directory = state.directories["main"]
+    operations: list[str] = []
+    for name in ("search", "get"):
+        original = getattr(directory, name)
+
+        def counted(*args: Any, _original: Any = original, _name: str = name, **kw: Any) -> Any:
+            operations.append(_name)
+            return _original(*args, **kw)
+
+        monkeypatch.setattr(directory, name, counted)
+
+    def cost(limit: int) -> int:
+        operations.clear()
+        page = a.get("/objects/user", base=BASE, scope="sub", limit=limit).json()
+        assert len(page["items"]) == limit
+        return len(operations)
+
+    assert cost(1) == cost(7)
+
+
 def test_crud_flow_with_lock(app_client: TestClient) -> None:
     a = api(app_client, "admin")
     r = a.post(

@@ -20,7 +20,7 @@ from heracles.core.config_store import effective_settings
 from heracles.core.locks import Lock, LockedError
 from heracles.core.snapshots import Snapshot, SnapshotError, SnapshotService
 from heracles.ldap import dn as dnlib
-from heracles.ldap.client import NoSuchObjectError, Scope
+from heracles.ldap.client import Entry, NoSuchObjectError, Scope
 from heracles.ldap.filter import escape_filter_value
 from heracles.objects import (
     ObjectConflictError,
@@ -267,30 +267,21 @@ def list_objects(
             cursor,
             sort=sort,
             descending=order == "desc",
+            extra_attrs=["userPassword"] if type_name == "user" else (),
+            locked=_account_locked if type_name == "user" else None,
         )
     body = page.to_json()
     if type_name == "user":
-        _mark_locked_accounts(user, body)
         _count_groups(user, domain, body)
     return body
 
 
-def _mark_locked_accounts(user: CurrentUserDep, body: dict[str, JSON]) -> None:
-    """Fill ``locked`` (account lock) on user rows."""
+def _account_locked(entry: Entry) -> bool:
+    """Account lock of a user row, from the password fetched with the listing."""
     from heracles.auth.passwords import is_locked
 
-    items = body.get("items")
-    if not isinstance(items, list):
-        return
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        dn = item.get("dn")
-        if not isinstance(dn, str):
-            continue
-        entry = user.directory.get(dn, ["userPassword"])
-        stored = entry.text("userPassword") if entry is not None else None
-        item["locked"] = bool(stored) and is_locked(stored or "")
+    stored = entry.text("userPassword")
+    return bool(stored) and is_locked(stored or "")
 
 
 def _count_groups(user: CurrentUserDep, domain: DomainDep, body: dict[str, JSON]) -> None:

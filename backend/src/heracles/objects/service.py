@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import copy
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -203,8 +203,15 @@ class ObjectService:
         *,
         sort: str | None = None,
         descending: bool = False,
+        extra_attrs: Sequence[str] = (),
+        locked: Callable[[Entry], bool] | None = None,
     ) -> ListPage:
-        """List objects of a type below a department (``ONE``: its container, ``SUB``: tree)."""
+        """List objects of a type below a department (``ONE``: its container, ``SUB``: tree).
+
+        ``locked`` computes the ``locked`` flag of a row from its entry; the attributes
+        it needs are named in ``extra_attrs`` and fetched by the same search (they never
+        appear in the row values).
+        """
         info = self.registry.get(type_name)
         base = base or self.directory.base_dn
         if scope == Scope.SUBTREE:
@@ -213,7 +220,11 @@ class ObjectService:
             search_base, ldap_scope = dnlib.join(info.type.rdn, base), Scope.ONE
         search_attrs = self._search_attrs(info)
         flt = filters.and_(info.type.filter, filters.text_query(search_attrs, query or ""))
-        wanted = list(dict.fromkeys([*info.type.columns, info.type.main_attr, info.type.name_attr]))
+        wanted = list(
+            dict.fromkeys(
+                [*info.type.columns, info.type.main_attr, info.type.name_attr, *extra_attrs]
+            )
+        )
         try:
             entries = [
                 e
@@ -235,10 +246,28 @@ class ObjectService:
         window = entries[offset : offset + limit]
         more = offset + limit < len(entries)
         return ListPage(
-            items=[self._row(info, e) for e in window],
+            items=[self._row(info, e, locked) for e in window],
             next_cursor=_encode_cursor(offset + limit) if more else None,
             total=len(entries),
         )
+
+    def count(self, type_name: str, base: str | None = None, scope: Scope = Scope.ONE) -> int:
+        """Number of objects :meth:`list` would report as ``total`` (no rows, no sorting)."""
+        info = self.registry.get(type_name)
+        base = base or self.directory.base_dn
+        if scope == Scope.SUBTREE:
+            search_base, ldap_scope = base, Scope.SUBTREE
+        else:
+            search_base, ldap_scope = dnlib.join(info.type.rdn, base), Scope.ONE
+        main_tab, main_attr = info.main_tab.name, info.type.main_attr
+        try:
+            return sum(
+                1
+                for e in self.directory.search(search_base, info.type.filter, ldap_scope, ["1.1"])
+                if self.policy.can_read(e.dn, main_tab, main_attr)
+            )
+        except NoSuchObjectError:
+            return 0
 
     @staticmethod
     def _search_attrs(info: TypeInfo) -> StrList:
@@ -254,7 +283,9 @@ class ObjectService:
                 out.append(name)
         return out
 
-    def _row(self, info: TypeInfo, entry: Entry) -> ListRow:
+    def _row(
+        self, info: TypeInfo, entry: Entry, locked: Callable[[Entry], bool] | None = None
+    ) -> ListRow:
         keys = [*info.type.columns] or [info.type.main_attr]
         values: dict[str, str] = {}
         for key in keys:
@@ -272,7 +303,7 @@ class ObjectService:
             else:
                 text = "" if shown is None else str(shown)
             values[key] = text
-        return ListRow(entry.dn, values)
+        return ListRow(entry.dn, values, locked(entry) if locked is not None else False)
 
     # ---------------------------------------------------------------- create
 

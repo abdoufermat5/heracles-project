@@ -272,26 +272,32 @@ def dashboard(user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
             info = domain.registry.get(name)
         except UnknownTypeError:
             continue
-        service, _policy = domain.service(user, name)
-        page = service.list(name, base, Scope.SUBTREE, limit=1)
-        cards.append(
-            {
-                "key": name,
-                "label": info.type.label_plural or info.type.label,
-                "value": page.total,
-                "trend": None,
-            }
-        )
+        service, policy = domain.service(user, name)
         if name == "user":
+            # one search gives both the readable users and the locked accounts
+            total = 0
+            main_tab, main_attr = info.main_tab.name, info.type.main_attr
             try:
                 for entry in directory.search(
                     base, info.type.filter, Scope.SUBTREE, ["userPassword"]
                 ):
+                    if policy.can_read(entry.dn, main_tab, main_attr):
+                        total += 1
                     stored = entry.text("userPassword")
                     if stored and is_locked(stored):
                         locked_users += 1
             except NoSuchObjectError:
                 pass
+        else:
+            total = service.count(name, base, Scope.SUBTREE)
+        cards.append(
+            {
+                "key": name,
+                "label": info.type.label_plural or info.type.label,
+                "value": total,
+                "trend": None,
+            }
+        )
     return {
         "cards": cards,
         "locked_users": locked_users,
