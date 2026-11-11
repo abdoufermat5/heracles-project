@@ -9,8 +9,9 @@
 #   export HERACLES_TEST_LDAP_URI=ldap://localhost:1389
 #   uv run --extra ldap pytest -m integration
 #
-# Optional: copy the compatibility schema files of an existing installation
-# into deploy/ldap/compat-schema/ (see its README) before the first start.
+# Schemas: deploy/ldap/schema/ holds the Heracles schema (heracles.ldif) and the
+# third-party schemas some plugins need (sudo, openssh-lpk, dnszone, samba...;
+# see its README). They are loaded at the first start of the data volume.
 
 services:
   ldap:
@@ -28,7 +29,7 @@ services:
       LDAP_EXTRA_SCHEMAS: cosine,inetorgperson,nis
     volumes:
       - ./ldap/seed.ldif:/ldifs/seed.ldif:ro
-      - ./ldap/compat-schema:/schemas:ro
+      - ./ldap/schema:/schemas:ro
       - ldap-data:/bitnami/openldap
     healthcheck:
       test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost:1389 -b dc=heracles,dc=test -D cn=admin,dc=heracles,dc=test -w admin -s base dn"]

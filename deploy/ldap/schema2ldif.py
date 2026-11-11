@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Convert OpenLDAP ``.schema`` files to ``cn=config`` LDIF schema entries.
 
-    python3 deploy/ldap/schema2ldif.py path/to/name.schema [...] -o deploy/ldap/compat-schema
+    python3 deploy/ldap/schema2ldif.py path/to/name.schema [...] -o deploy/ldap/schema
 
 Each ``<name>.schema`` becomes ``<prefix><name>.ldif`` (prefix from ``--prefix``, to
 control the load order) containing one ``olcSchemaConfig`` entry.

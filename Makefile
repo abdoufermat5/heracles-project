@@ -16,7 +16,7 @@ CONFIG ?= $(HERACLES_CONFIG)
 .PHONY: help install install-backend install-frontend \
         dev dev-demo dev-down dev-mock backend frontend demo build serve dns-demo \
         test test-backend test-frontend lint lint-backend lint-frontend \
-        format typecheck check bench ldap-up ldap-down ldap-logs test-integration e2e e2e-ui e2e-down compat-schema clean
+        format typecheck check bench ldap-up ldap-down ldap-logs test-integration e2e e2e-ui e2e-down schema third-party-schema clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "; printf "\nUsage: make \033[36m<target>\033[0m\n\n"} \
@@ -142,10 +142,14 @@ e2e-ui: ## Browser end-to-end tests only, against the running stack (make dev or
 e2e-down: ## Stop the end-to-end stack and drop its LDAP data
 	$(COMPOSE) --profile e2e down -v
 
-compat-schema: ## Convert .schema files to LDIF for the test LDAP (SCHEMAS="a.schema b.schema")
-	@test -n "$(SCHEMAS)" || { echo 'Usage: make compat-schema SCHEMAS="path/core.schema ..."'; exit 1; }
+schema: ## Regenerate the Heracles LDAP schema files (deploy/ldap/schema/heracles.{ldif,schema})
+	cd backend && uv run heracles schema export --format ldif -o ../deploy/ldap/schema/heracles.ldif
+	cd backend && uv run heracles schema export --format schema -o ../deploy/ldap/schema/heracles.schema
+
+third-party-schema: ## Convert third-party .schema files to LDIF for the test LDAP (SCHEMAS="a.schema b.schema")
+	@test -n "$(SCHEMAS)" || { echo 'Usage: make third-party-schema SCHEMAS="path/sudo.schema ..."'; exit 1; }
 	i=0; for s in $(SCHEMAS); do i=$$((i+1)); \
-	  python3 deploy/ldap/schema2ldif.py "$$s" -o deploy/ldap/compat-schema --prefix "$$(printf '%02d' $$i)-"; done
+	  python3 deploy/ldap/schema2ldif.py "$$s" -o deploy/ldap/schema --prefix "$$(printf '%02d' $$i)-"; done
 
 # ----------------------------------------------------------------- clean
 

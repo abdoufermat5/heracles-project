@@ -16,8 +16,9 @@ coverage/
 .coverage
 htmlcov/
 .DS_Store
-deploy/ldap/compat-schema/*
-!deploy/ldap/compat-schema/README.md
+deploy/ldap/compat-schema/
+deploy/ldap/schema/*.ldif
+!deploy/ldap/schema/heracles.ldif
 .claude/settings.local.json
 frontend/*.tsbuildinfo
 .hypothesis/
