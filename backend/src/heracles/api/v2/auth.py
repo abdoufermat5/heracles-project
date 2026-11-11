@@ -727,14 +727,3 @@ def recovery_confirm(
         attributes=["password: reset with a recovery link"],
     )
     return StatusResponse()
-
-
-# -- OIDC (stubs) --------------------------------------------------------------------------------
-@router.get("/oidc/login")
-def oidc_login() -> None:
-    raise ApiError(501, "not_implemented", "OIDC login is not implemented yet")
-
-
-@router.get("/oidc/callback")
-def oidc_callback() -> None:
-    raise ApiError(501, "not_implemented", "OIDC login is not implemented yet")

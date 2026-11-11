@@ -490,7 +490,6 @@ const fr: Translation = {
       cas: 'Se connecter avec l’authentification unique',
       httpBasic: 'Se connecter avec les identifiants du navigateur',
       httpHeader: 'Se connecter avec votre compte d’organisation',
-      oidc: 'Se connecter avec OpenID Connect',
     },
     or: 'ou',
     failed: 'L’authentification unique a échoué. Réessayez ou utilisez votre compte d’annuaire.',

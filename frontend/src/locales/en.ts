@@ -489,7 +489,6 @@ const en = {
       cas: 'Sign in with single sign-on',
       httpBasic: 'Sign in with browser credentials',
       httpHeader: 'Sign in with your organization account',
-      oidc: 'Sign in with OpenID Connect',
     },
     or: 'or',
     failed: 'Single sign-on failed. Try again or use your directory account.',

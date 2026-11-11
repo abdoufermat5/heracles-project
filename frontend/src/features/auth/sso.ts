@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { API_BASE, request } from '@/api/client'
 
-export type LoginMethodId = 'form' | 'http-basic' | 'http-header' | 'cas' | 'oidc'
+export type LoginMethodId = 'form' | 'http-basic' | 'http-header' | 'cas'
 
 export interface LoginMethod {
   id: LoginMethodId

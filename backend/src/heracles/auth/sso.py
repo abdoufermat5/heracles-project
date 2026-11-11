@@ -1,4 +1,4 @@
-"""Login-method configuration (form, HTTP Basic, trusted header, CAS, OIDC).
+"""Login-method configuration (form, HTTP Basic, trusted header, CAS).
 
 The effective configuration is the merge of the YAML settings and the
 configuration entry stored in the directory. :func:`effective_sso` reads the
@@ -16,8 +16,8 @@ from pydantic import BaseModel
 from heracles.core.config_store import effective_settings
 from heracles.ldap.client import DirectoryClient
 
-LoginMethod = Literal["form", "http-basic", "http-header", "cas", "oidc"]
-LOGIN_METHODS: tuple[str, ...] = ("form", "http-basic", "http-header", "cas", "oidc")
+LoginMethod = Literal["form", "http-basic", "http-header", "cas"]
+LOGIN_METHODS: tuple[str, ...] = ("form", "http-basic", "http-header", "cas")
 
 
 class SsoSettings(BaseModel):

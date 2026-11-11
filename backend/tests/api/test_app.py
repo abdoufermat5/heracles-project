@@ -106,13 +106,6 @@ def test_header_login_disabled_by_default(env: Env) -> None:
     assert r.status_code == 404
 
 
-def test_oidc_routes_are_stubbed(env: Env) -> None:
-    for path in ("/api/v2/auth/oidc/login", "/api/v2/auth/oidc/callback"):
-        r = env.client.get(path)
-        assert r.status_code == 501
-        assert r.json()["error"]["code"] == "not_implemented"
-
-
 def test_static_spa_with_history_fallback(tmp_path: Path) -> None:
     (tmp_path / "assets").mkdir()
     (tmp_path / "index.html").write_text("<html>spa</html>")

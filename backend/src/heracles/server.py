@@ -26,6 +26,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
+import structlog
 import yaml
 from fastapi import APIRouter, Depends, FastAPI
 
@@ -47,6 +48,8 @@ from heracles.objects.builtin import register_builtin_types
 from heracles.objects.registry import PluginRouterContext, discover_plugins
 from heracles.storage import Database
 from heracles.tasks.syslog import configure_audit_syslog
+
+log = structlog.get_logger(__name__)
 
 __all__ = ["build_app", "build_demo_app", "create_full_app"]
 
@@ -167,6 +170,27 @@ def read_config(path: Path) -> Mapping[str, Any]:
     return cast("dict[str, Any]", loaded)
 
 
+def warn_about_config(raw: Mapping[str, Any], settings: ApiSettings) -> None:
+    """Startup warnings about options that are removed or leave the server exposed."""
+    api_raw = raw.get("api")
+    api_keys = api_raw if isinstance(api_raw, dict) else {}
+    if "oidc" in raw or "oidc" in api_keys:
+        log.warning(
+            "config_oidc_ignored",
+            detail="OpenID Connect login was removed; the oidc key is ignored",
+        )
+    sso_raw = api_keys.get("sso")
+    sso_keys = sso_raw if isinstance(sso_raw, dict) else {}
+    has_public_url = bool(settings.sso.cas_service_name or sso_keys.get("cas_service_name"))
+    if not has_public_url:
+        log.warning(
+            "config_no_public_url",
+            detail="cas_service_name / invitations public_base_url are unset: links are built "
+            "from the Host header, accepted only for api.allowed_hosts",
+            allowed_hosts=settings.allowed_hosts,
+        )
+
+
 def load_config(
     config_path: str | os.PathLike[str] | None = None,
 ) -> tuple[Mapping[str, Any], ApiSettings, dict[str, DirectoryClient]]:
@@ -177,6 +201,7 @@ def load_config(
     ldap_settings = load_settings(path_text)
     raw: Mapping[str, Any] = read_config(Path(path_text)) if path_text else {}
     api_settings = ApiSettings.model_validate(raw.get("api", {}))
+    warn_about_config(raw, api_settings)
     directories: dict[str, DirectoryClient] = {
         cfg.id: PyLdapDirectory(cfg) for cfg in ldap_settings.directories
     }

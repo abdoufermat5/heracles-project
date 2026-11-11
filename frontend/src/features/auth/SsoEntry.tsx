@@ -7,7 +7,6 @@ const LABEL_KEYS: Record<Exclude<LoginMethodId, 'form'>, string> = {
   cas: 'sso.signIn.cas',
   'http-basic': 'sso.signIn.httpBasic',
   'http-header': 'sso.signIn.httpHeader',
-  oidc: 'sso.signIn.oidc',
 }
 
 /**
