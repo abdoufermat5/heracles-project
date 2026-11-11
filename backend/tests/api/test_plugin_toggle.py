@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from heracles import demo
 from heracles.api.settings import ApiSettings, DatabaseSettings, PluginsSettings
+from heracles.api.state import AppState
 from heracles.server import create_full_app
 from tests.api.test_admin_api import Api
 
@@ -94,3 +96,21 @@ def test_errors(client: TestClient) -> None:
     assert patch(admin, "acl_admin", False).status_code == 409
     r = admin.client.patch("/api/v2/admin/plugins/dns", json={}, headers=admin.headers)
     assert r.status_code == 422
+
+
+def test_audit_sink_follows_the_audit_plugin_switch(client: TestClient) -> None:
+    """Sign-ins are audited as soon as the plugin is switched on, and the switch itself too."""
+    admin = Api(client).login("admin")
+    app = cast(FastAPI, client.app)
+    state: AppState = app.state.heracles
+    sink = state.audit
+    assert not sink.enabled
+    assert patch(admin, "audit", True).status_code == 200
+    assert sink.enabled
+    events = admin.client.get("/api/v2/audit", params={"action": "config"}).json()["items"]
+    assert any("plugin audit enabled" in line for e in events for line in e["attributes"])
+    assert patch(admin, "audit", False).status_code == 200
+    assert not sink.enabled
+    assert patch(admin, "audit", True).status_code == 200
+    events = admin.client.get("/api/v2/audit", params={"action": "config"}).json()["items"]
+    assert any("plugin audit disabled" in line for e in events for line in e["attributes"])

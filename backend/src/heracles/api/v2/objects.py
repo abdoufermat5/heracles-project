@@ -151,7 +151,7 @@ def list_types(user: CurrentUserDep, domain: DomainDep) -> list[JSON]:
 
     return [
         {
-            **cast("dict[str, JSON]", t.summary(can_create=can_create(t.name))),
+            **t.summary(can_create=can_create(t.name)),
             **_nav_fields(t.type),
             **_capabilities(t),
         }

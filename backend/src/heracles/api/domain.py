@@ -229,7 +229,8 @@ def install_domain(app: FastAPI, domain: Domain) -> None:
     app.state.domain = domain
     state = getattr(app.state, "heracles", None)
     if state is not None:
-        state.audit.attach(domain.registry)
+        # follow the live registry: plugins can be switched on and off from the console
+        state.audit.attach(lambda: domain.registry)
 
 
 def get_domain(request: Request) -> Domain:

@@ -81,6 +81,11 @@ def _audit(user: CurrentUser, domain: Domain, action: str, kind: str, dn: str, *
     domain.audit.record_by(user, action, object_type=kind, object_dn=dn, attributes=notes)
 
 
+def _audit_plugin_switch(user: CurrentUser, domain: Domain, name: str, *, enabled: bool) -> None:
+    state = "enabled" if enabled else "disabled"
+    _audit(user, domain, "config", "plugin", user.directory.base_dn, f"plugin {name} {state}")
+
+
 @contextmanager  # pyright: ignore[reportDeprecated]
 def admin_errors() -> Iterator[None]:
     try:
@@ -848,10 +853,14 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
                 ) from None
             except PluginLockedError:
                 raise ApiError(409, "plugin_locked", "This plugin cannot be disabled") from None
+            if not body.enabled:  # recorded while still on: switching audit off is logged
+                _audit_plugin_switch(user, domain, name, enabled=False)
             domain.registry = registry
             if holder is not None:
                 holder.registry = registry
         log.info("plugin_toggled", plugin=name, enabled=body.enabled, by=user.dn)
+        if body.enabled:  # recorded once on: switching the audit plugin on is logged too
+            _audit_plugin_switch(user, domain, name, enabled=True)
         row = next(p for p in describe_plugins(registry) if p["name"] == name)
         return {"restart_required": False, "plugin": row}
 

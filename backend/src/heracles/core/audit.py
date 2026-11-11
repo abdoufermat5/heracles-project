@@ -12,7 +12,7 @@ audited operation).
 from __future__ import annotations
 
 import secrets
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -115,26 +115,39 @@ def _cut(text: str) -> str:
 class AuditSink:
     """Records audit events when the audit plugin is enabled; otherwise a no-op."""
 
-    def __init__(self, registry: TypeRegistry | None = None) -> None:
-        self._registry = registry
+    def __init__(self, registry: TypeRegistry | Callable[[], TypeRegistry] | None = None) -> None:
+        self._source = registry
 
-    def attach(self, registry: TypeRegistry) -> None:
-        """Bind the sink to the registry once plugins are loaded."""
-        self._registry = registry
+    def attach(self, registry: TypeRegistry | Callable[[], TypeRegistry]) -> None:
+        """Bind the sink to the registry once plugins are loaded.
+
+        A callable is read at every call: the console swaps the registry when a plugin is
+        switched on or off, and the sink must follow without a restart.
+        """
+        self._source = registry
+
+    @property
+    def _registry(self) -> TypeRegistry | None:
+        source = self._source
+        if source is None or not callable(source):
+            return source
+        return source()
 
     @property
     def enabled(self) -> bool:
-        if self._registry is None:
+        registry = self._registry
+        if registry is None:
             return False
         try:
-            self._registry.get(EVENT_TYPE)
+            registry.get(EVENT_TYPE)
         except Exception:
             return False
         return True
 
     def _allowed(self, action: str) -> bool:
-        assert self._registry is not None
-        settings: Any = self._registry.settings.get(PLUGIN_NAME)
+        registry = self._registry
+        assert registry is not None
+        settings: Any = registry.settings.get(PLUGIN_NAME)
         actions = getattr(settings, "actions", None)
         return actions is None or action in actions
 
