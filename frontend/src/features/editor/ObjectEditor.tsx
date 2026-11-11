@@ -59,6 +59,8 @@ import { LockedDialog } from './LockedDialog'
 import { ReferencesPanel } from './ReferencesPanel'
 import { SecondFactorsPanel } from './SecondFactorsPanel'
 import { SnapshotsPanel } from './SnapshotsPanel'
+import { ObjectHistory } from '@/features/audit/ObjectHistory'
+import { useAuditEnabled } from '@/features/audit/hooks'
 import { TemplateFillForm } from './TemplateFillForm'
 import { TemplatePicker } from './TemplatePicker'
 
@@ -67,6 +69,7 @@ const BASE_KEY = 'main.base'
 const REFERENCES_TAB = '@references'
 const SNAPSHOTS_TAB = '@snapshots'
 const SECOND_FACTORS_TAB = '@secondFactors'
+const HISTORY_TAB = '@history'
 
 interface Props {
   type: string
@@ -419,8 +422,12 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
     }
   }
 
+  const showHistory = useAuditEnabled().enabled && type !== 'audit_event'
   const extraPanel =
-    tab === REFERENCES_TAB || tab === SNAPSHOTS_TAB || (tab === SECOND_FACTORS_TAB && showSecondFactors)
+    tab === REFERENCES_TAB ||
+    tab === SNAPSHOTS_TAB ||
+    (tab === SECOND_FACTORS_TAB && showSecondFactors) ||
+    (tab === HISTORY_TAB && showHistory)
       ? tab
       : null
   const extras = isCreate
@@ -428,6 +435,7 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
     : [
         { name: REFERENCES_TAB, label: t('references.tab') },
         { name: SNAPSHOTS_TAB, label: t('snapshots.tab') },
+        ...(showHistory ? [{ name: HISTORY_TAB, label: t('audit.history.tab') }] : []),
         ...(showSecondFactors ? [{ name: SECOND_FACTORS_TAB, label: t('secondFactors.tab') }] : []),
       ]
   const currentTabObj = extraPanel ? undefined : (desc.tabs.find((tb) => tb.name === tab) ?? desc.tabs[0])
@@ -510,6 +518,7 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
             <SnapshotsPanel type={type} dn={detail.dn} onRestored={() => void reloadAfterRestore()} />
           )}
           {extraPanel === SECOND_FACTORS_TAB && detail && <SecondFactorsPanel dn={detail.dn} />}
+          {extraPanel === HISTORY_TAB && detail && <ObjectHistory dn={detail.dn} limit={50} />}
 
           {currentTabObj?.optional && (
             <div className="flex items-center justify-between rounded-md border bg-card p-4">

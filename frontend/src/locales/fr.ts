@@ -4,6 +4,7 @@ import { settingsFr } from './settings.fr'
 import type { Translation } from './en'
 import { objectsFr } from './objects.fr'
 import { adminFr } from '@/features/admin/locale-fr'
+import { auditFr } from '@/features/audit/locale-fr'
 
 const fr: Translation = {
   common: {
@@ -398,6 +399,7 @@ const fr: Translation = {
   },
   // --- P3 admin ---
   ...adminFr,
+  ...auditFr,
   // --- P3 compat ---
   io: {
     title: 'Import / export',

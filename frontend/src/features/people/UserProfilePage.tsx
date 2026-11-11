@@ -62,6 +62,7 @@ import { LdifDialog } from '@/features/editor/LdifDialog'
 import { LockedDialog } from '@/features/editor/LockedDialog'
 import { ReferencesPanel } from '@/features/editor/ReferencesPanel'
 import { SecondFactorsPanel } from '@/features/editor/SecondFactorsPanel'
+import { UserActivity } from '@/features/audit/ObjectHistory'
 import { SnapshotsPanel } from '@/features/editor/SnapshotsPanel'
 import { showTriggerOutput } from '@/features/editor/triggerOutput'
 import { CopyMoveDialog } from '@/features/listing/CopyMoveDialog'
@@ -804,6 +805,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
         {/* Tab 4: Security */}
         <TabsContent value="security" className="space-y-6">
           <SecondFactorsPanel dn={dn} />
+          <UserActivity dn={dn} />
         </TabsContent>
 
         {/* Tab 5: Advanced */}

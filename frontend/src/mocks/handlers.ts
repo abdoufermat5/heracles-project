@@ -2,6 +2,7 @@ import { http, HttpResponse, delay, type HttpHandler } from 'msw'
 import type { ErrorCode, ObjectListItem, TabState } from '@/api/types'
 import { BASE_DN, db } from './db'
 import { adminHandlers } from './adminHandlers'
+import { auditHandlers } from './auditHandlers'
 import { ioHandlers } from './io'
 import { typeSummaries } from './typeDefs'
 
@@ -615,6 +616,7 @@ export const handlers: HttpHandler[] = [
 
   // --- P3 admin ---
   ...adminHandlers,
+  ...auditHandlers,
   // --- P3 compat ---
   ...ioHandlers,
 ]

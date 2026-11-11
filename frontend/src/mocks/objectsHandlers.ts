@@ -215,7 +215,7 @@ export const objectsHandlers: HttpHandler[] = [
     if (!db.me()) return err(401, 'unauthenticated', 'Authentication required')
     const d = db.descriptor(String(params.type))
     if (!d) return err(404, 'not_found', 'Unknown type')
-    return HttpResponse.json({ ...d, supports_templates: d.name !== 'department' })
+    return HttpResponse.json({ ...d, supports_templates: d.name !== 'department' && d.creatable !== false })
   }),
 
   // ── templates ──

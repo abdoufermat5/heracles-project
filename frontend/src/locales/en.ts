@@ -3,6 +3,7 @@ import { accessEn } from './access'
 import { settingsEn } from './settings'
 import { objectsEn } from './objects'
 import { adminEn } from '@/features/admin/locale-en'
+import { auditEn } from '@/features/audit/locale-en'
 
 const en = {
   common: {
@@ -397,6 +398,7 @@ const en = {
   },
   // --- P3 admin ---
   ...adminEn,
+  ...auditEn,
   // --- P3 compat ---
   io: {
     title: 'Import / export',

@@ -47,6 +47,7 @@ const HealthPage = lazyRouteComponent(() => import('@/features/admin/HealthPage'
 const PluginsPage = lazyRouteComponent(() => import('@/features/admin/PluginsPage'), 'PluginsPage')
 const TasksPage = lazyRouteComponent(() => import('@/features/admin/TasksPage'), 'TasksPage')
 const IoPage = lazyRouteComponent(() => import('@/features/io/IoPage'), 'IoPage')
+const AuditPage = lazyRouteComponent(() => import('@/features/audit/AuditPage'), 'AuditPage')
 
 /** A route component that renders lazy `pages`: preloading it preloads them. */
 function rendering(
@@ -278,6 +279,20 @@ const adminTasksRoute = adminRoute('/admin/tasks', 'tasks', TasksPage)
 // --- P3 compat ---
 const ioRoute = createRoute({ getParentRoute: () => appRoute, path: '/io', component: IoPage })
 
+// --- audit log ---
+const auditRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/activity/audit',
+  validateSearch: (s: Record<string, unknown>): { object?: string; actor?: string } => ({
+    object: typeof s.object === 'string' && s.object !== '' ? s.object : undefined,
+    actor: typeof s.actor === 'string' && s.actor !== '' ? s.actor : undefined,
+  }),
+  component: rendering(function AuditRoute() {
+    const { object, actor } = auditRoute.useSearch()
+    return <AuditPage key={`${object ?? ''}|${actor ?? ''}`} object={object} actor={actor} />
+  }, AuditPage),
+})
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   secondFactorRoute,
@@ -293,6 +308,7 @@ const routeTree = rootRoute.addChildren([
     templateEditRoute,
     editRoute,
     ioRoute,
+    auditRoute,
     adminAccessRoute,
     adminConfigRoute,
     adminHealthRoute,
