@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import AsyncGenerator, Iterator
+from collections.abc import AsyncGenerator, Iterator, Mapping
 from contextlib import asynccontextmanager, contextmanager  # pyright: ignore[reportDeprecated]
 from datetime import UTC, datetime
 from importlib.metadata import entry_points
 from typing import Any, cast
 
 import structlog
-from fastapi import APIRouter, FastAPI, Query, Response
+from fastapi import APIRouter, FastAPI, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from heracles.acl import FULL_RIGHTS, NO_RIGHTS, Rights
@@ -33,6 +33,9 @@ from heracles.ldap.client import Modification, NoSuchObjectError, Scope
 from heracles.objects.errors import UnknownTypeError
 from heracles.objects.registry import PLUGIN_GROUP, Plugin, TypeRegistry
 from heracles.schema import names as schema
+from heracles.tasks.scheduler import RunRecord
+from heracles.tasks.syslog import syslog_configured
+from heracles.tasks.wiring import task_store
 from heracles.triggers import HOOK_MODES, TabHook, TriggerSettings, parse_hook
 
 log = structlog.get_logger(__name__)
@@ -316,12 +319,25 @@ def _utc_text(entry_value: str | None) -> str | None:
         return entry_value
 
 
+def _report_of(run: RunRecord | None) -> dict[str, Any] | None:
+    """Time, status and summary of the latest scheduler run of a task's kind."""
+    if run is None:
+        return None
+    return {
+        "time": run.finished_at.isoformat(),
+        "status": run.status,
+        "summary": run.summary,
+        "errors": list(run.errors),
+    }
+
+
 def task_rows(
     user: CurrentUser,
     domain: Domain,
     *,
     kind: str | None = None,
     status: str | None = None,
+    last_runs: Mapping[str, RunRecord] | None = None,
 ) -> list[dict[str, Any]]:
     """Task objects readable by the user, with the progress of their granular sub-tasks."""
     directory = user.directory
@@ -368,6 +384,7 @@ def task_rows(
                     "created": _utc_text(entry.text(schema.TASKS_CREATION_DATE_ATTR)),
                     "last_run": _utc_text(entry.text(schema.TASKS_LAST_EXEC_ATTR)),
                     "next_run": _utc_text(entry.text(schema.TASKS_NEXT_EXEC_ATTR)),
+                    "last_report": _report_of((last_runs or {}).get(info.name)),
                     "subtasks": {
                         "total": len(subs),
                         "done": sum(
@@ -767,12 +784,15 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
 
     @router.get("/tasks")
     def tasks(
+        request: Request,
         user: CurrentUserDep,
         domain: DomainDep,
         kind: str | None = None,
         status: str | None = None,
     ) -> dict[str, Any]:
-        rows = task_rows(user, domain, kind=kind, status=status)
+        store = task_store(request.app)
+        last_runs = store.last_by_kind(user.directory_id) if store else {}
+        rows = task_rows(user, domain, kind=kind, status=status, last_runs=last_runs)
         kinds = sorted(
             {(i.name, i.type.label) for i in domain.registry.list() if i.acl_category == "tasks"}
         )
@@ -784,18 +804,54 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
                 "active": sum(1 for r in rows if r["status"].lower() == "activated"),
                 "failed_subtasks": sum(r["subtasks"]["failed"] for r in rows),
             },
+            "capabilities": {
+                "syslog_configured": syslog_configured(),
+                "scheduler_in_process": getattr(request.app.state, "scheduler", None) is not None,
+                "run_history": store is not None,
+            },
         }
 
+    @router.get("/tasks/runs")
+    def task_runs(
+        request: Request,
+        user: CurrentUserDep,
+        domain: DomainDep,
+        limit: int = Query(30, ge=1, le=200),
+    ) -> dict[str, Any]:
+        """Recent scheduler runs (one per task runner and pass), most recent first."""
+        remember(domain)
+        if not domain.is_admin(user.dn):
+            evaluator = domain.evaluator(user)
+            base = user.directory.base_dn
+            if not any(
+                not evaluator.permissions(base, f"{info.acl_category}/0").is_empty
+                for info in domain.registry.list()
+                if info.acl_category == "tasks"
+            ):
+                raise forbidden("You cannot see the task runs")
+        store = task_store(request.app)
+        runs = store.recent(limit, directory=user.directory_id) if store else []
+        return {"runs": [r.as_dict() for r in runs]}
+
     @router.post("/tasks/{dn:path}/run")
-    def run_task(dn: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, Any]:
-        """Ask the scheduler to run the task at its next pass (status active, due now)."""
+    def run_task(
+        dn: str, request: Request, user: CurrentUserDep, domain: DomainDep
+    ) -> dict[str, Any]:
+        """Make the task due now; run it at once when the scheduler lives in this process.
+
+        Otherwise (a separate ``heracles worker``) the task is only queued for the next pass.
+        """
         entry, _key = _task_entry(user, domain, dn)
         now = format_generalized_time(datetime.now(UTC)).encode()
         mods = [Modification("replace", schema.TASKS_NEXT_EXEC_ATTR, [now])]
         if (entry.text(schema.TASKS_STATUS_ATTR) or "").lower() != "activated":
             mods.append(Modification("replace", schema.TASKS_STATUS_ATTR, [b"Activated"]))
         user.directory.modify(entry.dn, mods)
-        return {"dn": entry.dn, "queued": True}
+        scheduler = getattr(request.app.state, "scheduler", None)
+        runs = scheduler.run_pass([user.directory_id]) if scheduler is not None else None
+        if runs is None:  # no in-process scheduler, or another worker is mid-pass
+            return {"dn": entry.dn, "queued": True, "runs": []}
+        return {"dn": entry.dn, "queued": False, "runs": [r.as_dict() for r in runs]}
 
     @router.post("/tasks/{dn:path}/retry")
     def retry_task(dn: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, Any]:
