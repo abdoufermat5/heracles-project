@@ -50,12 +50,20 @@ def _import_ldap() -> ModuleType:
 
 
 class PyLdapDirectory:
-    """Directory client backed by python-ldap with a reusable connection."""
+    """Directory client backed by python-ldap with a pool of service connections.
+
+    Up to ``config.pool_size`` operations run at the same time, each on its own
+    connection; further callers wait for one. Connections are opened on demand and
+    kept bound for reuse.
+    """
 
     def __init__(self, config: DirectoryConfig) -> None:
         self._ldap: Any = _import_ldap()
         self._config = config
-        self._conn: Any = None
+        #: Bound connections nobody is using (most recently used last).
+        self._idle: list[Any] = []
+        self._slots = threading.BoundedSemaphore(config.pool_size)
+        #: Guards ``_idle`` and connection set-up (TLS options are process-wide).
         self._lock = threading.RLock()
         self._object_classes: set[str] | None = None
 
@@ -66,13 +74,10 @@ class PyLdapDirectory:
         return self._config.base_dn
 
     def close(self) -> None:
-        """Unbind and drop the cached connection."""
+        """Unbind and drop the idle connections (one in use is kept by its operation)."""
         with self._lock:
-            self._drop()
-
-    def _drop(self) -> None:
-        conn, self._conn = self._conn, None
-        if conn is not None:
+            idle, self._idle = self._idle, []
+        for conn in idle:
             self._unbind(conn)
 
     def _unbind(self, conn: Any) -> None:
@@ -82,51 +87,75 @@ class PyLdapDirectory:
     def _new_connection(self) -> Any:
         ldap = self._ldap
         cfg = self._config
-        conn = ldap.initialize(cfg.uri)
-        conn.protocol_version = ldap.VERSION3
-        conn.set_option(ldap.OPT_REFERRALS, 0)
-        conn.set_option(ldap.OPT_NETWORK_TIMEOUT, cfg.timeout)
-        conn.set_option(ldap.OPT_TIMEOUT, cfg.timeout)
-        if cfg.ca_file:
-            conn.set_option(ldap.OPT_X_TLS_CACERTFILE, cfg.ca_file)
-        if cfg.uri.lower().startswith("ldaps://") or cfg.starttls:
-            conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
-            conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
+        with self._lock:
+            conn = ldap.initialize(cfg.uri)
+            conn.protocol_version = ldap.VERSION3
+            conn.set_option(ldap.OPT_REFERRALS, 0)
+            conn.set_option(ldap.OPT_NETWORK_TIMEOUT, cfg.timeout)
+            conn.set_option(ldap.OPT_TIMEOUT, cfg.timeout)
+            if cfg.ca_file:
+                conn.set_option(ldap.OPT_X_TLS_CACERTFILE, cfg.ca_file)
+            if cfg.uri.lower().startswith("ldaps://") or cfg.starttls:
+                conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+                conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
         if cfg.starttls and not cfg.uri.lower().startswith("ldaps://"):
             conn.start_tls_s()
         return conn
 
-    def _connection(self) -> Any:
-        if self._conn is None:
-            conn = self._new_connection()
-            try:
-                conn.simple_bind_s(
-                    self._config.bind_dn, self._config.bind_password.get_secret_value()
-                )
-            except self._ldap.INVALID_CREDENTIALS as exc:
-                raise InvalidCredentialsError("service account bind failed") from exc
-            self._conn = conn
-        return self._conn
+    def _checkout(self) -> Any:
+        """An idle service connection, or a new bound one."""
+        with self._lock:
+            if self._idle:
+                return self._idle.pop()
+        conn = self._new_connection()
+        try:
+            conn.simple_bind_s(self._config.bind_dn, self._config.bind_password.get_secret_value())
+        except self._ldap.INVALID_CREDENTIALS as exc:
+            self._unbind(conn)
+            raise InvalidCredentialsError("service account bind failed") from exc
+        except self._ldap.LDAPError:
+            self._unbind(conn)
+            raise
+        return conn
 
     def _run(self, op: Callable[[Any], T]) -> T:
-        """Run ``op`` on the shared connection, reconnecting once if it dropped."""
+        """Run ``op`` on a pooled connection, reconnecting once if it dropped."""
         ldap = self._ldap
-        with self._lock:
+        with self._slots:
             for attempt in (0, 1):
+                conn: Any = None
                 try:
-                    return op(self._connection())
+                    conn = self._checkout()
+                    result = op(conn)
                 except (
                     ldap.SERVER_DOWN,
                     ldap.TIMEOUT,
                     ldap.UNAVAILABLE,
                     ldap.CONNECT_ERROR,
                 ) as exc:
-                    self._drop()
+                    # the connection is dead, and the idle ones are probably as stale
+                    if conn is not None:
+                        self._unbind(conn)
+                    self.close()
                     if attempt:
                         raise DirectoryError(f"directory unavailable: {exc}") from exc
                 except ldap.LDAPError as exc:
+                    self._checkin(conn)
                     raise self._translate(exc) from exc
+                except BaseException:
+                    # unknown state (an operation may be half read): do not reuse it
+                    if conn is not None:
+                        self._unbind(conn)
+                    raise
+                else:
+                    self._checkin(conn)
+                    return result
             raise DirectoryError("unreachable")  # pragma: no cover
+
+    def _checkin(self, conn: Any) -> None:
+        if conn is not None:
+            with self._lock:
+                self._idle.append(conn)
 
     def _translate(self, exc: Exception) -> DirectoryError:
         ldap = self._ldap
@@ -222,11 +251,10 @@ class PyLdapDirectory:
         if not password:
             return False
         ldap = self._ldap
-        with self._lock:
-            try:
-                conn = self._new_connection()
-            except ldap.LDAPError as exc:
-                raise DirectoryError(f"cannot connect: {exc}") from exc
+        try:
+            conn = self._new_connection()
+        except ldap.LDAPError as exc:
+            raise DirectoryError(f"cannot connect: {exc}") from exc
         try:
             conn.simple_bind_s(dn, password)
         except ldap.INVALID_CREDENTIALS:

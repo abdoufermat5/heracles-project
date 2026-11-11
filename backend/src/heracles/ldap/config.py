@@ -10,6 +10,7 @@ Directories are declared in a YAML or TOML file whose path is given by the
         bind_dn: cn=admin,dc=example,dc=org
         bind_password: secret
         base_dn: dc=example,dc=org
+        pool_size: 8          # optional: service connections (parallel operations)
 
 Per-directory environment overrides use
 ``HERACLES_DIRECTORY_<ID>_<FIELD>`` (``<ID>`` upper-cased, ``-`` as ``_``), for
@@ -32,7 +33,17 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 CONFIG_ENV = "HERACLES_CONFIG"
-_FIELDS = ("label", "uri", "bind_dn", "bind_password", "base_dn", "starttls", "ca_file", "timeout")
+_FIELDS = (
+    "label",
+    "uri",
+    "bind_dn",
+    "bind_password",
+    "base_dn",
+    "starttls",
+    "ca_file",
+    "timeout",
+    "pool_size",
+)
 
 
 class ConfigError(ValueError):
@@ -53,6 +64,8 @@ class DirectoryConfig(BaseModel):
     starttls: bool = False
     ca_file: str | None = None
     timeout: float = Field(default=10.0, gt=0)
+    #: Service connections kept to the server: operations running at the same time.
+    pool_size: int = Field(default=8, ge=1, le=64)
 
 
 class LdapSettings(BaseSettings):

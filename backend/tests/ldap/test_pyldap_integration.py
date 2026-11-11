@@ -78,3 +78,21 @@ def test_schema_and_password(directory: DirectoryClient) -> None:
     assert "inetorgperson" in directory.schema_object_classes()
     assert not directory.check_password(f"cn=admin,{BASE}", "definitely-wrong")
     assert not directory.check_password(f"cn=admin,{BASE}", "")
+
+
+def test_concurrent_operations(directory: DirectoryClient) -> None:
+    """More parallel callers than pooled connections all get the right answer."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def read(_: int) -> str | None:
+        entry = directory.get(BASE, ["objectClass"])
+        return entry.dn if entry is not None else None
+
+    with ThreadPoolExecutor(max_workers=32) as pool:
+        results = list(pool.map(read, range(200)))
+    assert set(results) == {BASE}
+    # failing operations give their connection back: more failures than the pool holds
+    for _ in range(20):
+        with pytest.raises(NoSuchObjectError):
+            list(directory.search(f"ou=missing,{BASE}"))
+    assert read(0) == BASE
