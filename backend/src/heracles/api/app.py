@@ -17,8 +17,10 @@ from heracles.api.static import mount_spa
 from heracles.auth.login import LoginConfig, parse_networks
 from heracles.auth.mail import Mailer, MemoryMailer
 from heracles.auth.passwords import PasswordPolicy
-from heracles.auth.ratelimit import RateLimiter
+from heracles.auth.ratelimit import LoginLimiter, RateLimiter
+from heracles.auth.ratelimit_db import SqliteRateLimiter
 from heracles.auth.recovery import InMemoryTokenStore, RecoveryService, TokenStore
+from heracles.auth.recovery_db import SqliteTokenStore
 from heracles.auth.second_factor import (
     InMemorySecondFactorStore,
     SecondFactorService,
@@ -26,6 +28,7 @@ from heracles.auth.second_factor import (
 )
 from heracles.auth.second_factor_db import SqliteSecondFactorStore
 from heracles.auth.sessions import InMemorySessionStore, SessionStore
+from heracles.auth.sessions_db import SqliteSessionStore
 from heracles.auth.webauthn import WebAuthnService
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError
@@ -49,7 +52,7 @@ def create_app(
     second_factor_store: SecondFactorStore | None = None,
     token_store: TokenStore | None = None,
     mailer: Mailer | None = None,
-    limiter: RateLimiter | None = None,
+    limiter: LoginLimiter | None = None,
     is_admin: AdminResolver | None = None,
     logout_hooks: Iterable[LogoutHook] = (),
     extra_routers: Iterable[APIRouter] = (),
@@ -62,6 +65,9 @@ def create_app(
     (their own prefix is relative to ``/api/v2``); ``public_routers`` are mounted
     at the root without session or CSRF checks. Every service has an
     in-memory default so the app runs without any backend but the directory.
+    With a database (``settings.database.path``) the sessions, the second-factor
+    registrations, the recovery tokens and the login limiter default to stores in it,
+    so several worker processes share them.
     """
     app = FastAPI(
         title="Heracles",
@@ -70,16 +76,23 @@ def create_app(
         openapi_url="/api/openapi.json" if settings.enable_docs else None,
     )
 
-    session_store = (
-        sessions
-        if sessions is not None
-        else InMemorySessionStore(
+    database = Database(settings.database.path) if settings.database.path is not None else None
+    session_store: SessionStore
+    if sessions is not None:
+        session_store = sessions
+    elif database is not None:
+        session_store = SqliteSessionStore(
+            database,
+            idle_timeout=settings.session.idle_timeout_seconds,
+            absolute_timeout=settings.session.absolute_timeout_seconds,
+            clock=clock,
+        )
+    else:
+        session_store = InMemorySessionStore(
             idle_timeout=settings.session.idle_timeout_seconds,
             absolute_timeout=settings.session.absolute_timeout_seconds,
         )
-    )
     mail = mailer if mailer is not None else MemoryMailer()
-    database = Database(settings.database.path) if settings.database.path is not None else None
     sf_store: SecondFactorStore
     if second_factor_store is not None:
         sf_store = second_factor_store
@@ -87,6 +100,30 @@ def create_app(
         sf_store = SqliteSecondFactorStore(database)
     else:
         sf_store = InMemorySecondFactorStore()
+    tokens: TokenStore
+    if token_store is not None:
+        tokens = token_store
+    elif database is not None:
+        tokens = SqliteTokenStore(database, clock)
+    else:
+        tokens = InMemoryTokenStore()
+    login_limiter: LoginLimiter
+    if limiter is not None:
+        login_limiter = limiter
+    elif database is not None:
+        login_limiter = SqliteRateLimiter(
+            database,
+            free_attempts=settings.login.free_attempts,
+            base_delay=settings.login.base_delay_seconds,
+            max_delay=settings.login.max_delay_seconds,
+            clock=clock,
+        )
+    else:
+        login_limiter = RateLimiter(
+            free_attempts=settings.login.free_attempts,
+            base_delay=settings.login.base_delay_seconds,
+            max_delay=settings.login.max_delay_seconds,
+        )
     policy_cfg = settings.password
     policy = PasswordPolicy(
         min_length=policy_cfg.min_length,
@@ -103,17 +140,11 @@ def create_app(
         settings=settings,
         directories=directories,
         sessions=session_store,
-        limiter=limiter
-        if limiter is not None
-        else RateLimiter(
-            free_attempts=settings.login.free_attempts,
-            base_delay=settings.login.base_delay_seconds,
-            max_delay=settings.login.max_delay_seconds,
-        ),
+        limiter=login_limiter,
         second_factor=SecondFactorService(sf_store, issuer=settings.totp_issuer, clock=clock),
         webauthn=WebAuthnService(sf_store, settings.webauthn, clock=clock),
         recovery=RecoveryService(
-            store=token_store if token_store is not None else InMemoryTokenStore(),
+            store=tokens,
             mailer=mail,
             policy=policy,
             login_config=login_cfg,

@@ -34,4 +34,8 @@ Other useful targets (`make help` lists them all):
 | `make ldap-up` | start the test OpenLDAP server (port 1389) |
 | `make serve CONFIG=heracles.yaml` | run against a real directory |
 
+Production state that is not in the directory (sessions, login throttling,
+recovery tokens, second factors) lives in the SQLite application database, so
+`heracles serve --workers N` can run several processes sharing it.
+
 Heracles works on directories that provide its compatibility LDAP schema.

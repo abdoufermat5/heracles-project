@@ -145,10 +145,7 @@ def _set_account_lock(
     with _trigger_errors():
         (events.pre_lock if locked else events.pre_unlock)(pre)
     if changes:
-        try:
-            user.directory.modify(dn, changes)
-        finally:
-            domain.invalidate_listings(user)
+        user.directory.modify(dn, changes)
     after = service.load("user", dn)
     post = EventContext(type_name="user", dn=dn, before=before, after=after, changes=changes)
     (events.post_lock if locked else events.post_unlock)(post)

@@ -287,11 +287,15 @@ def second_factor(
         if session.second_factor_failures >= state.settings.login.max_second_factor_failures:
             state.sessions.delete(session.id)
         raise unauthenticated("Invalid code")
+    # Persist what this request already changed (a consumed WebAuthn challenge) before the
+    # row is renamed: the old id stops working right below.
+    state.sessions.save(session)
     rotated = state.sessions.rotate(session.id)
     if rotated is None:
         raise unauthenticated()
     rotated.second_factor_pending = False
     rotated.second_factor_failures = 0
+    state.sessions.save(rotated)
     _set_session_cookie(response, state, rotated)
     return StatusResponse()
 

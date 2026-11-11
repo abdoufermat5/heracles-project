@@ -13,10 +13,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from heracles.api.deps import CurrentUser, StateDep, client_ip
 from heracles.api.errors import ApiError, unauthenticated
+from heracles.api.middleware import LEGACY_SESSION_HEADER, SESSION_HEADER
 from heracles.ldap.client import DirectoryError
-
-SESSION_HEADER = "Session-Token"
-LEGACY_SESSION_HEADER = "X-Session-Token"
 
 
 def v1_error(status: int, message: str, fields: dict[str, str] | None = None) -> JSONResponse:

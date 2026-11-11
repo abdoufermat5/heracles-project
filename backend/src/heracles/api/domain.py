@@ -171,9 +171,9 @@ class Domain:
         )
         return service, policy
 
-    def invalidate_listings(self, user: CurrentUser) -> None:
-        """Drop the user's listing snapshots (call after any write the user made)."""
-        self.listings.invalidate(user.session.id)
+    def invalidate_listings(self, session_id: str) -> None:
+        """Drop the listing snapshots of one session (the raw id, as in ``Session.id``)."""
+        self.listings.invalidate(session_id)
 
     def events(self, user: CurrentUser) -> ObjectEvents:
         """Object event hooks contributed by the plugins, for one request.

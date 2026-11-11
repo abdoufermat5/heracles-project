@@ -6,21 +6,37 @@ import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from heracles.api.errors import error_body
 from heracles.api.settings import ApiSettings
+from heracles.api.state import AppState
+from heracles.auth.sessions import Session
+
+if TYPE_CHECKING:
+    from heracles.api.domain import Domain
 
 log = structlog.get_logger("heracles.http")
 
 REQUEST_ID_HEADER = "X-Request-ID"
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+#: ASGI scope key of the sessions a request loaded (the request and this middleware share it).
+SESSIONS_SCOPE_KEY = "heracles.sessions"
+
+#: Session token headers of API v1 (the cookie of API v2 is named by the settings).
+SESSION_HEADER = "Session-Token"
+LEGACY_SESSION_HEADER = "X-Session-Token"
+
+_READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
@@ -106,6 +122,50 @@ def install_body_limit(app: FastAPI, settings: ApiSettings) -> None:
 GZIP_MINIMUM_BYTES = 1024
 
 
+async def _save_sessions(request: Request) -> None:
+    """Persist what the handlers changed on the sessions this request loaded.
+
+    Handlers edit the session object in place; a store shared between processes only
+    sees the change through ``save`` (a no-op for the in-memory store).
+    """
+    touched: list[Session] | None = request.scope.get(SESSIONS_SCOPE_KEY)
+    state: AppState | None = getattr(request.app.state, "heracles", None)
+    if not touched or state is None:
+        return
+    store = state.sessions
+
+    def save_all() -> None:
+        for session in touched:
+            store.save(session)
+
+    try:
+        await run_in_threadpool(save_all)
+    except Exception:
+        log.exception("session_save_failed")
+
+
+def _invalidate_listings(request: Request) -> None:
+    """Drop the listing snapshots of the session behind a request that may have written.
+
+    Whatever the router (API v1, v2, a plugin's), a request that is not read-only makes
+    the snapshots of its session stale. The raw id of the cookie or token is enough: an
+    unknown id matches no snapshot, so no session lookup is needed.
+    """
+    if request.method in _READ_ONLY_METHODS:
+        return
+    domain: Domain | None = getattr(request.app.state, "domain", None)
+    state: AppState | None = getattr(request.app.state, "heracles", None)
+    if domain is None or state is None:
+        return
+    sid = (
+        request.cookies.get(state.settings.session.cookie_name)
+        or request.headers.get(SESSION_HEADER)
+        or request.headers.get(LEGACY_SESSION_HEADER)
+    )
+    if sid:
+        domain.invalidate_listings(sid)
+
+
 def install_middleware(app: FastAPI) -> None:
     # Added first so it sits inside ``request_context``: the SPA bundle and the JSON
     # listings compress to about a quarter of their size.
@@ -125,6 +185,9 @@ def install_middleware(app: FastAPI) -> None:
         except Exception:
             log.exception("request_failed", method=request.method, path=request.url.path)
             raise
+        finally:
+            _invalidate_listings(request)
+            await _save_sessions(request)
         response.headers[REQUEST_ID_HEADER] = request_id
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)

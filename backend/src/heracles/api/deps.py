@@ -15,6 +15,7 @@ from typing import Annotated, Any
 from fastapi import Depends, Request
 
 from heracles.api.errors import ApiError, forbidden, unauthenticated
+from heracles.api.middleware import SESSIONS_SCOPE_KEY
 from heracles.api.state import AppState
 from heracles.auth import csrf
 from heracles.auth.login import is_trusted_proxy
@@ -75,8 +76,22 @@ class CurrentUser:
 
 
 def session_from_cookie(request: Request, state: AppState) -> Session | None:
+    """The session of the cookie: one object per request, saved by the middleware at the end.
+
+    Persistent stores hand out a fresh object per ``get``; sharing it keeps handlers and
+    dependencies looking at the same state and makes the final ``save`` see every change.
+    """
     sid = request.cookies.get(state.settings.session.cookie_name)
-    return state.sessions.get(sid) if sid else None
+    if not sid:
+        return None
+    loaded: list[Session] = request.scope.setdefault(SESSIONS_SCOPE_KEY, [])
+    for session in loaded:
+        if session.id == sid:
+            return session
+    found = state.sessions.get(sid)
+    if found is not None:
+        loaded.append(found)
+    return found
 
 
 def current_session(request: Request, state: StateDep) -> Session:

@@ -30,6 +30,8 @@ class Session:
     second_factor_failures: int = 0
     #: Arbitrary per-session cache (ACL cache, WebAuthn challenge, ...).
     cache: dict[str, Any] = field(default_factory=lambda: {})
+    #: Bookkeeping of a persistent store (what was loaded, to save only the changes).
+    persisted: Any = field(default=None, repr=False, compare=False)
 
     @property
     def authenticated(self) -> bool:
@@ -58,6 +60,14 @@ class SessionStore(Protocol):
 
     def delete(self, session_id: str) -> Session | None:
         """Remove the session; return it if it existed."""
+        ...
+
+    def save(self, session: Session) -> None:
+        """Persist in-place changes made to a session returned by this store.
+
+        A session that was deleted or rotated meanwhile stays gone. Stores that hand out
+        the live object (the in-memory one) have nothing to do.
+        """
         ...
 
 
@@ -142,6 +152,9 @@ class InMemorySessionStore:
     def delete(self, session_id: str) -> Session | None:
         with self._lock:
             return self._sessions.pop(session_id, None)
+
+    def save(self, session: Session) -> None:
+        """No-op: callers already hold the live object."""
 
     def __len__(self) -> int:
         with self._lock:

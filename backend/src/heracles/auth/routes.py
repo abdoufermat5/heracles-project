@@ -132,6 +132,7 @@ def _open_session(
     )
     if sso:
         session.cache["sso"] = sso
+        state.sessions.save(session)
     cfg = state.settings.session
     response.set_cookie(
         cfg.cookie_name,

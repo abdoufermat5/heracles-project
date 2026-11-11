@@ -125,6 +125,7 @@ def apply_runtime(
     """Make the running application follow ``config`` (no restart needed)."""
     from heracles.auth.login import LoginConfig
     from heracles.auth.sessions import InMemorySessionStore
+    from heracles.auth.sessions_db import SqliteSessionStore
 
     policy = state.policy
     policy.min_length = config.password_min_length
@@ -139,7 +140,7 @@ def apply_runtime(
     )
     state.login_config = login
     state.recovery.login_config = login
-    if isinstance(state.sessions, InMemorySessionStore):
+    if isinstance(state.sessions, InMemorySessionStore | SqliteSessionStore):
         state.sessions.idle_timeout = config.session_lifetime
     domain.acl_target_limit = config.acl_target_filter_limit
 

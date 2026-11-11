@@ -199,6 +199,37 @@ def test_listing_snapshot_is_dropped_by_a_write(
     assert len(searches) == first_cost  # the snapshot was dropped, so page 2 searched again
 
 
+def test_listing_snapshot_is_dropped_by_any_non_read_request_even_a_failed_one(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    a = api(app_client, "admin")
+    a.get("/types")
+    searches = count_searches(app_client, monkeypatch)
+    a.get("/objects/user", base=BASE, scope="sub", limit=3)
+    first_cost = len(searches)
+
+    # a POST refused before any object endpoint ran still drops the session's snapshots
+    assert a.post("/objects/user", {}).status_code >= 400
+    searches.clear()
+    a.get("/objects/user", base=BASE, scope="sub", limit=3, offset=3)
+    assert len(searches) == first_cost
+
+    # a GET does not
+    a.get("/objects/user", base=BASE, scope="sub", limit=3)
+    searches.clear()
+    a.get("/objects/user", base=BASE, scope="sub", limit=3, offset=3)
+    assert len(searches) < first_cost
+
+    # a write outside API v2 is recognised by the v1 session token header
+    state = cast(AppState, cast(FastAPI, app_client.app).state.heracles)
+    cookie = app_client.cookies[state.settings.session.cookie_name]
+    with TestClient(app_client.app) as token_client:
+        token_client.post("/api/v1/unknown", headers={"Session-Token": cookie})
+    searches.clear()
+    a.get("/objects/user", base=BASE, scope="sub", limit=3, offset=3)
+    assert len(searches) == first_cost
+
+
 def test_account_lock_drops_the_listing_snapshot(app_client: TestClient) -> None:
     a = api(app_client, "admin")
     a.get("/objects/user", base=BASE, scope="sub", limit=1, order="desc")
