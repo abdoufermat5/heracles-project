@@ -305,6 +305,32 @@ def test_import_cannot_define_triggers_unless_administrator(app: FastAPI) -> Non
     assert helpdesk.directory.get(f"ou=sneaky,{BASE}") is None
 
 
+def test_import_cannot_set_hashes_acls_or_roles_unless_administrator(app: FastAPI) -> None:
+    _grant_ldif_write(app, "helpdesk")
+    base = "objectClass: inetOrgPerson\ncn: x\nsn: x\n"
+    texts = {
+        "hash": f"dn: uid=h1,{BASE}\n{base}uid: h1\nuserPassword: {{SSHA}}AAAA\n",
+        "acl": f"dn: uid=h2,{BASE}\n{base}uid: h2\nobjectClass: hrcAcl\nhrcAclEntry: 0:x\n",
+        "role": f"dn: cn=r,{BASE}\nobjectClass: organizationalRole\ncn: r\n"
+        f"roleOccupant: uid=helpdesk,{BASE}\n",
+    }
+    helpdesk = Api(app).login("helpdesk")
+    for text in texts.values():
+        body = helpdesk.post("/ldif/import", {"text": text}).json()
+        assert body["summary"]["error"] == 1 and body["summary"]["add"] == 0, body
+        assert "administrator" in body["results"][0]["error"]
+    assert helpdesk.directory.get(f"uid=h1,{BASE}") is None
+
+
+def test_import_of_hashes_is_allowed_for_administrators(admin: Api) -> None:
+    text = (
+        f"dn: uid=h3,{BASE}\nobjectClass: inetOrgPerson\ncn: x\nsn: x\nuid: h3\n"
+        "userPassword: {SSHA}AAAA\n"
+    )
+    body = admin.post("/ldif/import", {"text": text}).json()
+    assert body["summary"]["add"] == 1, body
+
+
 def test_import_of_triggers_is_allowed_for_administrators(admin: Api) -> None:
     text = (
         f"dn: ou=hooked,{BASE}\nobjectClass: organizationalUnit\nou: hooked\n"

@@ -156,6 +156,7 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             allowed=gate.can_import_ldif,
             apply=not body.dry_run,
             protected=None if admin else importer.configuration_entry(user.directory),
+            restricted=None if admin else importer.privileged_content,
         )
         if not body.dry_run:
             summary = importer.summarize(results)

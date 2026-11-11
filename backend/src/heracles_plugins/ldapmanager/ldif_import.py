@@ -64,6 +64,37 @@ def configuration_entry(directory: DirectoryClient) -> Callable[[Entry], bool]:
     return check
 
 
+#: Attributes holding credentials, ACL assignments or role membership: a raw import may set
+#: them only for administrators (or holders of the configuration right).
+PRIVILEGED_ATTRIBUTES = frozenset(
+    name.lower()
+    for name in (
+        schema.STD_ATTR.USER_PASSWORD,
+        "authPassword",
+        "sambaNTPassword",
+        "sambaLMPassword",
+        "krbPrincipalKey",
+        schema.ATTR.ACL_ENTRY,
+        schema.ATTR.ACL_TEMPLATE,
+        schema.STD_ATTR.ROLE_OCCUPANT,
+    )
+)
+_PRIVILEGED_CLASSES = frozenset(c.lower() for c in (schema.OC.ACL_ROLE, schema.OC.ACL_ASSIGNMENT))
+
+
+def privileged_content(entry: Entry) -> str | None:
+    """Why a record may only be imported by an administrator (``None``: it may)."""
+    for name in entry.attrs:
+        if name.lower() in PRIVILEGED_ATTRIBUTES:
+            return f"Setting {name} (password hash, ACL or role membership) needs an administrator"
+    for name, values in entry.attrs.items():
+        if name.lower() == "objectclass" and any(
+            v.decode("utf-8", "replace").lower() in _PRIVILEGED_CLASSES for v in values
+        ):
+            return "ACL and role entries can only be imported by an administrator"
+    return None
+
+
 def _by_name(entry: Entry) -> dict[str, tuple[str, list[bytes]]]:
     return {name.lower(): (name, list(values)) for name, values in entry.attrs.items()}
 
@@ -96,12 +127,14 @@ def run_import(
     allowed: Callable[[str], bool],
     apply: bool,
     protected: Callable[[Entry], bool] | None = None,
+    restricted: Callable[[Entry], str | None] | None = None,
 ) -> list[EntryResult]:
     """Process ``entries`` in order; with ``apply`` false nothing is written (dry run).
 
     A record whose parent is neither in the directory nor an earlier record is an error.
     Failures never stop the run: every record gets a result. ``protected`` marks the
-    entries a raw import must never write (the new record, or the entry it would change).
+    entries a raw import must never write (the new record, or the entry it would change);
+    ``restricted`` returns the reason a record carries content the caller may not set.
     """
     results: list[EntryResult] = []
     planned: set[str] = set()
@@ -115,8 +148,21 @@ def run_import(
         if not allowed(entry.dn):
             result.error = "You are not allowed to import entries here"
             continue
+        if restricted is not None and (reason := restricted(entry)):
+            result.error = reason
+            continue
         try:
             existing = directory.get(entry.dn)
+            if (
+                restricted is not None
+                and existing is not None
+                and options.remove_missing
+                and restricted(existing)
+            ):
+                result.error = (
+                    "This entry holds credentials or ACLs that only an administrator may remove"
+                )
+                continue
             if protected is not None and (
                 protected(entry) or (existing is not None and protected(existing))
             ):
