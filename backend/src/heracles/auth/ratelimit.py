@@ -1,4 +1,4 @@
-"""In-memory login rate limiter with exponential backoff."""
+"""Login rate limiting with exponential backoff (in-memory; see ``ratelimit_db`` for shared)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,23 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
+
+
+class LoginLimiter(Protocol):
+    """What the login flow needs from a rate limiter (per-process or shared)."""
+
+    def key(self, ip: str, login: str) -> str:
+        """The throttling key of an attempt."""
+        ...
+
+    def retry_after(self, key: str) -> float:
+        """Seconds the caller must wait (0 when allowed)."""
+        ...
+
+    def record_failure(self, key: str) -> None: ...
+
+    def record_success(self, key: str) -> None: ...
 
 
 @dataclass(slots=True)

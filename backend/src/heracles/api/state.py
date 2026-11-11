@@ -10,7 +10,7 @@ from heracles.api.settings import ApiSettings
 from heracles.auth.login import IPNetwork, LoginConfig
 from heracles.auth.mail import Mailer
 from heracles.auth.passwords import PasswordPolicy
-from heracles.auth.ratelimit import RateLimiter
+from heracles.auth.ratelimit import LoginLimiter
 from heracles.auth.recovery import RecoveryService
 from heracles.auth.second_factor import SecondFactorService
 from heracles.auth.sessions import Session, SessionStore
@@ -27,7 +27,7 @@ class AppState:
     settings: ApiSettings
     directories: dict[str, DirectoryClient]
     sessions: SessionStore
-    limiter: RateLimiter
+    limiter: LoginLimiter
     second_factor: SecondFactorService
     webauthn: WebAuthnService
     recovery: RecoveryService
