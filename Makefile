@@ -10,6 +10,7 @@ COMPOSE  := docker compose -f deploy/docker-compose.yml
 HOST ?= 127.0.0.1
 PORT ?= 8420
 UI_PORT ?= 5173
+DNS_PORT ?= 15353
 CONFIG ?= $(HERACLES_CONFIG)
 
 .PHONY: help install install-backend install-frontend \
@@ -36,10 +37,11 @@ install-frontend: ## Install frontend dependencies (pnpm)
 
 # ------------------------------------------------------------------- run
 
-dev: ## Whole stack: OpenLDAP + API containers, Vite dev server on the host
-	@echo "→ API http://$(HOST):$(PORT) (container, real LDAP) · UI http://localhost:$(UI_PORT) · login alice / alice-secret"
+dev: ## Whole stack: OpenLDAP + API + DNS containers, Vite dev server on the host
+	@echo "→ API http://$(HOST):$(PORT) (container, real LDAP) · DNS 127.0.0.1:$(DNS_PORT) · UI http://localhost:$(UI_PORT) · login alice / alice-secret"
+	@echo "  DNS zones of the directory: dig @127.0.0.1 -p $(DNS_PORT) www.heracles.test"
 	@echo "  the containers stay up after this exits; stop them with \`make dev-down\`"
-	$(COMPOSE) --profile dev up -d --build --wait heracles
+	$(COMPOSE) --profile dev up -d --build --wait
 	@trap 'kill 0' INT TERM EXIT; \
 	  (cd $(FRONTEND) && VITE_API_MOCK=false HERACLES_API_URL=http://$(HOST):$(PORT) \
 	      pnpm exec vite --port $(UI_PORT)) & \

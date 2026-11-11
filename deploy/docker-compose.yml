@@ -78,6 +78,12 @@ services:
     depends_on:
       ldap:
         condition: service_healthy
+    # The image's healthcheck asks the HTTP API, which this container does not serve.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import dns.message, dns.query; dns.query.udp(dns.message.make_query('localhost', 'A'), '127.0.0.1', port=5353, timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 
 volumes:
   ldap-data:

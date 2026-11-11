@@ -13,7 +13,7 @@ Status: early development.
 
 ```bash
 make install   # backend (uv) + frontend (pnpm) dependencies
-make dev       # whole stack: OpenLDAP + API containers, UI on http://localhost:5173
+make dev       # whole stack: OpenLDAP + API + DNS containers, UI on http://localhost:5173
 ```
 
 Log in with `alice` / `alice-secret` (real OpenLDAP container, seed in
@@ -41,7 +41,9 @@ recovery tokens, second factors) lives in the SQLite application database, so
 
 The zones stored by the DNS plugin can be served authoritatively: `make dns-demo`
 answers for the demo zone on port 5353 (`dig @127.0.0.1 -p 5353 www.heracles.test`),
-and the `dns` service of the compose stack publishes the test directory's zones
-on port 15353.
+and `make dev` starts the compose stack's `dns` service with the seed zone
+`heracles.test` on port 15353 (`dig @127.0.0.1 -p 15353 www.heracles.test`).
+An existing LDAP volume predates that seed: drop it with
+`docker compose -f deploy/docker-compose.yml down -v` to load it.
 
 Heracles works on directories that provide its compatibility LDAP schema.

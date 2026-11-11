@@ -68,3 +68,65 @@ cn: staff
 member: uid=alice,ou=people,dc=heracles,dc=test
 member: uid=bob,ou=people,dc=heracles,dc=test
 member: uid=carol,ou=people,dc=heracles,dc=test
+
+# DNS plugin: one forward zone and its reverse zone, served by the `dns`
+# container of the dev stack (`dig @127.0.0.1 -p 15353 www.heracles.test`).
+
+dn: ou=dns,dc=heracles,dc=test
+objectClass: organizationalUnit
+ou: dns
+
+dn: zoneName=heracles.test,ou=dns,dc=heracles,dc=test
+objectClass: top
+objectClass: dNSZone
+zoneName: heracles.test
+relativeDomainName: @
+dNSTTL: 3600
+sOARecord: ns1.heracles.test. hostmaster.heracles.test. 2026111101 3600 900 604800 3600
+nSRecord: ns1.heracles.test.
+mXRecord: 10 mail.heracles.test.
+tXTRecord: v=spf1 -all
+
+dn: relativeDomainName=ns1,zoneName=heracles.test,ou=dns,dc=heracles,dc=test
+objectClass: top
+objectClass: dNSZone
+zoneName: heracles.test
+relativeDomainName: ns1
+aRecord: 10.0.0.2
+
+dn: relativeDomainName=www,zoneName=heracles.test,ou=dns,dc=heracles,dc=test
+objectClass: top
+objectClass: dNSZone
+zoneName: heracles.test
+relativeDomainName: www
+aRecord: 10.0.0.10
+
+dn: relativeDomainName=mail,zoneName=heracles.test,ou=dns,dc=heracles,dc=test
+objectClass: top
+objectClass: dNSZone
+zoneName: heracles.test
+relativeDomainName: mail
+aRecord: 10.0.0.20
+
+dn: relativeDomainName=alias,zoneName=heracles.test,ou=dns,dc=heracles,dc=test
+objectClass: top
+objectClass: dNSZone
+zoneName: heracles.test
+relativeDomainName: alias
+cNAMERecord: www.heracles.test.
+
+dn: zoneName=2.0.192.in-addr.arpa,zoneName=heracles.test,ou=dns,dc=heracles,dc=test
+objectClass: top
+objectClass: dNSZone
+zoneName: 2.0.192.in-addr.arpa
+relativeDomainName: @
+dNSTTL: 3600
+sOARecord: ns1.heracles.test. hostmaster.heracles.test. 2026111101 3600 900 604800 3600
+nSRecord: ns1.heracles.test.
+
+dn: relativeDomainName=10,zoneName=2.0.192.in-addr.arpa,zoneName=heracles.test,ou=dns,dc=heracles,dc=test
+objectClass: top
+objectClass: dNSZone
+zoneName: 2.0.192.in-addr.arpa
+relativeDomainName: 10
+pTRRecord: www.heracles.test.
