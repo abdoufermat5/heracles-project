@@ -217,6 +217,7 @@ export interface TabDescriptor {
   name: string
   label: string
   optional: boolean
+  description?: string
   sections: SectionDescriptor[]
 }
 

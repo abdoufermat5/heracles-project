@@ -17,7 +17,7 @@ import {
   useTypeDescriptor,
   useTypes,
 } from '@/api/hooks'
-import type { LockInfo, ObjectDetail, TypeDescriptor } from '@/api/types'
+import type { LockInfo, ObjectDetail, TabDescriptor, TypeDescriptor } from '@/api/types'
 import { showTriggerOutput } from '@/features/editor/triggerOutput'
 import {
   AlertDialog,
@@ -419,6 +419,21 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
     }
   }
 
+  const setTabActive = (tb: TabDescriptor, v: boolean) => {
+    if (v) {
+      for (const a of allAttributes(tb)) {
+        const key = `${tb.name}.${a.name}` as never
+        const cur = form.getValues(key) as unknown
+        if (cur === null || cur === undefined || cur === '' || (Array.isArray(cur) && cur.length === 0))
+          form.setValue(key, defaultValue(a) as never)
+      }
+    }
+    setActive((a) => ({ ...a, [tb.name]: v }))
+  }
+  const newTabs = new Set(
+    isCreate ? [] : Object.keys(active).filter((n) => active[n] && !baseline.current.active[n]),
+  )
+
   const extraPanel =
     tab === REFERENCES_TAB || tab === SNAPSHOTS_TAB || (tab === SECOND_FACTORS_TAB && showSecondFactors)
       ? tab
@@ -497,6 +512,12 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
           errorsByTab={errorsByTab}
           dirtyTabs={dirtyTabs}
           extras={extras}
+          newTabs={newTabs}
+          canChangeCapabilities={!!editing && (isCreate || !detail || (detail.acl[desc.tabs[0]?.name ?? 'main']?.object ?? 'rw').includes('m'))}
+          onSetTabActive={(name, v) => {
+            const tb = desc.tabs.find((x) => x.name === name)
+            if (tb) setTabActive(tb, v)
+          }}
         />
 
         <div
@@ -522,17 +543,7 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
               <Switch
                 checked={isCurrentTabActive}
                 disabled={!canToggleCurrentTab}
-                onCheckedChange={(v) => {
-                  if (v) {
-                    for (const a of allAttributes(currentTabObj)) {
-                      const key = `${currentTabObj.name}.${a.name}` as never
-                      const cur = form.getValues(key) as unknown
-                      if (cur === null || cur === undefined || cur === '' || (Array.isArray(cur) && cur.length === 0))
-                        form.setValue(key, defaultValue(a) as never)
-                    }
-                  }
-                  setActive((a) => ({ ...a, [currentTabObj.name]: v }))
-                }}
+                onCheckedChange={(v) => setTabActive(currentTabObj, v)}
                 aria-label={t('editor.enableTab', { tab: currentTabObj.label })}
               />
             </div>

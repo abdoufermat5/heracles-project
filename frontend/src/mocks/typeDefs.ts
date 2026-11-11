@@ -130,6 +130,7 @@ export const typeDescriptors: TypeDescriptor[] = [
         name: 'posix',
         label: 'POSIX account',
         optional: true,
+        description: 'Unix account: UID, home directory, shell',
         sections: [
           {
             name: 'posix',
