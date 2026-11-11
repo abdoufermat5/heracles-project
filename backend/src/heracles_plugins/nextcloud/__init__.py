@@ -59,6 +59,7 @@ class NextcloudAccountTab(Tab):
     name = "nextcloud"
     acl_key = "nextcloudAccount"
     label = _("Nextcloud")
+    description = _("File sharing and sync account")
     optional = True
     object_classes = ("hrcNextCloudAccount",)
 

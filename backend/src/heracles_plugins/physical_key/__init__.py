@@ -47,6 +47,7 @@ class PhysicalKeyAccountTab(Tab):
     name = "physical_key"
     acl_key = "PhysicalKeyAccount"
     label = _("Physical key")
+    description = _("Hardware security key or badge identifiers")
     optional = True
     object_classes = ("hrcPhysicalKey",)
 

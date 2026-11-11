@@ -231,6 +231,7 @@ class PersonalTab(Tab):
 
     name = "personal"
     label = _("Personal")
+    description = _("Personal details: private contact data and preferences")
     acl_key = "personalInfo"
     optional = True
     object_classes = ("hrcPersonalInfo",)

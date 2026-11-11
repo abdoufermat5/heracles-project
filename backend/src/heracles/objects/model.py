@@ -57,6 +57,8 @@ class Tab:
 
     name: ClassVar[str] = ""
     label: ClassVar[str] = ""
+    #: One-line explanation shown when the tab is offered as an optional capability.
+    description: ClassVar[str] = ""
     object_classes: ClassVar[Sequence[str]] = ()
     optional: ClassVar[bool] = False
     requires: ClassVar[Sequence[str]] = ()
@@ -132,6 +134,7 @@ class Tab:
             "name": cls.name,
             "label": cls.display_label(),
             "optional": cls.optional,
+            "description": cls.description,
             "sections": [s.describe() for s in cls.sections],
         }
 

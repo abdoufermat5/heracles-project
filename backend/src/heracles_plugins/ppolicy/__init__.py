@@ -227,6 +227,7 @@ class PpolicyAccountTab(Tab):
     name = "ppolicy"
     acl_key = "ppolicyAccount"
     label = _("Password policy")
+    description = _("Password policy applied to this account")
     object_classes = ()
     # Always active: it has no objectClass of its own, so it is never deactivated.
     optional = False

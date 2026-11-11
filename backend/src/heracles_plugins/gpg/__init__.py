@@ -70,6 +70,7 @@ class GpgAccountTab(Tab):
     name = "gpg"
     acl_key = "gpgAccount"
     label = _("GPG")
+    description = _("OpenPGP key and key server settings")
     optional = True
     object_classes = ("hrcGpgAccount",)
 

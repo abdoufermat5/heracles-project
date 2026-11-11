@@ -101,6 +101,7 @@ class EjbcaCertificatesTab(Tab):
     name = "ejbca"
     acl_key = "ejbcaCertificates"
     label = _("PKI certificates")
+    description = _("Certificates issued by the certificate authority")
     optional = True
     object_classes = ("hrcEjbcaCertificates",)
 

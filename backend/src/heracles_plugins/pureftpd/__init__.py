@@ -34,6 +34,7 @@ class PureFtpdAccountTab(Tab):
     name = "pureftpd"
     acl_key = "pureftpdAccount"
     label = _("Pure-FTPd")
+    description = _("FTP account: home, quotas and bandwidth limits")
     optional = True
     object_classes = ("PureFTPdUser",)
 

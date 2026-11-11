@@ -206,6 +206,7 @@ class PosixAccountTab(Tab):
     name = "posix"
     acl_key = "posixAccount"
     label = _("Unix")
+    description = _("Unix account: UID, home directory, shell")
     optional = True
     object_classes = ("posixAccount", "shadowAccount")
 

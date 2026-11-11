@@ -130,6 +130,7 @@ class SpamAssassinUserTab(Tab):
     name = "spamassassin"
     acl_key = "spamAssassinAccount"
     label = _("SpamAssassin")
+    description = _("Spam filtering settings")
     description = _("User SpamAssassin spam filter settings")
     optional = True
     object_classes = ("hrcSpamAssassinUser",)

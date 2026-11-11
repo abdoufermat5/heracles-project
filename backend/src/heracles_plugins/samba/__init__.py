@@ -226,6 +226,7 @@ class SambaUserTab(Tab):
     name = "samba"
     acl_key = "sambaAccount"
     label = _("Samba")
+    description = _("Windows network account: SID, home share, logon script")
     optional = True
     object_classes = ("sambaSamAccount",)
 

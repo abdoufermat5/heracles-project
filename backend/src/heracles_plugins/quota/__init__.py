@@ -76,6 +76,7 @@ class QuotaAccountTab(Tab):
     name = "quota"
     acl_key = "quotaAccount"
     label = _("Quotas")
+    description = _("Disk usage limits for this account")
     optional = True
     object_classes = ("systemQuotas",)
     requires = ("posix",)
