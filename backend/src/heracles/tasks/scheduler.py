@@ -26,10 +26,12 @@ from typing import Any, cast
 import structlog
 
 from heracles.auth.mail import Mailer
+from heracles.core.audit import AuditSink
 from heracles.ldap.client import DirectoryClient
 from heracles.objects.registry import TypeRegistry
 from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles.storage import Database
+from heracles.tasks.auditing import DEFAULT_HIDDEN, AuditingDirectory
 
 __all__ = [
     "LEASE_NAME",
@@ -307,8 +309,15 @@ class Scheduler:
                 runner=runner.name,
                 kind=runner.kind,
             )
+        audit_settings: Any = registry.settings.get("audit")
         ctx = TaskRunContext(
-            directory=directory,
+            # the runner's writes are recorded in the audit log (no-op without the plugin)
+            directory=AuditingDirectory(
+                directory,
+                AuditSink(registry),
+                source=f"task {runner.name}",
+                hidden_attributes=getattr(audit_settings, "hidden_attributes", DEFAULT_HIDDEN),
+            ),
             now=started,
             settings=registry.settings.get(plugin_name),
             mailer=self.mailer,

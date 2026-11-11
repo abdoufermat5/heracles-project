@@ -148,9 +148,13 @@ class Labels:
 
 
 def _login_note(event: Event) -> str:
+    """Label of an event without author: the attempted login, or the writing task."""
     for line in event.attributes:
         if line.startswith("login: "):
             return line[len("login: ") :]
+    for line in event.attributes:
+        if line.startswith("source: "):
+            return line[len("source: ") :]
     return ""
 
 
