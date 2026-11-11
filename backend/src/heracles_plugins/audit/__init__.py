@@ -8,15 +8,14 @@ Provides:
 * the read-only ``auditSecurity`` tab on users listing the events concerning them;
 * :class:`AuditEvents`, an ``ObjectEvents`` implementation writing the events.
 
-Integration notes for the framework owners:
+Integration notes:
 
 * Events: ``Domain.service`` builds ``ObjectService(directory, registry, policy=policy)``
   for each request. Pass ``events=AuditEvents(user.directory, author_dn=user.dn,
   author_ip=<client address>, settings=registry.settings["audit"])`` there (and, to keep
   other hooks, wrap several ``ObjectEvents`` in one object calling each in turn).
-* Scheduler / CLI: ``run_audit(directory, datetime.now(UTC), registry.settings["audit"])``,
-  hourly or daily. Bind a ``logging.handlers.SysLogHandler`` to the ``heracles.audit`` logger
-  to get the syslog forwarding.
+* The scheduler (``heracles worker``) runs the purge/forwarding tasks; the ``audit.syslog``
+  configuration binds a ``SysLogHandler`` to the ``heracles.audit`` logger.
 """
 
 from __future__ import annotations
@@ -34,6 +33,7 @@ from heracles.i18n import _
 from heracles.objects import ObjectType, Plugin, Section, Tab, TabAttachment
 from heracles.objects.hooks import TabContext
 from heracles.objects.registry import EventsContext
+from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles_plugins._tasks import TaskObjectType, TaskTab
 from heracles_plugins.audit.events import (
     AUDIT_RDN,
@@ -190,7 +190,13 @@ def plugin() -> Plugin:
         required_object_classes=(EVENT_CLASS,),
         settings=AuditSettings(),
         object_events=(_audit_events,),
+        task_runners=(TaskRunner(PLUGIN_NAME, _run, kind=AuditTask.name),),
     )
+
+
+def _run(ctx: TaskRunContext) -> AuditReport:
+    settings = ctx.settings if isinstance(ctx.settings, AuditSettings) else None
+    return run_audit(ctx.directory, ctx.now, settings)
 
 
 def _audit_events(ctx: EventsContext) -> AuditEvents:

@@ -31,6 +31,9 @@ def _serve(args: argparse.Namespace) -> int:
         # sessions, the login limiter and recovery tokens through the application database.
         if args.config:
             os.environ["HERACLES_CONFIG"] = args.config
+        if args.with_worker:
+            os.environ["HERACLES_WITH_WORKER"] = "1"
+            os.environ["HERACLES_WORKER_INTERVAL"] = str(args.worker_interval)
         uvicorn.run(
             "heracles.server:build_app",
             factory=True,
@@ -40,9 +43,53 @@ def _serve(args: argparse.Namespace) -> int:
             proxy_headers=True,
         )
         return 0
-    app = build_demo_app(args.static) if args.demo else build_app(args.config)
+    if args.demo:
+        app = build_demo_app(args.static)
+        if args.with_worker:
+            from heracles.tasks.wiring import attach_scheduler
+
+            attach_scheduler(app, interval=args.worker_interval)
+    else:
+        os.environ["HERACLES_WORKER_INTERVAL"] = str(args.worker_interval)
+        app = build_app(args.config, with_worker=args.with_worker)
     uvicorn.run(app, host=args.host, port=args.port, proxy_headers=True)
     return 0
+
+
+def _worker(args: argparse.Namespace) -> int:
+    import signal
+    import threading
+
+    from heracles.ldap.config import ConfigError
+    from heracles.tasks import wiring
+
+    if args.interval <= 0:
+        print("heracles worker: --interval must be positive", file=sys.stderr)
+        return 2
+    try:
+        scheduler = wiring.build_worker(args.config)
+    except ConfigError as exc:
+        print(f"heracles worker: {exc}", file=sys.stderr)
+        return 2
+    stop = threading.Event()
+    if not args.once:
+
+        def request_stop(_signum: int, _frame: object) -> None:
+            stop.set()
+
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            signal.signal(sig, request_stop)
+    while True:
+        runs = scheduler.run_pass()
+        if runs is None:
+            print("heracles worker: another worker holds the lease", file=sys.stderr)
+        else:
+            for run in runs:
+                print(
+                    f"{run.directory} {run.runner}: {run.status} ({run.summary})", file=sys.stderr
+                )
+        if args.once or stop.wait(args.interval):
+            return 0
 
 
 def _dns(args: argparse.Namespace) -> int:
@@ -156,7 +203,21 @@ def main(
         default=1,
         help="worker processes (state is shared through the application database)",
     )
+    serve.add_argument(
+        "--with-worker",
+        action="store_true",
+        help="also run the task scheduler in a background thread",
+    )
+    serve.add_argument(
+        "--worker-interval", type=float, default=60.0, help="seconds between scheduler passes"
+    )
     serve.set_defaults(func=_serve)
+
+    worker = sub.add_parser("worker", help="run the scheduled tasks (reminders, audit purge, ...)")
+    worker.add_argument("--config", help="configuration file (default: $HERACLES_CONFIG)")
+    worker.add_argument("--interval", type=float, default=60.0, help="seconds between passes")
+    worker.add_argument("--once", action="store_true", help="run one pass and exit")
+    worker.set_defaults(func=_worker)
 
     dns = sub.add_parser("dns", help="serve the DNS zones stored in the directory")
     source = dns.add_mutually_exclusive_group()

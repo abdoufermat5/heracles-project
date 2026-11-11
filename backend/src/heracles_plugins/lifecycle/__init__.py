@@ -8,8 +8,6 @@ date attribute (POSIX ``shadowExpire`` by default) are plugin settings
 (``registry.settings["lifecycle"]``). Each task chooses the accounts (members, login pattern),
 a grace period in days after the end date and whether to also lock the account.
 
-Integration notes: from the CLI / scheduler call ``run_lifecycle(directory,
-datetime.now(UTC), registry.settings["lifecycle"], lock_hooks=registry.account_lock_hooks)``.
 """
 
 from __future__ import annotations
@@ -20,6 +18,7 @@ from heracles.attributes import BooleanAttr, IntAttr, ListAttr, ObjectRefAttr, S
 from heracles.i18n import _
 from heracles.objects import Plugin, Section
 from heracles.objects.hooks import TabContext
+from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles_plugins._tasks import TaskObjectType, TaskTab
 from heracles_plugins.lifecycle.runner import (
     TASK_CLASS,
@@ -98,6 +97,14 @@ def plugin() -> Plugin:
         types=(LifecycleTask,),
         required_object_classes=("hrcTasks", TASK_CLASS),
         settings=LifecycleSettings(),
+        task_runners=(TaskRunner(PLUGIN_NAME, _run, kind=LifecycleTask.name),),
+    )
+
+
+def _run(ctx: TaskRunContext) -> LifecycleReport:
+    settings = ctx.settings if isinstance(ctx.settings, LifecycleSettings) else None
+    return run_lifecycle(
+        ctx.directory, ctx.now, settings, lock_hooks=ctx.registry.account_lock_hooks
     )
 
 

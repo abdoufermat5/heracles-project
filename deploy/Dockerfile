@@ -45,4 +45,6 @@ USER heracles
 EXPOSE 8420
 HEALTHCHECK --interval=5s --timeout=3s --retries=20 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8420/readyz')"
-CMD ["heracles", "serve", "--host", "0.0.0.0", "--port", "8420"]
+# --with-worker runs the task scheduler (reminders, audit purge, ...) inside the server;
+# several replicas are safe: a lease in the application database serialises the passes.
+CMD ["heracles", "serve", "--host", "0.0.0.0", "--port", "8420", "--with-worker"]

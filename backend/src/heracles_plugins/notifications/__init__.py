@@ -12,8 +12,6 @@ the task; the first run only records them.
 The attributes a task may monitor are ``NotificationsSettings.attributes``
 (``registry.settings["notifications"]``); password attributes are never monitored.
 
-Integration notes: from the CLI / scheduler call ``run_notifications(directory, mailer,
-datetime.now(UTC), registry.settings["notifications"])``.
 """
 
 from __future__ import annotations
@@ -22,6 +20,7 @@ from heracles.attributes import EmailAttr, ListAttr, MultiSelectAttr, ObjectRefA
 from heracles.i18n import _
 from heracles.objects import Plugin, Section
 from heracles.objects.hooks import TabContext
+from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles_plugins._tasks import TaskObjectType, TaskTab
 from heracles_plugins.notifications.runner import (
     FORBIDDEN_ATTRIBUTES,
@@ -109,7 +108,18 @@ def plugin() -> Plugin:
         types=(NotificationsTask,),
         required_object_classes=("hrcTasks", TASK_CLASS),
         settings=NotificationsSettings(),
+        task_runners=(
+            TaskRunner(PLUGIN_NAME, _run, kind=NotificationsTask.name, needs_mailer=True),
+        ),
     )
+
+
+def _run(ctx: TaskRunContext) -> NotificationsReport:
+    settings = ctx.settings if isinstance(ctx.settings, NotificationsSettings) else None
+    mailer = ctx.mailer
+    if mailer is None:
+        raise RuntimeError("no mail server is configured")
+    return run_notifications(ctx.directory, mailer, ctx.now, settings)
 
 
 __all__ = [

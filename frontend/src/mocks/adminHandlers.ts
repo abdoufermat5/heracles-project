@@ -459,6 +459,12 @@ function initialTasks(): TaskRow[] {
       subtasks: { total: 4, done: 3, failed: 1 },
       failed_subtasks: [`cn=sub1,ou=tasks,${BASE_DN}`],
       can_run: true,
+      last_report: {
+        time: '2026-01-02T10:00:01+00:00',
+        status: 'ok',
+        summary: 'events_purged 5',
+        errors: [],
+      },
     },
     {
       dn: `cn=old-reminder,ou=tasks,${BASE_DN}`,
@@ -900,14 +906,48 @@ export const adminHandlers: HttpHandler[] = [
           active: rows.filter((r) => r.status === 'Activated').length,
           failed_subtasks: rows.reduce((n, r) => n + r.subtasks.failed, 0),
         },
+        capabilities: { syslog_configured: false, scheduler_in_process: true, run_history: true },
       })
     }),
+  ),
+  http.get(
+    `${A}/tasks/runs`,
+    guarded(() =>
+      HttpResponse.json({
+        runs: [
+          {
+            id: 2,
+            directory: 'main',
+            runner: 'audit',
+            kind: 'audit_task',
+            started: '2030-01-02T03:04:00+00:00',
+            finished: '2030-01-02T03:04:01+00:00',
+            status: 'ok',
+            counts: { events_purged: 5 },
+            errors: [],
+            summary: 'events_purged 5',
+          },
+          {
+            id: 1,
+            directory: 'main',
+            runner: 'user_reminder',
+            kind: 'reminder_task',
+            started: '2030-01-02T03:04:00+00:00',
+            finished: '2030-01-02T03:04:00+00:00',
+            status: 'skipped',
+            counts: {},
+            errors: ['no mail server is configured: the runner was skipped'],
+            summary: '1 error(s)',
+          },
+        ],
+      }),
+    ),
   ),
   http.post(
     `${A}/tasks/:dn/run`,
     guarded(({ params }) => {
       record('POST', '/tasks/run', dn(params.dn))
-      return HttpResponse.json({ dn: dn(params.dn), queued: true })
+      return HttpResponse.json({ dn: dn(params.dn), queued: false, runs: [] })
     }),
   ),
   http.post(

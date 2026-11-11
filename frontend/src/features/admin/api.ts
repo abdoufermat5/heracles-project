@@ -17,6 +17,8 @@ import type {
   RightsReport,
   RoleInput,
   RoleTemplate,
+  TaskRun,
+  TaskRunOutcome,
   TasksView,
 } from './types'
 
@@ -72,7 +74,9 @@ export const adminApi = {
   tasks: (p: { kind?: string; status?: string } = {}) =>
     request<TasksView>(`${A}/tasks`, { query: { ...p } }),
   runTask: (dn: string) =>
-    request<{ dn: string; queued: boolean }>(`${A}/tasks/${dnPath(dn)}/run`, { method: 'POST' }),
+    request<TaskRunOutcome>(`${A}/tasks/${dnPath(dn)}/run`, { method: 'POST' }),
+  taskRuns: (limit = 30) =>
+    request<{ runs: TaskRun[] }>(`${A}/tasks/runs`, { query: { limit } }),
   retryTask: (dn: string) =>
     request<{ dn: string; retried: string[] }>(`${A}/tasks/${dnPath(dn)}/retry`, {
       method: 'POST',

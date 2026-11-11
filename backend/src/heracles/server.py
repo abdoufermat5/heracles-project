@@ -36,6 +36,7 @@ from heracles.api.settings import ApiSettings, PluginsSettings
 from heracles.api.v2 import directory as directory_routes
 from heracles.api.v2 import objects as object_routes
 from heracles.attributes import set_default_password_checker, set_default_password_hasher
+from heracles.auth.mail import Mailer, MailSettings
 from heracles.auth.sessions import Session
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient
@@ -45,6 +46,7 @@ from heracles.objects.activation import LOCKED_PLUGINS, PluginManager, PluginOve
 from heracles.objects.builtin import register_builtin_types
 from heracles.objects.registry import PluginRouterContext, discover_plugins
 from heracles.storage import Database
+from heracles.tasks.syslog import configure_audit_syslog
 
 __all__ = ["build_app", "build_demo_app", "create_full_app"]
 
@@ -55,6 +57,7 @@ def create_full_app(
     *,
     registry: TypeRegistry | None = None,
     load_plugins: bool = True,
+    mailer: Mailer | None = None,
 ) -> FastAPI:
     """Wire domain services and object routers on top of :func:`create_app`."""
     manager: PluginManager | None = None
@@ -102,6 +105,7 @@ def create_full_app(
     app = create_app(
         settings,
         directories,
+        mailer=mailer,
         is_admin=is_admin,
         logout_hooks=[release_locks],
         # plugin routers first: their specific paths must win over the catch-all object routes
@@ -153,7 +157,7 @@ def _plugin_routers(
     return public, api
 
 
-def _read_config(path: Path) -> Mapping[str, Any]:
+def read_config(path: Path) -> Mapping[str, Any]:
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".toml":
         return tomllib.loads(text)
@@ -163,13 +167,15 @@ def _read_config(path: Path) -> Mapping[str, Any]:
     return cast("dict[str, Any]", loaded)
 
 
-def build_app(config_path: str | os.PathLike[str] | None = None) -> FastAPI:
-    """Production application from the configuration file."""
+def load_config(
+    config_path: str | os.PathLike[str] | None = None,
+) -> tuple[Mapping[str, Any], ApiSettings, dict[str, DirectoryClient]]:
+    """The raw configuration, the API settings and the directories it describes."""
     from heracles.ldap.pyldap import PyLdapDirectory
 
     path_text = config_path or os.environ.get("HERACLES_CONFIG")
     ldap_settings = load_settings(path_text)
-    raw: Mapping[str, Any] = _read_config(Path(path_text)) if path_text else {}
+    raw: Mapping[str, Any] = read_config(Path(path_text)) if path_text else {}
     api_settings = ApiSettings.model_validate(raw.get("api", {}))
     directories: dict[str, DirectoryClient] = {
         cfg.id: PyLdapDirectory(cfg) for cfg in ldap_settings.directories
@@ -181,7 +187,29 @@ def build_app(config_path: str | os.PathLike[str] | None = None) -> FastAPI:
         api_settings.plugins = PluginsSettings.model_validate(raw["plugins"])
     if not api_settings.directory_labels:
         api_settings.directory_labels = {cfg.id: cfg.label for cfg in ldap_settings.directories}
-    return create_full_app(api_settings, directories)
+    return raw, api_settings, directories
+
+
+def build_app(
+    config_path: str | os.PathLike[str] | None = None, *, with_worker: bool | None = None
+) -> FastAPI:
+    """Production application from the configuration file.
+
+    With ``with_worker`` (default: ``$HERACLES_WITH_WORKER`` is set) the task scheduler runs
+    in a background thread of this process.
+    """
+    from heracles.tasks.wiring import attach_scheduler
+
+    raw, api_settings, directories = load_config(config_path)
+    mailer = MailSettings.model_validate(raw.get("mail") or {}).build()
+    configure_audit_syslog(raw.get("audit"))
+    app = create_full_app(api_settings, directories, mailer=mailer)
+    if with_worker is None:
+        with_worker = bool(os.environ.get("HERACLES_WITH_WORKER"))
+    if with_worker:
+        interval = float(os.environ.get("HERACLES_WORKER_INTERVAL", "60"))
+        attach_scheduler(app, mailer=mailer, interval=interval, start=True)
+    return app
 
 
 def build_demo_app(static_dir: str | os.PathLike[str] | None = None) -> FastAPI:

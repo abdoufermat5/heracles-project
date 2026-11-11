@@ -30,3 +30,19 @@ api:
 # over this list).
 plugins:
   enabled: [posix, ssh, sudo, mail, audit, acl_admin, ppolicy, dns, systems, archive]
+
+# Outgoing mail (password recovery, reminder/notification/extractor tasks). Without a host,
+# the tasks that send mail are skipped and reported as such.
+# mail:
+#   host: smtp.example.org
+#   port: 587
+#   sender: heracles@example.org
+#   starttls: true
+#   username: heracles
+#   password: secret
+#
+# Forward the audit events recorded by the audit tasks to syslog.
+# audit:
+#   syslog:
+#     address: "logs.example.org:514"   # or a socket path such as /dev/log
+#     facility: local0

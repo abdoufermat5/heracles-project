@@ -3,13 +3,10 @@
 Provides the ``reminder_task`` and ``mail_template`` object types, the pure
 runner :func:`run_reminders` and the unauthenticated prolongation endpoint.
 
-Integration notes for the framework owners:
+Integration notes:
 
-* CLI / scheduler: build a ``DirectoryClient`` and a ``Mailer`` and call
-  ``run_reminders(directory, mailer, datetime.now(UTC), base_url,
-  registry.settings["user_reminder"])``; the returned ``RunReport`` lists what
-  was sent. Run it periodically (hourly is enough; each task keeps its own
-  next execution date).
+* The scheduler (``heracles worker``) runs :func:`run_reminders` through the registered runner
+  (it needs a configured mail server and the console's public address).
 * Prolongation endpoint: ``build_prolong_router(get_directory, settings)`` returns
   a router serving ``POST /api/v2/reminder/prolong``. It must be included on
   the application itself (``app.include_router``), not in the session and CSRF
@@ -37,6 +34,7 @@ from heracles.ldap import dn as dnlib
 from heracles.objects import ObjectType, Plugin, Section, Tab
 from heracles.objects.hooks import TabContext
 from heracles.objects.registry import PluginRouterContext
+from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles_plugins._tasks import NAME_RE, TaskObjectType, TaskTab
 from heracles_plugins.user_reminder.prolong import (
     ProlongError,
@@ -199,7 +197,15 @@ def plugin() -> Plugin:
         required_object_classes=("hrcTasks", "hrcTasksReminder"),
         settings=UserReminderSettings(),
         public_routers=(_prolong_router,),
+        task_runners=(TaskRunner(PLUGIN_NAME, _run, kind=ReminderTask.name, needs_mailer=True),),
     )
+
+
+def _run(ctx: TaskRunContext) -> RunReport:
+    mailer = ctx.mailer
+    if mailer is None:
+        raise RuntimeError("no mail server is configured")
+    return run_reminders(ctx.directory, mailer, ctx.now, ctx.base_url, ctx.settings)
 
 
 def _prolong_router(ctx: PluginRouterContext) -> APIRouter:

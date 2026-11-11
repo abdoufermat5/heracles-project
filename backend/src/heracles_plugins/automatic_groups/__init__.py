@@ -8,8 +8,6 @@ attribute matches a regular expression (``[attribute:]regex``, the attribute def
 the login) and adds them to the chosen group. For a dynamic group, users of the task that no
 longer match are removed too. The group may be a ``groupOfNames`` or a POSIX group.
 
-Integration notes: from the CLI / scheduler call ``run_automatic_groups(directory,
-datetime.now(UTC), registry.settings["automatic_groups"])``.
 """
 
 from __future__ import annotations
@@ -20,6 +18,7 @@ from heracles.attributes import BooleanAttr, ListAttr, ObjectRefAttr, StringAttr
 from heracles.i18n import _
 from heracles.objects import Plugin, Section
 from heracles.objects.hooks import TabContext
+from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles_plugins._tasks import TaskObjectType, TaskTab
 from heracles_plugins.automatic_groups.runner import (
     TASK_CLASS,
@@ -105,7 +104,13 @@ def plugin() -> Plugin:
         types=(AutomaticGroupsTask,),
         required_object_classes=("hrcTasks", TASK_CLASS),
         settings=AutomaticGroupsSettings(),
+        task_runners=(TaskRunner(PLUGIN_NAME, _run, kind=AutomaticGroupsTask.name),),
     )
+
+
+def _run(ctx: TaskRunContext) -> AutomaticGroupsReport:
+    settings = ctx.settings if isinstance(ctx.settings, AutomaticGroupsSettings) else None
+    return run_automatic_groups(ctx.directory, ctx.now, settings)
 
 
 __all__ = [
