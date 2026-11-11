@@ -19,6 +19,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from heracles.api.errors import error_body
 from heracles.api.settings import ApiSettings
 from heracles.api.state import AppState
+from heracles.auth.login import IPNetwork, is_trusted_proxy
 from heracles.auth.sessions import Session
 
 if TYPE_CHECKING:
@@ -50,7 +51,23 @@ SECURITY_HEADERS = {
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "X-Frame-Options": "DENY",
     "Cross-Origin-Opener-Policy": "same-origin",
+    "Permissions-Policy": (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
+        "publickey-credentials-get=(self), publickey-credentials-create=(self)"
+    ),
 }
+
+HSTS = "max-age=31536000; includeSubDomains"
+
+
+def is_https(request: Request, trusted_proxies: list[IPNetwork]) -> bool:
+    """Whether the client reached us over HTTPS (directly, or through a trusted proxy)."""
+    if request.url.scheme == "https":
+        return True
+    peer = request.client.host if request.client else ""
+    if peer and is_trusted_proxy(peer, trusted_proxies):
+        return request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower() == "https"
+    return False
 
 
 TOO_LARGE = "The request body is too large"
@@ -191,6 +208,9 @@ def install_middleware(app: FastAPI) -> None:
         response.headers[REQUEST_ID_HEADER] = request_id
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
+        app_state: AppState | None = getattr(request.app.state, "heracles", None)
+        if app_state is not None and is_https(request, app_state.trusted_proxies):
+            response.headers.setdefault("Strict-Transport-Security", HSTS)
         if request.url.path.startswith("/api/"):
             response.headers.setdefault("Cache-Control", "no-store")
         log.info(
