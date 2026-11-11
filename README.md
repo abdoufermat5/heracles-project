@@ -30,6 +30,7 @@ Other useful targets (`make help` lists them all):
 | `make demo` | build the UI and serve everything from the demo backend |
 | `make dev-mock` | UI only, with the in-browser mock API |
 | `make test` / `make check` | tests / lint + types + tests |
+| `make bench USERS=5000` | latency and LDAP round trips per API endpoint on a large demo directory |
 | `make ldap-up` | start the test OpenLDAP server (port 1389) |
 | `make serve CONFIG=heracles.yaml` | run against a real directory |
 

@@ -15,7 +15,7 @@ CONFIG ?= $(HERACLES_CONFIG)
 .PHONY: help install install-backend install-frontend \
         dev dev-demo dev-down dev-mock backend frontend demo build serve \
         test test-backend test-frontend lint lint-backend lint-frontend \
-        format typecheck check ldap-up ldap-down ldap-logs test-integration e2e e2e-ui e2e-down compat-schema clean
+        format typecheck check bench ldap-up ldap-down ldap-logs test-integration e2e e2e-ui e2e-down compat-schema clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "; printf "\nUsage: make \033[36m<target>\033[0m\n\n"} \
@@ -107,6 +107,9 @@ typecheck: ## pyright (strict) + tsc
 	cd $(FRONTEND) && pnpm exec tsc -b
 
 check: lint-backend typecheck test ## Everything CI runs (except frontend lint)
+
+bench: ## API latency and LDAP round trips per endpoint on a large demo directory (USERS=5000)
+	cd $(BACKEND) && uv run python scripts/bench.py --users $(or $(USERS),5000)
 
 # ------------------------------------------------------------ test LDAP
 
