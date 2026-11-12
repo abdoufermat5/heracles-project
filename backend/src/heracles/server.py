@@ -173,14 +173,14 @@ def read_config(path: Path) -> Mapping[str, Any]:
 def warn_about_config(raw: Mapping[str, Any], settings: ApiSettings) -> None:
     """Startup warnings about options that are removed or leave the server exposed."""
     api_raw = raw.get("api")
-    api_keys = api_raw if isinstance(api_raw, dict) else {}
+    api_keys: dict[str, Any] = cast("dict[str, Any]", api_raw) if isinstance(api_raw, dict) else {}
     if "oidc" in raw or "oidc" in api_keys:
         log.warning(
             "config_oidc_ignored",
             detail="OpenID Connect login was removed; the oidc key is ignored",
         )
     sso_raw = api_keys.get("sso")
-    sso_keys = sso_raw if isinstance(sso_raw, dict) else {}
+    sso_keys: dict[str, Any] = cast("dict[str, Any]", sso_raw) if isinstance(sso_raw, dict) else {}
     has_public_url = bool(settings.sso.cas_service_name or sso_keys.get("cas_service_name"))
     if not has_public_url:
         log.warning(

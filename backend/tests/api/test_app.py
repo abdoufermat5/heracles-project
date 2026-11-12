@@ -141,6 +141,7 @@ def test_hsts_only_over_https_and_permissions_policy(env: Env) -> None:
     secure = TestClient(env.client.app, base_url="https://testserver").get("/healthz")
     assert secure.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
     # a forwarded scheme counts only from a trusted proxy
-    assert "strict-transport-security" not in plain_client.get(
-        "/healthz", headers={"X-Forwarded-Proto": "https"}
-    ).headers
+    assert (
+        "strict-transport-security"
+        not in plain_client.get("/healthz", headers={"X-Forwarded-Proto": "https"}).headers
+    )
