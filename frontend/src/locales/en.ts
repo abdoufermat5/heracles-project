@@ -11,6 +11,7 @@ import { setupEn } from '@/features/setup/locale-en'
 import { onboardingEn } from '@/features/onboarding/locale-en'
 import { auditEn } from '@/features/audit/locale-en'
 import { meEn } from '@/features/me/locale-en'
+import { publicFormsEn } from '@/features/public/locale-en'
 
 const en = {
   common: {
@@ -418,6 +419,7 @@ const en = {
   ...setupEn,
   ...onboardingEn,
   ...meEn,
+  ...publicFormsEn,
   // --- P3 compat ---
   io: {
     title: 'Import / export',

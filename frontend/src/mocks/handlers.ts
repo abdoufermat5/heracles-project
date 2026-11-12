@@ -5,6 +5,7 @@ import { BASE_DN, db } from './db'
 import { adminHandlers } from './adminHandlers'
 import { auditHandlers } from './auditHandlers'
 import { ioHandlers } from './io'
+import { publicHandlers } from './publicHandlers'
 import { attributesOf, FilterSyntaxError, ldapMatches, parseLdapFilter } from './ldapFilter'
 import { typeSummaries } from './typeDefs'
 
@@ -704,4 +705,5 @@ export const handlers: HttpHandler[] = [
   ...auditHandlers,
   // --- P3 compat ---
   ...ioHandlers,
+  ...publicHandlers,
 ]

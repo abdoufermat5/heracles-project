@@ -28,6 +28,7 @@ import { parseListSearch, type ListSearch } from '@/features/listing/urlState'
 // Pages are split out of the entry bundle: the router loads a page's chunk before
 // rendering its route, and on link intent (`defaultPreload`).
 const SetupPage = lazyRouteComponent(() => import('@/features/setup/SetupWizard'), 'SetupPage')
+const PublicFormPage = lazyRouteComponent(() => import('@/features/public/PublicFormPage'), 'PublicFormPage')
 const authPages = () => import('@/features/auth/AuthPages')
 const LoginPage = lazyRouteComponent(authPages, 'LoginPage')
 const SecondFactorPage = lazyRouteComponent(authPages, 'SecondFactorPage')
@@ -109,6 +110,16 @@ const loginRoute = createRoute({
     sso_error: s.sso_error === undefined ? undefined : String(s.sso_error),
   }),
   component: LoginPage,
+})
+
+// Anonymous public form, and the registration page of an invitation link (`?token=`).
+const publicFormRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/forms/$name',
+  validateSearch: (s: Record<string, unknown>): { token?: string } => ({
+    token: typeof s.token === 'string' && s.token ? s.token : undefined,
+  }),
+  component: PublicFormPage,
 })
 
 const secondFactorRoute = createRoute({
@@ -299,6 +310,7 @@ const auditRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
+  publicFormRoute,
   secondFactorRoute,
   recoveryRoute,
   recoveryConfirmRoute,

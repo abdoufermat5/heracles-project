@@ -12,6 +12,7 @@ import { setupFr } from '@/features/setup/locale-fr'
 import { onboardingFr } from '@/features/onboarding/locale-fr'
 import { auditFr } from '@/features/audit/locale-fr'
 import { meFr } from '@/features/me/locale-fr'
+import { publicFormsFr } from '@/features/public/locale-fr'
 
 const fr: Translation = {
   common: {
@@ -419,6 +420,7 @@ const fr: Translation = {
   ...setupFr,
   ...onboardingFr,
   ...meFr,
+  ...publicFormsFr,
   // --- P3 compat ---
   io: {
     title: 'Import / export',
