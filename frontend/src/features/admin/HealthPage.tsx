@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { PageHeader } from '@/components/ui/page-header'
+import { PageLayout } from '@/components/patterns'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useCapabilities, useChecks, useFix } from './hooks'
@@ -224,8 +224,7 @@ export function HealthPage() {
   const hasWarnings = counts.warning > 0
 
   return (
-    <div className="space-y-4">
-      <PageHeader
+    <PageLayout
         title={t('setup.title')}
         description={t('setup.description')}
         actions={
@@ -239,7 +238,7 @@ export function HealthPage() {
             {t('setup.rerun')}
           </Button>
         }
-      />
+      >
       {isError ? (
         <ErrorState error={error} onRetry={() => void refetch()} />
       ) : isPending ? (
@@ -324,6 +323,6 @@ export function HealthPage() {
           </ul>
         </div>
       )}
-    </div>
+    </PageLayout>
   )
 }

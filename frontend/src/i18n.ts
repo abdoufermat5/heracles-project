@@ -45,6 +45,15 @@ export const i18nReady: Promise<void> = i18n
     () => undefined,
   )
 
+/**
+ * `{{label, lcfirst}}`: a type label dropped into the middle of a sentence ("New user"),
+ * leaving acronyms and proper names ("LDAP entry", "DNS zone") untouched.
+ */
+i18n.services.formatter?.add('lcfirst', (value: unknown) => {
+  const s = String(value ?? '')
+  return /^[A-ZÀ-Ý]{2}/.test(s) ? s : s.charAt(0).toLocaleLowerCase() + s.slice(1)
+})
+
 i18n.on('languageChanged', (lng) => {
   document.documentElement.lang = lng.startsWith('fr') ? 'fr' : 'en'
 })

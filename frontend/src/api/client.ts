@@ -31,6 +31,13 @@ export function setUnauthenticatedHandler(fn: (() => void) | null): void {
   onUnauthenticated = fn
 }
 
+let onSetupRequired: (() => void) | null = null
+
+/** Registered by the app: the server is in first-run setup mode, so send the user to /setup. */
+export function setSetupRequiredHandler(fn: (() => void) | null): void {
+  onSetupRequired = fn
+}
+
 export function resetCsrf(): void {
   csrfToken = null
   csrfPromise = null
@@ -97,7 +104,8 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
 
   if (!res.ok) {
     const err = await parseError(res)
-    if (res.status === 401 && !opts.silent401) onUnauthenticated?.()
+    if (res.status === 503 && err.code === 'setup_required') onSetupRequired?.()
+    else if (res.status === 401 && !opts.silent401) onUnauthenticated?.()
     throw err
   }
   if (res.status === 204) return undefined as T

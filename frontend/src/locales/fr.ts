@@ -5,6 +5,8 @@ import type { Translation } from './en'
 import { objectsFr } from './objects.fr'
 import { sidebarFr } from './sidebar.fr'
 import { adminFr } from '@/features/admin/locale-fr'
+import { setupFr } from '@/features/setup/locale-fr'
+import { onboardingFr } from '@/features/onboarding/locale-fr'
 import { auditFr } from '@/features/audit/locale-fr'
 
 const fr: Translation = {
@@ -70,7 +72,7 @@ const fr: Translation = {
     empty: 'Aucun résultat.',
     navigate: 'Aller à',
     actions: 'Actions',
-    create: 'Créer : {{type}}',
+    create: 'Créer : {{type, lcfirst}}',
     toggleTheme: 'Basculer entre thème clair et sombre',
     switchLanguage: 'Changer de langue (English / Français)',
     recent: 'Objets récents',
@@ -221,7 +223,7 @@ const fr: Translation = {
   editor: {
     lockedTitle: 'Objet verrouillé',
     lockedBody: 'Cet objet est en cours de modification par {{user}} depuis {{since}}. Réessayez plus tard.',
-    newTitle: 'Nouveau : {{type}}',
+    newTitle: 'Nouveau : {{type, lcfirst}}',
     editing: 'Modification',
     unsaved: 'Modifications non enregistrées',
     inactive: 'Inactif',
@@ -262,7 +264,7 @@ const fr: Translation = {
     accountLockedSuccess: 'Compte verrouillé.',
     accountUnlockedSuccess: 'Compte déverrouillé.',
     actions: 'Actions',
-    backToList: 'Retour à {{type}}',
+    backToList: 'Retour à {{type, lcfirst}}',
     saveShortcut: 'Enregistrer les modifications (⌘S)',
     saving: 'Enregistrement…',
   },
@@ -272,8 +274,8 @@ const fr: Translation = {
     locked: 'Verrouillé',
     count_one: '{{count}} élément',
     count_other: '{{count}} éléments',
-    create: 'Nouveau : {{type}}',
-    searchPlaceholder: 'Rechercher parmi {{type}}…',
+    create: 'Nouveau : {{type, lcfirst}}',
+    searchPlaceholder: 'Rechercher parmi {{type, lcfirst}}…',
     search: 'Rechercher',
     scope: 'Portée de la recherche',
     scope_one: 'Ce département',
@@ -407,6 +409,8 @@ const fr: Translation = {
   // --- P3 admin ---
   ...adminFr,
   ...auditFr,
+  ...setupFr,
+  ...onboardingFr,
   // --- P3 compat ---
   io: {
     title: 'Import / export',

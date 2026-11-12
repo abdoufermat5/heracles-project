@@ -3,7 +3,7 @@ import { ExternalLink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useMe, useObject, useTypeDescriptor } from '@/api/hooks'
 import { Button } from '@/components/ui/button'
-import { PageHeader } from '@/components/ui/page-header'
+import { PageLayout } from '@/components/patterns'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCapabilities } from '@/features/admin/hooks'
 import { GroupsSection } from '@/features/portal/GroupsSection'
@@ -53,22 +53,8 @@ export function MePage() {
   const mail = typeof mainValues.mail === 'string' ? mainValues.mail : undefined
   const isConsoleUser = caps?.console ?? me.is_admin
 
-  return (
-    <div className="space-y-6 pb-12">
-      {isConsoleUser && (
-        <PageHeader
-          title={t('user.me')}
-          description={t('me.subtitle')}
-          actions={
-            <Button asChild variant="outline" size="sm">
-              <Link to="/types/$type/$dn" params={{ type: 'user', dn: me.dn }}>
-                {t('me.editAccount')}
-                <ExternalLink className="size-3.5" aria-hidden="true" />
-              </Link>
-            </Button>
-          }
-        />
-      )}
+  const body = (
+    <>
       {/* Employee / User Overview Card */}
       <ProfileCard
         me={me}
@@ -101,6 +87,24 @@ export function MePage() {
       {isConsoleUser && technical && (
         <TechnicalDetailsSection me={me} />
       )}
-    </div>
+    </>
+  )
+  if (!isConsoleUser) return <div className="space-y-6 pb-12">{body}</div>
+  return (
+    <PageLayout
+      className="space-y-6 pb-12"
+      title={t('user.me')}
+      description={t('me.subtitle')}
+      actions={
+        <Button asChild variant="outline" size="sm">
+          <Link to="/types/$type/$dn" params={{ type: 'user', dn: me.dn }}>
+            {t('me.editAccount')}
+            <ExternalLink className="size-3.5" aria-hidden="true" />
+          </Link>
+        </Button>
+      }
+    >
+      {body}
+    </PageLayout>
   )
 }

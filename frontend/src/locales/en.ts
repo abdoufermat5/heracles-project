@@ -4,6 +4,8 @@ import { settingsEn } from './settings'
 import { objectsEn } from './objects'
 import { sidebarEn } from './sidebar'
 import { adminEn } from '@/features/admin/locale-en'
+import { setupEn } from '@/features/setup/locale-en'
+import { onboardingEn } from '@/features/onboarding/locale-en'
 import { auditEn } from '@/features/audit/locale-en'
 
 const en = {
@@ -69,7 +71,7 @@ const en = {
     empty: 'No results.',
     navigate: 'Go to',
     actions: 'Actions',
-    create: 'Create {{type}}',
+    create: 'Create {{type, lcfirst}}',
     toggleTheme: 'Toggle light / dark theme',
     switchLanguage: 'Switch language (English / Français)',
     recent: 'Recent objects',
@@ -220,7 +222,7 @@ const en = {
   editor: {
     lockedTitle: 'Object is locked',
     lockedBody: 'This object is being edited by {{user}} since {{since}}. Try again later.',
-    newTitle: 'New {{type}}',
+    newTitle: 'New {{type, lcfirst}}',
     editing: 'Editing',
     unsaved: 'Unsaved changes',
     inactive: 'Inactive',
@@ -261,7 +263,7 @@ const en = {
     accountLockedSuccess: 'Account locked.',
     accountUnlockedSuccess: 'Account unlocked.',
     actions: 'Actions',
-    backToList: 'Back to {{type}}',
+    backToList: 'Back to {{type, lcfirst}}',
     saveShortcut: 'Save changes (⌘S)',
     saving: 'Saving…',
   },
@@ -271,8 +273,8 @@ const en = {
     locked: 'Locked',
     count_one: '{{count}} item',
     count_other: '{{count}} items',
-    create: 'New {{type}}',
-    searchPlaceholder: 'Search {{type}}…',
+    create: 'New {{type, lcfirst}}',
+    searchPlaceholder: 'Search {{type, lcfirst}}…',
     search: 'Search',
     scope: 'Search scope',
     scope_one: 'This department',
@@ -406,6 +408,8 @@ const en = {
   // --- P3 admin ---
   ...adminEn,
   ...auditEn,
+  ...setupEn,
+  ...onboardingEn,
   // --- P3 compat ---
   io: {
     title: 'Import / export',

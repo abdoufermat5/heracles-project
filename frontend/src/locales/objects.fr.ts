@@ -4,14 +4,14 @@ export const objectsFr: ObjectsTranslation = {
   templates: {
     viewObjects: 'Objets',
     viewTemplates: 'Modèles',
-    backToList: 'Retour aux modèles de {{type}}',
+    backToList: 'Retour aux modèles de {{type, lcfirst}}',
     badge: 'Modèle',
     views: 'Vue de la liste',
     title: 'Modèles',
     empty: 'Aucun modèle pour le moment',
     emptyHelp: 'Un modèle pré-remplit les nouveaux objets avec des valeurs et des variables.',
     new: 'Nouveau modèle',
-    newTitle: 'Nouveau modèle de {{type}}',
+    newTitle: 'Nouveau modèle de {{type, lcfirst}}',
     editTitle: 'Modifier le modèle {{name}}',
     editHelp:
       'Chaque champ est un texte libre. Utilisez %attribut% pour insérer une valeur fournie à la création.',
@@ -52,7 +52,7 @@ export const objectsFr: ObjectsTranslation = {
     previewHelp: 'Valeurs résolues. Rien n’est enregistré tant que vous ne créez pas l’objet.',
     previewEmpty: 'Renseignez les champs pour voir le résultat.',
     previewFailed: 'L’aperçu n’est pas encore disponible.',
-    createFrom: 'Créer {{type}}',
+    createFrom: 'Créer {{type, lcfirst}}',
     created_object: '{{type}} créé à partir du modèle.',
   },
   copy: {
