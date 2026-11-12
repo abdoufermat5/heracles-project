@@ -5,7 +5,8 @@ export function createQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 15_000,
+        staleTime: 30_000,
+        gcTime: 10 * 60_000,
         refetchOnWindowFocus: false,
         retry: (count, error) => !(isApiError(error) && error.status < 500) && count < 2,
       },
