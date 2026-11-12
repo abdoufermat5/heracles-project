@@ -199,7 +199,7 @@ describe('listing page', () => {
     expect(await screen.findByText(/26–50 of 200/)).toBeInTheDocument()
   })
 
-  it('applies a raw LDAP filter and shows the server refusal inline', async () => {
+  it('applies a raw LDAP filter and explains a server refusal once', async () => {
     signIn()
     const seen: string[] = []
     server.events.on('request:start', ({ request }) => {
@@ -211,11 +211,13 @@ describe('listing page', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Advanced filter' }))
     const input = screen.getByRole('textbox', { name: 'Advanced filter' })
     await userEvent.type(input, '(nosuchattr=1){Enter}')
-    expect(await screen.findByRole('alert')).toHaveTextContent("'nosuchattr'")
+    expect(await screen.findByText('This filter could not be run')).toBeInTheDocument()
+    expect(screen.getAllByText(/'nosuchattr'/)).toHaveLength(1)
+    expect(input).toHaveAttribute('aria-invalid', 'true')
     expect(seen.some((s) => s.includes('filter=%28nosuchattr'))).toBe(true)
     await userEvent.clear(input)
     await userEvent.type(input, '(uid=*){Enter}')
-    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('This filter could not be run')).not.toBeInTheDocument())
   })
 
   it('moves the row cursor with j/k and selects with x', async () => {

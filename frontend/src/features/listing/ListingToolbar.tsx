@@ -428,7 +428,7 @@ export function ListingToolbar({
             <Button type="submit" size="sm" variant="outline">
               {t('safety.applyFilter')}
             </Button>
-            {ldapFilter && (
+            {ldapFilter && !ldapFilterError && (
               <Button
                 type="button"
                 size="sm"
@@ -442,11 +442,8 @@ export function ListingToolbar({
               </Button>
             )}
           </div>
-          {ldapFilterError ? (
-            <p role="alert" className="font-mono text-caption text-destructive">
-              {ldapFilterError}
-            </p>
-          ) : (
+          {/* a refused filter is explained (with a way out) in the results area */}
+          {!ldapFilterError && (
             <p className="text-caption text-muted-foreground">{t('safety.advancedFilterHint')}</p>
           )}
         </form>
