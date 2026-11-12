@@ -58,7 +58,9 @@ import { LdifDialog } from './LdifDialog'
 import { LockedDialog } from './LockedDialog'
 import { ReferencesPanel } from './ReferencesPanel'
 import { SecondFactorsPanel } from './SecondFactorsPanel'
+import { SaveReviewDialog } from './SaveReviewDialog'
 import { SnapshotsPanel } from './SnapshotsPanel'
+import { useUndoableSave } from './undo'
 import { ObjectHistory } from '@/features/audit/ObjectHistory'
 import { useAuditEnabled } from '@/features/audit/hooks'
 import { TemplateFillForm } from './TemplateFillForm'
@@ -78,9 +80,11 @@ interface Props {
   /** Create mode only: DN of an object of the same type to prefill the form from. */
   copyFrom?: string | null
   initialTab?: string
+  /** Open straight in edit mode (the listing's `e` shortcut). */
+  autoEdit?: boolean
 }
 
-export function ObjectEditor({ type, dn, copyFrom = null, initialTab }: Props) {
+export function ObjectEditor({ type, dn, copyFrom = null, initialTab, autoEdit }: Props) {
   const desc = useTypeDescriptor(type)
   const obj = useObject(type, dn)
   const source = useObject(type, dn === null ? copyFrom : null)
@@ -112,6 +116,7 @@ export function ObjectEditor({ type, dn, copyFrom = null, initialTab }: Props) {
       detail={obj.data ?? null}
       source={dn === null ? (source.data ?? null) : null}
       initialTab={initialTab}
+      autoEdit={autoEdit}
     />
   )
 }
@@ -123,9 +128,10 @@ interface InnerProps {
   source: ObjectDetail | null
   /** Tab to open first (deep links from the profile pages). */
   initialTab?: string
+  autoEdit?: boolean
 }
 
-function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
+function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const scope = useScope()
@@ -290,6 +296,14 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
     }
   }
 
+  const autoEditDone = useRef(false)
+  useEffect(() => {
+    if (!autoEdit || autoEditDone.current || isCreate || !canEdit) return
+    autoEditDone.current = true
+    void startEdit()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEdit, isCreate, canEdit])
+
   const release = async () => {
     if (locked.current && detail) {
       locked.current = false
@@ -333,8 +347,18 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
     if (first) setTab(first.name)
   }
 
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const reviewConfirmed = useRef(false)
+  const { takeUndoPoint, toastSaved } = useUndoableSave(type)
+
   const save = form.handleSubmit(
     async (values) => {
+      // Every edit of an existing object is confirmed on a diff first.
+      if (!isCreate && diffs.length > 0 && !reviewConfirmed.current) {
+        setReviewOpen(true)
+        return
+      }
+      reviewConfirmed.current = false
       try {
         if (isCreate) {
           const base = (values.main?.base as string | null) ?? scope.base ?? ''
@@ -355,7 +379,9 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
         }
         if (!detail) return
         let result: ObjectDetail = detail
+        let undoId: string | null = null
         if (Object.keys(changes).length > 0) {
+          undoId = await takeUndoPoint(detail.dn)
           result = await patch.mutateAsync({ tabs: changes })
           showTriggerOutput(result)
         }
@@ -366,7 +392,7 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
           finalDn = moved.dn
         }
         await release()
-        toast.success(t('editor.saved'))
+        toastSaved(t('editor.saved'), undoId, () => void reloadAfterRestore())
         if (finalDn !== detail.dn) {
           baseline.current = { values, active }
           bypassGuard.current = true
@@ -587,6 +613,18 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
       )}
 
       {/* Dialogs */}
+      <SaveReviewDialog
+        open={reviewOpen}
+        target={detail?.dn ?? title}
+        diffs={diffs}
+        busy={formState.isSubmitting}
+        onCancel={() => setReviewOpen(false)}
+        onConfirm={() => {
+          reviewConfirmed.current = true
+          setReviewOpen(false)
+          void save()
+        }}
+      />
       <LockedDialog lock={lockInfo} onClose={() => setLockInfo(null)} />
 
       <LdifDialog
@@ -594,6 +632,7 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
         onOpenChange={setLdifOpen}
         ldif={ldifText}
         title={title}
+        dn={detail?.dn}
         loading={ldifQuery.isPending && ldifOpen}
       />
 

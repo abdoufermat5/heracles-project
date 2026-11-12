@@ -163,9 +163,55 @@ describe('listing page', () => {
     signIn()
     renderApp('/types/user')
     await screen.findByText('200 items')
-    const densityBtn = screen.getByRole('button', { name: 'Compact' })
+    // compact is the default for console users
+    const densityBtn = screen.getByRole('button', { name: 'Comfortable' })
     await userEvent.click(densityBtn)
-    expect(screen.getByRole('button', { name: 'Comfortable' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Compact' })).toBeInTheDocument()
+  })
+
+  it('keeps the view in the URL and restores it from a shared link', async () => {
+    signIn()
+    const { history, unmount } = renderApp('/types/user')
+    await screen.findByText('200 items')
+    await userEvent.click(screen.getByRole('button', { name: /Person/ }))
+    await waitFor(() => expect(history.location.search).toContain('sort='))
+    await userEvent.click(screen.getByRole('button', { name: 'Next page' }))
+    await waitFor(() => expect(history.location.search).toContain('page=2'))
+    const url = history.location.href
+    unmount()
+    // a pasted link reopens on the same page and sort
+    renderApp(url)
+    expect(await screen.findByText(/26–50 of 200/)).toBeInTheDocument()
+  })
+
+  it('applies a raw LDAP filter and shows the server refusal inline', async () => {
+    signIn()
+    const seen: string[] = []
+    server.events.on('request:start', ({ request }) => {
+      const u = new URL(request.url)
+      if (u.pathname.endsWith('/objects/user')) seen.push(u.search)
+    })
+    renderApp('/types/user')
+    await screen.findByText('200 items')
+    await userEvent.click(screen.getByRole('button', { name: 'Advanced filter' }))
+    const input = screen.getByRole('textbox', { name: 'Advanced filter' })
+    await userEvent.type(input, '(nosuchattr=1){Enter}')
+    expect(await screen.findByRole('alert')).toHaveTextContent("'nosuchattr'")
+    expect(seen.some((s) => s.includes('filter=%28nosuchattr'))).toBe(true)
+    await userEvent.clear(input)
+    await userEvent.type(input, '(uid=*){Enter}')
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+  })
+
+  it('moves the row cursor with j/k and selects with x', async () => {
+    signIn()
+    renderApp('/types/user')
+    await screen.findByText('200 items')
+    const table = screen.getByLabelText(/j\/k move/)
+    table.focus()
+    await userEvent.keyboard('jjkx')
+    const bar = await screen.findByRole('region', { name: 'Bulk actions' })
+    expect(within(bar).getByText('1 selected')).toBeInTheDocument()
   })
 })
 

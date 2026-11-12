@@ -15,6 +15,7 @@ from heracles.api.v1.common import V1Route, V1UserDep
 from heracles.api.v1.convert import bad_request, tabs_payload, to_v1
 from heracles.api.v1.names import (
     V1Tab,
+    filter_checks,
     find_attribute,
     find_tab,
     resolve_type,
@@ -88,27 +89,12 @@ def _update(
     return state
 
 
-#: Attributes any reader of an entry may test in a search filter.
-_OPEN_FILTER_ATTRS = frozenset({"objectclass"})
-
-
 def _filter_checks(info: TypeInfo, flt: Filter) -> list[tuple[str, str]]:
-    """``(tab, attribute)`` pairs a search filter tests, to be readable by the caller.
-
-    A filter is an oracle on the attributes it names: without this check a user could
-    probe the value of an attribute the ACLs hide (a password hash, say) one character
-    at a time. Unknown and write-only attributes are refused.
-    """
-    names = filter_attributes(flt)
-    checks: list[tuple[str, str]] = []
-    for name in sorted(names - _OPEN_FILTER_ATTRS):
-        found = next(
-            ((t, a) for t in info.tabs if (a := find_attribute(t, name)) is not None), None
-        )
-        if found is None or found[1].write_only:
-            raise bad_request(f"The attribute '{name}' cannot be used in a filter")
-        checks.append((found[0].name, found[1].name))
-    return checks
+    """See :func:`heracles.api.v1.names.filter_checks`; refuses with a 400."""
+    try:
+        return filter_checks(info, filter_attributes(flt))
+    except ValueError as exc:
+        raise bad_request(f"The attribute '{exc}' cannot be used in a filter") from None
 
 
 # -- types ------------------------------------------------------------------------------------

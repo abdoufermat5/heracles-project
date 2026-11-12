@@ -5,6 +5,7 @@ import { objectsEn } from './objects'
 import { sidebarEn } from './sidebar'
 import { shellEn } from './shell'
 import { resilienceEn } from './resilience'
+import { safetyEn } from './safety'
 import { adminEn } from '@/features/admin/locale-en'
 import { setupEn } from '@/features/setup/locale-en'
 import { onboardingEn } from '@/features/onboarding/locale-en'
@@ -38,6 +39,7 @@ const en = {
   ...sidebarEn,
   ...shellEn,
   ...resilienceEn,
+  ...safetyEn,
   // --- end P3 objects ---
   categories: {
     directory: 'Directory',

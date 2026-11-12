@@ -1,11 +1,14 @@
 import {
+  ArrowDown,
+  ArrowUp,
+  ListFilter,
   PanelRight,
   Rows3,
   Search,
   SlidersHorizontal,
   X,
 } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ColumnDescriptor } from '@/api/types'
 import { FilterChip } from '@/components/patterns/DataControls'
@@ -51,6 +54,14 @@ interface ListingToolbarProps {
   showPreview: boolean
   onTogglePreview: () => void
   supportsStatusFilter?: boolean
+  /** Raw LDAP filter in force (the `filter` query parameter). */
+  ldapFilter?: string
+  onLdapFilterChange?: (filter: string) => void
+  /** Server-side message when the filter was refused. */
+  ldapFilterError?: string | null
+  /** Column keys in display order (chooser). */
+  columnOrder?: string[]
+  onMoveColumn?: (key: string, direction: -1 | 1) => void
 }
 
 const segmentClass =
@@ -82,8 +93,27 @@ export function ListingToolbar({
   showPreview,
   onTogglePreview,
   supportsStatusFilter = true,
+  ldapFilter = '',
+  onLdapFilterChange,
+  ldapFilterError = null,
+  columnOrder = [],
+  onMoveColumn,
 }: ListingToolbarProps) {
   const { t } = useTranslation()
+  const [showAdvanced, setShowAdvanced] = useState(Boolean(ldapFilter))
+  const [draft, setDraft] = useState(ldapFilter)
+  const [seenFilter, setSeenFilter] = useState(ldapFilter)
+  if (seenFilter !== ldapFilter) {
+    // The URL changed the filter (back/forward): follow it.
+    setSeenFilter(ldapFilter)
+    setDraft(ldapFilter)
+    if (ldapFilter) setShowAdvanced(true)
+  }
+  const orderedColumns = [...availableColumns].sort((a, b) => {
+    const ia = columnOrder.indexOf(a.key)
+    const ib = columnOrder.indexOf(b.key)
+    return (ia < 0 ? 1e6 : ia) - (ib < 0 ? 1e6 : ib)
+  })
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // "/" shortcut to focus search input
@@ -233,8 +263,25 @@ export function ListingToolbar({
           />
         )}
 
-        {/* Right side controls: Columns, Density, Preview */}
+        {/* Right side controls: Advanced filter, Columns, Density, Preview */}
         <div className="ml-auto flex items-center gap-1.5">
+          {onLdapFilterChange && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showAdvanced || ldapFilter ? 'secondary' : 'outline'}
+                  size="icon-sm"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                  aria-label={t('safety.advancedFilter')}
+                  aria-expanded={showAdvanced}
+                >
+                  <ListFilter aria-hidden />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('safety.advancedFilter')}</TooltipContent>
+            </Tooltip>
+          )}
+
           {/* Column selector */}
           <DropdownMenu>
             <Tooltip>
@@ -257,16 +304,47 @@ export function ListingToolbar({
                 {t('listing.columns')}
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {availableColumns.map((col) => {
+              {orderedColumns.map((col, idx) => {
                 const isChecked = columnVisibility[col.key] !== false
                 return (
-                  <DropdownMenuCheckboxItem
-                    key={col.key}
-                    checked={isChecked}
-                    onCheckedChange={() => onToggleColumn(col.key)}
-                  >
-                    {col.label}
-                  </DropdownMenuCheckboxItem>
+                  <div key={col.key} className="flex items-center">
+                    <DropdownMenuCheckboxItem
+                      className="flex-1"
+                      checked={isChecked}
+                      onCheckedChange={() => onToggleColumn(col.key)}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      {col.label}
+                    </DropdownMenuCheckboxItem>
+                    {onMoveColumn && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => onMoveColumn(col.key, -1)}
+                          aria-label={t('safety.moveColumn', {
+                            name: col.label,
+                            direction: t('safety.moveUp'),
+                          })}
+                          className="rounded-sm p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                        >
+                          <ArrowUp className="size-3.5" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === orderedColumns.length - 1}
+                          onClick={() => onMoveColumn(col.key, 1)}
+                          aria-label={t('safety.moveColumn', {
+                            name: col.label,
+                            direction: t('safety.moveDown'),
+                          })}
+                          className="rounded-sm p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                        >
+                          <ArrowDown className="size-3.5" aria-hidden />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )
               })}
               <DropdownMenuSeparator />
@@ -328,6 +406,51 @@ export function ListingToolbar({
           </Tooltip>
         </div>
       </div>
+
+      {onLdapFilterChange && showAdvanced && (
+        <form
+          className="space-y-1"
+          onSubmit={(e) => {
+            e.preventDefault()
+            onLdapFilterChange(draft.trim())
+          }}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={t('safety.advancedFilterPlaceholder')}
+              aria-label={t('safety.advancedFilter')}
+              aria-invalid={ldapFilterError ? true : undefined}
+              spellCheck={false}
+              className="h-8 w-full font-mono text-body sm:w-[32rem]"
+            />
+            <Button type="submit" size="sm" variant="outline">
+              {t('safety.applyFilter')}
+            </Button>
+            {ldapFilter && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setDraft('')
+                  onLdapFilterChange('')
+                }}
+              >
+                {t('safety.clearFilter')}
+              </Button>
+            )}
+          </div>
+          {ldapFilterError ? (
+            <p role="alert" className="font-mono text-caption text-destructive">
+              {ldapFilterError}
+            </p>
+          ) : (
+            <p className="text-caption text-muted-foreground">{t('safety.advancedFilterHint')}</p>
+          )}
+        </form>
+      )}
     </div>
   )
 }

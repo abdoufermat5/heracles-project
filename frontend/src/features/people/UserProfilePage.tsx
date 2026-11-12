@@ -58,6 +58,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useObjectLdif, useReferences, useSecondFactors, useSnapshots } from '@/features/editor/api'
 import { FieldRow } from '@/features/editor/FieldRow'
 import { LdifDialog } from '@/features/editor/LdifDialog'
+import { SaveReviewDialog } from '@/features/editor/SaveReviewDialog'
+import { useUndoableSave } from '@/features/editor/undo'
 import { LockedDialog } from '@/features/editor/LockedDialog'
 import { ReferencesPanel } from '@/features/editor/ReferencesPanel'
 import { SecondFactorsPanel } from '@/features/editor/SecondFactorsPanel'
@@ -67,9 +69,11 @@ import { showTriggerOutput } from '@/features/editor/triggerOutput'
 import { CopyMoveDialog } from '@/features/listing/CopyMoveDialog'
 import {
   computeChanges,
+  listFieldDiffs,
   objectToLdif,
   rdnValue,
   valuesFromDetail,
+  type FieldDiff,
   type FormValues,
 } from '@/lib/objects'
 import { useTechnicalDetails } from '@/lib/preferences'
@@ -116,6 +120,8 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   const [moveOpen, setMoveOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [ldifOpen, setLdifOpen] = useState(false)
+  const [review, setReview] = useState<{ section: string; diffs: FieldDiff[] } | null>(null)
+  const { takeUndoPoint, toastSaved } = useUndoableSave('user')
   const [copiedDn, setCopiedDn] = useState(false)
   // Detail data
   const detail: ObjectDetail | null = obj.data ?? null
@@ -255,8 +261,20 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
     reset(initialValues)
   }
 
-  const handleSaveSection = async (sectionName: string) => {
+  const handleSaveSection = async (sectionName: string, confirmed = false) => {
     if (!descriptor || !detail) return
+    if (!confirmed) {
+      const diffs = listFieldDiffs(
+        descriptor,
+        valuesFromDetail(descriptor, detail),
+        getValues(),
+        { main: true },
+      )
+      if (diffs.length > 0) {
+        setReview({ section: sectionName, diffs })
+        return
+      }
+    }
     setSavingSection(sectionName)
     try {
       const currentValues = getValues()
@@ -280,9 +298,10 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
         return
       }
 
+      const undoId = await takeUndoPoint(detail.dn)
       const res = await patch.mutateAsync({ tabs: changes })
       showTriggerOutput(res)
-      toast.success(t('common.saved'))
+      toastSaved(t('common.saved'), undoId, () => void obj.refetch())
       if (isAcquiredLock.current) {
         void api.unlockObject('user', detail.dn).catch(() => undefined)
         isAcquiredLock.current = false
@@ -943,11 +962,24 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
           },
         ]}
       />
+      <SaveReviewDialog
+        open={review !== null}
+        target={detail?.dn ?? dn}
+        diffs={review?.diffs ?? []}
+        busy={savingSection !== null}
+        onCancel={() => setReview(null)}
+        onConfirm={() => {
+          const section = review?.section
+          setReview(null)
+          if (section) void handleSaveSection(section, true)
+        }}
+      />
       <LdifDialog
         open={ldifOpen}
         onOpenChange={setLdifOpen}
         ldif={ldifText}
         title={cnVal}
+        dn={detail?.dn ?? dn}
         loading={ldifQuery.isPending && ldifOpen}
       />
       <LockedDialog

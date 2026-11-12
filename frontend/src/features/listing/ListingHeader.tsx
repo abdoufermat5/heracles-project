@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { ArchiveRestore, Download, MoreHorizontal, Plus, RefreshCw } from 'lucide-react'
+import { ArchiveRestore, Download, Terminal, MoreHorizontal, Plus, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TypeDescriptor, TypeSummary } from '@/api/types'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,8 @@ interface ListingHeaderProps {
   onExportCsv: () => void
   /** Opens the "restore a deleted object" dialog (needs snapshots). */
   onRestoreDeleted?: () => void
+  /** Copies the current view as an `ldapsearch` command. */
+  onCopyLdapsearch?: () => void
 }
 
 export function ListingHeader({
@@ -35,6 +37,7 @@ export function ListingHeader({
   onRefresh,
   onExportCsv,
   onRestoreDeleted,
+  onCopyLdapsearch,
 }: ListingHeaderProps) {
   const { t } = useTranslation()
 
@@ -79,6 +82,12 @@ export function ListingHeader({
               <Download className="size-3.5 text-muted-foreground" aria-hidden />
               <span>{t('listing.exportCsv')}</span>
             </DropdownMenuItem>
+            {onCopyLdapsearch && (
+              <DropdownMenuItem onClick={onCopyLdapsearch} className="gap-2">
+                <Terminal className="size-3.5 text-muted-foreground" aria-hidden />
+                <span>{t('safety.copyLdapsearch')}</span>
+              </DropdownMenuItem>
+            )}
             {onRestoreDeleted && (
               <DropdownMenuItem onClick={onRestoreDeleted} className="gap-2">
                 <ArchiveRestore className="size-3.5 text-muted-foreground" aria-hidden />

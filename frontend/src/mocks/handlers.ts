@@ -5,6 +5,7 @@ import { BASE_DN, db } from './db'
 import { adminHandlers } from './adminHandlers'
 import { auditHandlers } from './auditHandlers'
 import { ioHandlers } from './io'
+import { attributesOf, FilterSyntaxError, ldapMatches, parseLdapFilter } from './ldapFilter'
 import { typeSummaries } from './typeDefs'
 
 const B = '/api/v2'
@@ -425,6 +426,32 @@ export const handlers: HttpHandler[] = [
         .all(type)
         .filter((r) => inScope(r.dn, base, scope))
         .map((r) => ({ r, v: flat(r) }))
+      const rawFilter = u.searchParams.get('filter')
+      if (rawFilter) {
+        try {
+          const node = parseLdapFilter(rawFilter)
+          const known = new Set(
+            desc.tabs.flatMap((t) =>
+              t.sections.flatMap((sec) => sec.attributes.map((a) => a.name.toLowerCase())),
+            ),
+          )
+          for (const a of attributesOf(node)) {
+            if (a.toLowerCase() !== 'objectclass' && !known.has(a.toLowerCase()))
+              return err(400, 'validation', `The attribute '${a}' cannot be used in a filter`)
+          }
+          rows = rows.filter(({ v }) =>
+            ldapMatches(node, (attr) => {
+              const key = Object.keys(v).find((k) => k.toLowerCase() === attr.toLowerCase())
+              const val = key ? v[key] : undefined
+              return (Array.isArray(val) ? val : val == null || val === '' ? [] : [val]).map(String)
+            }),
+          )
+        } catch (e) {
+          if (e instanceof FilterSyntaxError)
+            return err(400, 'validation', `Invalid filter: ${e.message}`)
+          throw e
+        }
+      }
       if (q)
         rows = rows.filter(
           ({ r, v }) =>

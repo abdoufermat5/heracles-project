@@ -16,6 +16,7 @@ from heracles.api.domain import DomainDep, TypeAclPolicy
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.etag import json_with_etag
 from heracles.api.stepup import require_recent_auth
+from heracles.api.v1.names import filter_checks
 from heracles.attributes import JSON
 from heracles.core import references
 from heracles.core.config_store import effective_settings
@@ -23,7 +24,7 @@ from heracles.core.locks import Lock, LockedError
 from heracles.core.snapshots import Snapshot, SnapshotError, SnapshotService
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Entry, NoSuchObjectError, Scope
-from heracles.ldap.filter import escape_filter_value
+from heracles.ldap.filter import FilterError, escape_filter_value, filter_attributes, parse_filter
 from heracles.objects import (
     ObjectConflictError,
     ObjectNotFoundError,
@@ -174,6 +175,7 @@ def describe_type(
         info = domain.registry.get(type_name)
     body.update(_nav_fields(info.type))
     body.update(_capabilities(info))
+    body["ldap_filter"] = info.type.filter
     body["supports_templates"] = bool(body["supports_templates"]) and info.type.creatable
     return json_with_etag(request, body)
 
@@ -303,7 +305,19 @@ def list_objects(
     offset: Annotated[int, Query(ge=0)] = 0,
     sort: str | None = None,
     order: Literal["asc", "desc"] = "asc",
+    filter: Annotated[str | None, Query(description="An extra LDAP filter (ANDed)")] = None,
 ) -> dict[str, JSON]:
+    checks: list[tuple[str, str]] = []
+    if filter:
+        try:
+            parsed = parse_filter(filter)
+            checks = filter_checks(domain.registry.get(type_name), filter_attributes(parsed))
+        except FilterError as exc:
+            raise ApiError(400, "validation", f"Invalid filter: {exc}") from None
+        except ValueError as exc:
+            raise ApiError(
+                400, "validation", f"The attribute '{exc}' cannot be used in a filter"
+            ) from None
     with object_errors():
         if offset > 0 and cursor is None:
             cursor = encode_cursor(offset)
@@ -319,6 +333,8 @@ def list_objects(
             descending=order == "desc",
             extra_attrs=["userPassword"] if type_name == "user" else (),
             locked=_account_locked if type_name == "user" else None,
+            extra_filter=filter or "",
+            filter_checks=checks,
         )
     body = page.to_json()
     if type_name == "user":

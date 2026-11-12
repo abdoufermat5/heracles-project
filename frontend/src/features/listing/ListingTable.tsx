@@ -4,6 +4,7 @@ import {
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
+  type ColumnSizingState,
   type RowSelectionState,
   type SortingState,
 } from '@tanstack/react-table'
@@ -49,6 +50,10 @@ interface ListingTableProps {
   selection: RowSelectionState
   onSelectionChange: (selection: RowSelectionState) => void
   columnVisibility: Record<string, boolean>
+  /** Preferred order of the data columns (ids); unlisted ones keep their default place. */
+  columnOrder?: string[]
+  columnSizing?: ColumnSizingState
+  onColumnSizingChange?: (sizing: ColumnSizingState) => void
   density: Density
   onRowClick?: (item: ObjectListItem) => void
   onDeleteSingle?: (item: ObjectListItem) => void
@@ -66,6 +71,9 @@ export function ListingTable({
   selection,
   onSelectionChange,
   columnVisibility,
+  columnOrder = [],
+  columnSizing = {},
+  onColumnSizingChange,
   density,
   onRowClick,
   onDeleteSingle,
@@ -420,6 +428,14 @@ export function ListingTable({
     type,
   ])
 
+  const orderedIds = useMemo(() => {
+    const ids = columns.map((c) => c.id ?? '')
+    const middle = ids.filter((id) => id !== 'select' && id !== 'actions')
+    const preferred = columnOrder.filter((id) => middle.includes(id))
+    const rest = middle.filter((id) => !preferred.includes(id))
+    return ['select', ...preferred, ...rest, 'actions']
+  }, [columns, columnOrder])
+
   const table = useReactTable({
     data: rows,
     columns,
@@ -429,6 +445,14 @@ export function ListingTable({
       sorting,
       rowSelection: selection,
       columnVisibility,
+      columnSizing,
+      columnOrder: orderedIds,
+    },
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onColumnSizingChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(columnSizing) : updater
+      onColumnSizingChange?.(next)
     },
     onSortingChange: (updater) => {
       const next = typeof updater === 'function' ? updater(sorting) : updater
@@ -464,30 +488,43 @@ export function ListingTable({
     ? virtual.getTotalSize() - (virtualItems[virtualItems.length - 1]?.end ?? 0)
     : 0
 
-  const handleTableKeyDown = (e: React.KeyboardEvent) => {
-    if (tableRows.length === 0) return
+  const moveCursor = (delta: number) => {
+    setFocusedIndex((prev) => {
+      const next =
+        prev === null ? 0 : Math.max(0, Math.min(prev + delta, tableRows.length - 1))
+      virtual.scrollToIndex(next, { align: 'auto' })
+      return next
+    })
+  }
 
-    if (e.key === 'ArrowDown') {
+  // Focus-scoped: only active while the table has the keyboard focus.
+  const handleTableKeyDown = (e: React.KeyboardEvent) => {
+    if (tableRows.length === 0 || e.ctrlKey || e.metaKey || e.altKey) return
+    const target = e.target as HTMLElement
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return
+    const current = focusedIndex !== null ? tableRows[focusedIndex] : undefined
+
+    if (e.key === 'ArrowDown' || e.key === 'j') {
       e.preventDefault()
-      setFocusedIndex((prev) => {
-        const next = prev === null ? 0 : Math.min(prev + 1, tableRows.length - 1)
-        virtual.scrollToIndex(next, { align: 'auto' })
-        return next
-      })
-    } else if (e.key === 'ArrowUp') {
+      moveCursor(1)
+    } else if (e.key === 'ArrowUp' || e.key === 'k') {
       e.preventDefault()
-      setFocusedIndex((prev) => {
-        const next = prev === null ? 0 : Math.max(prev - 1, 0)
-        virtual.scrollToIndex(next, { align: 'auto' })
-        return next
+      moveCursor(-1)
+    } else if (current && (e.key === 'Enter' || e.key === 'o')) {
+      e.preventDefault()
+      const item = current.original
+      if (onRowClick) onRowClick(item)
+      else void navigate({ to: '/types/$type/$dn', params: { type, dn: item.dn } })
+    } else if (current && e.key === 'x') {
+      e.preventDefault()
+      current.toggleSelected()
+    } else if (current && e.key === 'e') {
+      e.preventDefault()
+      void navigate({
+        to: '/types/$type/$dn',
+        params: { type, dn: current.original.dn },
+        search: { view: 'generic', edit: true },
       })
-    } else if (e.key === 'Enter') {
-      if (focusedIndex !== null && tableRows[focusedIndex]) {
-        e.preventDefault()
-        const item = tableRows[focusedIndex].original
-        if (onRowClick) onRowClick(item)
-        else void navigate({ to: '/types/$type/$dn', params: { type, dn: item.dn } })
-      }
     }
   }
 
@@ -608,6 +645,7 @@ export function ListingTable({
         ref={scrollerRef}
         tabIndex={0}
         onKeyDown={handleTableKeyDown}
+        aria-label={t('safety.shortcuts')}
         className="hidden md:block relative max-h-[calc(100vh-220px)] overflow-auto rounded-t-md border border-t-0 bg-card outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <table className="w-full border-collapse text-body" style={{ minWidth: 650 }}>
@@ -620,8 +658,13 @@ export function ListingTable({
                   return (
                     <th
                       key={header.id}
+                      style={
+                        columnSizing[header.id] !== undefined
+                          ? { width: header.getSize(), maxWidth: header.getSize() }
+                          : undefined
+                      }
                       className={cn(
-                        'h-10 px-3 text-left text-small font-medium text-muted-foreground select-none',
+                        'relative h-10 px-3 text-left text-small font-medium text-muted-foreground select-none',
                         header.id === 'select' && 'w-10 px-0 text-center',
                         header.id === 'actions' && 'w-24 text-right',
                         header.id === 'status' && 'w-32',
@@ -646,6 +689,24 @@ export function ListingTable({
                       ) : (
                         flexRender(header.column.columnDef.header, header.getContext())
                       )}
+                      {header.column.getCanResize() &&
+                        header.id !== 'select' &&
+                        header.id !== 'actions' && (
+                          <div
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label={t('safety.resizeColumn', {
+                              name: String(header.column.columnDef.header ?? header.id),
+                            })}
+                            onMouseDown={header.getResizeHandler()}
+                            onTouchStart={header.getResizeHandler()}
+                            onClick={(e) => e.stopPropagation()}
+                            className={cn(
+                              'absolute top-0 right-0 h-full w-1.5 cursor-col-resize touch-none select-none hover:bg-ring/50',
+                              header.column.getIsResizing() && 'bg-ring',
+                            )}
+                          />
+                        )}
                     </th>
                   )
                 })}
@@ -683,6 +744,11 @@ export function ListingTable({
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
+                      style={
+                        columnSizing[cell.column.id] !== undefined
+                          ? { width: cell.column.getSize(), maxWidth: cell.column.getSize() }
+                          : undefined
+                      }
                       className={cn(
                         'px-3 text-body truncate',
                         cell.column.id === 'select' && 'w-10 px-0 text-center',

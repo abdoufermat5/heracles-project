@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { RouteError } from '@/components/resilience'
 import { AdminGate, type AdminCapability } from '@/features/admin/AdminGate'
+import { parseListSearch, type ListSearch } from '@/features/listing/urlState'
 
 // Pages are split out of the entry bundle: the router loads a page's chunk before
 // rendering its route, and on link intent (`defaultPreload`).
@@ -172,13 +173,7 @@ const styleguideRoute = createRoute({
 const listRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/types/$type',
-  validateSearch: (
-    s: Record<string, unknown>,
-  ): { view?: 'templates'; filter?: 'active' | 'locked' | 'expiring' } => ({
-    view: s.view === 'templates' ? 'templates' : undefined,
-    filter:
-      s.filter === 'active' || s.filter === 'locked' || s.filter === 'expiring' ? s.filter : undefined,
-  }),
+  validateSearch: (s: Record<string, unknown>): ListSearch => parseListSearch(s),
   component: rendering(function ListRoute() {
     const { type } = listRoute.useParams()
     const { view, filter } = listRoute.useSearch()
@@ -236,21 +231,22 @@ const templateEditRoute = createRoute({
 const editRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/types/$type/$dn',
-  validateSearch: (s: Record<string, unknown>): { view?: string; tab?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { view?: string; tab?: string; edit?: boolean } => ({
     view: typeof s.view === 'string' ? s.view : undefined,
     tab: typeof s.tab === 'string' ? s.tab : undefined,
+    edit: s.edit === true || s.edit === 'true' ? true : undefined,
   }),
   component: rendering(
     function EditRoute() {
       const { type, dn } = editRoute.useParams()
-      const { view, tab } = editRoute.useSearch()
+      const { view, tab, edit } = editRoute.useSearch()
       if (type === 'user' && view !== 'generic') {
         return <UserProfilePage key={`user:${dn}`} dn={dn} />
       }
       if (type === 'group' && view !== 'generic') {
         return <GroupProfilePage key={`group:${dn}`} dn={dn} />
       }
-      return <ObjectEditor key={`${type}:${dn}:${tab ?? ''}`} type={type} dn={dn} initialTab={tab} />
+      return <ObjectEditor key={`${type}:${dn}:${tab ?? ''}`} type={type} dn={dn} initialTab={tab} autoEdit={edit} />
     },
     UserProfilePage,
     GroupProfilePage,

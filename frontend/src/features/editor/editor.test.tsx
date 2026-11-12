@@ -1,8 +1,9 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { api } from '@/api/endpoints'
 import { server } from '@/mocks/server'
+import { objectsApi } from '@/features/editor/api'
 import { renderApp, signIn, userPath } from '@/test/utils'
 
 async function openEditor(path = userPath(0)) {
@@ -13,7 +14,27 @@ async function openEditor(path = userPath(0)) {
   await screen.findByLabelText(/^Last name/ )
 }
 
+async function confirmReview() {
+  const dialog = await screen.findByRole('dialog', { name: /Review changes/ })
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+}
+
 describe('object editor', () => {
+  it('offers Undo after a save and restores the undo-point snapshot', async () => {
+    // sonner captures the pointer on its toasts; jsdom lacks it
+    HTMLElement.prototype.setPointerCapture = () => undefined
+    const restore = vi.spyOn(objectsApi, 'restoreSnapshot')
+    await openEditor()
+    await userEvent.click(screen.getByRole('button', { name: /Edit/ }))
+    const sn = await screen.findByLabelText(/^Last name/)
+    await waitFor(() => expect(sn).toBeEnabled())
+    await userEvent.type(sn, 'x')
+    await userEvent.click(screen.getByRole('button', { name: /Save/ }))
+    await confirmReview()
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(restore).toHaveBeenCalledTimes(1))
+  })
+
   it('shows values read-only first, then enables fields after acquiring the lock', async () => {
     const lock = vi.spyOn(api, 'lockObject')
     await openEditor()
@@ -36,6 +57,13 @@ describe('object editor', () => {
     await userEvent.type(sn, 'Changed')
     expect(await screen.findByTestId('dirty-indicator')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /Save/ }))
+
+    // The diff is shown first (technical name, old and new value); nothing is sent yet.
+    const review = await screen.findByRole('dialog', { name: /Review changes/ })
+    expect(within(review).getByText('sn')).toBeInTheDocument()
+    expect(within(review).getByText('Changed')).toBeInTheDocument()
+    expect(patch).not.toHaveBeenCalled()
+    await confirmReview()
 
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(1))
     const body = patch.mock.calls[0]?.[2]
@@ -77,6 +105,7 @@ describe('object editor', () => {
     await waitFor(() => expect(sn).toBeEnabled())
     await userEvent.type(sn, 'x')
     await userEvent.click(screen.getByRole('button', { name: /Save/ }))
+    await confirmReview()
     expect(await screen.findByText('Rejected by server')).toBeInTheDocument()
     expect(sn).toHaveAttribute('aria-invalid', 'true')
   })
@@ -113,6 +142,7 @@ describe('object editor', () => {
     await userEvent.type(screen.getByLabelText(/^Group id/ ), '2000')
     await userEvent.type(screen.getByLabelText(/^Home directory/ ), '/home/x')
     await userEvent.click(screen.getByRole('button', { name: /Save/ }))
+    await confirmReview()
     await waitFor(() => expect(patch).toHaveBeenCalled())
     const posix = patch.mock.calls[0]?.[2].tabs.posix
     expect(posix?.active).toBe(true)
@@ -194,6 +224,7 @@ describe('object editor', () => {
     expect(await screen.findByTestId('dirty-indicator')).toBeInTheDocument()
 
     await userEvent.keyboard('{Control>}s{/Control}')
+    await confirmReview()
 
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(1))
     const body = patch.mock.calls[0]?.[2]
