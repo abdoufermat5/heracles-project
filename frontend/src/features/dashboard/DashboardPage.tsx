@@ -16,12 +16,14 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDashboard, useMe, useTypes } from '@/api/hooks'
 import { ErrorState } from '@/components/ErrorState'
+import { PageLayout } from '@/components/patterns'
 import { getRecentItems } from '@/components/shell/recent'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCapabilities } from '@/features/admin/hooks'
 import { RecentActivityCard } from '@/features/audit/RecentActivityCard'
 import { useIoAccess } from '@/features/io/hooks'
+import { GetStartedCard } from '@/features/onboarding/GetStartedCard'
 import { TypeIcon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
@@ -124,13 +126,12 @@ export function DashboardPage() {
   const queueEmpty = !isPending && locked + expiring + failed === 0
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-title font-semibold tracking-tight text-foreground">{greeting}</h1>
-          <p className="text-body text-muted-foreground">{t('dashboard.subtitle')}</p>
-        </div>
-        <div className="flex gap-2">
+    <PageLayout
+      className="space-y-8"
+      title={greeting}
+      description={t('dashboard.subtitle')}
+      actions={
+        <>
           <Button asChild variant="outline">
             <Link to="/types/$type" params={{ type: 'user' }}>
               <Users />
@@ -145,8 +146,10 @@ export function DashboardPage() {
               </Link>
             </Button>
           )}
-        </div>
-      </header>
+        </>
+      }
+    >
+      <GetStartedCard />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <section aria-labelledby="queue-title" className="rounded-lg border bg-card">
@@ -349,6 +352,6 @@ export function DashboardPage() {
           </ul>
         )}
       </section>
-    </div>
+    </PageLayout>
   )
 }
