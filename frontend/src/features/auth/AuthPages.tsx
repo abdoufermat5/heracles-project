@@ -46,13 +46,16 @@ function BrandMark({ tone }: { tone: 'default' | 'onPrimary' }) {
  * Sign-in pages: the organisation on one side, the form on the other. On small
  * screens the brand panel folds into a header above the form.
  */
-function AuthLayout({
+export function AuthLayout({
   title,
   subtitle,
+  wide = false,
   children,
 }: {
   title: string
   subtitle?: string
+  /** a roomier column, for multi-step flows such as the first-run setup */
+  wide?: boolean
   children: React.ReactNode
 }) {
   const { t } = useTranslation()
@@ -91,7 +94,7 @@ function AuthLayout({
           <BrandMark tone="default" />
         </header>
         <main className="flex flex-1 items-center justify-center px-6 py-10">
-          <div className="w-full max-w-[380px]">
+          <div className={cn('w-full', wide ? 'max-w-xl' : 'max-w-[380px]')}>
             <div className="space-y-1.5">
               <h1 className="text-title font-semibold tracking-tight text-foreground">{title}</h1>
               {subtitle && <p className="text-body text-muted-foreground">{subtitle}</p>}

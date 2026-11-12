@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider, type RouterHistory } from '@tanstack/react-router'
 import { useMemo } from 'react'
-import { setUnauthenticatedHandler } from '@/api/client'
+import { setSetupRequiredHandler, setUnauthenticatedHandler } from '@/api/client'
 import { createQueryClient } from '@/queryClient'
 import { Toaster } from '@/components/ui/sonner'
 import { ScopeProvider } from '@/lib/scope'
@@ -16,6 +16,9 @@ export function App({ history, client }: { history?: RouterHistory; client?: Que
     setUnauthenticatedHandler(() => {
       queryClient.clear()
       void r.navigate({ to: '/login', search: { redirect: undefined } })
+    })
+    setSetupRequiredHandler(() => {
+      if (r.state.location.pathname !== '/setup') void r.navigate({ to: '/setup' })
     })
     return r
   }, [queryClient, history])

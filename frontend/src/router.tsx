@@ -13,6 +13,7 @@ import {
 import type { ReactNode } from 'react'
 import { Compass } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { isApiError } from '@/api/client'
 import { api } from '@/api/endpoints'
 import { qk } from '@/api/hooks'
 import { WorkspaceShell } from '@/components/shell/WorkspaceShell'
@@ -24,6 +25,7 @@ import { AdminGate, type AdminCapability } from '@/features/admin/AdminGate'
 
 // Pages are split out of the entry bundle: the router loads a page's chunk before
 // rendering its route, and on link intent (`defaultPreload`).
+const SetupPage = lazyRouteComponent(() => import('@/features/setup/SetupWizard'), 'SetupPage')
 const authPages = () => import('@/features/auth/AuthPages')
 const LoginPage = lazyRouteComponent(authPages, 'LoginPage')
 const SecondFactorPage = lazyRouteComponent(authPages, 'SecondFactorPage')
@@ -94,6 +96,9 @@ function safeRedirect(v: unknown): string | undefined {
   return typeof v === 'string' && v.startsWith('/') && !v.startsWith('//') ? v : undefined
 }
 
+// First-run setup: the server answers 503 `setup_required` everywhere else until it is done.
+const setupRoute = createRoute({ getParentRoute: () => rootRoute, path: '/setup', component: SetupPage })
+
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
@@ -136,7 +141,8 @@ const appRoute = createRoute({
   beforeLoad: async ({ context, location }) => {
     try {
       await context.queryClient.ensureQueryData({ queryKey: qk.me, queryFn: api.me })
-    } catch {
+    } catch (e) {
+      if (isApiError(e) && e.code === 'setup_required') throw redirect({ to: '/setup' })
       throw redirect({ to: '/login', search: { redirect: location.href } })
     }
     // decides between the administration console and the self-service portal
@@ -294,6 +300,7 @@ const auditRoute = createRoute({
 })
 
 const routeTree = rootRoute.addChildren([
+  setupRoute,
   loginRoute,
   secondFactorRoute,
   recoveryRoute,
