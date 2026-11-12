@@ -55,12 +55,55 @@ export function loadDensity(): Density {
   } catch {
     /* ignore */
   }
-  return 'comfortable'
+  // Console users are technical staff: dense rows unless they chose otherwise.
+  return 'compact'
 }
 
 export function saveDensity(density: Density): void {
   try {
     localStorage.setItem(DENSITY_STORAGE_KEY, density)
+  } catch {
+    /* ignore */
+  }
+}
+
+export const COLUMN_ORDER_PREFIX = 'heracles.listing.colorder.'
+export const COLUMN_SIZING_PREFIX = 'heracles.listing.colwidths.'
+
+export function loadColumnOrder(type: string): string[] {
+  try {
+    const raw = localStorage.getItem(`${COLUMN_ORDER_PREFIX}${type}`)
+    if (raw) {
+      const v: unknown = JSON.parse(raw)
+      if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string')
+    }
+  } catch {
+    /* ignore */
+  }
+  return []
+}
+
+export function saveColumnOrder(type: string, order: string[]): void {
+  try {
+    localStorage.setItem(`${COLUMN_ORDER_PREFIX}${type}`, JSON.stringify(order))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadColumnSizing(type: string): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(`${COLUMN_SIZING_PREFIX}${type}`)
+    if (raw) return JSON.parse(raw) as Record<string, number>
+  } catch {
+    /* ignore */
+  }
+  return {}
+}
+
+export function saveColumnSizing(type: string, sizing: Record<string, number>): void {
+  try {
+    localStorage.setItem(`${COLUMN_SIZING_PREFIX}${type}`, JSON.stringify(sizing))
   } catch {
     /* ignore */
   }

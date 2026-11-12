@@ -168,6 +168,7 @@ def describe_type(type_name: str, user: CurrentUserDep, domain: DomainDep) -> di
         info = domain.registry.get(type_name)
     body.update(_nav_fields(info.type))
     body.update(_capabilities(info))
+    body["ldap_filter"] = info.type.filter
     body["supports_templates"] = bool(body["supports_templates"]) and info.type.creatable
     return body
 

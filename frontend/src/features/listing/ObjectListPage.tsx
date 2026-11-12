@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import type { RowSelectionState, SortingState } from '@tanstack/react-table'
+import type { ColumnSizingState, RowSelectionState, SortingState } from '@tanstack/react-table'
 import {
   Copy,
   Download,
@@ -10,7 +10,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
@@ -31,11 +31,11 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { supportsTemplates } from '@/features/editor/api'
 import { AddToGroupDialog } from '@/features/people/AddToGroupDialog'
 import { getUserStatus } from '@/features/people/utils'
-import type { Scope } from '@/lib/scope'
 import { useScope } from '@/lib/scope'
 import { BulkEditDialog } from './BulkEditDialog'
 import { CopyMoveDialog, type CopyMoveMode } from './CopyMoveDialog'
 import { exportToCsv } from './csv'
+import { buildLdapsearch } from './ldapsearch'
 import { ListingDeleteDialog } from './ListingDeleteDialog'
 import { ListingEmptyState } from './ListingEmptyState'
 import { ListingHeader } from './ListingHeader'
@@ -47,13 +47,18 @@ import { ListingToolbar } from './ListingToolbar'
 import { RestoreDeletedDialog } from './RestoreDeletedDialog'
 import { TemplatesView } from './TemplatesView'
 import {
+  loadColumnOrder,
+  loadColumnSizing,
   loadColumnVisibility,
   loadDensity,
+  saveColumnOrder,
+  saveColumnSizing,
   saveColumnVisibility,
   saveDensity,
   type Density,
   type StatusFilter,
 } from './types'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES, useListSearch } from './urlState'
 
 function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value)
@@ -113,23 +118,61 @@ export function ObjectListPage({
     }
   })
 
-  // State
-  const [searchQuery, setSearchQuery] = useState('')
+  // The view (filters, sort, page, columns) lives in the URL: shareable, back/forward-safe.
+  const { search, update } = useListSearch()
+  const [searchQuery, setSearchQuery] = useState(search.q ?? '')
   const debouncedQuery = useDebounced(searchQuery)
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => statusForView(savedView))
+  const pushedQuery = useRef(search.q ?? '')
+  useEffect(() => {
+    // The URL changed under us (back/forward, pasted link): follow it.
+    const q = search.q ?? ''
+    if (q !== pushedQuery.current) {
+      pushedQuery.current = q
+      setSearchQuery(q)
+    }
+  }, [search.q])
+  useEffect(() => {
+    if (debouncedQuery !== pushedQuery.current) {
+      pushedQuery.current = debouncedQuery
+      update({ q: debouncedQuery || undefined, page: undefined }, true)
+    }
+  }, [debouncedQuery, update])
+
+  const statusFilter: StatusFilter = search.status ?? statusForView(savedView)
+  const setStatusFilter = (v: StatusFilter) =>
+    update({ status: v === 'all' ? undefined : v, page: undefined })
   const [employeeTypes, setEmployeeTypes] = useState<string[]>([])
-  const [filterBase, setFilterBase] = useState<string | null>(null)
-  const [filterScope, setFilterScope] = useState<Scope>(globalScope)
-  const [sorting, setSorting] = useState<SortingState>([])
+  const filterBase = search.base ?? null
+  const setFilterBase = (b: string | null) => update({ base: b ?? undefined, page: undefined })
+  const filterScope = search.scope ?? globalScope
+  const setFilterScope = (sc: 'one' | 'sub') => update({ scope: sc, page: undefined })
+  const sorting = useMemo<SortingState>(
+    () => (search.sort ? [{ id: search.sort, desc: Boolean(search.desc) }] : []),
+    [search.sort, search.desc],
+  )
+  const setSorting = (next: SortingState) =>
+    update({ sort: next[0]?.id, desc: next[0]?.desc || undefined, page: undefined })
+  const ldapFilter = search.ldap ?? ''
   const [selection, setSelection] = useState<RowSelectionState>({})
   const [density, setDensity] = useState<Density>(loadDensity)
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() =>
+  const [storedHidden, setColumnVisibility] = useState<Record<string, boolean>>(() =>
     loadColumnVisibility(type),
+  )
+  // A shared link's `hide` wins over what this browser remembers.
+  const columnVisibility = useMemo<Record<string, boolean>>(
+    () =>
+      search.hide ? Object.fromEntries(search.hide.map((k) => [k, false])) : storedHidden,
+    [search.hide, storedHidden],
+  )
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => loadColumnOrder(type))
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(() =>
+    loadColumnSizing(type),
   )
 
   // Pagination
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(25)
+  const page = search.page ?? 1
+  const pageSize = search.size ?? DEFAULT_PAGE_SIZE
+  const setPage = (n: number) => update({ page: n })
 
   const [showPreview, setShowPreview] = useState(false)
   const [previewDn, setPreviewDn] = useState<string | null>(null)
@@ -148,8 +191,7 @@ export function ObjectListPage({
     } catch {
       /* ignore */
     }
-    setPage(1)
-    setStatusFilter(statusForView(v))
+    update({ status: undefined, page: undefined })
   }
 
   // Handlers for persistence
@@ -159,24 +201,41 @@ export function ObjectListPage({
   }
 
   const handleToggleColumn = (colKey: string) => {
-    setColumnVisibility((prev) => {
-      const next = { ...prev, [colKey]: prev[colKey] === false }
-      saveColumnVisibility(type, next)
-      return next
-    })
+    const next = { ...columnVisibility, [colKey]: columnVisibility[colKey] === false }
+    setColumnVisibility(next)
+    saveColumnVisibility(type, next)
+    const hidden = Object.keys(next).filter((k) => next[k] === false)
+    update({ hide: hidden.length > 0 ? hidden : undefined }, true)
   }
 
   const handleResetColumns = () => {
     setColumnVisibility({})
     saveColumnVisibility(type, {})
+    setColumnOrder([])
+    saveColumnOrder(type, [])
+    setColumnSizing({})
+    saveColumnSizing(type, {})
+    update({ hide: undefined }, true)
   }
 
-  // Reset page when search or filters change
-  const filterKey = `${debouncedQuery}:${statusFilter}:${filterBase}:${filterScope}:${employeeTypes.join(',')}`
-  const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
-  if (prevFilterKey !== filterKey) {
-    setPrevFilterKey(filterKey)
-    setPage(1)
+  const handleMoveColumn = (key: string, direction: -1 | 1) => {
+    const keys = (desc.data?.columns ?? []).map((c) => c.key)
+    const current = [
+      ...columnOrder.filter((k) => keys.includes(k)),
+      ...keys.filter((k) => !columnOrder.includes(k)),
+    ]
+    const i = current.indexOf(key)
+    const j = i + direction
+    if (i < 0 || j < 0 || j >= current.length) return
+    const moved = [...current]
+    ;[moved[i], moved[j]] = [moved[j]!, moved[i]!]
+    setColumnOrder(moved)
+    saveColumnOrder(type, moved)
+  }
+
+  const handleColumnSizing = (next: ColumnSizingState) => {
+    setColumnSizing(next)
+    saveColumnSizing(type, next)
   }
 
   // Active query parameters
@@ -185,7 +244,8 @@ export function ObjectListPage({
   const list = usePaginatedObjectList(type, {
     base: currentBase,
     scope: filterScope,
-    q: debouncedQuery || undefined,
+    q: search.q,
+    filter: ldapFilter || undefined,
     sort: sort?.id,
     order: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
     limit: pageSize,
@@ -224,7 +284,7 @@ export function ObjectListPage({
   }, [rawRows])
 
   // Reset selection on major query/filter changes
-  const queryKey = `${type}:${currentBase}:${filterScope}:${debouncedQuery}:${statusFilter}:${page}`
+  const queryKey = `${type}:${currentBase}:${filterScope}:${search.q ?? ''}:${ldapFilter}:${statusFilter}:${page}`
   const [prevQueryKey, setPrevQueryKey] = useState(queryKey)
   if (prevQueryKey !== queryKey) {
     setPrevQueryKey(queryKey)
@@ -270,6 +330,21 @@ export function ObjectListPage({
     }
   }
 
+  const handleCopyLdapsearch = () => {
+    const cols = desc.data?.columns.map((c) => c.key) ?? []
+    const cmd = buildLdapsearch({
+      base: currentBase ?? '',
+      scope: filterScope,
+      typeFilter: desc.data?.ldap_filter,
+      extraFilter: ldapFilter || undefined,
+      q: search.q,
+      searchAttrs: cols,
+      attrs: cols,
+    })
+    void navigator.clipboard?.writeText(cmd)
+    toast.success(t('safety.ldapsearchCopied'))
+  }
+
   const handleExportCsv = (selectedOnly = false) => {
     if (!desc.data) return
     const exportRows = selectedOnly && selectedDns.length > 0
@@ -294,10 +369,13 @@ export function ObjectListPage({
     : []
 
   const currentDepartmentName = findDepartmentLabel(tree.data, currentBase ?? null)
-  const hasFilterActive = Boolean(debouncedQuery || statusFilter !== 'all' || employeeTypes.length > 0 || filterBase)
+  const hasFilterActive = Boolean(search.q || ldapFilter || statusFilter !== 'all' || employeeTypes.length > 0 || filterBase)
 
   // Error and permission checks
-  const primaryError = desc.error ?? list.error
+  // A refused raw filter is shown next to its input, not as a page error.
+  const filterError =
+    ldapFilter && isApiError(list.error) && list.error.status === 400 ? list.error.message : null
+  const primaryError = desc.error ?? (filterError ? null : list.error)
   if (primaryError) {
     if (isApiError(primaryError) && (primaryError.status === 403 || primaryError.code === 'forbidden')) {
       return (
@@ -334,6 +412,7 @@ export function ObjectListPage({
         onRefresh={() => void list.refetch()}
         onExportCsv={() => handleExportCsv(false)}
         onRestoreDeleted={canCreate ? () => setRestoreOpen(true) : undefined}
+        onCopyLdapsearch={handleCopyLdapsearch}
       />
 
       {hasTemplates && (
@@ -386,6 +465,11 @@ export function ObjectListPage({
               showPreview={showPreview}
               onTogglePreview={() => setShowPreview((p) => !p)}
               supportsStatusFilter={type === 'user'}
+              ldapFilter={ldapFilter}
+              onLdapFilterChange={(f) => update({ ldap: f || undefined, page: undefined })}
+              ldapFilterError={filterError}
+              columnOrder={columnOrder}
+              onMoveColumn={handleMoveColumn}
             />
 
             {list.isPending ? (
@@ -402,10 +486,15 @@ export function ObjectListPage({
                 canCreate={summary?.can_create}
                 onClearFilter={() => {
                   setSearchQuery('')
-                  setStatusFilter('all')
                   setEmployeeTypes([])
-                  setFilterBase(null)
                   setSavedView('all')
+                  update({
+                    q: undefined,
+                    status: undefined,
+                    base: undefined,
+                    ldap: undefined,
+                    page: undefined,
+                  })
                 }}
               />
             ) : (
@@ -508,6 +597,9 @@ export function ObjectListPage({
                       selection={selection}
                       onSelectionChange={setSelection}
                       columnVisibility={columnVisibility}
+                      columnOrder={columnOrder}
+                      columnSizing={columnSizing}
+                      onColumnSizingChange={handleColumnSizing}
                       density={density}
                       onRowClick={(item) => {
                         if (showPreview) {
@@ -532,11 +624,13 @@ export function ObjectListPage({
                         pageSize={pageSize}
                         total={total ?? rows.length}
                         onPage={setPage}
-                        onPageSize={(size) => {
-                          setPageSize(size)
-                          setPage(1)
-                        }}
-                        pageSizes={[25, 50, 100]}
+                        onPageSize={(size) =>
+                          update({
+                            size: size === DEFAULT_PAGE_SIZE ? undefined : size,
+                            page: undefined,
+                          })
+                        }
+                        pageSizes={PAGE_SIZES}
                       />
                     </div>
                   </div>

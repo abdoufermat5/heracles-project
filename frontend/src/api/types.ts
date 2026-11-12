@@ -268,6 +268,8 @@ export interface TypeDescriptor {
   creatable?: boolean
   editable?: boolean
   deletable?: boolean
+  /** LDAP search filter selecting the objects of this type. */
+  ldap_filter?: string
 }
 
 // ── Tree ──────────────────────────────────────────────────────────────────
@@ -308,6 +310,8 @@ export interface ListParams {
   offset?: number
   sort?: string
   order?: 'asc' | 'desc'
+  /** Extra LDAP filter, ANDed with the type filter by the server. */
+  filter?: string
 }
 
 export interface TabState {

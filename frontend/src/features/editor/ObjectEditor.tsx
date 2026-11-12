@@ -80,9 +80,11 @@ interface Props {
   /** Create mode only: DN of an object of the same type to prefill the form from. */
   copyFrom?: string | null
   initialTab?: string
+  /** Open straight in edit mode (the listing's `e` shortcut). */
+  autoEdit?: boolean
 }
 
-export function ObjectEditor({ type, dn, copyFrom = null, initialTab }: Props) {
+export function ObjectEditor({ type, dn, copyFrom = null, initialTab, autoEdit }: Props) {
   const desc = useTypeDescriptor(type)
   const obj = useObject(type, dn)
   const source = useObject(type, dn === null ? copyFrom : null)
@@ -114,6 +116,7 @@ export function ObjectEditor({ type, dn, copyFrom = null, initialTab }: Props) {
       detail={obj.data ?? null}
       source={dn === null ? (source.data ?? null) : null}
       initialTab={initialTab}
+      autoEdit={autoEdit}
     />
   )
 }
@@ -125,9 +128,10 @@ interface InnerProps {
   source: ObjectDetail | null
   /** Tab to open first (deep links from the profile pages). */
   initialTab?: string
+  autoEdit?: boolean
 }
 
-function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
+function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const scope = useScope()
@@ -291,6 +295,14 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
       else toast.error(isApiError(e) ? e.message : t('common.error'))
     }
   }
+
+  const autoEditDone = useRef(false)
+  useEffect(() => {
+    if (!autoEdit || autoEditDone.current || isCreate || !canEdit) return
+    autoEditDone.current = true
+    void startEdit()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEdit, isCreate, canEdit])
 
   const release = async () => {
     if (locked.current && detail) {
