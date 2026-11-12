@@ -33,7 +33,9 @@ export default defineConfig({
               // Design-system primitives and icons are shared by the shell and every
               // page: one chunk instead of dozens of sub-kilobyte requests.
               name: 'ui',
-              test: /src[\\/]components[\\/]ui[\\/]|node_modules[\\/](@radix-ui|radix-ui|@floating-ui|lucide-react|react-remove-scroll[^\\/]*|aria-hidden|clsx|tailwind-merge|class-variance-authority)[\\/]/,
+              // Primitives only the lazy pages use (selects, tabs, toggles...) stay out of the
+              // initial chunk: they load with the first page that needs them.
+              test: /src[\\/]components[\\/]ui[\\/](?!select|tabs|checkbox|switch|progress|scroll-area|toggle-group|alert-dialog|collapsible)|node_modules[\\/](@radix-ui[\\/]react-(?!select|tabs|checkbox|switch|progress|scroll-area|toggle|alert-dialog|collapsible)|radix-ui|@floating-ui|lucide-react|react-remove-scroll[^\\/]*|aria-hidden|clsx|tailwind-merge|class-variance-authority)[\\/]/,
             },
           ],
         },

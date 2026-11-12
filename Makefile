@@ -13,7 +13,7 @@ UI_PORT ?= 5173
 DNS_PORT ?= 15353
 CONFIG ?= $(HERACLES_CONFIG)
 
-.PHONY: help install install-backend install-frontend \
+.PHONY: bundle-check help install install-backend install-frontend \
         dev dev-demo dev-down dev-mock backend frontend demo build serve dns-demo \
         test test-backend test-frontend lint lint-backend lint-frontend \
         format typecheck check bench ldap-up ldap-down ldap-logs test-integration e2e e2e-ui e2e-down schema third-party-schema clean
@@ -157,3 +157,6 @@ clean: ## Remove caches and build output
 	rm -rf $(FRONTEND)/dist $(FRONTEND)/*.tsbuildinfo
 	find $(BACKEND) -type d \( -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache \
 	  -o -name .hypothesis \) -prune -exec rm -rf {} +
+
+bundle-check: ## Fail when the built frontend exceeds its size budget (run after a build)
+	cd $(FRONTEND) && pnpm check:bundle
