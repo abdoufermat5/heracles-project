@@ -513,7 +513,12 @@ OBJECT_CLASSES: tuple[ObjectClass, ...] = (
         ObjectClass.AUXILIARY,
         may=("hrcDashboardPrefix", "hrcDashboardNumberOfDigit", "hrcDashboardExpiredAccountsDays"),
     ),
-    ObjectClass(11, "hrcDepartment", ObjectClass.AUXILIARY, may=("ou", "description")),
+    ObjectClass(
+        11,
+        "hrcDepartment",
+        ObjectClass.AUXILIARY,
+        may=("ou", "description", "businessCategory", "manager"),
+    ),
     ObjectClass(
         12,
         "hrcDesktopApplication",

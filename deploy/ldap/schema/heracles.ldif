@@ -1053,7 +1053,8 @@ olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.10 NAME '
  hrcDashboardPluginConf' SUP top AUXILIARY MAY ( hrcDashboardPrefix $ hrcDas
  hboardNumberOfDigit $ hrcDashboardExpiredAccountsDays ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.11 NAME '
- hrcDepartment' SUP top AUXILIARY MAY ( ou $ description ) )
+ hrcDepartment' SUP top AUXILIARY MAY ( ou $ description $ businessCategory 
+ $ manager ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.12 NAME '
  hrcDesktopApplication' SUP top STRUCTURAL MUST cn MAY ( hrcApplicationTitle
   $ description $ hrcApplicationExecutePath $ hrcApplicationImage $ hrcAppli
