@@ -13,9 +13,11 @@ PORT ?= 8420
 UI_PORT ?= 5173
 DNS_PORT ?= 15353
 CONFIG ?= $(HERACLES_CONFIG)
+IMAGE ?= heracles
+VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(BACKEND)/pyproject.toml)
 
 .PHONY: bundle-check help install install-backend install-frontend \
-        dev dev-demo dev-down dev-mock backend frontend demo build serve dns-demo \
+        dev dev-demo dev-down dev-mock backend frontend demo build docker-build serve dns-demo \
         test test-backend test-frontend lint lint-backend lint-frontend \
         format typecheck check bench ldap-up ldap-down ldap-logs test-integration e2e e2e-replicas e2e-ui e2e-down schema third-party-schema clean
 
@@ -73,6 +75,9 @@ frontend: ## Vite dev server only, proxied to the backend on $(PORT)
 
 build: ## Build the frontend (frontend/dist)
 	cd $(FRONTEND) && pnpm build
+
+docker-build: ## Build the production image (IMAGE=heracles; tags: backend version + latest)
+	docker build -f deploy/Dockerfile -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
 
 demo: build ## Build the UI and serve everything from the demo backend
 	@echo "→ http://$(HOST):$(PORT)  ·  login admin / heracles"
