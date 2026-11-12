@@ -72,7 +72,7 @@ describe('helpers', () => {
   it('builds entry URLs', () => {
     expect(methodUrl({ id: 'cas', url: '/api/v2/auth/cas/login' })).toBe('/api/v2/auth/cas/login')
     expect(methodUrl({ id: 'cas', url: '/x?a=1' }, '/y')).toBe('/x?a=1&next=%2Fy')
-    expect(methodUrl({ id: 'oidc', url: null }, '/y')).toBe('/api/v2/auth/oidc/login?next=%2Fy')
+    expect(methodUrl({ id: 'cas', url: null }, '/y')).toBe('/api/v2/auth/cas/login?next=%2Fy')
   })
 
   it('logs out of CAS too when the session was opened through it', async () => {

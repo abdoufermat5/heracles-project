@@ -8,7 +8,6 @@ from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
 
 from heracles.api.hosts import DEFAULT_ALLOWED_HOSTS
-from heracles.auth.oidc import OidcSettings
 from heracles.auth.recovery import RecoveryConfig
 from heracles.auth.sso import SsoSettings
 from heracles.auth.webauthn import WebAuthnSettings
@@ -134,7 +133,6 @@ class ApiSettings(BaseModel):
     login: LoginSettings = Field(default_factory=LoginSettings)
     recovery: RecoverySettings = Field(default_factory=RecoverySettings)
     password: PasswordSettings = Field(default_factory=PasswordSettings)
-    oidc: OidcSettings = Field(default_factory=OidcSettings)
     webauthn: WebAuthnSettings = Field(default_factory=WebAuthnSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     plugins: PluginsSettings = Field(default_factory=PluginsSettings)

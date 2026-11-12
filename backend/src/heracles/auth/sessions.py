@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 import threading
 import time
@@ -11,6 +12,32 @@ from typing import Any, Protocol
 
 IDLE_TIMEOUT_SECONDS = 30 * 60
 ABSOLUTE_TIMEOUT_SECONDS = 12 * 3600
+
+
+#: Cache key holding where a session was opened from: ``{"ip": ..., "ua": ...}``.
+CLIENT_KEY = "client"
+
+
+def session_ref(session_id: str) -> str:
+    """Opaque public reference of a session (never the cookie value itself)."""
+    return hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:32]
+
+
+@dataclass(frozen=True, slots=True)
+class SessionInfo:
+    """What the owner (or an administrator) may see of an active session."""
+
+    ref: str
+    directory_id: str
+    created_at: float
+    last_seen: float
+    ip: str
+    user_agent: str
+
+
+def client_info(ip: str, user_agent: str | None) -> dict[str, str]:
+    """The value of :data:`CLIENT_KEY` for a request."""
+    return {"ip": ip[:64], "ua": (user_agent or "")[:300]}
 
 
 @dataclass(slots=True)
@@ -67,6 +94,19 @@ class SessionStore(Protocol):
 
         A session that was deleted or rotated meanwhile stays gone. Stores that hand out
         the live object (the in-memory one) have nothing to do.
+        """
+        ...
+
+    def list_for_user(self, user_dn: str) -> list[SessionInfo]:
+        """The live, fully authenticated sessions of a user, newest first."""
+        ...
+
+    def delete_for_user(
+        self, user_dn: str, *, ref: str | None = None, keep: str | None = None
+    ) -> int:
+        """Revoke the sessions of a user: only ``ref``, or all but ``keep`` (both references).
+
+        Returns how many were removed.
         """
         ...
 
@@ -155,6 +195,45 @@ class InMemorySessionStore:
 
     def save(self, session: Session) -> None:
         """No-op: callers already hold the live object."""
+
+    def list_for_user(self, user_dn: str) -> list[SessionInfo]:
+        now = self._clock()
+        wanted = user_dn.lower()
+        with self._lock:
+            self._purge(now)
+            found = [
+                s
+                for s in self._sessions.values()
+                if s.user_dn.lower() == wanted and not s.second_factor_pending
+            ]
+        infos = [
+            SessionInfo(
+                session_ref(s.id),
+                s.directory_id,
+                s.created_at,
+                s.last_seen,
+                str(s.cache.get(CLIENT_KEY, {}).get("ip", "")),
+                str(s.cache.get(CLIENT_KEY, {}).get("ua", "")),
+            )
+            for s in found
+        ]
+        return sorted(infos, key=lambda i: i.last_seen, reverse=True)
+
+    def delete_for_user(
+        self, user_dn: str, *, ref: str | None = None, keep: str | None = None
+    ) -> int:
+        wanted = user_dn.lower()
+        with self._lock:
+            doomed = [
+                sid
+                for sid, s in self._sessions.items()
+                if s.user_dn.lower() == wanted
+                and (ref is None or session_ref(sid) == ref)
+                and (keep is None or session_ref(sid) != keep)
+            ]
+            for sid in doomed:
+                del self._sessions[sid]
+        return len(doomed)
 
     def __len__(self) -> int:
         with self._lock:

@@ -15,6 +15,7 @@ from heracles.api.deps import CurrentUserDep, StateDep
 from heracles.api.domain import DomainDep
 from heracles.api.errors import forbidden, not_found, validation
 from heracles.api.etag import json_with_etag
+from heracles.api.stepup import require_recent_auth
 from heracles.attributes import JSON
 from heracles.auth.passwords import is_locked, lock, unlock
 from heracles.auth.second_factor import SecondFactorSummary
@@ -238,6 +239,7 @@ def remove_security_key(
     dn: str, credential_id: str, user: CurrentUserDep, domain: DomainDep, state: StateDep
 ) -> None:
     _second_factor_target(user, domain, dn, write=True)
+    require_recent_auth(state, user.session)
     try:
         raw = base64url_to_bytes(credential_id)
     except ValueError:
@@ -252,8 +254,39 @@ def remove_security_key(
 def reset_second_factors(dn: str, user: CurrentUserDep, domain: DomainDep, state: StateDep) -> None:
     """Remove the authenticator, security keys and recovery codes of a user."""
     _second_factor_target(user, domain, dn, write=True)
+    require_recent_auth(state, user.session)
     removed = state.second_factor.reset(dn)
     _record_reset(user, domain, dn, removed)
+
+
+# ----------------------------------------------------------------- sessions
+
+
+@router.delete("/users/{dn:path}/sessions")
+def revoke_user_sessions(
+    dn: str, user: CurrentUserDep, domain: DomainDep, state: StateDep
+) -> dict[str, JSON]:
+    """Sign a user out everywhere (lost device, suspected compromise).
+
+    Needs the right to lock the account (``userLock`` write) and a recent confirmation.
+    """
+    info = domain.registry.get("user")
+    if not domain.evaluator(user).can_write_attr(dn, info.acl_object(info.main_tab), USER_LOCK_ACL):
+        raise forbidden("You cannot sign this account out")
+    require_recent_auth(state, user.session)
+    entry = user.directory.get(dn, ["objectClass"])
+    if entry is None or not entry.has_object_class("inetOrgPerson"):
+        raise not_found("User not found")
+    count = state.sessions.delete_for_user(entry.dn)
+    log.warning("sessions_revoked", actor=user.dn, target=entry.dn, count=count)
+    state.audit.record_by(
+        user,
+        "logout",
+        object_type="user",
+        object_dn=entry.dn,
+        attributes=[f"all sessions revoked: {count}"],
+    )
+    return {"revoked": count}
 
 
 # -------------------------------------------------------------- dashboard

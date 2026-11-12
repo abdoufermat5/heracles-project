@@ -19,7 +19,6 @@ from heracles.auth.login import (
     parse_networks,
 )
 from heracles.auth.mail import MemoryMailer, SmtpMailer
-from heracles.auth.oidc import OidcClient, OidcSettings
 from heracles.auth.ratelimit import RateLimiter
 from heracles.auth.second_factor import InMemorySecondFactorStore, SecondFactorService
 from heracles.auth.sessions import InMemorySessionStore
@@ -230,19 +229,3 @@ def test_webauthn_options_generation() -> None:
     assert reg.options["rp"]["id"] == "example.com"
     assert len(reg.challenge) >= 32
     assert svc.begin_assertion("uid=a,dc=x").options["rpId"] == "example.com"
-
-
-def test_oidc_authorization_request() -> None:
-    client = OidcClient(
-        OidcSettings(
-            enabled=True,
-            client_id="cid",
-            authorization_endpoint="https://idp.example.com/auth",
-            redirect_uri="https://app.example.com/cb",
-        )
-    )
-    req = client.begin()
-    assert req.url.startswith("https://idp.example.com/auth?")
-    assert req.state and req.nonce and req.code_verifier
-    with pytest.raises(NotImplementedError):
-        client.complete("c", req.state)

@@ -304,3 +304,30 @@ def test_users_only_touch_their_own_factors(env: Env) -> None:
     }
     assert _delete(env, confirm=True) == 404
     assert env.post(CODES).status_code == 409
+
+
+def test_reauth_accepts_a_code_of_an_existing_second_factor(env: Env) -> None:
+    env.login()
+    secret = _enable(env)
+    env.clock.advance(301)
+    assert env.post(TOTP + "/begin").status_code == 403
+    wrong = env.post(BASE + "/reauth", {"method": "totp", "code": "000000"})
+    assert wrong.status_code == 422
+    env.clock.advance(TOTP_STEP_SECONDS * 2)  # the enrolment code is used up
+    ok = env.post(BASE + "/reauth", {"method": "totp", "code": _code(env, secret)})
+    assert ok.status_code == 200
+    assert env.post(TOTP + "/begin").status_code == 200
+    assert env.post(BASE + "/reauth", {}).status_code == 422
+
+
+def test_removing_the_last_factor_is_audited_and_mailed(env: Env) -> None:
+    env.login()
+    _enable(env)
+    assert _delete(env, confirm=True) == 204
+    [mail] = env.mailer.outbox
+    assert mail.to == "jdoe@example.com" and "turned off" in mail.subject.lower()
+    # a factor that is not the last one does not mail anybody
+    _enable(env)
+    _add_key(env)
+    assert _delete(env) == 204
+    assert len(env.mailer.outbox) == 1

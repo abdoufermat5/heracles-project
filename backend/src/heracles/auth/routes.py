@@ -20,6 +20,7 @@ from heracles.api.hosts import request_base
 from heracles.api.state import AppState
 from heracles.auth.cas import CasClient, CasError
 from heracles.auth.login import InvalidLoginError, authenticate_bind, find_user_dn
+from heracles.auth.sessions import CLIENT_KEY, client_info
 from heracles.auth.sso import SsoConfig, effective_sso
 from heracles.ldap.client import DirectoryClient
 
@@ -95,8 +96,6 @@ def available_methods(state: AppState, config: SsoConfig) -> MethodsResponse:
         methods.append(MethodInfo(id="http-header", url="/api/v2/auth/login/header"))
     if config.cas_available:
         methods.append(MethodInfo(id="cas", url="/api/v2/auth/cas/login"))
-    if state.settings.oidc.enabled:
-        methods.append(MethodInfo(id="oidc", url="/api/v2/auth/oidc/login"))
     primary = config.login_method if any(m.id == config.login_method for m in methods) else "form"
     return MethodsResponse(login_method=primary, methods=methods)
 
@@ -130,9 +129,12 @@ def _open_session(
         second_factor_pending=bool(methods),
         second_factor_methods=methods,
     )
+    session.cache[CLIENT_KEY] = client_info(
+        client_ip(request, state), request.headers.get("user-agent")
+    )
     if sso:
         session.cache["sso"] = sso
-        state.sessions.save(session)
+    state.sessions.save(session)
     cfg = state.settings.session
     response.set_cookie(
         cfg.cookie_name,

@@ -21,6 +21,7 @@ from heracles.api.deps import (
 )
 from heracles.api.errors import ApiError, not_found, unauthenticated, validation
 from heracles.api.state import AppState
+from heracles.api.stepup import mark_reauthenticated, require_recent_auth
 from heracles.auth import csrf
 from heracles.auth.login import (
     InvalidLoginError,
@@ -30,7 +31,7 @@ from heracles.auth.login import (
 from heracles.auth.passwords import PasswordPolicyError
 from heracles.auth.recovery import RecoveryError
 from heracles.auth.second_factor import WebAuthnCredential
-from heracles.auth.sessions import Session
+from heracles.auth.sessions import CLIENT_KEY, Session, client_info, session_ref
 from heracles.auth.webauthn import ASSERTION_KEY, REGISTRATION_KEY, WebAuthnError
 from heracles.ldap.client import DirectoryClient, DirectoryError, Scope
 from heracles.ldap.filter import escape_filter_value
@@ -90,7 +91,24 @@ class Me(BaseModel):
 
 
 class ReauthBody(BaseModel):
-    password: Annotated[str, Field(min_length=1, max_length=1024)]
+    """The current password, or a code of an existing second factor."""
+
+    password: Annotated[str, Field(max_length=1024)] = ""
+    method: Literal["totp", "recovery"] | None = None
+    code: Annotated[str, Field(max_length=64)] = ""
+
+
+class SessionOut(BaseModel):
+    id: str
+    user_agent: str
+    ip: str
+    created_at: float
+    last_seen: float
+    current: bool
+
+
+class RevokedOut(BaseModel):
+    revoked: int
 
 
 class WebAuthnOptions(BaseModel):
@@ -191,6 +209,10 @@ def _start_session(
         second_factor_pending=bool(methods),
         second_factor_methods=methods,
     )
+    session.cache[CLIENT_KEY] = client_info(
+        client_ip(request, state), request.headers.get("user-agent")
+    )
+    state.sessions.save(session)
     _set_session_cookie(response, state, session)
     if methods:
         return LoginResponse(status="second_factor", methods=methods)
@@ -327,27 +349,13 @@ def _audit_second_factor_failed(
     )
 
 
-#: How long a login or a password confirmation allows sensitive account changes.
-REAUTH_WINDOW_SECONDS = 5 * 60
-_REAUTH_KEY = "reauth_at"
-
-
-def _require_recent_auth(state: AppState, session: Session) -> None:
-    """Refuse a sensitive change unless the user proved their password recently.
-
-    A fresh login counts; otherwise the client confirms the password through
-    ``POST /auth/reauth`` and retries. A stolen session cookie alone is not enough.
-    """
-    last = float(session.cache.get(_REAUTH_KEY, session.created_at))
-    if state.clock() - last > REAUTH_WINDOW_SECONDS:
-        raise ApiError(403, "reauth_required", "Confirm your password to continue")
-
-
 @router.post("/reauth")
 def reauth(
     body: ReauthBody, request: Request, user: CurrentUserDep, state: StateDep
 ) -> StatusResponse:
-    """Confirm the current password, allowing sensitive changes for a short while."""
+    """Confirm the password (or a second-factor code), allowing sensitive changes a while."""
+    if not body.password and not (body.method and body.code):
+        raise validation("Enter your password", {"password": "Required"})
     key = state.limiter.key(client_ip(request, state), user.dn)
     wait = state.limiter.retry_after(key)
     if wait > 0:
@@ -358,17 +366,24 @@ def reauth(
             extra={"retry_after": math.ceil(wait)},
             headers={"Retry-After": str(math.ceil(wait))},
         )
-    try:
-        ok = user.directory.check_password(user.dn, body.password)
-    except DirectoryError:
-        ok = False
+    if body.method and body.code and not body.password:
+        ok = body.method in state.second_factor.methods_for(user.dn) and state.second_factor.verify(
+            user.dn, body.method, body.code
+        )
+        field_name = "code"
+    else:
+        try:
+            ok = user.directory.check_password(user.dn, body.password)
+        except DirectoryError:
+            ok = False
+        field_name = "password"
     if not ok:
         state.limiter.record_failure(key)
         log.info("reauth_failed", user=user.dn)
         # 422, not 401: a wrong confirmation must not end the session.
-        raise validation("Wrong password", {"password": "Wrong password"})
+        raise validation("Wrong password or code", {field_name: "Wrong value"})
     state.limiter.record_success(key)
-    user.session.cache[_REAUTH_KEY] = state.clock()
+    mark_reauthenticated(state, user.session)
     return StatusResponse()
 
 
@@ -408,7 +423,7 @@ def webauthn_list(user: CurrentUserDep, state: StateDep) -> list[WebAuthnCredent
 
 @router.post("/webauthn/credentials/options")
 def webauthn_register_options(user: CurrentUserDep, state: StateDep) -> WebAuthnOptions:
-    _require_recent_auth(state, user.session)
+    require_recent_auth(state, user.session)
     entry = user.directory.get(user.dn, ["uid", "displayName", "cn"])
     if entry is None:
         raise unauthenticated("Account no longer exists")
@@ -445,9 +460,13 @@ def webauthn_register(
 
 @router.delete("/webauthn/credentials/{credential_id}", status_code=204)
 def webauthn_delete(
-    credential_id: str, user: CurrentUserDep, state: StateDep, confirm_disable: bool = False
+    credential_id: str,
+    request: Request,
+    user: CurrentUserDep,
+    state: StateDep,
+    confirm_disable: bool = False,
 ) -> None:
-    _require_recent_auth(state, user.session)
+    require_recent_auth(state, user.session)
     try:
         raw = base64url_to_bytes(credential_id)
     except ValueError:
@@ -472,6 +491,8 @@ def webauthn_delete(
         object_dn=user.dn,
         attributes=["security key: removed"],
     )
+    if not _real_factors(state, user.dn):
+        _second_factor_turned_off(state, user, request)
 
 
 # -- TOTP and recovery codes (self-service) ------------------------------------------------------
@@ -482,6 +503,31 @@ _TOTP_PENDING_KEY = "totp_pending"
 
 def _real_factors(state: AppState, user_dn: str) -> list[str]:
     return [m for m in state.second_factor.methods_for(user_dn) if m != "recovery"]
+
+
+def _second_factor_turned_off(state: AppState, user: CurrentUserDep, request: Request) -> None:
+    """The last second factor is gone: audit it and tell the user by mail (when it is set up)."""
+    log.warning("second_factor_turned_off", user=user.dn)
+    state.audit.record_by(
+        user,
+        "second_factor",
+        object_type="user",
+        object_dn=user.dn,
+        attributes=["2FA turned off: last second factor removed"],
+    )
+    try:
+        entry = user.directory.get(user.dn, ["mail"])
+        address = entry.text("mail") if entry is not None else None
+        if address:
+            state.mailer.send(
+                address,
+                "Two-factor authentication turned off",
+                "Two-factor authentication was turned off on your account "
+                f"(request from {client_ip(request, state)}).\n"
+                "If this was not you, change your password and contact an administrator.",
+            )
+    except Exception:
+        log.exception("second_factor_mail_failed")
 
 
 @router.get("/totp")
@@ -497,7 +543,7 @@ def totp_status(user: CurrentUserDep, state: StateDep) -> TotpStatus:
 @router.post("/totp/begin")
 def totp_begin(user: CurrentUserDep, state: StateDep) -> TotpEnrolment:
     """Issue a secret for the authenticator app; it only counts once confirmed."""
-    _require_recent_auth(state, user.session)
+    require_recent_auth(state, user.session)
     entry = user.directory.get(user.dn, ["uid", "cn"])
     if entry is None:
         raise unauthenticated("Account no longer exists")
@@ -510,7 +556,7 @@ def totp_begin(user: CurrentUserDep, state: StateDep) -> TotpEnrolment:
 @router.post("/totp/confirm")
 def totp_confirm(body: TotpConfirmBody, user: CurrentUserDep, state: StateDep) -> StatusResponse:
     """Activate TOTP if the code matches the pending secret (kept for retries on a typo)."""
-    _require_recent_auth(state, user.session)
+    require_recent_auth(state, user.session)
     cache = user.session.cache
     pending = cache.get(_TOTP_PENDING_KEY)
     if pending is None or state.clock() > pending[1]:
@@ -532,8 +578,10 @@ def totp_confirm(body: TotpConfirmBody, user: CurrentUserDep, state: StateDep) -
 
 
 @router.delete("/totp", status_code=204)
-def totp_disable(user: CurrentUserDep, state: StateDep, confirm_disable: bool = False) -> None:
-    _require_recent_auth(state, user.session)
+def totp_disable(
+    request: Request, user: CurrentUserDep, state: StateDep, confirm_disable: bool = False
+) -> None:
+    require_recent_auth(state, user.session)
     store = state.second_factor.store
     if not store.totp_secret(user.dn):
         raise not_found()
@@ -555,12 +603,14 @@ def totp_disable(user: CurrentUserDep, state: StateDep, confirm_disable: bool = 
         object_dn=user.dn,
         attributes=["authenticator app: disabled"],
     )
+    if not _real_factors(state, user.dn):
+        _second_factor_turned_off(state, user, request)
 
 
 @router.post("/recovery-codes")
 def recovery_codes_generate(user: CurrentUserDep, state: StateDep) -> RecoveryCodes:
     """(Re)generate the single-use codes; the clear values are returned only here."""
-    _require_recent_auth(state, user.session)
+    require_recent_auth(state, user.session)
     if not _real_factors(state, user.dn):
         raise ApiError(
             409,
@@ -600,6 +650,54 @@ def logout(request: Request, response: Response, state: StateDep) -> None:
             except Exception:
                 log.exception("logout_hook_failed")
     response.delete_cookie(state.settings.session.cookie_name, path="/")
+
+
+# -- active sessions (self-service) --------------------------------------------------------------
+@router.get("/sessions")
+def my_sessions(user: CurrentUserDep, state: StateDep) -> list[SessionOut]:
+    """The signed-in person's active sessions (devices), the current one marked."""
+    mine = session_ref(user.session.id)
+    return [
+        SessionOut(
+            id=i.ref,
+            user_agent=i.user_agent,
+            ip=i.ip,
+            created_at=i.created_at,
+            last_seen=i.last_seen,
+            current=i.ref == mine,
+        )
+        for i in state.sessions.list_for_user(user.dn)
+    ]
+
+
+def _audit_revoke(state: AppState, user: CurrentUserDep, target_dn: str, what: str) -> None:
+    log.info("sessions_revoked", actor=user.dn, target=target_dn, what=what)
+    state.audit.record_by(
+        user,
+        "logout",
+        object_type="user",
+        object_dn=target_dn,
+        attributes=[what],
+    )
+
+
+@router.delete("/sessions/{ref}", status_code=204)
+def revoke_session(ref: str, user: CurrentUserDep, state: StateDep) -> None:
+    """Sign one of the person's other sessions out."""
+    if ref == session_ref(user.session.id):
+        raise validation("Use sign out for this session", {"id": "This is the current session"})
+    if not state.sessions.delete_for_user(user.dn, ref=ref):
+        raise not_found("Session not found")
+    _audit_revoke(state, user, user.dn, "session revoked")
+
+
+@router.post("/sessions/revoke-others")
+def revoke_other_sessions(user: CurrentUserDep, state: StateDep) -> RevokedOut:
+    """Sign out everywhere but here."""
+    count = state.sessions.delete_for_user(user.dn, keep=session_ref(user.session.id))
+    if count:
+        _audit_revoke(state, user, user.dn, f"other sessions revoked: {count}")
+    return RevokedOut(revoked=count)
 
 
 class MyGroup(BaseModel):
@@ -727,14 +825,3 @@ def recovery_confirm(
         attributes=["password: reset with a recovery link"],
     )
     return StatusResponse()
-
-
-# -- OIDC (stubs) --------------------------------------------------------------------------------
-@router.get("/oidc/login")
-def oidc_login() -> None:
-    raise ApiError(501, "not_implemented", "OIDC login is not implemented yet")
-
-
-@router.get("/oidc/callback")
-def oidc_callback() -> None:
-    raise ApiError(501, "not_implemented", "OIDC login is not implemented yet")

@@ -34,7 +34,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, cast
 
-from heracles.auth.sessions import Session
+from heracles.auth.sessions import CLIENT_KEY, Session, SessionInfo
 from heracles.storage import Database
 
 COMPONENT = "sessions"
@@ -362,6 +362,49 @@ class SqliteSessionStore:
         session = None if row is None else self._loaded(row, session_id, key, row["last_seen"])
         self._side_drop(key)
         return session
+
+    def list_for_user(self, user_dn: str) -> list[SessionInfo]:
+        now = self._clock()
+        with self._db.connection() as conn:
+            rows = conn.execute(
+                "SELECT id_hash, directory_id, created_at, last_seen, cache FROM sessions"
+                " WHERE user_dn = ? AND second_factor_pending = 0",
+                (user_dn,),
+            ).fetchall()
+        infos: list[SessionInfo] = []
+        for row in rows:
+            if self._expired(row, now):
+                continue
+            stored = cast("dict[str, Any]", json.loads(row["cache"]))
+            client = cast("dict[str, Any]", _decode(stored.get(CLIENT_KEY, {})))
+            infos.append(
+                SessionInfo(
+                    str(row["id_hash"])[:32],
+                    row["directory_id"],
+                    float(row["created_at"]),
+                    float(row["last_seen"]),
+                    str(client.get("ip", "")),
+                    str(client.get("ua", "")),
+                )
+            )
+        return sorted(infos, key=lambda i: i.last_seen, reverse=True)
+
+    def delete_for_user(
+        self, user_dn: str, *, ref: str | None = None, keep: str | None = None
+    ) -> int:
+        removed = 0
+        with self._db.transaction() as conn:
+            rows = conn.execute(
+                "SELECT id_hash FROM sessions WHERE user_dn = ?", (user_dn,)
+            ).fetchall()
+            for row in rows:
+                key = str(row["id_hash"])
+                if (ref is not None and key[:32] != ref) or (keep is not None and key[:32] == keep):
+                    continue
+                conn.execute("DELETE FROM sessions WHERE id_hash = ?", (key,))
+                removed += 1
+                self._side_drop(key)
+        return removed
 
     def save(self, session: Session) -> None:
         loaded = session.persisted

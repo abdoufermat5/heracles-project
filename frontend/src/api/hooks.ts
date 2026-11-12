@@ -24,6 +24,7 @@ export const qk = {
   refSearch: (type: string, q: string) => ['objects', type, 'ref', q] as const,
   dashboard: ['dashboard'] as const,
   securityKeys: ['security-keys'] as const,
+  sessions: ['sessions'] as const,
   totp: ['totp'] as const,
   snapshots: (type: string, dn: string) => ['snapshots', type, dn] as const,
 }

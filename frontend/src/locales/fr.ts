@@ -10,6 +10,7 @@ import { adminFr } from '@/features/admin/locale-fr'
 import { setupFr } from '@/features/setup/locale-fr'
 import { onboardingFr } from '@/features/onboarding/locale-fr'
 import { auditFr } from '@/features/audit/locale-fr'
+import { meFr } from '@/features/me/locale-fr'
 
 const fr: Translation = {
   common: {
@@ -415,6 +416,7 @@ const fr: Translation = {
   ...auditFr,
   ...setupFr,
   ...onboardingFr,
+  ...meFr,
   // --- P3 compat ---
   io: {
     title: 'Import / export',
@@ -498,7 +500,6 @@ const fr: Translation = {
       cas: 'Se connecter avec l’authentification unique',
       httpBasic: 'Se connecter avec les identifiants du navigateur',
       httpHeader: 'Se connecter avec votre compte d’organisation',
-      oidc: 'Se connecter avec OpenID Connect',
     },
     or: 'ou',
     failed: 'L’authentification unique a échoué. Réessayez ou utilisez votre compte d’annuaire.',

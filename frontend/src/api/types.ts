@@ -85,6 +85,21 @@ export interface WebAuthnCredentialInfo {
   sign_count: number
 }
 
+/** One active session of the signed-in person (`GET /auth/sessions`). */
+export interface SessionInfo {
+  /** Opaque reference (not the cookie value). */
+  id: string
+  user_agent: string
+  ip: string
+  /** Unix seconds. */
+  created_at: number
+  last_seen: number
+  current: boolean
+}
+
+/** What confirms the identity again before a sensitive change. */
+export type ReauthProof = { password: string } | { method: 'totp' | 'recovery'; code: string }
+
 export interface WebAuthnRegisterRequest {
   label: string
   credential: Record<string, unknown>

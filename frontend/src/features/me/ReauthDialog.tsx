@@ -19,16 +19,21 @@ export function ReauthDialog({
   open,
   onCancel,
   onConfirmed,
+  body,
 }: {
   open: boolean
   onCancel: () => void
   onConfirmed: () => void
+  /** Explains what the confirmation is for (defaults to the two-factor wording). */
+  body?: string
 }) {
   const { t } = useTranslation()
+  const [useCode, setUseCode] = useState(false)
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const confirm = useMutation({
-    mutationFn: (pw: string) => api.reauth(pw),
+    mutationFn: (value: string) =>
+      api.reauth(useCode ? { method: 'totp', code: value.trim() } : { password: value }),
     onSuccess: () => {
       setPassword('')
       setError(null)
@@ -58,17 +63,31 @@ export function ReauthDialog({
         >
           <DialogHeader>
             <DialogTitle className="text-lead">{t('security.reauthTitle')}</DialogTitle>
-            <DialogDescription className="text-body">{t('security.reauthBody')}</DialogDescription>
+            <DialogDescription className="text-body">
+              {body ?? t('security.reauthBody')}
+            </DialogDescription>
           </DialogHeader>
           <Input
-            type="password"
-            autoComplete="current-password"
+            type={useCode ? 'text' : 'password'}
+            autoComplete={useCode ? 'one-time-code' : 'current-password'}
+            inputMode={useCode ? 'numeric' : undefined}
             autoFocus
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            aria-label={t('security.password')}
+            aria-label={useCode ? t('reauth.code') : t('security.password')}
             className="h-8 text-body"
           />
+          <button
+            type="button"
+            className="justify-self-start text-body text-primary underline-offset-4 hover:underline"
+            onClick={() => {
+              setUseCode((v) => !v)
+              setPassword('')
+              setError(null)
+            }}
+          >
+            {useCode ? t('reauth.usePassword') : t('reauth.useCode')}
+          </button>
           {error && (
             <p role="alert" className="text-body text-destructive">
               {error}

@@ -106,13 +106,6 @@ def test_header_login_disabled_by_default(env: Env) -> None:
     assert r.status_code == 404
 
 
-def test_oidc_routes_are_stubbed(env: Env) -> None:
-    for path in ("/api/v2/auth/oidc/login", "/api/v2/auth/oidc/callback"):
-        r = env.client.get(path)
-        assert r.status_code == 501
-        assert r.json()["error"]["code"] == "not_implemented"
-
-
 def test_static_spa_with_history_fallback(tmp_path: Path) -> None:
     (tmp_path / "assets").mkdir()
     (tmp_path / "index.html").write_text("<html>spa</html>")
@@ -137,3 +130,18 @@ def test_static_spa_with_history_fallback(tmp_path: Path) -> None:
 def test_no_static_dir_means_plain_404() -> None:
     app = create_app(ApiSettings(static_dir=Path("/nonexistent")), {"main": FakeDirectory()})
     assert TestClient(app).get("/").status_code == 404
+
+
+def test_hsts_only_over_https_and_permissions_policy(env: Env) -> None:
+    plain_client = TestClient(env.client.app, base_url="http://testserver")
+    plain = plain_client.get("/healthz")
+    assert "strict-transport-security" not in plain.headers
+    assert "camera=()" in plain.headers["permissions-policy"]
+    assert "publickey-credentials-get=(self)" in plain.headers["permissions-policy"]
+    secure = TestClient(env.client.app, base_url="https://testserver").get("/healthz")
+    assert secure.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
+    # a forwarded scheme counts only from a trusted proxy
+    assert (
+        "strict-transport-security"
+        not in plain_client.get("/healthz", headers={"X-Forwarded-Proto": "https"}).headers
+    )

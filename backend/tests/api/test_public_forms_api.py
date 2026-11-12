@@ -23,6 +23,7 @@ from heracles.objects import ObjectService, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
 from heracles.server import create_full_app
 from heracles_plugins.public_forms import Captcha, PublicFormsSettings, build_public_router
+from heracles_plugins.public_forms.captcha import solve
 from heracles_plugins.public_forms.router import SubmissionWindow
 
 CLASSES = ["hrcPublicForm", "hrcInvitation", "hrcRegistration", "hrcUserRegistration"]
@@ -73,7 +74,7 @@ class Env:
         self.service = ObjectService(d, self.registry)
         self.clock = Clock()
         self.mailer = MemoryMailer()
-        self.captcha = Captcha(b"k" * 32, clock=self.clock)
+        self.captcha = Captcha(b"k" * 32, clock=self.clock, difficulty=8)
         app = FastAPI()
         app.include_router(
             build_public_router(
@@ -196,44 +197,53 @@ def test_default_locked_accounts(env: Env) -> None:
     assert is_locked(entry.text("userPassword") or "")
 
 
+def _solved(env: Env) -> dict[str, Any]:
+    challenge = env.client.get(f"{PATH}/join/captcha").json()
+    assert challenge["algorithm"] == "sha256" and "question" not in challenge
+    counter = solve(challenge["nonce"], challenge["difficulty"])
+    env.clock.now += challenge["min_fill_seconds"] + 1
+    return {"captcha_token": challenge["token"], "captcha_answer": str(counter)}
+
+
 def test_terms_and_captcha(env: Env) -> None:
     env.form(hrcPublicFormCaptcha=True, hrcPublicFormTosUrl="https://example.com/terms")
     assert env.client.get(f"{PATH}/join").json()["tos_url"] == "https://example.com/terms"
-    challenge = env.client.get(f"{PATH}/join/captcha").json()
-    a, _plus, b = challenge["question"].split()
-    answer = str(int(a) + int(b))
+    proof = _solved(env)
 
-    wrong = env.post(
-        {"values": person(), "captcha_token": challenge["token"], "captcha_answer": "0"}
-    )
+    wrong = env.post({"values": person(), **proof, "captcha_answer": "x"})
     assert wrong.status_code == 422 and "captcha_answer" in wrong.json()["error"]["fields"]
-    no_terms = env.post(
-        {"values": person(), "captcha_token": challenge["token"], "captcha_answer": answer}
-    )
+    no_terms = env.post({"values": person(), **proof})
     assert no_terms.status_code == 422 and "accept_terms" in no_terms.json()["error"]["fields"]
     # the challenge was consumed by the previous attempt
-    fresh = env.client.get(f"{PATH}/join/captcha").json()
-    a, _plus, b = fresh["question"].split()
-    ok = env.post(
-        {
-            "values": person(),
-            "captcha_token": fresh["token"],
-            "captcha_answer": str(int(a) + int(b)),
-            "accept_terms": True,
-        }
-    )
+    fresh = _solved(env)
+    ok = env.post({"values": person(), **fresh, "accept_terms": True})
     assert ok.status_code == 201, ok.text
-    replay = env.post(
-        {
-            "values": person(**{"main.uid": "other"}),
-            "captcha_token": fresh["token"],
-            "captcha_answer": str(int(a) + int(b)),
-            "accept_terms": True,
-        }
-    )
+    replay = env.post({"values": person(**{"main.uid": "other"}), **fresh, "accept_terms": True})
     assert replay.status_code == 422
     no_captcha_form = env.client.get(f"{PATH}/other/captcha")
     assert no_captcha_form.status_code == 404
+
+
+def test_captcha_needs_some_time_and_the_work(env: Env) -> None:
+    env.form(hrcPublicFormCaptcha=True)
+    challenge = env.client.get(f"{PATH}/join/captcha").json()
+    counter = solve(challenge["nonce"], challenge["difficulty"])
+    body = {
+        "values": person(),
+        "captcha_token": challenge["token"],
+        "captcha_answer": str(counter),
+    }
+    too_fast = env.post(body)  # a script: no time passed since the challenge was issued
+    assert too_fast.status_code == 422
+    env.clock.now += challenge["min_fill_seconds"] + 1
+    assert env.post(body).status_code == 201
+
+
+def test_honeypot_drops_the_submission_silently(env: Env) -> None:
+    env.form()
+    r = env.post({"values": person(), "website": "spam"})
+    assert r.status_code == 201
+    assert env.directory.get(f"uid=jdoe,ou=people,{BASE}") is None
 
 
 def test_failed_attempts_are_rate_limited(env: Env) -> None:

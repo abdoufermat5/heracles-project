@@ -13,10 +13,12 @@ import type {
   ObjectList,
   ObjectReference,
   PatchObjectRequest,
+  ReauthProof,
   RecoveryCodes,
   RecoveryConfirm,
   RecoveryRequest,
   SecondFactorRequest,
+  SessionInfo,
   Snapshot,
   TotpEnrolment,
   TotpStatus,
@@ -70,8 +72,19 @@ export const api = {
     }),
   generateRecoveryCodes: () => request<RecoveryCodes>('/auth/recovery-codes', { method: 'POST' }),
   /** Confirm the password before a sensitive account change (second factors). */
-  reauth: (password: string) =>
-    request<{ status: 'ok' }>('/auth/reauth', { method: 'POST', body: { password } }),
+  reauth: (proof: ReauthProof | string) =>
+    request<{ status: 'ok' }>('/auth/reauth', {
+      method: 'POST',
+      body: typeof proof === 'string' ? { password: proof } : proof,
+    }),
+  listSessions: () => request<SessionInfo[]>('/auth/sessions'),
+  revokeSession: (id: string) =>
+    request<undefined>(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  revokeOtherSessions: () =>
+    request<{ revoked: number }>('/auth/sessions/revoke-others', { method: 'POST' }),
+  /** Administrator: sign a user out everywhere (needs the right to lock the account). */
+  revokeUserSessions: (dn: string) =>
+    request<{ revoked: number }>(`/users/${dnPath(dn)}/sessions`, { method: 'DELETE' }),
   logout: async () => {
     if (hasSsoCookie()) {
       // opened through CAS: the server ends our session and the CAS one, then returns to /login

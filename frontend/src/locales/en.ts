@@ -9,6 +9,7 @@ import { adminEn } from '@/features/admin/locale-en'
 import { setupEn } from '@/features/setup/locale-en'
 import { onboardingEn } from '@/features/onboarding/locale-en'
 import { auditEn } from '@/features/audit/locale-en'
+import { meEn } from '@/features/me/locale-en'
 
 const en = {
   common: {
@@ -414,6 +415,7 @@ const en = {
   ...auditEn,
   ...setupEn,
   ...onboardingEn,
+  ...meEn,
   // --- P3 compat ---
   io: {
     title: 'Import / export',
@@ -497,7 +499,6 @@ const en = {
       cas: 'Sign in with single sign-on',
       httpBasic: 'Sign in with browser credentials',
       httpHeader: 'Sign in with your organization account',
-      oidc: 'Sign in with OpenID Connect',
     },
     or: 'or',
     failed: 'Single sign-on failed. Try again or use your directory account.',

@@ -11,10 +11,11 @@ from fastapi import APIRouter, Body, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
 from heracles.acl import Rights
-from heracles.api.deps import CurrentUserDep
+from heracles.api.deps import CurrentUserDep, StateDep
 from heracles.api.domain import DomainDep, TypeAclPolicy
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.etag import json_with_etag
+from heracles.api.stepup import require_recent_auth
 from heracles.attributes import JSON
 from heracles.core import references
 from heracles.core.config_store import effective_settings
@@ -701,16 +702,26 @@ def get_object(type_name: str, dn: str, user: CurrentUserDep, domain: DomainDep)
 
 @router.patch("/objects/{type_name}/{dn:path}")
 def patch_object(
-    type_name: str, dn: str, body: PatchBody, user: CurrentUserDep, domain: DomainDep
+    type_name: str,
+    dn: str,
+    body: PatchBody,
+    user: CurrentUserDep,
+    domain: DomainDep,
+    state: StateDep,
 ) -> dict[str, JSON]:
     _check_not_locked_by_other(domain, user, dn)
+    if dnlib.normalize(dn) == dnlib.normalize(user.dn) and any(
+        "userPassword" in (tab.values or {}) for tab in body.tabs.values()
+    ):
+        # Changing your own password: a stolen session alone must not be enough.
+        require_recent_auth(state, user.session)
     with object_errors():
         service, policy = domain.service(user, type_name)
-        state = service.update(type_name, dn, _tabs_json(body.tabs))
-        if dnlib.normalize(state.dn) != dnlib.normalize(dn):
+        updated = service.update(type_name, dn, _tabs_json(body.tabs))
+        if dnlib.normalize(updated.dn) != dnlib.normalize(dn):
             locks = domain.locks(user.directory_id, user.directory)
             locks.release(dn, user.dn)
-        return _with_event_output(user, domain, object_json(service, policy, state))
+        return _with_event_output(user, domain, object_json(service, policy, updated))
 
 
 @router.delete("/objects/{type_name}/{dn:path}", status_code=status.HTTP_204_NO_CONTENT)

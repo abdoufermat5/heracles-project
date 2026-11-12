@@ -8,6 +8,7 @@ import { SectionCard } from '@/components/patterns/SectionCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ReauthDialog } from '@/features/me/ReauthDialog'
 import { generatePassword, passwordStrength } from '@/lib/password'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +28,8 @@ export function PasswordSection({ userDn, allowed = true }: { userDn: string; al
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Set when the server asks to confirm the password first; retried once confirmed. */
+  const [needsReauth, setNeedsReauth] = useState(false)
 
   const score = passwordStrength(newPassword)
   const isMatching = newPassword !== '' && confirmPassword !== '' && newPassword === confirmPassword
@@ -46,15 +49,8 @@ export function PasswordSection({ userDn, allowed = true }: { userDn: string; al
     toast.success(t('fields.passwordGenerated'))
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const submit = async () => {
     setError(null)
-
-    if (!isMatching) {
-      setError(t('settingsUI.portal.passwordsDoNotMatch'))
-      return
-    }
-
     try {
       await patch.mutateAsync({
         tabs: {
@@ -69,6 +65,10 @@ export function PasswordSection({ userDn, allowed = true }: { userDn: string; al
       setConfirmPassword('')
       setShowPassword(false)
     } catch (err) {
+      if (isApiError(err) && err.code === 'reauth_required') {
+        setNeedsReauth(true)
+        return
+      }
       setError(isApiError(err) ? err.message : t('common.error'))
       toast.error(isApiError(err) ? err.message : t('common.error'))
     }
@@ -83,7 +83,17 @@ export function PasswordSection({ userDn, allowed = true }: { userDn: string; al
       {!allowed ? (
         <p className="text-small text-muted-foreground">{t('settingsUI.portal.passwordNotAllowed')}</p>
       ) : (
-      <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!isMatching) {
+            setError(t('settingsUI.portal.passwordsDoNotMatch'))
+            return
+          }
+          void submit()
+        }}
+        className="max-w-lg space-y-4"
+      >
         {/* New password input */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
@@ -190,6 +200,15 @@ export function PasswordSection({ userDn, allowed = true }: { userDn: string; al
         </Button>
       </form>
       )}
+      <ReauthDialog
+        open={needsReauth}
+        body={t('reauth.passwordChangeBody')}
+        onCancel={() => setNeedsReauth(false)}
+        onConfirmed={() => {
+          setNeedsReauth(false)
+          void submit()
+        }}
+      />
     </SectionCard>
   )
 }
