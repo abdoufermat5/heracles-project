@@ -11,6 +11,7 @@ import {
   Lock,
   LockOpen,
   Mail,
+  LogOut,
   MoreHorizontal,
   Phone,
   Plus,
@@ -59,6 +60,7 @@ import { useObjectLdif, useReferences, useSecondFactors, useSnapshots } from '@/
 import { FieldRow } from '@/features/editor/FieldRow'
 import { LdifDialog } from '@/features/editor/LdifDialog'
 import { SaveReviewDialog } from '@/features/editor/SaveReviewDialog'
+import { RevokeUserSessionsDialog } from '@/features/me/RevokeUserSessionsDialog'
 import { useUndoableSave } from '@/features/editor/undo'
 import { LockedDialog } from '@/features/editor/LockedDialog'
 import { ReferencesPanel } from '@/features/editor/ReferencesPanel'
@@ -118,6 +120,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   const [addToGroupOpen, setAddToGroupOpen] = useState(false)
   const [offboardOpen, setOffboardOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
+  const [revokeOpen, setRevokeOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [ldifOpen, setLdifOpen] = useState(false)
   const [review, setReview] = useState<{ section: string; diffs: FieldDiff[] } | null>(null)
@@ -504,6 +507,12 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
                   <History className="size-4" />
                   {t('peopleUI.userProfile.actions.snapshots')}
                 </DropdownMenuItem>
+                {canEdit && (
+                  <DropdownMenuItem onClick={() => setRevokeOpen(true)}>
+                    <LogOut className="size-4" />
+                    {t('sessions.admin.confirm')}
+                  </DropdownMenuItem>
+                )}
                 {canDelete && (
                   <>
                     <DropdownMenuSeparator />
@@ -935,6 +944,8 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
           void referencesQuery.refetch()
         }}
       />
+
+      <RevokeUserSessionsDialog dn={dn} name={cnVal} open={revokeOpen} onOpenChange={setRevokeOpen} />
 
       <ConfirmDialog
         open={deleteConfirmOpen}
