@@ -52,7 +52,7 @@ export function PasswordField({ p }: { p: FieldInputProps }) {
             if (v === '') setConfirm('')
           }}
           disabled={p.readOnly}
-          placeholder={t('fields.passwordUnchanged')}
+          placeholder={p.placeholder ?? t('fields.passwordUnchanged')}
           autoComplete="new-password"
           aria-invalid={p.invalid || undefined}
           aria-describedby={p.error ? `${p.id}-error` : undefined}

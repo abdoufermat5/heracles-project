@@ -15,6 +15,8 @@ export interface FieldInputProps {
   /** Password confirmation (controlled by the form when provided). */
   confirm?: string
   onConfirmChange?: (value: string) => void
+  /** Placeholder of the main input (password fields: "unchanged" by default, for edit forms). */
+  placeholder?: string
 }
 
 /** Read the message at a sub-path of an RHF error tree. */

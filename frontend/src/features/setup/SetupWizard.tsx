@@ -610,6 +610,7 @@ function AdminStep({
             onChange: (v) => set({ password: typeof v === 'string' ? v : '' }),
             confirm,
             onConfirmChange: setConfirm,
+            placeholder: '',
           }}
         />
         {short && (
