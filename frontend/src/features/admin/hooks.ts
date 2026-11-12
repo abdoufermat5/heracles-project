@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { qk } from '@/api/hooks'
+import { forgetIoAbsence } from '@/features/io/hooks'
 import { adminApi } from './api'
 import type { Assignment, ConfigValue, Hook, PluginInfo, RoleInput, RoleTemplate } from './types'
 
@@ -148,6 +149,8 @@ export function useTogglePlugin() {
       if (ctx?.previous) qc.setQueryData(ak.plugins, ctx.previous)
     },
     onSettled: () => {
+      forgetIoAbsence()
+      void qc.invalidateQueries({ queryKey: ['io', 'access'] })
       void qc.invalidateQueries({ queryKey: ak.plugins })
       void qc.invalidateQueries({ queryKey: ak.caps })
       void qc.invalidateQueries({ queryKey: qk.types })

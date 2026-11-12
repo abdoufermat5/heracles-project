@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useDashboard, useTypes } from '@/api/hooks'
+import { useDashboard, usePrefetch, useTypes } from '@/api/hooks'
 import { NAV_GROUPS, type NavGroup, type TypeSummary } from '@/api/types'
 import { useCapabilities } from '@/features/admin/hooks'
 import { useIoAccess } from '@/features/io/hooks'
@@ -109,9 +109,13 @@ function NavLink({
   onTogglePin?: (type: string) => void
 }) {
   const { t } = useTranslation()
+  const prefetch = usePrefetch()
   const { label, count } = item
+  const warm = item.type ? () => prefetch.type(item.type ?? '') : undefined
   const link = (
     <Link
+      onMouseEnter={warm}
+      onFocus={warm}
       to={item.to as never}
       params={item.params as never}
       activeOptions={{ exact: item.exact }}

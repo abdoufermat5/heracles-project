@@ -4,6 +4,7 @@ import { settingsFr } from './settings.fr'
 import type { Translation } from './en'
 import { objectsFr } from './objects.fr'
 import { sidebarFr } from './sidebar.fr'
+import { shellFr } from './shell.fr'
 import { adminFr } from '@/features/admin/locale-fr'
 import { setupFr } from '@/features/setup/locale-fr'
 import { onboardingFr } from '@/features/onboarding/locale-fr'
@@ -34,6 +35,7 @@ const fr: Translation = {
   ...accessFr,
   ...settingsFr,
   ...sidebarFr,
+  ...shellFr,
   // --- end P3 objects ---
   categories: {
     directory: 'Annuaire',

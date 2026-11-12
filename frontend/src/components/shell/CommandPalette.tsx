@@ -1,27 +1,35 @@
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Clock,
-  LayoutDashboard,
-  LogOut,
-  Moon,
-  Languages,
-  Plus,
-  X,
-  User,
-  ExternalLink,
-} from 'lucide-react'
+import { Clock, Plus, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useTypes } from '@/api/hooks'
+import { toast } from 'sonner'
+import { usePrefetch, useTypes } from '@/api/hooks'
 import { api } from '@/api/endpoints'
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from '@/components/ui/command'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Kbd } from '@/components/ui/kbd'
+import { useCapabilities } from '@/features/admin/hooks'
+import { comboLabels } from '@/lib/hotkeys'
 import { TypeIcon } from '@/lib/icons'
 import { rdnValue } from '@/lib/objects'
 import { useTheme } from '@/lib/theme'
 import { addRecentItem, getRecentItems } from './recent'
+import {
+  buildPaletteActions,
+  currentObjectOf,
+  fuzzyScore,
+  navShortcuts,
+  type PaletteAction,
+} from './paletteActions'
 
 function useDebounced<T>(value: T, ms = 220): T {
   const [v, setV] = useState(value)
@@ -32,12 +40,44 @@ function useDebounced<T>(value: T, ms = 220): T {
   return v
 }
 
+const itemClass = 'flex items-center gap-2 px-2.5'
+
+/** A palette row: an action or a destination, with an optional prefetch hint on intent. */
+interface Entry extends PaletteAction {
+  typeIcon?: string
+  hint?: () => void
+}
+
+function Row({ entry, onSelect }: { entry: Entry; onSelect: () => void }) {
+  const Icon = entry.icon
+  return (
+    <CommandItem
+      value={entry.id}
+      onSelect={onSelect}
+      onMouseEnter={entry.hint}
+      onFocus={entry.hint}
+      className={itemClass + (entry.destructive ? ' text-destructive focus:text-destructive' : '')}
+    >
+      {entry.typeIcon ? (
+        <TypeIcon name={entry.typeIcon} className="size-3.5 shrink-0" />
+      ) : (
+        <Icon className="size-3.5 shrink-0" aria-hidden />
+      )}
+      <span className="truncate">{entry.label}</span>
+      {entry.shortcut && <Kbd keys={comboLabels(entry.shortcut)} className="ml-auto" />}
+    </CommandItem>
+  )
+}
+
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { toggle } = useTheme()
   const { data: types } = useTypes()
+  const { data: caps } = useCapabilities()
+  const prefetch = usePrefetch()
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
   const [q, setQ] = useState('')
   const dq = useDebounced(q.trim())
   const recents = useMemo(() => (open ? getRecentItems() : []), [open])
@@ -59,26 +99,94 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     onOpenChange(false)
     fn()
   }
-
-  const needle = q.trim().toLowerCase()
-  const match = (s: string) => !needle || s.toLowerCase().includes(needle)
-  const creatable = types?.filter((ty) => ty.can_create && match(t('palette.create', { type: ty.label }))) ?? []
-  const actionsVisible =
-    creatable.length > 0 ||
-    match(t('palette.toggleTheme')) ||
-    match(t('palette.switchLanguage')) ||
-    match(t('user.logout'))
+  const go = (to: string, opts?: { params?: Record<string, string>; search?: Record<string, string> }) =>
+    void navigate({ to: to as never, params: opts?.params as never, search: opts?.search as never })
 
   const logout = async () => {
-    await api.logout()
-    qc.clear()
-    void navigate({ to: '/login' })
+    try {
+      await api.logout()
+    } finally {
+      qc.clear()
+      void navigate({ to: '/login' })
+    }
   }
+
+  const current = currentObjectOf(pathname)
+  const currentTitle = current ? recents.find((r) => r.dn.toLowerCase() === current.dn.toLowerCase())?.title : undefined
+
+  const entries = useMemo(() => {
+    const canCreate = (name: string) => types?.find((ty) => ty.name === name)?.can_create === true
+    const nav: Entry[] = navShortcuts(caps)
+      .filter((n) => !n.cap || caps?.[n.cap])
+      .map((n) => ({
+        id: `nav:${n.combo}`,
+        label: t(n.labelKey),
+        icon: n.icon,
+        shortcut: n.combo,
+        run: () => go(n.to, { params: n.params }),
+        hint: n.params?.type ? () => prefetch.type(n.params?.type ?? '') : undefined,
+      }))
+    const shortcutTypes = new Set(['user', 'group'])
+    const typeNav: Entry[] = (types ?? [])
+      .filter((ty) => !shortcutTypes.has(ty.name))
+      .map((ty) => ({
+        id: `type:${ty.name}`,
+        label: ty.label_plural,
+        icon: Clock,
+        typeIcon: ty.icon,
+        run: () => go('/types/$type', { params: { type: ty.name } }),
+        hint: () => prefetch.type(ty.name),
+      }))
+    const actions: Entry[] = [
+      ...buildPaletteActions({
+        t,
+        can: { createUser: canCreate('user'), createGroup: canCreate('group'), acl: caps?.acl === true },
+        current,
+        currentLabel: currentTitle,
+        go,
+        toggleTheme: toggle,
+        switchLanguage: () => void i18n.changeLanguage(i18n.language.startsWith('fr') ? 'en' : 'fr'),
+        signOut: () => void logout(),
+        copyDn: (dn) => {
+          navigator.clipboard.writeText(dn).then(
+            () => toast.success(t('shellUI.palette.copied')),
+            () => toast.error(t('shellUI.palette.copyFailed')),
+          )
+        },
+      }),
+      ...(types ?? [])
+        .filter((ty) => ty.can_create && !shortcutTypes.has(ty.name))
+        .map((ty) => ({
+          id: `create:${ty.name}`,
+          label: t('palette.create', { type: ty.label }),
+          icon: Plus,
+          run: () => go('/types/$type/new', { params: { type: ty.name } }),
+        })),
+    ]
+    return { nav, typeNav, actions }
+    // go/logout/toggle are recreated every render; what matters is listed here
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caps, types, t, current?.dn, currentTitle, i18n.language])
+
+  const needle = q.trim()
+  const rank = (items: Entry[]): Entry[] => {
+    if (!needle) return items
+    return items
+      .map((it) => ({ it, s: fuzzyScore(needle, it.label) }))
+      .filter((x): x is { it: Entry; s: number } => x.s !== null)
+      .sort((a, b) => b.s - a.s)
+      .map((x) => x.it)
+  }
+  const nav = rank(entries.nav)
+  const typeNav = rank(entries.typeNav)
+  const actions = rank(entries.actions)
+  const recentHits = needle ? recents.filter((r) => fuzzyScore(needle, `${r.title} ${r.dn}`) !== null) : recents
 
   const onSelectObject = (type: string, dn: string, title: string) => {
     addRecentItem({ dn, type, title, subtitle: dn })
-    run(() => void navigate({ to: '/types/$type/$dn', params: { type, dn } }))
+    run(() => go('/types/$type/$dn', { params: { type, dn } }))
   }
+  const typeLabel = (name: string) => types?.find((ty) => ty.name === name)?.label ?? name
 
   return (
     <Dialog
@@ -118,19 +226,23 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               {search.isFetching ? t('common.loading') : t('palette.empty')}
             </CommandEmpty>
 
-            {/* Recent items when query is empty */}
-            {!q.trim() && recents.length > 0 && (
-              <CommandGroup heading={t('palette.recent', 'Recent objects')}>
-                {recents.map((item) => (
+            {recentHits.length > 0 && (
+              <CommandGroup heading={t('palette.recent')}>
+                {recentHits.map((item) => (
                   <CommandItem
                     key={`recent-${item.dn}`}
                     value={`recent-${item.dn}`}
                     onSelect={() => onSelectObject(item.type, item.dn, item.title)}
-                    className="flex items-center gap-2 px-2.5"
+                    onMouseEnter={() => prefetch.object(item.type, item.dn)}
+                    onFocus={() => prefetch.object(item.type, item.dn)}
+                    className={itemClass}
                   >
-                    <Clock className="size-3.5 text-muted-foreground shrink-0" />
+                    <Clock className="size-3.5 text-muted-foreground shrink-0" aria-hidden />
                     <span className="font-medium text-foreground truncate">{item.title}</span>
-                    <span className="font-dn text-muted-foreground ml-auto truncate text-caption max-w-[200px]">
+                    <span className="rounded-sm bg-muted px-1 text-caption text-muted-foreground">
+                      {typeLabel(item.type)}
+                    </span>
+                    <span className="font-dn text-muted-foreground ml-auto truncate text-caption max-w-[220px]">
                       {item.dn}
                     </span>
                   </CommandItem>
@@ -138,89 +250,22 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               </CommandGroup>
             )}
 
-            {/* Navigation Group */}
-            {match(t('nav.dashboard')) && (
-              <CommandGroup heading={t('palette.navigate')}>
-                <CommandItem
-                  value="nav-dashboard"
-                  onSelect={() => run(() => void navigate({ to: '/' }))}
-                  className="flex items-center gap-2 px-2.5"
-                >
-                  <LayoutDashboard className="size-3.5 shrink-0" />
-                  <span>{t('nav.dashboard')}</span>
-                </CommandItem>
-                <CommandItem
-                  value="nav-me"
-                  onSelect={() => run(() => void navigate({ to: '/me' }))}
-                  className="flex items-center gap-2 px-2.5"
-                >
-                  <User className="size-3.5 shrink-0" />
-                  <span>{t('user.me')}</span>
-                </CommandItem>
-                {types
-                  ?.filter((ty) => match(ty.label_plural))
-                  .map((ty) => (
-                    <CommandItem
-                      key={ty.name}
-                      value={`nav-${ty.name}`}
-                      onSelect={() => run(() => void navigate({ to: '/types/$type', params: { type: ty.name } }))}
-                      className="flex items-center gap-2 px-2.5"
-                    >
-                      <TypeIcon name={ty.icon} className="size-3.5 shrink-0" />
-                      <span>{ty.label_plural}</span>
-                    </CommandItem>
-                  ))}
+            {actions.length > 0 && (
+              <CommandGroup heading={t('palette.actions')}>
+                {actions.map((a) => (
+                  <Row key={a.id} entry={a} onSelect={() => run(a.run)} />
+                ))}
               </CommandGroup>
             )}
 
-            {/* Actions Group */}
-            {actionsVisible && (
-            <CommandGroup heading={t('palette.actions')}>
-              {creatable.map((ty) => (
-                  <CommandItem
-                    key={ty.name}
-                    value={`create-${ty.name}`}
-                    onSelect={() => run(() => void navigate({ to: '/types/$type/new', params: { type: ty.name } }))}
-                    className="flex items-center gap-2 px-2.5"
-                  >
-                    <Plus className="size-3.5 shrink-0 text-primary" />
-                    <span>{t('palette.create', { type: ty.label })}</span>
-                  </CommandItem>
+            {nav.length + typeNav.length > 0 && (
+              <CommandGroup heading={t('palette.navigate')}>
+                {[...nav, ...typeNav].map((a) => (
+                  <Row key={a.id} entry={a} onSelect={() => run(a.run)} />
                 ))}
-              {match(t('palette.toggleTheme')) && (
-                <CommandItem
-                  value="toggle-theme"
-                  onSelect={() => run(toggle)}
-                  className="flex items-center gap-2 px-2.5"
-                >
-                  <Moon className="size-3.5 shrink-0" />
-                  <span>{t('palette.toggleTheme')}</span>
-                </CommandItem>
-              )}
-              {match(t('palette.switchLanguage')) && (
-                <CommandItem
-                  value="switch-language"
-                  onSelect={() => run(() => void i18n.changeLanguage(i18n.language.startsWith('fr') ? 'en' : 'fr'))}
-                  className="flex items-center gap-2 px-2.5"
-                >
-                  <Languages className="size-3.5 shrink-0" />
-                  <span>{t('palette.switchLanguage')}</span>
-                </CommandItem>
-              )}
-              {match(t('user.logout')) && (
-                <CommandItem
-                  value="logout"
-                  onSelect={() => run(() => void logout())}
-                  className="flex items-center gap-2 px-2.5 text-destructive focus:text-destructive"
-                >
-                  <LogOut className="size-3.5 shrink-0" />
-                  <span>{t('user.logout')}</span>
-                </CommandItem>
-              )}
-            </CommandGroup>
+              </CommandGroup>
             )}
 
-            {/* Search Results */}
             {search.data && search.data.length > 0 && <CommandSeparator className="my-1" />}
             {search.data?.map((g) => (
               <CommandGroup key={g.type.name} heading={g.type.label_plural}>
@@ -232,14 +277,18 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                       key={it.dn}
                       value={`obj-${it.dn}`}
                       onSelect={() => onSelectObject(g.type.name, it.dn, label)}
-                      className="flex items-center gap-2 px-2.5"
+                      onMouseEnter={() => prefetch.object(g.type.name, it.dn)}
+                      onFocus={() => prefetch.object(g.type.name, it.dn)}
+                      className={itemClass}
                     >
                       <TypeIcon name={g.type.icon} className="size-3.5 text-muted-foreground shrink-0" />
                       <span className="font-medium text-foreground truncate">{label}</span>
+                      <span className="rounded-sm bg-muted px-1 text-caption text-muted-foreground">
+                        {g.type.label}
+                      </span>
                       <span className="font-dn text-muted-foreground ml-auto truncate text-caption max-w-[220px]">
                         {it.dn}
                       </span>
-                      <ExternalLink className="size-3 text-muted-foreground/60 shrink-0 ml-1" />
                     </CommandItem>
                   )
                 })}
@@ -247,7 +296,6 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             ))}
           </CommandList>
 
-          {/* Keyboard hints footer */}
           <div className="flex items-center justify-between border-t border-border bg-muted/30 px-3 py-2 text-caption text-muted-foreground">
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">

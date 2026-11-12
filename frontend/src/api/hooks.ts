@@ -1,12 +1,16 @@
 import {
   keepPreviousData,
+  type InfiniteData,
+  type QueryClient,
   useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { api } from './endpoints'
-import type { CreateObjectRequest, ListParams, PatchObjectRequest } from './types'
+import type { CreateObjectRequest, ListParams, ObjectList, PatchObjectRequest } from './types'
 
 export const qk = {
   me: ['me'] as const,
@@ -127,8 +131,32 @@ export function useDeleteObjects(type: string) {
   })
 }
 
+type Snapshot = [readonly unknown[], unknown][]
+
+/** Set `locked` on the matching rows of every cached list (paged or infinite). */
+export function patchLockedInCache(qc: QueryClient, type: string, dns: string[], locked: boolean) {
+  const wanted = new Set(dns.map((d) => d.toLowerCase()))
+  const patchList = (list: ObjectList): ObjectList => ({
+    ...list,
+    items: list.items.map((i) => (wanted.has(i.dn.toLowerCase()) ? { ...i, locked } : i)),
+  })
+  qc.setQueriesData<ObjectList | InfiniteData<ObjectList>>(
+    { queryKey: [...qk.objects(type), 'list'] },
+    (old) => {
+      if (!old) return old
+      if ('pages' in old) return { ...old, pages: old.pages.map(patchList) }
+      return patchList(old)
+    },
+  )
+}
+
+/**
+ * Lock / unlock accounts. The lists show the new state at once; a failure puts the
+ * previous state back and tells the user.
+ */
 export function useAccountLock(type: string) {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: async ({ dns, lock }: { dns: string[]; lock: boolean }) => {
       const fn = lock ? api.lockAccount : api.unlockAccount
@@ -136,11 +164,40 @@ export function useAccountLock(type: string) {
       const failed = results.filter((r) => r.status === 'rejected').length
       return { ok: dns.length - failed, failed }
     },
+    onMutate: async ({ dns, lock }) => {
+      await qc.cancelQueries({ queryKey: qk.objects(type) })
+      const previous: Snapshot = qc.getQueriesData({ queryKey: [...qk.objects(type), 'list'] })
+      patchLockedInCache(qc, type, dns, lock)
+      return { previous }
+    },
+    // some rows failed: the caller reports the counts; the lists settle on the server state
+    onSuccess: (res, _vars, ctx) => {
+      if (res.failed > 0) ctx?.previous.forEach(([key, data]) => qc.setQueryData(key, data))
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.previous.forEach(([key, data]) => qc.setQueryData(key, data))
+      toast.error(t('shellUI.lock.failed'))
+    },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: qk.objects(type) })
       void qc.invalidateQueries({ queryKey: qk.dashboard })
     },
   })
+}
+
+/** Warm the cache on link / row intent (hover, focus). Never throws. */
+export function usePrefetch() {
+  const qc = useQueryClient()
+  return {
+    type: (name: string) => {
+      if (!name) return
+      void qc.prefetchQuery({ queryKey: qk.type(name), queryFn: () => api.type(name), staleTime: 5 * 60_000 })
+    },
+    object: (type: string, dn: string) => {
+      void qc.prefetchQuery({ queryKey: qk.object(type, dn), queryFn: () => api.getObject(type, dn) })
+      void qc.prefetchQuery({ queryKey: qk.type(type), queryFn: () => api.type(type), staleTime: 5 * 60_000 })
+    },
+  }
 }
 
 export function useObjectAccountLocked(type: string, dn: string | null) {

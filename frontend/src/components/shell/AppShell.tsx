@@ -45,6 +45,7 @@ import { useTheme, type ThemeChoice } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { CommandPalette } from './CommandPalette'
 import { SidebarNav } from './Sidebar'
+import { ShortcutSheet, useShellHotkeys } from './ShortcutSheet'
 
 const COLLAPSE_KEY = 'heracles.sidebar.collapsed'
 
@@ -265,16 +266,11 @@ export function AppShell() {
     }
   }, [collapsed])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setPalette((p) => !p)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  const [sheet, setSheet] = useState(false)
+  useShellHotkeys({
+    togglePalette: () => setPalette((p) => !p),
+    toggleSheet: () => setSheet((p) => !p),
+  })
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -411,6 +407,7 @@ export function AppShell() {
 
         {/* Global Command Palette */}
         <CommandPalette open={palette} onOpenChange={setPalette} />
+        <ShortcutSheet open={sheet} onOpenChange={setSheet} />
       </div>
     </TooltipProvider>
   )
