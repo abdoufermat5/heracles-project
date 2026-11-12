@@ -14,6 +14,7 @@ import {
   useObjectAccountLocked,
   usePatchObject,
   qk,
+  useMe,
   useTypeDescriptor,
   useTypes,
 } from '@/api/hooks'
@@ -135,6 +136,7 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
   const { t } = useTranslation()
   const navigate = useNavigate()
   const scope = useScope()
+  const me = useMe().data
   const isCreate = detail === null
   const type = desc.name
 
@@ -361,7 +363,8 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
       reviewConfirmed.current = false
       try {
         if (isCreate) {
-          const base = (values.main?.base as string | null) ?? scope.base ?? ''
+          // no department chosen and no scope: the top of the directory
+          const base = (values.main?.base as string | null) || scope.base || me?.base || ''
           const res = await create.mutateAsync({
             base,
             tabs: buildCreateTabs(desc, values, active),
