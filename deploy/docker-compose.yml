@@ -86,6 +86,84 @@ services:
       timeout: 3s
       retries: 12
 
+  # ---- replicas profile: two Heracles servers behind a load balancer ---------------------------
+  # Several replicas on different hosts share their state through PostgreSQL. This profile runs
+  # the same topology on one machine; point the e2e suite at the balancer (port 8430):
+  #   docker compose -p hrc-replicas -f deploy/docker-compose.yml --profile replicas \
+  #     up -d --build balancer
+  # (name the balancer: the plain `ldap` service has no profile and would also start, on 1389).
+  # Use a separate project name (-p): it has its own directory and database, and publishes only
+  # 8421, 8422 (the replicas) and 8430 (the balancer).
+  ldap-replicas:
+    profiles: [replicas]
+    extends:
+      service: ldap
+    ports: !override []
+    volumes:
+      - ./ldap/seed.ldif:/ldifs/seed.ldif:ro
+      - ./ldap/schema:/schemas:ro
+      - ldap-replicas-data:/bitnami/openldap
+
+  postgres:
+    profiles: [replicas]
+    image: postgres:17
+    environment:
+      POSTGRES_USER: heracles
+      POSTGRES_PASSWORD: heracles
+      POSTGRES_DB: heracles
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U heracles -d heracles"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  heracles-1: &replica
+    profiles: [replicas]
+    image: heracles-replica:latest
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8421:8420"
+    volumes:
+      - ./e2e/heracles-replicas.yaml:/etc/heracles/heracles.yaml:ro
+    depends_on:
+      ldap-replicas:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  heracles-2:
+    <<: *replica
+    # same image as heracles-1 (built once)
+    build: !reset null
+    ports:
+      - "8422:8420"
+    depends_on:
+      heracles-1:
+        condition: service_started
+      ldap-replicas:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  balancer:
+    profiles: [replicas]
+    image: nginx:1.27-alpine
+    ports:
+      - "8430:8430"
+    volumes:
+      - ./e2e/replicas-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      heracles-1:
+        condition: service_healthy
+      heracles-2:
+        condition: service_healthy
+
 volumes:
   ldap-data:
   heracles-data:
+  postgres-data:
+  ldap-replicas-data:
