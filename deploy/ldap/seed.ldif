@@ -2,8 +2,14 @@ dn: dc=heracles,dc=test
 objectClass: top
 objectClass: dcObject
 objectClass: organization
+objectClass: hrcAcl
 dc: heracles
 o: Heracles test directory
+# ACL assignments (index:scope:base64(role DN):base64(members)):
+#   0  admin        -> cn=admins,ou=groups  (alice)
+#   1  self-service -> *                    (everyone, on their own entry)
+hrcAclEntry: 0:subtree:Y249YWRtaW4sb3U9YWNscm9sZXMsZGM9aGVyYWNsZXMsZGM9dGVzdA==:Y249YWRtaW5zLG91PWdyb3VwcyxkYz1oZXJhY2xlcyxkYz10ZXN0
+hrcAclEntry: 1:subtree:Y249c2VsZi1zZXJ2aWNlLG91PWFjbHJvbGVzLGRjPWhlcmFjbGVzLGRjPXRlc3Q=:Kg==
 
 dn: ou=people,dc=heracles,dc=test
 objectClass: organizationalUnit
@@ -68,6 +74,25 @@ cn: staff
 member: uid=alice,ou=people,dc=heracles,dc=test
 member: uid=bob,ou=people,dc=heracles,dc=test
 member: uid=carol,ou=people,dc=heracles,dc=test
+
+# ACL roles, assigned on the base entry above. Self-service lets every user
+# read their own entry and change a few personal fields.
+
+dn: ou=aclroles,dc=heracles,dc=test
+objectClass: organizationalUnit
+ou: aclroles
+
+dn: cn=admin,ou=aclroles,dc=heracles,dc=test
+objectClass: hrcRole
+cn: admin
+description: Full rights on the whole directory
+hrcAclTemplate: 0:all;cmdrw
+
+dn: cn=self-service,ou=aclroles,dc=heracles,dc=test
+objectClass: hrcRole
+cn: self-service
+description: Users read their own entry and update their contact details and password
+hrcAclTemplate: 0:user/user;sr#telephoneNumber;srw#mobile;srw#jpegPhoto;srw#userPassword;srw
 
 # DNS plugin: one forward zone and its reverse zone, served by the `dns`
 # container of the dev stack (`dig @127.0.0.1 -p 15353 www.heracles.test`).
