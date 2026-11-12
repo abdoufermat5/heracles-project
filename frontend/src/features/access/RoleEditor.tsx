@@ -510,11 +510,6 @@ function TemplateMatrix({
 function RoleSummary({ matrix }: { matrix: Matrix }) {
   const { t } = useTranslation()
   const sentences = useMemo(() => matrixSentences(matrix, t), [matrix, t])
-  const objects = new Set(
-    matrix.templates.flatMap((template) =>
-      template.rows.filter(rowHasContent).map((row) => row.key),
-    ),
-  )
   return (
     <aside
       aria-label={t('accessUI.editor.summaryTitle')}
@@ -524,9 +519,6 @@ function RoleSummary({ matrix }: { matrix: Matrix }) {
         <h2 className="text-body font-semibold text-foreground">
           {t('accessUI.editor.summaryTitle')}
         </h2>
-        <p className="text-caption text-muted-foreground">
-          {t('accessUI.roles.objects', { count: objects.size })}
-        </p>
       </div>
       {sentences.length === 0 ? (
         <div className="space-y-1">

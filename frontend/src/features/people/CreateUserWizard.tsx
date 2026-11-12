@@ -472,9 +472,6 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                 <Label className="text-small font-medium">
                   {t('peopleUI.wizard.step2.groups')}
                 </Label>
-                <span className="text-caption text-muted-foreground">
-                  {selectedGroups.length} selected
-                </span>
               </div>
               <p className="text-caption text-muted-foreground">
                 {t('peopleUI.wizard.step2.groupsHelp')}

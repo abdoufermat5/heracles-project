@@ -19,14 +19,7 @@ export function GroupsSection() {
   return (
     <SectionCard
       id="portal-groups"
-      title={
-        <div className="flex items-center gap-2">
-          <span>{t('settingsUI.portal.myGroups')}</span>
-          <Badge variant="neutral">
-            {t('settingsUI.portal.groupsCount', { count: groupRefs.length })}
-          </Badge>
-        </div>
-      }
+      title={t('settingsUI.portal.myGroups')}
       description={t('settingsUI.portal.myGroupsSubtitle')}
     >
       {isPending ? (

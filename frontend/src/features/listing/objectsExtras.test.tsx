@@ -5,7 +5,7 @@ import { db } from '@/mocks/db'
 import { must, renderApp, signIn } from '@/test/utils'
 
 async function selectRows(count: number): Promise<void> {
-  await screen.findByText('200 items')
+  await screen.findByText(/1–25 of 200/)
   const rows = screen.getAllByRole('row')
   for (let i = 1; i <= count; i++) {
     await userEvent.click(within(must(rows[i])).getByRole('checkbox'))
@@ -129,7 +129,7 @@ describe('copy and move', () => {
   it('moves one object from its row menu', async () => {
     signIn()
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     const rows = screen.getAllByRole('row')
     const dn = must(
       within(must(rows[1]))
@@ -154,7 +154,7 @@ describe('restore a deleted object', () => {
     const rec = must(db.all('user')[2])
     const dn = rec.dn
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     await objectsApi.createSnapshot('user', dn, 'before the cleanup')
     db.remove(dn)
 

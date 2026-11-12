@@ -406,8 +406,6 @@ export function ObjectListPage({
         label={label}
         summary={summary}
         descriptor={desc.data}
-        total={total}
-        isSuccess={list.isSuccess}
         isFetching={list.isFetching}
         onRefresh={() => void list.refetch()}
         onExportCsv={() => handleExportCsv(false)}
@@ -484,6 +482,8 @@ export function ObjectListPage({
                 typeLabel={desc.data?.label}
                 isFiltered={hasFilterActive}
                 canCreate={summary?.can_create}
+                filterError={filterError}
+                onClearLdapFilter={() => update({ ldap: undefined, page: undefined })}
                 onClearFilter={() => {
                   setSearchQuery('')
                   setEmployeeTypes([])

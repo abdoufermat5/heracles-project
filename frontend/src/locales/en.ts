@@ -315,6 +315,8 @@ const en = {
     densityComfortable: 'Comfortable',
     densityCompact: 'Compact',
     clearSearch: 'Clear search',
+    filterRefusedTitle: 'This filter could not be run',
+    clearLdapFilter: 'Clear filter',
     filterStatus: 'Status',
     filterAll: 'All',
     filterActive: 'Active',

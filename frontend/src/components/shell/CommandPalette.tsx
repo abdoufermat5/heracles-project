@@ -4,7 +4,8 @@ import { Clock, Plus, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { usePrefetch, useTypes } from '@/api/hooks'
+import { qk, usePrefetch, useTypes } from '@/api/hooks'
+import type { ObjectDetail, TypeDescriptor } from '@/api/types'
 import { api } from '@/api/endpoints'
 import {
   Command,
@@ -20,7 +21,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { useCapabilities } from '@/features/admin/hooks'
 import { comboLabels } from '@/lib/hotkeys'
 import { TypeIcon } from '@/lib/icons'
-import { rdnValue } from '@/lib/objects'
+import { nameValue, rdnValue } from '@/lib/objects'
 import { useTheme } from '@/lib/theme'
 import { addRecentItem, getRecentItems } from './recent'
 import {
@@ -64,6 +65,11 @@ function Row({ entry, onSelect }: { entry: Entry; onSelect: () => void }) {
         <Icon className="size-3.5 shrink-0" aria-hidden />
       )}
       <span className="truncate">{entry.label}</span>
+      {entry.detail && (
+        <span className="font-dn text-muted-foreground ml-auto truncate text-caption max-w-[220px]">
+          {entry.detail}
+        </span>
+      )}
       {entry.shortcut && <Kbd keys={comboLabels(entry.shortcut)} className="ml-auto" />}
     </CommandItem>
   )
@@ -112,7 +118,15 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   }
 
   const current = currentObjectOf(pathname)
-  const currentTitle = current ? recents.find((r) => r.dn.toLowerCase() === current.dn.toLowerCase())?.title : undefined
+  // The readable label comes from the object page's own cached detail, then the recents list.
+  const loaded = current ? qc.getQueryData<ObjectDetail>(qk.object(current.type, current.dn)) : undefined
+  const currentDesc = current ? qc.getQueryData<TypeDescriptor>(qk.type(current.type)) : undefined
+  const currentTitle =
+    loaded && currentDesc
+      ? nameValue(currentDesc, loaded)
+      : current
+        ? (recents.find((r) => r.dn.toLowerCase() === current.dn.toLowerCase())?.title ?? rdnValue(current.dn))
+        : undefined
 
   const entries = useMemo(() => {
     const canCreate = (name: string) => types?.find((ty) => ty.name === name)?.can_create === true
@@ -166,7 +180,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     return { nav, typeNav, actions }
     // go/logout/toggle are recreated every render; what matters is listed here
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caps, types, t, current?.dn, currentTitle, i18n.language])
+  }, [caps, types, t, current?.dn, currentTitle, i18n.language, open])
 
   const needle = q.trim()
   const rank = (items: Entry[]): Entry[] => {

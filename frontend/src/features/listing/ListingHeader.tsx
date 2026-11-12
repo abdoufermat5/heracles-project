@@ -15,8 +15,6 @@ interface ListingHeaderProps {
   label: string
   summary?: TypeSummary
   descriptor?: TypeDescriptor
-  total: number | null
-  isSuccess: boolean
   isFetching: boolean
   onRefresh: () => void
   onExportCsv: () => void
@@ -31,8 +29,6 @@ export function ListingHeader({
   label,
   summary,
   descriptor,
-  total,
-  isSuccess,
   isFetching,
   onRefresh,
   onExportCsv,
@@ -47,12 +43,6 @@ export function ListingHeader({
         <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">
           {label}
         </h1>
-        <span
-          className="font-mono text-body text-muted-foreground tabular-nums"
-          aria-live="polite"
-        >
-          {isSuccess && total !== null ? t('listing.count', { count: total }) : '\u00a0'}
-        </span>
       </div>
 
       <div className="flex items-center gap-2">
