@@ -109,13 +109,13 @@ describe('sidebar', () => {
     expect(within(infra).getByRole('link', { name: /Workstations/ })).toBeInTheDocument()
   })
 
-  it('counts types through their count_key', async () => {
+  it('shows no counters next to the links', async () => {
     signIn()
     useRealisticTypes()
     renderApp('/')
     const el = await nav()
-    const users = within(el).getByRole('link', { name: /^Users/ })
-    await waitFor(() => expect(users).toHaveTextContent(/\d/))
+    expect(within(el).getByRole('link', { name: /^Users/ })).toHaveTextContent(/^Users$/)
+    expect(el).not.toHaveTextContent(/\d/)
   })
 
   it('remembers collapsed groups', async () => {

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useDashboard, usePrefetch, useTypes } from '@/api/hooks'
+import { usePrefetch, useTypes } from '@/api/hooks'
 import { NAV_GROUPS, type NavGroup, type TypeSummary } from '@/api/types'
 import { useCapabilities } from '@/features/admin/hooks'
 import { useIoAccess } from '@/features/io/hooks'
@@ -91,7 +91,6 @@ interface NavItem {
   params?: { type: string }
   label: string
   icon: ReactNode
-  count?: number | null
   /** Object type behind the link: those can be pinned. */
   type?: string
   exact?: boolean
@@ -110,7 +109,7 @@ function NavLink({
 }) {
   const { t } = useTranslation()
   const prefetch = usePrefetch()
-  const { label, count } = item
+  const { label } = item
   const warm = item.type ? () => prefetch.type(item.type ?? '') : undefined
   const link = (
     <Link
@@ -127,11 +126,6 @@ function NavLink({
       {!collapsed && (
         <>
           <span className="flex-1 truncate">{label}</span>
-          {typeof count === 'number' && (
-            <span className="ml-auto font-mono text-caption tabular-nums text-sidebar-muted group-hover:text-sidebar-accent-foreground">
-              {count.toLocaleString()}
-            </span>
-          )}
         </>
       )}
     </Link>
@@ -143,11 +137,6 @@ function NavLink({
         <TooltipTrigger asChild>{link}</TooltipTrigger>
         <TooltipContent side="right" sideOffset={8} className="flex items-center gap-1.5">
           <span>{label}</span>
-          {typeof count === 'number' && (
-            <span className="font-mono text-caption tabular-nums opacity-70">
-              {count.toLocaleString()}
-            </span>
-          )}
         </TooltipContent>
       </Tooltip>
     )
@@ -231,7 +220,6 @@ interface Group {
 export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useTranslation()
   const { data: types, isPending } = useTypes()
-  const { data: dashboard } = useDashboard()
   const { data: caps } = useCapabilities()
   const { data: io } = useIoAccess()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
@@ -244,14 +232,12 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
   const hasType = (name: string) => all.some((x) => x.name === name)
 
   const typeItem = (ty: TypeSummary): NavItem => {
-    const card = ty.count_key ? dashboard?.cards?.find((c) => c.key === ty.count_key) : undefined
     return {
       key: `type:${ty.name}`,
       to: '/types/$type',
       params: { type: ty.name },
       label: ty.label_plural,
       icon: <TypeIcon name={ty.icon} className="size-4 shrink-0" />,
-      count: card ? card.value : null,
       type: ty.name,
     }
   }
@@ -298,12 +284,12 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
       more: byGroup(id, 'secondary'),
     })).filter((g) => g.primary.length + g.more.length > 0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, favorites, dashboard, caps, io, t])
+  }, [all, favorites, caps, io, t])
 
   const favoriteItems = useMemo(
     () => all.filter((x) => favorites.has(x.name)).map(typeItem),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [all, favorites, dashboard],
+    [all, favorites],
   )
 
   const dashboardItem = fixed('dashboard', '/', t('nav.dashboard'), LayoutDashboard)
@@ -393,7 +379,6 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
                       <ChevronRight className="size-3.5" aria-hidden />
                     )}
                     <span className="flex-1 text-left">{t('sidebar.more')}</span>
-                    <span className="font-mono tabular-nums">{g.more.length}</span>
                   </button>
                   {moreShown && <div className="space-y-0.5 pl-2">{g.more.map(renderItem)}</div>}
                 </>
