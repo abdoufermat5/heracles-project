@@ -7,13 +7,14 @@ from contextlib import contextmanager  # pyright: ignore[reportDeprecated]
 from typing import Annotated, Any, Literal, cast
 
 import structlog
-from fastapi import APIRouter, Body, Query, Response, status
+from fastapi import APIRouter, Body, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
 from heracles.acl import Rights
 from heracles.api.deps import CurrentUserDep
 from heracles.api.domain import DomainDep, TypeAclPolicy
 from heracles.api.errors import ApiError, forbidden, not_found, validation
+from heracles.api.etag import json_with_etag
 from heracles.attributes import JSON
 from heracles.core import references
 from heracles.core.config_store import effective_settings
@@ -138,8 +139,8 @@ def _capabilities(info: Any) -> dict[str, JSON]:
     }
 
 
-@router.get("/types")
-def list_types(user: CurrentUserDep, domain: DomainDep) -> list[JSON]:
+@router.get("/types", response_model=None)
+def list_types(request: Request, user: CurrentUserDep, domain: DomainDep) -> Response:
     base = user.directory.base_dn
     evaluator = domain.evaluator(user)
 
@@ -149,18 +150,23 @@ def list_types(user: CurrentUserDep, domain: DomainDep) -> list[JSON]:
             return False
         return evaluator.permissions(base, info.acl_object(info.main_tab)).create
 
-    return [
-        {
-            **t.summary(can_create=can_create(t.name)),
-            **_nav_fields(t.type),
-            **_capabilities(t),
-        }
-        for t in domain.registry.list()
-    ]
+    return json_with_etag(
+        request,
+        [
+            {
+                **t.summary(can_create=can_create(t.name)),
+                **_nav_fields(t.type),
+                **_capabilities(t),
+            }
+            for t in domain.registry.list()
+        ],
+    )
 
 
-@router.get("/types/{type_name}")
-def describe_type(type_name: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
+@router.get("/types/{type_name}", response_model=None)
+def describe_type(
+    type_name: str, request: Request, user: CurrentUserDep, domain: DomainDep
+) -> Response:
     del user
     with object_errors():
         body = domain.registry.describe(type_name)
@@ -168,7 +174,7 @@ def describe_type(type_name: str, user: CurrentUserDep, domain: DomainDep) -> di
     body.update(_nav_fields(info.type))
     body.update(_capabilities(info))
     body["supports_templates"] = bool(body["supports_templates"]) and info.type.creatable
-    return body
+    return json_with_etag(request, body)
 
 
 # ---------------------------------------------------------------- templates
