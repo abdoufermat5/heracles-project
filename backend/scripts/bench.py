@@ -5,7 +5,11 @@ accounts, as a delegated (non-bootstrap) administrator so ACLs are evaluated.
 The in-memory directory answers in microseconds, so the ``calls`` column (LDAP
 operations per request) is what predicts latency against a real server.
 
-    uv run python scripts/bench.py [--users 5000] [--repeat 5] [--profile PATH]
+    uv run python scripts/bench.py [--users 5000] [--repeat 20] [--profile PATH] [--no-check]
+
+The script exits with status 1 when the p95 of an endpoint exceeds its budget in
+``P95_BUDGET_MS`` (measured at 5000 users, with about 2x headroom for a slower machine).
+The budgets only apply to the default ``--users``; ``--no-check`` skips them.
 """
 
 from __future__ import annotations
@@ -27,6 +31,27 @@ from heracles.api.settings import ApiSettings
 from heracles.ldap.client import Entry, Scope
 from heracles.ldap.memory import MemoryDirectory
 from heracles.server import create_full_app
+
+
+#: p95 budget in milliseconds per endpoint at ``DEFAULT_USERS`` users.
+P95_BUDGET_MS: dict[str, float] = {
+    "types": 100,
+    "tree": 600,
+    "dashboard": 1000,
+    "users page (sub)": 1000,
+    "users page (one)": 1100,
+    "users search": 430,
+    "users page 40": 210,
+    "groups page": 140,
+    "user detail": 155,
+}
+DEFAULT_USERS = 5000
+
+
+def p95(timings: list[float]) -> float:
+    """Nearest-rank 95th percentile."""
+    ordered = sorted(timings)
+    return ordered[max(0, -(-len(ordered) * 95 // 100) - 1)]
 
 
 class CountingDirectory(MemoryDirectory):
@@ -97,7 +122,8 @@ def build_directory(users: int) -> CountingDirectory:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--users", type=int, default=5000)
-    parser.add_argument("--repeat", type=int, default=5)
+    parser.add_argument("--repeat", type=int, default=20)
+    parser.add_argument("--no-check", action="store_true", help="do not enforce the p95 budgets")
     parser.add_argument("--profile", help="write cProfile stats of the measured requests here")
     args = parser.parse_args()
 
@@ -134,7 +160,8 @@ def main() -> None:
 
     profiler = cProfile.Profile() if args.profile else None
     print(f"{args.users} users, {args.repeat} runs each")
-    print(f"{'endpoint':<20}{'p50 ms':>10}{'max ms':>10}{'calls':>8}{'bytes':>9}")
+    print(f"{'endpoint':<20}{'p50 ms':>10}{'p95 ms':>10}{'max ms':>10}{'calls':>8}{'bytes':>9}")
+    over: list[str] = []
     for name, path in endpoints.items():
         timings: list[float] = []
         calls = size = 0
@@ -148,12 +175,20 @@ def main() -> None:
             if profiler:
                 profiler.disable()
             calls, size = directory.calls, len(response.content)
+        slow = p95(timings)
+        budget = P95_BUDGET_MS.get(name)
+        if budget is not None and slow > budget:
+            over.append(f"{name}: p95 {slow:.1f} ms > budget {budget:.0f} ms")
         print(
-            f"{name:<20}{statistics.median(timings):>10.1f}{max(timings):>10.1f}{calls:>8}{size:>9}"
+            f"{name:<20}{statistics.median(timings):>10.1f}{slow:>10.1f}"
+            f"{max(timings):>10.1f}{calls:>8}{size:>9}"
         )
     if profiler and args.profile:
         profiler.dump_stats(args.profile)
         pstats.Stats(args.profile).sort_stats("cumulative").print_stats(35)
+    if over and not args.no_check and args.users == DEFAULT_USERS:
+        print("\nbudget exceeded:\n  " + "\n  ".join(over))
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
