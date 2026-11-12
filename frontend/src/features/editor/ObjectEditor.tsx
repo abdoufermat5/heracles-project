@@ -58,7 +58,9 @@ import { LdifDialog } from './LdifDialog'
 import { LockedDialog } from './LockedDialog'
 import { ReferencesPanel } from './ReferencesPanel'
 import { SecondFactorsPanel } from './SecondFactorsPanel'
+import { SaveReviewDialog } from './SaveReviewDialog'
 import { SnapshotsPanel } from './SnapshotsPanel'
+import { useUndoableSave } from './undo'
 import { ObjectHistory } from '@/features/audit/ObjectHistory'
 import { useAuditEnabled } from '@/features/audit/hooks'
 import { TemplateFillForm } from './TemplateFillForm'
@@ -333,8 +335,18 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
     if (first) setTab(first.name)
   }
 
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const reviewConfirmed = useRef(false)
+  const { takeUndoPoint, toastSaved } = useUndoableSave(type)
+
   const save = form.handleSubmit(
     async (values) => {
+      // Every edit of an existing object is confirmed on a diff first.
+      if (!isCreate && diffs.length > 0 && !reviewConfirmed.current) {
+        setReviewOpen(true)
+        return
+      }
+      reviewConfirmed.current = false
       try {
         if (isCreate) {
           const base = (values.main?.base as string | null) ?? scope.base ?? ''
@@ -355,7 +367,9 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
         }
         if (!detail) return
         let result: ObjectDetail = detail
+        let undoId: string | null = null
         if (Object.keys(changes).length > 0) {
+          undoId = await takeUndoPoint(detail.dn)
           result = await patch.mutateAsync({ tabs: changes })
           showTriggerOutput(result)
         }
@@ -366,7 +380,7 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
           finalDn = moved.dn
         }
         await release()
-        toast.success(t('editor.saved'))
+        toastSaved(t('editor.saved'), undoId, () => void reloadAfterRestore())
         if (finalDn !== detail.dn) {
           baseline.current = { values, active }
           bypassGuard.current = true
@@ -587,6 +601,18 @@ function EditorInner({ desc, detail, source, initialTab }: InnerProps) {
       )}
 
       {/* Dialogs */}
+      <SaveReviewDialog
+        open={reviewOpen}
+        target={detail?.dn ?? title}
+        diffs={diffs}
+        busy={formState.isSubmitting}
+        onCancel={() => setReviewOpen(false)}
+        onConfirm={() => {
+          reviewConfirmed.current = true
+          setReviewOpen(false)
+          void save()
+        }}
+      />
       <LockedDialog lock={lockInfo} onClose={() => setLockInfo(null)} />
 
       <LdifDialog

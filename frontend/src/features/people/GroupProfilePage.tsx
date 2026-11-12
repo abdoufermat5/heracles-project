@@ -56,9 +56,18 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FieldRow } from '@/features/editor/FieldRow'
+import { useObjectLdif } from '@/features/editor/api'
 import { LdifDialog } from '@/features/editor/LdifDialog'
+import { SaveReviewDialog } from '@/features/editor/SaveReviewDialog'
+import { useUndoableSave } from '@/features/editor/undo'
 import { SnapshotsPanel } from '@/features/editor/SnapshotsPanel'
-import { computeChanges, valuesFromDetail, type FormValues } from '@/lib/objects'
+import {
+  computeChanges,
+  listFieldDiffs,
+  valuesFromDetail,
+  type FieldDiff,
+  type FormValues,
+} from '@/lib/objects'
 import { useTechnicalDetails } from '@/lib/preferences'
 import { initials } from '@/lib/utils'
 import { makeResolver } from '@/lib/validation'
@@ -92,6 +101,9 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
   const [memberToRemove, setMemberToRemove] = useState<{ dn: string; name: string } | null>(null)
   const [deleteGroupOpen, setDeleteGroupOpen] = useState(false)
   const [ldifOpen, setLdifOpen] = useState(false)
+  const [reviewDiffs, setReviewDiffs] = useState<FieldDiff[] | null>(null)
+  const { takeUndoPoint, toastSaved } = useUndoableSave('group')
+  const ldifQuery = useObjectLdif('group', dn, ldifOpen)
   const [copiedDn, setCopiedDn] = useState(false)
 
   // Add members dialog state
@@ -224,8 +236,20 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
   }
 
   // Save properties action
-  const handleSaveProperties = async () => {
+  const handleSaveProperties = async (confirmed = false) => {
     if (!descriptor || !detail) return
+    if (!confirmed) {
+      const diffs = listFieldDiffs(
+        descriptor,
+        valuesFromDetail(descriptor, detail),
+        getValues(),
+        { main: true },
+      )
+      if (diffs.length > 0) {
+        setReviewDiffs(diffs)
+        return
+      }
+    }
     setSavingProps(true)
     try {
       const currentValues = getValues()
@@ -243,8 +267,9 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
         return
       }
 
+      const undoId = await takeUndoPoint(detail.dn)
       await patch.mutateAsync({ tabs: changes })
-      toast.success(t('common.saved'))
+      toastSaved(t('common.saved'), undoId, () => void obj.refetch())
       setEditingProps(false)
       void obj.refetch()
     } catch (err) {
@@ -676,11 +701,24 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
         onConfirm={() => void handleDeleteGroup()}
       />
 
+      <SaveReviewDialog
+        open={reviewDiffs !== null}
+        target={detail?.dn ?? dn}
+        diffs={reviewDiffs ?? []}
+        busy={savingProps}
+        onCancel={() => setReviewDiffs(null)}
+        onConfirm={() => {
+          setReviewDiffs(null)
+          void handleSaveProperties(true)
+        }}
+      />
+
       <LdifDialog
         open={ldifOpen}
         onOpenChange={setLdifOpen}
-        ldif={dn}
+        ldif={ldifQuery.data ?? `dn: ${dn}\n`}
         title={groupName}
+        loading={ldifQuery.isPending && ldifOpen}
       />
     </div>
   )

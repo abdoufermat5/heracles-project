@@ -3,6 +3,7 @@ import { accessEn } from './access'
 import { settingsEn } from './settings'
 import { objectsEn } from './objects'
 import { sidebarEn } from './sidebar'
+import { safetyEn } from './safety'
 import { adminEn } from '@/features/admin/locale-en'
 import { auditEn } from '@/features/audit/locale-en'
 
@@ -31,6 +32,7 @@ const en = {
   ...accessEn,
   ...settingsEn,
   ...sidebarEn,
+  ...safetyEn,
   // --- end P3 objects ---
   categories: {
     directory: 'Directory',
