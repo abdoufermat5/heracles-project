@@ -7,13 +7,14 @@ from contextlib import contextmanager
 from typing import cast
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, Response
 from webauthn import base64url_to_bytes
 from webauthn.helpers import bytes_to_base64url
 
 from heracles.api.deps import CurrentUserDep, StateDep
 from heracles.api.domain import DomainDep
 from heracles.api.errors import forbidden, not_found, validation
+from heracles.api.etag import json_with_etag
 from heracles.attributes import JSON
 from heracles.auth.passwords import is_locked, lock, unlock
 from heracles.auth.second_factor import SecondFactorSummary
@@ -38,8 +39,8 @@ _KIND_BY_ATTR = {"ou": "ou", "o": "o", "l": "l", "c": "c", "dc": "dc"}
 # ------------------------------------------------------------------- tree
 
 
-@router.get("/tree")
-def department_tree(user: CurrentUserDep, domain: DomainDep) -> list[dict[str, JSON]]:
+@router.get("/tree", response_model=None)
+def department_tree(request: Request, user: CurrentUserDep, domain: DomainDep) -> Response:
     """Departments readable by the user, as a tree rooted at the base."""
     directory = user.directory
     base = directory.base_dn
@@ -95,7 +96,7 @@ def department_tree(user: CurrentUserDep, domain: DomainDep) -> list[dict[str, J
         children = node["children"]
         assert isinstance(children, list)
         children.sort(key=lambda n: str(n["label"]).lower() if isinstance(n, dict) else "")
-    return [root]
+    return json_with_etag(request, [root])
 
 
 def _label(rdn: str) -> str:

@@ -74,7 +74,7 @@ def build_worker(config_path: str | os.PathLike[str] | None = None) -> Scheduler
 
     raw, api_settings, directories = load_config(config_path)
     configure_audit_syslog(raw.get("audit"))
-    database = Database(api_settings.database.path or MEMORY)
+    database = Database(api_settings.database.target or MEMORY)
     registry: TypeRegistry | Callable[[], TypeRegistry]
     if directories:
         # same enabled set as the console (configuration + stored overrides), re-read at

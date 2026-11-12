@@ -1,0 +1,23 @@
+# Configuration of the multi-replica stack (docker compose --profile replicas): several Heracles
+# servers behind one load balancer, sharing a PostgreSQL application database. Used by both
+# replicas; nothing in it is per replica.
+directories:
+  - id: main
+    label: Test directory
+    uri: ldap://ldap-replicas:1389
+    bind_dn: cn=admin,dc=heracles,dc=test
+    bind_password: admin
+    base_dn: dc=heracles,dc=test
+api:
+  admin_dns: ["uid=alice,ou=people,dc=heracles,dc=test"]
+  static_dir: /app/static
+  enable_docs: true
+  session:
+    cookie_secure: false
+  # Sessions, rate limits, second factors, plugin switches, the task lease and the listing
+  # change counters live here, so any replica can serve any request. $HERACLES_DATABASE_URL
+  # overrides it (keep the password out of the file in production).
+  database:
+    url: postgresql://heracles:heracles@postgres/heracles
+plugins:
+  enabled: [posix, ssh, sudo, mail, audit, acl_admin, ppolicy, dns, systems, archive]

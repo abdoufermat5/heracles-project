@@ -25,6 +25,7 @@ from heracles.ldap.client import DirectoryClient
 from heracles.objects import ObjectService, TypeInfo, TypeRegistry
 from heracles.objects.activation import PluginManager
 from heracles.objects.listing_cache import ListingCache, ListingScope
+from heracles.objects.listing_epochs import ListingEpochs
 from heracles.objects.model import Tab
 from heracles.objects.policy import CompositeEvents, ObjectEvents
 from heracles.objects.registry import EventsContext
@@ -101,6 +102,8 @@ class Domain:
     )
     #: Listing snapshots shared by the requests of this process (one set per session).
     listings: ListingCache = field(default_factory=ListingCache)
+    #: Per-session change counters shared with the other replicas (``None``: single process).
+    epochs: ListingEpochs | None = None
     #: When this process last compared its plugins with the app database (monotonic).
     _plugins_checked: float = field(default=float("-inf"), repr=False, compare=False)
 
@@ -202,7 +205,14 @@ class Domain:
         policy = TypeAclPolicy(evaluator, info, self.registry)
         events = self.events(user)
         memo = cast("tuple[ResolvedAcl, AclEvaluator]", user.acl)
-        listings = ListingScope(self.listings, user.session.id, memo[0])
+        epochs = self.epochs
+        sid = user.session.id
+        listings = ListingScope(
+            self.listings,
+            sid,
+            memo[0],
+            (lambda: epochs.current(sid)) if epochs is not None else None,
+        )
         service = ObjectService(
             user.directory, self.registry, policy=policy, events=events, listings=listings
         )
@@ -211,6 +221,8 @@ class Domain:
     def invalidate_listings(self, session_id: str) -> None:
         """Drop the listing snapshots of one session (the raw id, as in ``Session.id``)."""
         self.listings.invalidate(session_id)
+        if self.epochs is not None:
+            self.epochs.bump(session_id)  # the snapshots other replicas hold go stale too
 
     def events(self, user: CurrentUser) -> ObjectEvents:
         """Object event hooks contributed by the plugins, for one request.
@@ -256,6 +268,8 @@ def invalidate_acl_cache(session: Session) -> None:
 def install_domain(app: FastAPI, domain: Domain) -> None:
     app.state.domain = domain
     state = getattr(app.state, "heracles", None)
+    if state is not None and state.database is not None and domain.epochs is None:
+        domain.epochs = ListingEpochs(state.database)
     if state is not None:
         # follow the live registry: plugins can be switched on and off from the console
         state.audit.attach(lambda: domain.registry)

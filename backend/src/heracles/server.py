@@ -64,7 +64,7 @@ def create_full_app(
     if registry is None:
         if load_plugins and directories:
             database = (
-                Database(settings.database.path) if settings.database.path is not None else None
+                Database(settings.database.target) if settings.database.target is not None else None
             )
             manager = PluginManager(
                 discover_plugins(),
@@ -180,7 +180,7 @@ def load_config(
     directories: dict[str, DirectoryClient] = {
         cfg.id: PyLdapDirectory(cfg) for cfg in ldap_settings.directories
     }
-    if api_settings.database.path is None:
+    if api_settings.database.target is None:
         data_dir = Path(os.environ.get("HERACLES_DATA_DIR", "/var/lib/heracles"))
         api_settings.database.path = data_dir / "heracles.db"
     if "plugins" in raw and "plugins" not in raw.get("api", {}):

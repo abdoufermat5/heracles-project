@@ -5,13 +5,16 @@ whole result before slicing one page. Paging through thousands of entries would 
 that for every page, so the filtered and sorted entry list is kept for a few seconds
 and later pages are cut from it.
 
-The cache is process-local (workers do not share it) and bounded: snapshots expire
+The cache is process-local (workers and replicas do not share it) and bounded: snapshots expire
 after :data:`LISTING_TTL` seconds and at most :data:`MAX_SNAPSHOTS` are kept, the least
 recently used one being dropped first. Every snapshot belongs to one owner (the
 session), because the ACL filtering baked into it differs between users.
 
 Staleness: a write made through the same session clears that session's snapshots,
-and so does a change of its ACL resolution. Writes made by other sessions are not
+and so does a change of its ACL resolution. When the process shares an application database
+with other replicas, the session's change counter (:mod:`heracles.objects.listing_epochs`)
+is part of what a snapshot was made under, so a write served by another replica also
+invalidates it. Writes made by other sessions are not
 seen until the snapshot expires or the user reloads the first page, which always
 searches the directory again.
 """
@@ -22,7 +25,7 @@ import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NamedTuple
 
 from heracles.ldap.client import Entry, Scope
@@ -53,6 +56,8 @@ class _Snapshot:
     expires: float
     #: Identity of the owner's ACL resolution the entries were filtered with.
     version: object
+    #: The session's change counter when the snapshot was made.
+    epoch: int = 0
 
 
 class ListingCache:
@@ -71,22 +76,24 @@ class ListingCache:
         self._lock = threading.Lock()
         self._items: OrderedDict[ListingKey, _Snapshot] = OrderedDict()
 
-    def get(self, key: ListingKey, version: object) -> Sequence[Entry] | None:
+    def get(self, key: ListingKey, version: object, epoch: int = 0) -> Sequence[Entry] | None:
         """The fresh snapshot of ``key`` made under ``version``, if any."""
         with self._lock:
             snap = self._items.get(key)
             if snap is None:
                 return None
-            if snap.expires <= self._clock() or snap.version is not version:
+            if snap.expires <= self._clock() or snap.version is not version or snap.epoch != epoch:
                 del self._items[key]
                 return None
             self._items.move_to_end(key)
             return snap.entries
 
-    def put(self, key: ListingKey, version: object, entries: Sequence[Entry]) -> None:
+    def put(
+        self, key: ListingKey, version: object, entries: Sequence[Entry], epoch: int = 0
+    ) -> None:
         with self._lock:
             now = self._clock()
-            self._items[key] = _Snapshot(tuple(entries), now + self._ttl, version)
+            self._items[key] = _Snapshot(tuple(entries), now + self._ttl, version, epoch)
             self._items.move_to_end(key)
             for stale in [k for k, s in self._items.items() if s.expires <= now]:
                 del self._items[stale]
@@ -113,6 +120,18 @@ class ListingScope:
     #: Identity of the owner's current ACL resolution; snapshots made under another one
     #: are ignored (an ACL change alters what the owner may see).
     version: object
+    #: The owner's change counter, read lazily (once per scope); ``None``: single process.
+    epoch_of: Callable[[], int] | None = None
+    _epoch: list[int] = field(default_factory=lambda: [], repr=False, compare=False)
+
+    @property
+    def epoch(self) -> int:
+        """The counter as it was when the request first needed it (before any search)."""
+        if self.epoch_of is None:
+            return 0
+        if not self._epoch:
+            self._epoch.append(self.epoch_of())
+        return self._epoch[0]
 
     def key(
         self,
@@ -129,10 +148,10 @@ class ListingScope:
         )
 
     def get(self, key: ListingKey) -> Sequence[Entry] | None:
-        return self.cache.get(key, self.version)
+        return self.cache.get(key, self.version, self.epoch)
 
     def put(self, key: ListingKey, entries: Sequence[Entry]) -> None:
-        self.cache.put(key, self.version, entries)
+        self.cache.put(key, self.version, entries, self.epoch)
 
 
 __all__ = [

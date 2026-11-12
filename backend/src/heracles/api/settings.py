@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from heracles.api.hosts import DEFAULT_ALLOWED_HOSTS
 from heracles.auth.oidc import OidcSettings
@@ -82,11 +83,27 @@ class BrandingSettings(BaseModel):
 
 
 class DatabaseSettings(BaseModel):
-    """The application's own SQLite database (second-factor registrations, ...)."""
+    """The application's own database (sessions, second factor, task lease, ...)."""
 
-    #: Database file. Unset: in-memory stores (demo, tests); the production server
-    #: defaults it to ``$HERACLES_DATA_DIR/heracles.db`` (``/var/lib/heracles``).
+    #: SQLite database file (single node). Unset: in-memory stores (demo, tests); the production
+    #: server defaults it to ``$HERACLES_DATA_DIR/heracles.db`` (``/var/lib/heracles``).
     path: Path | None = None
+    #: ``postgresql://user:password@host/db``: a PostgreSQL database shared by several replicas
+    #: on different hosts (needs the ``postgres`` extra). Takes precedence over ``path``;
+    #: ``$HERACLES_DATABASE_URL`` takes precedence over the file.
+    url: str | None = None
+
+    @model_validator(mode="after")
+    def _env_url(self) -> DatabaseSettings:
+        env = os.environ.get("HERACLES_DATABASE_URL", "").strip()
+        if env:
+            self.url = env
+        return self
+
+    @property
+    def target(self) -> Path | str | None:
+        """What :class:`~heracles.storage.Database` opens: the URL, else the file, else nothing."""
+        return self.url or self.path
 
 
 class PluginsSettings(BaseModel):

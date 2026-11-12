@@ -1,5 +1,11 @@
-"""Server-side persistent storage (the application's SQLite database)."""
+"""Server-side persistent storage (the application database: SQLite or PostgreSQL)."""
 
-from heracles.storage.database import Database, DatabaseError
+from heracles.storage.database import (
+    Database,
+    DatabaseError,
+    Migration,
+    SqliteDatabase,
+    is_postgres_url,
+)
 
-__all__ = ["Database", "DatabaseError"]
+__all__ = ["Database", "DatabaseError", "Migration", "SqliteDatabase", "is_postgres_url"]

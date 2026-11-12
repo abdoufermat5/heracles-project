@@ -23,6 +23,8 @@ dependencies = [
 [project.optional-dependencies]
 ldap = ["python-ldap>=3.4.4"]  # needs libldap2-dev + libsasl2-dev
 dns = ["dnspython>=2.7"]
+# shared application database for several replicas on different hosts
+postgres = ["psycopg[binary,pool]==3.3.8", "psycopg-pool==3.3.3"]
 
 [project.scripts]
 heracles = "heracles.cli.main:main"
@@ -92,6 +94,8 @@ dev = [
   "pytest-cov>=7.1.0",
   "httpx2>=2.16.0",
   "dnspython>=2.7",
+  "psycopg[binary,pool]==3.3.8",
+  "psycopg-pool==3.3.3",
 ]
 
 [build-system]

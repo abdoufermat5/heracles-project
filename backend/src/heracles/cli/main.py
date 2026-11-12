@@ -182,6 +182,22 @@ def _migrate_directory(args: argparse.Namespace) -> int:
     return 0
 
 
+def _db_migrate_to_postgres(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from heracles.storage import DatabaseError
+    from heracles.storage.copy import copy_sqlite_to_postgres
+
+    try:
+        copied = copy_sqlite_to_postgres(Path(args.source), args.to)
+    except DatabaseError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    for table, count in copied.items():
+        print(f"{table}: {count} row(s)")
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -251,6 +267,16 @@ def main(
         "--force", action="store_true", help="write the result even when errors were found"
     )
     migrate.set_defaults(func=_migrate_directory)
+
+    db = sub.add_parser("db", help="the application database")
+    db_sub = db.add_subparsers(dest="db_command", required=True)
+    to_pg = db_sub.add_parser(
+        "migrate-to-postgres",
+        help="copy the SQLite application database into PostgreSQL (to run several replicas)",
+    )
+    to_pg.add_argument("--from", dest="source", required=True, help="the SQLite file")
+    to_pg.add_argument("--to", required=True, help="postgresql://user:password@host/db (empty)")
+    to_pg.set_defaults(func=_db_migrate_to_postgres)
 
     # --- P3 admin ---
     admin_commands.register(sub, directories or admin_commands.load_directories)
