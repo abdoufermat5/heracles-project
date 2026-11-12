@@ -255,13 +255,61 @@ export const handlers: HttpHandler[] = [
     ),
   ),
 
+  http.get(
+    `${B}/auth/sessions`,
+    guarded(() => {
+      if (db.sessions.length === 0) {
+        const now = Math.floor(Date.now() / 1000)
+        db.sessions = [
+          { id: 'cur', user_agent: 'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0', ip: '192.0.2.10', created_at: now - 600, last_seen: now, current: true },
+          { id: 'old', user_agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', ip: '198.51.100.7', created_at: now - 86400, last_seen: now - 3600, current: false },
+        ]
+      }
+      return HttpResponse.json(db.sessions)
+    }),
+  ),
+
+  http.post(
+    `${B}/auth/sessions/revoke-others`,
+    guarded(
+      () => {
+        const revoked = db.sessions.filter((s) => !s.current).length
+        db.sessions = db.sessions.filter((s) => s.current)
+        return HttpResponse.json({ revoked })
+      },
+      { mutation: true },
+    ),
+  ),
+
+  http.delete(
+    `${B}/auth/sessions/:id`,
+    guarded(
+      ({ params }) => {
+        const id = String(params.id)
+        const target = db.sessions.find((s) => s.id === id)
+        if (!target) return err(404, 'not_found', 'Session not found')
+        if (target.current) return err(422, 'validation', 'This is the current session')
+        db.sessions = db.sessions.filter((s) => s.id !== id)
+        return new HttpResponse(null, { status: 204 })
+      },
+      { mutation: true },
+    ),
+  ),
+
+  http.delete(
+    `${B}/users/:dn/sessions`,
+    guarded(() => HttpResponse.json({ revoked: 1 }), { mutation: true }),
+  ),
+
   http.post(
     `${B}/auth/reauth`,
     guarded(
       async ({ request }) => {
-        const body = (await request.json()) as { password: string }
-        if (body.password === 'wrong')
-          return err(422, 'validation', 'Wrong password', { fields: { password: 'Wrong password' } })
+        const body = (await request.json()) as { password?: string; method?: string; code?: string }
+        if (body.password === 'wrong' || body.code === '000000')
+          return err(422, 'validation', 'Wrong password', {
+            fields: { [body.method ? 'code' : 'password']: 'Wrong value' },
+          })
         db.reauthFresh = true
         return HttpResponse.json({ status: 'ok' })
       },

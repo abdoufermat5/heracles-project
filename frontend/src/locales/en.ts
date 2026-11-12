@@ -5,6 +5,7 @@ import { objectsEn } from './objects'
 import { sidebarEn } from './sidebar'
 import { adminEn } from '@/features/admin/locale-en'
 import { auditEn } from '@/features/audit/locale-en'
+import { meEn } from '@/features/me/locale-en'
 
 const en = {
   common: {
@@ -406,6 +407,7 @@ const en = {
   // --- P3 admin ---
   ...adminEn,
   ...auditEn,
+  ...meEn,
   // --- P3 compat ---
   io: {
     title: 'Import / export',

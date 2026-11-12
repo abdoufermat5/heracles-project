@@ -38,15 +38,17 @@ export function sha256Short(message: Uint8Array): Uint8Array {
   const bits = message.length * 8
   block[62] = (bits >>> 8) & 0xff
   block[63] = bits & 0xff
+  const at = (i: number) => block[i] as number
+  const w = (i: number) => W[i] as number
   for (let i = 0; i < 16; i++) {
-    W[i] = (block[i * 4] << 24) | (block[i * 4 + 1] << 16) | (block[i * 4 + 2] << 8) | block[i * 4 + 3]
+    W[i] = (at(i * 4) << 24) | (at(i * 4 + 1) << 16) | (at(i * 4 + 2) << 8) | at(i * 4 + 3)
   }
   for (let i = 16; i < 64; i++) {
-    const a = W[i - 15]
-    const b = W[i - 2]
+    const a = w(i - 15)
+    const b = w(i - 2)
     const s0 = ((a >>> 7) | (a << 25)) ^ ((a >>> 18) | (a << 14)) ^ (a >>> 3)
     const s1 = ((b >>> 17) | (b << 15)) ^ ((b >>> 19) | (b << 13)) ^ (b >>> 10)
-    W[i] = (W[i - 16] + s0 + W[i - 7] + s1) | 0
+    W[i] = (w(i - 16) + s0 + w(i - 7) + s1) | 0
   }
   let h0 = 0x6a09e667
   let h1 = 0xbb67ae85
@@ -67,7 +69,7 @@ export function sha256Short(message: Uint8Array): Uint8Array {
   for (let i = 0; i < 64; i++) {
     const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7))
     const ch = (e & f) ^ (~e & g)
-    const t1 = (h + S1 + ch + K[i] + W[i]) | 0
+    const t1 = (h + S1 + ch + (K[i] as number) + w(i)) | 0
     const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10))
     const maj = (a & b) ^ (a & c) ^ (b & c)
     const t2 = (S0 + maj) | 0

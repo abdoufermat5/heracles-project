@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCapabilities } from '@/features/admin/hooks'
+import { SessionsPanel } from '@/features/me/SessionsPanel'
 import { GroupsSection } from '@/features/portal/GroupsSection'
 import { PasswordSection } from '@/features/portal/PasswordSection'
 import { ProfileCard } from '@/features/portal/ProfileCard'
@@ -93,6 +94,9 @@ export function MePage() {
 
       {/* Guided 2FA and Security Keys Setup */}
       <SecuritySection />
+
+      {/* Active sessions: devices signed in to this account */}
+      <SessionsPanel />
 
       {/* My Groups (Read-only list) */}
       <GroupsSection />

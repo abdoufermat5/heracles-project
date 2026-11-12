@@ -19,7 +19,7 @@ import secrets
 import threading
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 #: About 0.5 to 1 s of work in a browser worker (2**20 hashes on average).
 DEFAULT_DIFFICULTY = 20
@@ -47,6 +47,30 @@ def solve(nonce: str, difficulty: int) -> int:
     return counter
 
 
+class NonceStore(Protocol):
+    """Remembers solved challenges: ``claim`` is true only for the first caller."""
+
+    def claim(self, nonce: str, expires: float) -> bool: ...
+
+
+class MemoryNonceStore:
+    """Process-local nonces (tests, demo, a single process)."""
+
+    def __init__(self, clock: Callable[[], float] = time.time) -> None:
+        self._clock = clock
+        self._used: dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def claim(self, nonce: str, expires: float) -> bool:
+        now = self._clock()
+        with self._lock:
+            self._used = {n: e for n, e in self._used.items() if e > now}
+            if nonce in self._used or len(self._used) >= _MAX_USED:
+                return False
+            self._used[nonce] = expires
+        return True
+
+
 class Captcha:
     """Create and verify challenges."""
 
@@ -58,14 +82,14 @@ class Captcha:
         difficulty: int = DEFAULT_DIFFICULTY,
         min_fill: float = MIN_FILL_SECONDS,
         clock: Callable[[], float] = time.time,
+        nonces: NonceStore | None = None,
     ) -> None:
         self._secret = secret or secrets.token_bytes(32)
         self._ttl = ttl
         self._difficulty = max(0, min(difficulty, MAX_DIFFICULTY))
         self._min_fill = min_fill
         self._clock = clock
-        self._used: dict[str, float] = {}
-        self._lock = threading.Lock()
+        self._nonces: NonceStore = nonces or MemoryNonceStore(clock)
 
     @property
     def min_fill(self) -> float:
@@ -118,9 +142,4 @@ class Captcha:
         digest = hashlib.sha256(f"{nonce}:{int(counter)}".encode()).digest()
         if leading_zero_bits(digest) < difficulty:
             return False
-        with self._lock:
-            self._used = {n: e for n, e in self._used.items() if e > now}
-            if nonce in self._used or len(self._used) >= _MAX_USED:
-                return False
-            self._used[nonce] = expires
-        return True
+        return self._nonces.claim(nonce, expires)
