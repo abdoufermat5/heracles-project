@@ -32,7 +32,6 @@ from heracles.ldap.client import Entry, Scope
 from heracles.ldap.memory import MemoryDirectory
 from heracles.server import create_full_app
 
-
 #: p95 budget in milliseconds per endpoint at ``DEFAULT_USERS`` users.
 P95_BUDGET_MS: dict[str, float] = {
     "types": 100,
