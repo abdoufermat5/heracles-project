@@ -34,7 +34,6 @@ import {
   SectionCard,
 } from '@/components/patterns'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -317,11 +316,6 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
         name={groupName}
         subtitle={groupDesc ?? undefined}
         icon={<Users className="size-6 text-primary" />}
-        badges={
-          <Badge variant="outline" className="h-6 text-caption font-medium">
-            {t('peopleUI.groupProfile.membersBadge', { count: memberDns.length })}
-          </Badge>
-        }
         meta={[
           {
             icon: <Building2 className="size-3.5" />,

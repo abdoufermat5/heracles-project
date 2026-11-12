@@ -16,7 +16,7 @@ describe('full flow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     // back on the originally requested page
-    expect(await screen.findByText('200 items')).toBeInTheDocument()
+    expect(await screen.findByText(/1–25 of 200/)).toBeInTheDocument()
     expect(history.location.pathname).toBe('/types/user')
 
     // open the first user

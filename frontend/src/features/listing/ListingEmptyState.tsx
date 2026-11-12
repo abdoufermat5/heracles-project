@@ -9,6 +9,9 @@ interface ListingEmptyStateProps {
   isFiltered: boolean
   canCreate?: boolean
   onClearFilter: () => void
+  /** Server message when the advanced LDAP filter was refused (400). */
+  filterError?: string | null
+  onClearLdapFilter?: () => void
 }
 
 export function ListingEmptyState({
@@ -17,8 +20,25 @@ export function ListingEmptyState({
   isFiltered,
   canCreate = false,
   onClearFilter,
+  filterError = null,
+  onClearLdapFilter,
 }: ListingEmptyStateProps) {
   const { t } = useTranslation()
+
+  if (filterError) {
+    return (
+      <div
+        role="status"
+        className="flex flex-col items-center justify-center gap-2 rounded-b-md border border-dashed bg-card px-6 py-12 text-center"
+      >
+        <p className="text-body font-semibold text-foreground">{t('listing.filterRefusedTitle')}</p>
+        <p className="text-body text-muted-foreground">{filterError}</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={onClearLdapFilter ?? onClearFilter}>
+          {t('listing.clearLdapFilter')}
+        </Button>
+      </div>
+    )
+  }
 
   if (isFiltered) {
     return (

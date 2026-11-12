@@ -316,6 +316,8 @@ const fr: Translation = {
     densityComfortable: 'Confortable',
     densityCompact: 'Compact',
     clearSearch: 'Effacer la recherche',
+    filterRefusedTitle: "Ce filtre n'a pas pu être exécuté",
+    clearLdapFilter: 'Effacer le filtre',
     filterStatus: 'Statut',
     filterAll: 'Tous',
     filterActive: 'Actifs',

@@ -14,18 +14,18 @@ describe('listing page', () => {
     expect(screen.getByRole('columnheader', { name: /Status/ })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: /Department/ })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: /Groups/ })).toBeInTheDocument()
-    expect(await screen.findByText('200 items')).toBeInTheDocument()
+    expect(await screen.findByText(/1–25 of 200/)).toBeInTheDocument()
     expect(screen.getAllByRole('row').length).toBeGreaterThan(5)
   })
 
   it('searches server-side with q', async () => {
     signIn()
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     const target = must(db.all('user')[7])
     const uid = String(target.tabs.main?.values.uid)
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search' }), uid)
-    await waitFor(() => expect(screen.queryByText('200 items')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText(/1–25 of 200/)).not.toBeInTheDocument())
     expect((await screen.findAllByText(uid)).length).toBeGreaterThan(0)
   })
 
@@ -37,7 +37,7 @@ describe('listing page', () => {
       if (u.pathname.endsWith('/objects/user')) seen.push(u.search)
     })
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     await userEvent.click(screen.getByRole('button', { name: /Person/ }))
     await waitFor(() => expect(seen.some((s) => s.includes('order=asc'))).toBe(true))
   })
@@ -45,7 +45,7 @@ describe('listing page', () => {
   it('shows the locked badge and a bulk actions bar on selection', async () => {
     signIn()
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     expect((await screen.findAllByText('Locked')).length).toBeGreaterThan(0)
     const rows = screen.getAllByRole('row')
     await userEvent.click(within(must(rows[1])).getByRole('checkbox'))
@@ -71,10 +71,25 @@ describe('listing page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Directory down')
   })
 
+  it('shows a calm error state when the LDAP filter is refused', async () => {
+    signIn()
+    server.use(
+      http.get('/api/v2/objects/group', () =>
+        HttpResponse.json({ error: { code: 'invalid_filter', message: 'Unknown attribute: nope' } }, { status: 400 }),
+      ),
+    )
+    renderApp('/types/group?ldap=' + encodeURIComponent('(nope=1)'))
+    expect(await screen.findByText('This filter could not be run')).toBeInTheDocument()
+    expect(screen.queryByText('Try a different search term')).not.toBeInTheDocument()
+    expect(screen.getAllByText(/Unknown attribute: nope/).length).toBeGreaterThan(0)
+    const state = screen.getByText('This filter could not be run').closest('[role="status"]') as HTMLElement
+    expect(within(state).getByRole('button', { name: 'Clear filter' })).toBeInTheDocument()
+  })
+
   it('paginates results with real pagination', async () => {
     signIn()
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     expect(screen.getByRole('navigation', { name: 'Pagination' })).toBeInTheDocument()
     expect(screen.getByText(/1–25 of 200/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Next page' }))
@@ -84,7 +99,7 @@ describe('listing page', () => {
   it('clears search when clear button is clicked', async () => {
     signIn()
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     const input = screen.getByRole('searchbox', { name: 'Search' })
     await userEvent.type(input, 'testquery')
     expect(input).toHaveValue('testquery')
@@ -96,7 +111,7 @@ describe('listing page', () => {
   it('opens and confirms bulk delete dialog listing selected objects', async () => {
     signIn()
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     const rows = screen.getAllByRole('row')
     await userEvent.click(within(must(rows[1])).getByRole('checkbox'))
 
@@ -115,14 +130,14 @@ describe('listing page', () => {
   it('shows no matches empty state with clear search action', async () => {
     signIn()
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     const input = screen.getByRole('searchbox', { name: 'Search' })
     await userEvent.type(input, 'nonexistent_user_12345')
     expect(await screen.findByText('No matching results')).toBeInTheDocument()
     const clearBtns = screen.getAllByRole('button', { name: 'Clear search' })
     await userEvent.click(clearBtns[0]!)
     await waitFor(() => expect(input).toHaveValue(''))
-    expect(await screen.findByText('200 items')).toBeInTheDocument()
+    expect(await screen.findByText(/1–25 of 200/)).toBeInTheDocument()
   })
 
   it('shows permission denied state for 403 responses', async () => {
@@ -142,7 +157,7 @@ describe('listing page', () => {
   it('toggles the preview panel on wide screens', async () => {
     signIn()
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     expect(screen.queryByRole('complementary', { name: 'Preview' })).not.toBeInTheDocument()
 
     const toggleBtn = screen.getByRole('button', { name: 'Preview' })
@@ -162,7 +177,7 @@ describe('listing page', () => {
   it('toggles density between comfortable and compact', async () => {
     signIn()
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     // compact is the default for console users
     const densityBtn = screen.getByRole('button', { name: 'Comfortable' })
     await userEvent.click(densityBtn)
@@ -172,7 +187,7 @@ describe('listing page', () => {
   it('keeps the view in the URL and restores it from a shared link', async () => {
     signIn()
     const { history, unmount } = renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     await userEvent.click(screen.getByRole('button', { name: /Person/ }))
     await waitFor(() => expect(history.location.search).toContain('sort='))
     await userEvent.click(screen.getByRole('button', { name: 'Next page' }))
@@ -192,7 +207,7 @@ describe('listing page', () => {
       if (u.pathname.endsWith('/objects/user')) seen.push(u.search)
     })
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     await userEvent.click(screen.getByRole('button', { name: 'Advanced filter' }))
     const input = screen.getByRole('textbox', { name: 'Advanced filter' })
     await userEvent.type(input, '(nosuchattr=1){Enter}')
@@ -206,7 +221,7 @@ describe('listing page', () => {
   it('moves the row cursor with j/k and selects with x', async () => {
     signIn()
     renderApp('/types/user')
-    await screen.findByText('200 items')
+    await screen.findByText(/1–25 of 200/)
     const table = screen.getByLabelText(/j\/k move/)
     table.focus()
     await userEvent.keyboard('jjkx')

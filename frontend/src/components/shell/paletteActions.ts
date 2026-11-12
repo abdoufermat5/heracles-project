@@ -67,6 +67,8 @@ export interface PaletteAction {
   /** Combo (as given to `useHotkey`) shown on the right. */
   shortcut?: string
   destructive?: boolean
+  /** Secondary muted line (e.g. the DN an action is about). */
+  detail?: string
   run: () => void
 }
 
@@ -117,6 +119,7 @@ export function buildPaletteActions(c: ActionContext): PaletteAction[] {
       {
         id: 'audit-object',
         label: t('shellUI.palette.auditFor', { label: c.currentLabel ?? dn }),
+        detail: c.currentLabel && c.currentLabel !== dn ? dn : undefined,
         icon: History,
         run: () => go('/activity/audit', { search: { object: dn } }),
       },
