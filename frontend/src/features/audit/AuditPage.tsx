@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight, Download, ScrollText, X } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTypes } from '@/api/hooks'
@@ -8,7 +9,7 @@ import { FilterBar, FilterChip } from '@/components/patterns'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
-import { PageHeader } from '@/components/ui/page-header'
+import { PageLayout } from '@/components/patterns'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -105,11 +106,16 @@ export function AuditPage({ object: initialObject = '', actor: initialActor = ''
 
   if (!pending && !enabled) {
     return (
-      <div className="mx-auto max-w-md p-6">
+      <div className="mx-auto max-w-md">
         <EmptyState
           icon={<ScrollText aria-hidden />}
           title={t('audit.notEnabled.title')}
           description={t('audit.notEnabled.description')}
+          action={
+            <Button asChild size="sm">
+              <Link to="/admin/plugins">{t('onboarding.next.plugins')}</Link>
+            </Button>
+          }
         />
       </div>
     )
@@ -120,8 +126,7 @@ export function AuditPage({ object: initialObject = '', actor: initialActor = ''
     .map((x) => ({ value: x.name, label: x.label }))
 
   return (
-    <div className="space-y-4 p-6">
-      <PageHeader
+    <PageLayout
         title={t('audit.title')}
         description={t('audit.description')}
         actions={
@@ -132,8 +137,7 @@ export function AuditPage({ object: initialObject = '', actor: initialActor = ''
             </a>
           </Button>
         }
-      />
-
+      >
       <FilterBar search={search} onSearch={setSearch} placeholder={t('audit.search')}>
         <ToggleGroup
           type="single"
@@ -263,7 +267,13 @@ export function AuditPage({ object: initialObject = '', actor: initialActor = ''
               <Button variant="outline" size="sm" onClick={clearFilters}>
                 {t('audit.filters.clear')}
               </Button>
-            ) : undefined
+            ) : (
+              <Button asChild variant="outline" size="sm">
+                <Link to="/types/$type" params={{ type: 'user' }}>
+                  {t('onboarding.next.people')}
+                </Link>
+              </Button>
+            )
           }
         />
       ) : (
@@ -342,6 +352,6 @@ export function AuditPage({ object: initialObject = '', actor: initialActor = ''
           )}
         </div>
       )}
-    </div>
+    </PageLayout>
   )
 }

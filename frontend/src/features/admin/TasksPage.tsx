@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { PageHeader } from '@/components/ui/page-header'
+import { PageLayout } from '@/components/patterns'
 import { Progress } from '@/components/ui/progress'
 import {
   Select,
@@ -264,8 +264,7 @@ export function TasksPage() {
   const hasActiveFilters = Boolean(kind || status || search)
 
   return (
-    <div className="space-y-4">
-      <PageHeader title={t('tasks.title')} description={t('tasks.description')} />
+    <PageLayout title={t('tasks.title')} description={t('tasks.description')}>
       {everything.data?.capabilities && !everything.data.capabilities.scheduler_in_process && (
         <p className="rounded-md border bg-card p-3 text-small text-muted-foreground" role="note">
           {t('tasks.noScheduler')}
@@ -479,6 +478,6 @@ export function TasksPage() {
           )}
         </div>
       )}
-    </div>
+    </PageLayout>
   )
 }

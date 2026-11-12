@@ -1,4 +1,6 @@
 import { AlertTriangle, Layers, Puzzle } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
@@ -6,7 +8,7 @@ import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
-import { PageHeader } from '@/components/ui/page-header'
+import { PageLayout } from '@/components/patterns'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -166,8 +168,7 @@ export function PluginsPage() {
     )
 
   return (
-    <div className="space-y-4">
-      <PageHeader title={t('plugins.title')} description={t('plugins.description')} />
+    <PageLayout title={t('plugins.title')} description={t('plugins.description')}>
       {isError ? (
         <ErrorState error={error} onRetry={() => void refetch()} />
       ) : isPending ? (
@@ -176,7 +177,13 @@ export function PluginsPage() {
           <Skeleton className="h-48 w-full" />
         </div>
       ) : data.length === 0 ? (
-        <EmptyState icon={<Puzzle className="size-6 text-muted-foreground" aria-hidden />} title={t('plugins.none')} />
+        <EmptyState icon={<Puzzle className="size-6 text-muted-foreground" aria-hidden />} title={t('plugins.none')}
+          action={
+            <Button asChild variant="outline" size="sm">
+              <Link to="/admin/health">{t('onboarding.next.health')}</Link>
+            </Button>
+          }
+        />
       ) : (
         GROUPS.map((g) => {
           const items = data.filter((p) => groupOf(p) === g.id)
@@ -200,6 +207,6 @@ export function PluginsPage() {
           )
         })
       )}
-    </div>
+    </PageLayout>
   )
 }
