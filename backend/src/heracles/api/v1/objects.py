@@ -11,11 +11,11 @@ from fastapi import APIRouter, Body, Query, Request, Response, status
 from heracles.api.deps import CurrentUser
 from heracles.api.domain import Domain, DomainDep, TypeAclPolicy
 from heracles.api.errors import ApiError, forbidden, not_found
+from heracles.api.filter_rules import filter_checks
 from heracles.api.v1.common import V1Route, V1UserDep
 from heracles.api.v1.convert import bad_request, tabs_payload, to_v1
 from heracles.api.v1.names import (
     V1Tab,
-    filter_checks,
     find_attribute,
     find_tab,
     resolve_type,
@@ -90,7 +90,7 @@ def _update(
 
 
 def _filter_checks(info: TypeInfo, flt: Filter) -> list[tuple[str, str]]:
-    """See :func:`heracles.api.v1.names.filter_checks`; refuses with a 400."""
+    """See :func:`heracles.api.filter_rules.filter_checks`; refuses with a 400."""
     try:
         return filter_checks(info, filter_attributes(flt))
     except ValueError as exc:

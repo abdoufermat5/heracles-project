@@ -15,8 +15,8 @@ from heracles.api.deps import CurrentUserDep, StateDep
 from heracles.api.domain import DomainDep, TypeAclPolicy
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.etag import json_with_etag
+from heracles.api.filter_rules import filter_checks
 from heracles.api.stepup import require_recent_auth
-from heracles.api.v1.names import filter_checks
 from heracles.attributes import JSON
 from heracles.core import references
 from heracles.core.config_store import effective_settings
