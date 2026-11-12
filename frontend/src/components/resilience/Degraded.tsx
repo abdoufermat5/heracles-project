@@ -53,13 +53,15 @@ export function DegradedProvider({ children }: { children: ReactNode }) {
     api.status().then(setStatus, () => undefined) // 401 (signed out) or unreachable: keep the last state
   }, [])
 
+  const signedIn = Boolean(me)
   useEffect(() => {
+    if (!signedIn) return // /status needs a session; nothing to poll on the sign-in pages
     refresh()
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') refresh()
     }, POLL_MS)
     return () => clearInterval(timer)
-  }, [refresh])
+  }, [refresh, signedIn])
 
   useEffect(() => {
     let announced = false
