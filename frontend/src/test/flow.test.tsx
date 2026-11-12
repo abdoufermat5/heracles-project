@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { db } from '@/mocks/db'
 import { renderApp } from '@/test/utils'
@@ -36,6 +36,9 @@ describe('full flow', () => {
     await userEvent.clear(given)
     await userEvent.type(given, 'Zed')
     await userEvent.click(screen.getByRole('button', { name: /Save/ }))
+    // every save is confirmed on a diff of the changes
+    const review = await screen.findByRole('dialog')
+    await userEvent.click(within(review).getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() => expect(screen.queryByRole('button', { name: /Save/ })).not.toBeInTheDocument())
     expect(db.get(first.dn)?.tabs.main?.values.givenName).toBe('Zed')

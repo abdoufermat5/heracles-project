@@ -14,7 +14,7 @@ describe('employee self-service portal', () => {
     renderApp('/me')
 
     // Friendly greeting without admin jargon
-    expect(await screen.findByText(/Hello, Emma/)).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText(/Hello, Emma/)).toBeInTheDocument(), { timeout: 5000 })
     expect(screen.getByText('Manage your profile, password, and account security.')).toBeInTheDocument()
 
     // Profile card displays details and readable department path
