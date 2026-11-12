@@ -6,7 +6,7 @@ test('administrators get the console, grouped by task, with the work queue', asy
   await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening)/ })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Needs attention' })).toBeVisible()
   const nav = page.getByRole('navigation', { name: 'Main navigation' })
-  for (const section of ['People', 'Organization', 'Access', 'Administration'])
+  for (const section of ['People', 'Organization', 'Access', 'Activity'])
     await expect(nav.getByRole('heading', { name: section })).toBeVisible()
   await expect(nav.getByRole('link', { name: /Users/ })).toBeVisible()
   await expect(nav.getByRole('link', { name: 'Access control' })).toBeVisible()
