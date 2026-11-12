@@ -6,6 +6,7 @@ SHELL := /bin/bash
 BACKEND  := backend
 FRONTEND := frontend
 COMPOSE  := docker compose -f deploy/docker-compose.yml
+REPLICAS := docker compose -p hrc-replicas -f deploy/docker-compose.yml --profile replicas
 
 HOST ?= 127.0.0.1
 PORT ?= 8420
@@ -16,7 +17,7 @@ CONFIG ?= $(HERACLES_CONFIG)
 .PHONY: bundle-check help install install-backend install-frontend \
         dev dev-demo dev-down dev-mock backend frontend demo build serve dns-demo \
         test test-backend test-frontend lint lint-backend lint-frontend \
-        format typecheck check bench ldap-up ldap-down ldap-logs test-integration e2e e2e-ui e2e-down schema third-party-schema clean
+        format typecheck check bench ldap-up ldap-down ldap-logs test-integration e2e e2e-replicas e2e-ui e2e-down schema third-party-schema clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "; printf "\nUsage: make \033[36m<target>\033[0m\n\n"} \
@@ -135,6 +136,16 @@ e2e: ## Build and start OpenLDAP + Heracles containers, run the end-to-end tests
 	cd $(BACKEND) && HERACLES_E2E_URL=http://localhost:8420 uv run pytest -q -m e2e tests/e2e
 	$(COMPOSE) --profile e2e run --rm integration
 	cd $(FRONTEND) && HERACLES_E2E_URL=http://localhost:8420 pnpm exec playwright test
+
+e2e-replicas: ## Browser e2e tests against two replicas behind a load balancer (own compose project, ports 8421/8422/8430)
+	@# naming the balancer keeps the plain `ldap` service (port 1389) out of this stack
+	@status=0; \
+	$(REPLICAS) up -d --build --wait balancer \
+	  && (cd $(FRONTEND) && HERACLES_E2E_URL=http://localhost:8430 \
+	      HERACLES_E2E_REPLICAS=http://localhost:8421,http://localhost:8422 \
+	      pnpm exec playwright test) \
+	  || status=$$?; \
+	$(REPLICAS) down -v; exit $$status
 
 e2e-ui: ## Browser end-to-end tests only, against the running stack (make dev or make e2e)
 	cd $(FRONTEND) && HERACLES_E2E_URL=http://localhost:$(PORT) pnpm exec playwright test
