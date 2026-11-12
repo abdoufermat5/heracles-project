@@ -240,8 +240,6 @@ export const settingsFr: typeof settingsEn = {
       myGroups: 'Mes groupes',
       myGroupsSubtitle: 'Équipes et groupes de diffusion auxquels vous appartenez.',
       noGroups: 'Vous n\'êtes membre d\'aucun groupe.',
-      groupsCount_one: '{{count}} groupe',
-      groupsCount_other: '{{count}} groupes',
       passwordTitle: 'Mot de passe',
       passwordSubtitle: 'Mettez à jour votre mot de passe pour sécuriser votre compte.',
       currentPassword: 'Mot de passe actuel',

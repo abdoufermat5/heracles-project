@@ -286,8 +286,6 @@ export const peopleEn = {
     },
     groupProfile: {
       title: 'Group',
-      membersBadge_one: '{{count}} member',
-      membersBadge_other: '{{count}} members',
       tabs: {
         members: 'Members',
         properties: 'Properties',

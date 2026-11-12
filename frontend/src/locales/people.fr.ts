@@ -284,8 +284,6 @@ export const peopleFr: typeof peopleEn = {
     },
     groupProfile: {
       title: 'Groupe',
-      membersBadge_one: '{{count}} membre',
-      membersBadge_other: '{{count}} membres',
       tabs: {
         members: 'Membres',
         properties: 'Propriétés',

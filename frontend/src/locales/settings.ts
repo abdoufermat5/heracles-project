@@ -242,8 +242,6 @@ export const settingsEn = {
       myGroups: 'My groups',
       myGroupsSubtitle: 'Teams and distribution groups you belong to.',
       noGroups: 'You are not a member of any group.',
-      groupsCount_one: '{{count}} group',
-      groupsCount_other: '{{count}} groups',
       passwordTitle: 'Password',
       passwordSubtitle: 'Update your password to keep your account secure.',
       currentPassword: 'Current password',
