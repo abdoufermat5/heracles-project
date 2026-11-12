@@ -566,3 +566,12 @@ def test_password_policy_violation_is_a_validation_error(app_client: TestClient)
         {"tabs": {"main": {"values": {"userPassword": "long-enough-secret"}}}},
     )
     assert r.status_code == 200, r.text
+
+
+def test_create_with_empty_base_lands_at_the_top_of_the_directory(app_client: TestClient) -> None:
+    """An empty base is the directory root, never a DN with an empty parent."""
+    a = api(app_client, "admin")
+    tabs = {"main": {"active": True, "values": {"ou": "Top", "description": "x"}}}
+    r = a.post("/objects/department", {"base": "", "tabs": tabs})
+    assert r.status_code == 201, r.text
+    assert r.json()["dn"].lower() == f"ou=top,{BASE}".lower()

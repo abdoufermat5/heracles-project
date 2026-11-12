@@ -115,7 +115,7 @@ def _validation_error(_: Request, exc: Exception) -> JSONResponse:
 
 
 def _directory_error(_: Request, exc: Exception) -> JSONResponse:
-    log.warning("directory_error", error=type(exc).__name__)
+    log.warning("directory_error", error=type(exc).__name__, detail=str(exc)[:500])
     return JSONResponse(
         error_body("ldap_error", "The directory server reported an error"),
         status_code=502,

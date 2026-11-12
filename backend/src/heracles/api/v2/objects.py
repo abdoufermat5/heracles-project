@@ -423,7 +423,9 @@ def create_object(
         tabs = _tabs_json(body.tabs)
         if body.template is not None:
             tabs = _tabs_from_template(service, type_name, body.template, body.tabs)
-        new_dn = service.create(type_name, body.base, tabs)
+        # An empty base means the top of the directory (never a DN with an empty parent).
+        base = body.base.strip() or user.directory.base_dn
+        new_dn = service.create(type_name, base, tabs)
     return _with_event_output(user, domain, {"dn": new_dn})
 
 
