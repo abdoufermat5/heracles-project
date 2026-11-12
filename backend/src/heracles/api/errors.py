@@ -131,9 +131,19 @@ def _directory_unavailable(_: Request, exc: Exception) -> JSONResponse:
     )
 
 
+def _is_postgres_outage(exc: Exception) -> bool:
+    """A PostgreSQL connection failure (only when the optional driver is installed)."""
+    try:
+        import psycopg
+        from psycopg_pool import PoolTimeout
+    except ImportError:  # pragma: no cover - the postgres extra is optional
+        return False
+    return isinstance(exc, psycopg.OperationalError | psycopg.InterfaceError | PoolTimeout)
+
+
 def _unhandled(_: Request, exc: Exception) -> JSONResponse:
     log.error("unhandled_exception", exc_info=exc)
-    if isinstance(exc, sqlite3.Error | DatabaseError):
+    if isinstance(exc, sqlite3.Error | DatabaseError) or _is_postgres_outage(exc):
         metrics.DATABASE_ERRORS.inc()
         return JSONResponse(
             error_body("database_unavailable", "The application database is unavailable"),
