@@ -632,6 +632,7 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
         onOpenChange={setLdifOpen}
         ldif={ldifText}
         title={title}
+        dn={detail?.dn}
         loading={ldifQuery.isPending && ldifOpen}
       />
 

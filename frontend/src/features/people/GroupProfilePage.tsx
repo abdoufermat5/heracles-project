@@ -718,6 +718,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
         onOpenChange={setLdifOpen}
         ldif={ldifQuery.data ?? `dn: ${dn}\n`}
         title={groupName}
+        dn={dn}
         loading={ldifQuery.isPending && ldifOpen}
       />
     </div>

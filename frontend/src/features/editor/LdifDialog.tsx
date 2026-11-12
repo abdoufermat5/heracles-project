@@ -1,8 +1,9 @@
-import { Check, Copy, FileCode2 } from 'lucide-react'
+import { Check, Copy, FileCode2, Terminal } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { shellQuote } from '@/features/listing/ldapsearch'
 import {
   Dialog,
   DialogContent,
@@ -21,9 +22,11 @@ interface Props {
   title: string
   /** The server text is still being fetched. */
   loading?: boolean
+  /** DN of the entry: enables "Copy as ldapsearch". */
+  dn?: string
 }
 
-export function LdifDialog({ open, onOpenChange, ldif, title, loading = false }: Props) {
+export function LdifDialog({ open, onOpenChange, ldif, title, loading = false, dn }: Props) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
@@ -34,6 +37,14 @@ export function LdifDialog({ open, onOpenChange, ldif, title, loading = false }:
       toast.success(t('editor.copied'))
       setTimeout(() => setCopied(false), 2000)
     }
+  }
+
+  const onCopySearch = () => {
+    if (!dn) return
+    void navigator.clipboard?.writeText(
+      `ldapsearch -H 'ldap://HOST' -D '<BIND_DN>' -W -b ${shellQuote(dn)} -s base '(objectClass=*)'`,
+    )
+    toast.success(t('safety.ldapsearchCopied'))
   }
 
   return (
@@ -68,6 +79,12 @@ export function LdifDialog({ open, onOpenChange, ldif, title, loading = false }:
             {copied ? <Check className="text-success" /> : <Copy />}
             {t('editor.copyLdif')}
           </Button>
+          {dn && (
+            <Button type="button" variant="outline" size="sm" onClick={onCopySearch}>
+              <Terminal />
+              {t('safety.copyLdapsearch')}
+            </Button>
+          )}
           <Button
             type="button"
             variant="secondary"

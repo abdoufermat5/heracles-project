@@ -979,6 +979,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
         onOpenChange={setLdifOpen}
         ldif={ldifText}
         title={cnVal}
+        dn={detail?.dn ?? dn}
         loading={ldifQuery.isPending && ldifOpen}
       />
       <LockedDialog
