@@ -32,6 +32,9 @@ describe('multiple edit', () => {
     await userEvent.click(within(dialog).getByRole('combobox', { name: 'Attribute' }))
     await userEvent.click(await screen.findByRole('option', { name: 'Employee type' }))
     await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Value' }), 'contractor')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Review changes' }))
+    // exact objects and attribute changes are listed before anything is written
+    expect(within(dialog).getByTestId('bulk-review')).toHaveTextContent('2 objects will be affected')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Apply' }))
 
     expect(await within(dialog).findByText('The change was applied to 2 objects.')).toBeInTheDocument()
@@ -56,6 +59,9 @@ describe('multiple edit', () => {
     await userEvent.click(await screen.findByRole('option', { name: 'Last name' }))
     await userEvent.click(within(dialog).getByRole('combobox', { name: 'Operation' }))
     await userEvent.click(await screen.findByRole('option', { name: 'Clear' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Review changes' }))
+    // exact objects and attribute changes are listed before anything is written
+    expect(within(dialog).getByTestId('bulk-review')).toHaveTextContent('2 objects will be affected')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Apply' }))
     expect(await within(dialog).findByText('0 succeeded, 2 failed.')).toBeInTheDocument()
     expect(within(dialog).getAllByText(/Some fields are invalid/).length).toBe(2)

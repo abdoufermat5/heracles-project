@@ -12,6 +12,8 @@ export const safetyFr = {
     bulkObjects_one: '{{count}} objet sera concerné',
     bulkObjects_other: '{{count}} objets seront concernés',
     bulkChanges: 'Modifications d’attributs',
+    bulkObjectsList: 'Objets qui seront modifiés',
+    reviewBulk: 'Examiner les modifications',
     advancedFilter: 'Filtre avancé',
     advancedFilterPlaceholder: '(&(uid=a*)(mail=*@example.org))',
     advancedFilterHint:

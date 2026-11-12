@@ -49,6 +49,13 @@ interface Row {
   value: unknown
 }
 
+function formatChange(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—'
+  if (Array.isArray(v)) return v.join(', ')
+  if (typeof v === 'object') return JSON.stringify(v)
+  return String(v)
+}
+
 /** Whether an attribute holds several values (so add / remove make sense). */
 function holdsSeveral(a: AttributeDescriptor): boolean {
   return a.kind === 'list' || a.kind === 'multiselect' || a.multivalued === true
@@ -74,6 +81,8 @@ function Inner({ onOpenChange, type, descriptor, dns }: Props) {
   const [rows, setRows] = useState<Row[]>([])
   const [nextId, setNextId] = useState(1)
   const [results, setResults] = useState<BulkResult[] | null>(null)
+  // Step two: the exact objects and attribute changes, before anything is written.
+  const [reviewing, setReviewing] = useState(false)
 
   const choices = useMemo<Choice[]>(() => {
     const out: Choice[] = []
@@ -164,6 +173,47 @@ function Inner({ onOpenChange, type, descriptor, dns }: Props) {
                   </span>
                 </li>
               ))}
+            </ul>
+          </div>
+        ) : reviewing ? (
+          <div className="space-y-3" data-testid="bulk-review">
+            <p className="text-body font-medium text-foreground">
+              {t('safety.bulkObjects', { count: dns.length })}
+            </p>
+            <ul
+              className="max-h-32 overflow-y-auto rounded-md border bg-muted/40 p-2 font-mono text-small"
+              aria-label={t('safety.bulkObjectsList')}
+            >
+              {dns.map((dn) => (
+                <li key={dn} className="truncate" title={dn}>
+                  {dn}
+                </li>
+              ))}
+            </ul>
+            <p className="text-small font-semibold tracking-wide text-muted-foreground uppercase">
+              {t('safety.bulkChanges')}
+            </p>
+            <ul className="max-h-40 divide-y overflow-y-auto rounded-md border">
+              {rows.flatMap((r) => {
+                const choice = byKey(r.key)
+                if (!choice) return []
+                return [
+                  <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 px-3 py-2">
+                    <span className="text-body font-medium">{choice.attr.label}</span>
+                    <span className="font-mono text-caption text-muted-foreground">
+                      {choice.attr.name}
+                    </span>
+                    <span className="text-caption text-muted-foreground">
+                      {t(`bulkEdit.op_${r.op}`)}
+                    </span>
+                    {r.op !== 'clear' && (
+                      <span className="font-mono text-small break-all text-success">
+                        {formatChange(r.value)}
+                      </span>
+                    )}
+                  </li>,
+                ]
+              })}
             </ul>
           </div>
         ) : available.isError ? (
@@ -269,12 +319,23 @@ function Inner({ onOpenChange, type, descriptor, dns }: Props) {
         <DialogFooter>
           {results === null ? (
             <>
-              <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-                {t('common.cancel')}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => (reviewing ? setReviewing(false) : onOpenChange(false))}
+              >
+                {reviewing ? t('safety.cancel') : t('common.cancel')}
               </Button>
-              <Button type="button" size="sm" onClick={() => void apply()} disabled={!ready || edit.isPending}>
-                {edit.isPending ? t('bulkEdit.applying') : t('bulkEdit.apply')}
-              </Button>
+              {reviewing ? (
+                <Button type="button" size="sm" onClick={() => void apply()} disabled={edit.isPending}>
+                  {edit.isPending ? t('bulkEdit.applying') : t('bulkEdit.apply')}
+                </Button>
+              ) : (
+                <Button type="button" size="sm" onClick={() => setReviewing(true)} disabled={!ready}>
+                  {t('safety.reviewBulk')}
+                </Button>
+              )}
             </>
           ) : (
             <Button type="button" size="sm" onClick={() => onOpenChange(false)}>

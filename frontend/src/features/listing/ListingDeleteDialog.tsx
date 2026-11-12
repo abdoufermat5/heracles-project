@@ -32,10 +32,6 @@ export function ListingDeleteDialog({
 }: ListingDeleteDialogProps) {
   const { t } = useTranslation()
   const count = selectedDns.length
-  const previewLimit = 8
-  const previewDns = selectedDns.slice(0, previewLimit)
-  const remainingCount = count - previewDns.length
-
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-md">
@@ -47,23 +43,21 @@ export function ListingDeleteDialog({
             <span>{t('listing.deleteConfirmDesc')}</span>
             <div className="max-h-48 overflow-y-auto rounded-sm border bg-muted/40 p-2">
               <ul className="space-y-1">
-                {previewDns.map((dn) => {
+                {selectedDns.map((dn) => {
                   const item = itemsMap?.get(dn)
                   const displayName = nameAttr && item?.values[nameAttr]
                     ? String(item.values[nameAttr])
                     : dn
                   return (
-                    <li key={dn} className="truncate font-mono text-small text-foreground">
-                      {displayName}
+                    <li key={dn} className="font-mono text-small text-foreground" title={dn}>
+                      <span className="block truncate">{displayName}</span>
+                      {displayName !== dn && (
+                        <span className="block truncate text-caption text-muted-foreground">{dn}</span>
+                      )}
                     </li>
                   )
                 })}
               </ul>
-              {remainingCount > 0 && (
-                <p className="mt-2 text-muted-foreground">
-                  {t('listing.andMore', { count: remainingCount })}
-                </p>
-              )}
             </div>
             <p className="pt-1 text-small font-medium text-destructive">
               {t('editor.deleteBody')}

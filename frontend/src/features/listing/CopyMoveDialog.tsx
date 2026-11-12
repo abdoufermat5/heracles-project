@@ -126,6 +126,24 @@ function Inner({ onOpenChange, mode, type, descriptor, items }: Props) {
               )}
             </div>
 
+            {mode === 'move' && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {t('safety.bulkObjects', { count: items.length })}
+                </p>
+                <ul
+                  className="max-h-40 overflow-y-auto rounded-md border bg-muted/40 p-2 font-mono text-small"
+                  aria-label={t('safety.bulkObjectsList')}
+                >
+                  {items.map((i) => (
+                    <li key={i.dn} className="truncate" title={i.dn}>
+                      {i.dn}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {mode === 'copy' && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">{t('copy.newNameHelp')}</p>
