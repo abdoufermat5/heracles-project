@@ -21,6 +21,7 @@ import { adminApi } from '@/features/admin/api'
 import { ak } from '@/features/admin/hooks'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { RouteError } from '@/components/resilience'
 import { AdminGate, type AdminCapability } from '@/features/admin/AdminGate'
 
 // Pages are split out of the entry bundle: the router loads a page's chunk before
@@ -330,6 +331,7 @@ export function createAppRouter(queryClient: QueryClient, history?: RouterHistor
     context: { queryClient },
     history,
     defaultPreload: 'intent',
+    defaultErrorComponent: RouteError,
     scrollRestoration: true,
   })
 }

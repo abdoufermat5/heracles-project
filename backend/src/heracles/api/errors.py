@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from typing import Any
 
 import structlog
@@ -10,7 +11,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from heracles.ldap.client import DirectoryError
+from heracles import metrics
+from heracles.ldap.client import DirectoryError, DirectoryUnavailableError
+from heracles.storage.database import DatabaseError
 
 log = structlog.get_logger(__name__)
 
@@ -119,8 +122,23 @@ def _directory_error(_: Request, exc: Exception) -> JSONResponse:
     )
 
 
+def _directory_unavailable(_: Request, exc: Exception) -> JSONResponse:
+    log.warning("directory_unavailable", error=str(exc))
+    return JSONResponse(
+        error_body("directory_unavailable", "The directory is unavailable, try again shortly"),
+        status_code=503,
+        headers={"Retry-After": "5"},
+    )
+
+
 def _unhandled(_: Request, exc: Exception) -> JSONResponse:
     log.error("unhandled_exception", exc_info=exc)
+    if isinstance(exc, sqlite3.Error | DatabaseError):
+        metrics.DATABASE_ERRORS.inc()
+        return JSONResponse(
+            error_body("database_unavailable", "The application database is unavailable"),
+            status_code=503,
+        )
     return JSONResponse(
         error_body("internal", "Internal server error"),
         status_code=500,
@@ -132,4 +150,5 @@ def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, _http_error)
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(DirectoryError, _directory_error)
+    app.add_exception_handler(DirectoryUnavailableError, _directory_unavailable)
     app.add_exception_handler(Exception, _unhandled)

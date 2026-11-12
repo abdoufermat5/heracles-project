@@ -251,6 +251,11 @@ class Scheduler:
         self.base_url = base_url
         self._lease_seconds = lease_seconds
         self._now = now
+        self._stopping = threading.Event()
+
+    def request_stop(self) -> None:
+        """Finish the task being run, then start no other (graceful shutdown)."""
+        self._stopping.set()
 
     @property
     def registry(self) -> TypeRegistry:
@@ -280,6 +285,8 @@ class Scheduler:
                 if wanted is not None and dir_id not in wanted:
                     continue
                 for plugin_name, runner in registry.task_runners:
+                    if self._stopping.is_set():
+                        break
                     if only is not None and runner.kind not in only:
                         continue
                     run = self._run_one(registry, dir_id, directory, plugin_name, runner)
@@ -364,6 +371,7 @@ class SchedulerThread:
 
     def stop(self, timeout: float | None = 5.0) -> None:
         self._stop.set()
+        self.scheduler.request_stop()
         if self._thread.is_alive():
             self._thread.join(timeout)
 

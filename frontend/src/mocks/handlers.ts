@@ -1,5 +1,6 @@
 import { http, HttpResponse, delay, type HttpHandler } from 'msw'
 import type { ErrorCode, ObjectListItem, TabState } from '@/api/types'
+import { APP_VERSION } from '@/lib/appVersion'
 import { BASE_DN, db } from './db'
 import { adminHandlers } from './adminHandlers'
 import { auditHandlers } from './auditHandlers'
@@ -72,6 +73,15 @@ export const handlers: HttpHandler[] = [
   http.get(`${B}/directories`, () => HttpResponse.json(db.directories())),
   http.get(`${B}/branding`, () =>
     HttpResponse.json({ organization: '', logo_url: null, tagline: '' }),
+  ),
+
+  http.get(`${B}/status`, () =>
+    db.me()
+      ? HttpResponse.json({
+          directories: { main: { available: true, read_only: false } },
+          version: APP_VERSION,
+        })
+      : unauth(),
   ),
 
   http.post(`${B}/auth/login`, async ({ request }) => {

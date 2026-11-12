@@ -2,6 +2,7 @@ import { Save, Undo2 } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { useWritesAllowed } from '@/components/resilience'
 import type { FieldDiff } from '@/lib/objects'
 import { ReviewChangesPopover } from './ReviewChangesPopover'
 
@@ -25,6 +26,7 @@ export function EditorSaveBar({
   onSave,
 }: Props) {
   const { t } = useTranslation()
+  const writesAllowed = useWritesAllowed()
 
   // Global ⌘S / Ctrl+S shortcut to save changes
   useEffect(() => {
@@ -76,7 +78,7 @@ export function EditorSaveBar({
         <Button
           type="submit"
           size="sm"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !writesAllowed}
           title={t('editor.saveShortcut')}
         >
           <Save aria-hidden />

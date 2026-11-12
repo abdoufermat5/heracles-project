@@ -14,6 +14,7 @@ export type ErrorCode =
   | 'locked'
   | 'conflict'
   | 'ldap_error'
+  | 'directory_unavailable'
   | 'reauth_required'
   | 'last_second_factor'
   | 'second_factor_required'
@@ -35,6 +36,12 @@ export interface ApiErrorBody {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────
+
+/** `GET /status`: directory availability and the server build version. */
+export interface ServerStatus {
+  directories: Record<string, { available: boolean; read_only: boolean }>
+  version: string
+}
 
 export interface CsrfResponse {
   token: string

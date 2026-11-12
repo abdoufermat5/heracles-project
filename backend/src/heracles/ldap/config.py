@@ -12,6 +12,10 @@ Directories are declared in a YAML or TOML file whose path is given by the
         base_dn: dc=example,dc=org
         pool_size: 8          # optional: service connections (parallel operations)
 
+High availability: ``uri`` may hold several space-separated URIs, or use ``uris: [..]``;
+they are tried in order (failover for reads and writes). ``read_uris`` lists read-only
+replicas used for searches while they are healthy.
+
 Per-directory environment overrides use
 ``HERACLES_DIRECTORY_<ID>_<FIELD>`` (``<ID>`` upper-cased, ``-`` as ``_``), for
 example ``HERACLES_DIRECTORY_MAIN_BIND_PASSWORD``. Without a config file, a
@@ -29,13 +33,15 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 CONFIG_ENV = "HERACLES_CONFIG"
 _FIELDS = (
     "label",
     "uri",
+    "uris",
+    "read_uris",
     "bind_dn",
     "bind_password",
     "base_dn",
@@ -57,7 +63,12 @@ class DirectoryConfig(BaseModel):
 
     id: str = Field(min_length=1)
     label: str = ""
-    uri: str
+    #: One URI, or several separated by spaces (see ``uris``).
+    uri: str = ""
+    #: Servers in failover order (writes go to these only); defaults to ``uri``.
+    uris: list[str] = Field(default_factory=lambda: [])
+    #: Read-only replicas, preferred for searches while healthy.
+    read_uris: list[str] = Field(default_factory=lambda: [])
     bind_dn: str = ""
     bind_password: SecretStr = SecretStr("")
     base_dn: str
@@ -66,6 +77,28 @@ class DirectoryConfig(BaseModel):
     timeout: float = Field(default=10.0, gt=0)
     #: Service connections kept to the server: operations running at the same time.
     pool_size: int = Field(default=8, ge=1, le=64)
+
+    @field_validator("uris", "read_uris", mode="before")
+    @classmethod
+    def _split(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.replace(",", " ").split()
+        return value
+
+    @model_validator(mode="after")
+    def _need_a_server(self) -> DirectoryConfig:
+        if not self.write_uris:
+            raise ValueError(f"directory {self.id!r}: no server URI configured")
+        return self
+
+    @property
+    def write_uris(self) -> list[str]:
+        """Servers accepting writes, in failover order."""
+        return list(self.uris) or self.uri.split()
+
+    @property
+    def all_uris(self) -> list[str]:
+        return [*self.write_uris, *(u for u in self.read_uris if u not in self.write_uris)]
 
 
 class LdapSettings(BaseSettings):

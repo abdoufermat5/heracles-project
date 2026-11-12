@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { AppErrorBoundary } from './components/resilience'
 import { i18nReady } from './i18n'
 import './index.css'
 
@@ -16,7 +17,9 @@ async function bootstrap(): Promise<void> {
   if (!el) throw new Error('missing #root')
   createRoot(el).render(
     <StrictMode>
-      <App />
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
     </StrictMode>,
   )
 }

@@ -28,10 +28,12 @@ import type {
   WebAuthnOptionsResponse,
   WebAuthnRegisterRequest,
   MyGroup,
+  ServerStatus,
 } from './types'
 import type { CreationOptionsJson, RequestOptionsJson } from '@/lib/webauthn'
 
 export const api = {
+  status: () => request<ServerStatus>('/status', { silent401: true }),
   // auth
   directories: () => request<Directory[]>('/directories', { silent401: true }),
   login: async (body: LoginRequest) => {
