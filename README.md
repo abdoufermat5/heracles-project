@@ -67,6 +67,7 @@ Other useful targets (`make help` lists them all):
 | `make dev-mock` | UI only, with the in-browser mock API |
 | `make test` / `make check` | tests / lint + types + tests |
 | `make bench USERS=5000` | latency and LDAP round trips per API endpoint on a large demo directory |
+| `make e2e-replicas` | browser e2e tests against two replicas behind a load balancer (own compose project, ports 8421/8422/8430) |
 | `make ldap-up` | start the test OpenLDAP server (port 1389) |
 | `make serve CONFIG=heracles.yaml` | run against a real directory |
 
