@@ -85,7 +85,7 @@ class SqliteSecondFactorStore:
     def recovery_hashes(self, user_dn: str) -> list[str]:
         with self._db.connection() as conn:
             rows = conn.execute(
-                "SELECT digest FROM second_factor_recovery WHERE user_key = ? ORDER BY rowid",
+                "SELECT digest FROM second_factor_recovery WHERE user_key = ? ORDER BY digest",
                 (self._k(user_dn),),
             ).fetchall()
         return [r["digest"] for r in rows]

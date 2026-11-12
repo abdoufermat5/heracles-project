@@ -76,7 +76,7 @@ def create_app(
         openapi_url="/api/openapi.json" if settings.enable_docs else None,
     )
 
-    database = Database(settings.database.path) if settings.database.path is not None else None
+    database = Database(settings.database.target) if settings.database.target is not None else None
     session_store: SessionStore
     if sessions is not None:
         session_store = sessions
