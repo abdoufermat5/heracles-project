@@ -8,6 +8,8 @@ import sys
 from collections.abc import Sequence
 
 from heracles.cli import admin as admin_commands
+from heracles.cli import init as init_command
+from heracles.setup import service as setup_service
 
 
 def _serve(args: argparse.Namespace) -> int:
@@ -19,6 +21,27 @@ def _serve(args: argparse.Namespace) -> int:
     if workers < 1:
         print("heracles serve: --workers must be at least 1", file=sys.stderr)
         return 2
+    if not args.demo and setup_service.setup_required(args.config):
+        if workers != 1:
+            print(
+                "heracles serve: no configuration found, so the server starts in setup mode, "
+                "which needs --workers 1; finish the setup, then restart with more workers",
+                file=sys.stderr,
+            )
+            return 2
+        from pathlib import Path
+
+        from heracles.setup.mode import make_setup_server
+
+        static = Path(args.static) if args.static else setup_service.default_static_dir()
+        dispatcher = make_setup_server(
+            args.config,
+            static_dir=static,
+            with_worker=args.with_worker,
+            worker_interval=args.worker_interval,
+        )
+        uvicorn.run(dispatcher, host=args.host, port=args.port, proxy_headers=True)
+        return 0
     if workers > 1:
         if args.demo:
             print(
@@ -210,7 +233,7 @@ def main(
     serve = sub.add_parser("serve", help="run the web server")
     serve.add_argument("--config", help="configuration file (default: $HERACLES_CONFIG)")
     serve.add_argument("--demo", action="store_true", help="use the in-memory demo directory")
-    serve.add_argument("--static", help="built frontend directory to serve (demo mode)")
+    serve.add_argument("--static", help="built frontend directory to serve (demo and setup mode)")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8420)
     serve.add_argument(
@@ -277,6 +300,8 @@ def main(
     to_pg.add_argument("--from", dest="source", required=True, help="the SQLite file")
     to_pg.add_argument("--to", required=True, help="postgresql://user:password@host/db (empty)")
     to_pg.set_defaults(func=_db_migrate_to_postgres)
+
+    init_command.register(sub)
 
     # --- P3 admin ---
     admin_commands.register(sub, directories or admin_commands.load_directories)

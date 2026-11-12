@@ -464,23 +464,24 @@ def create_admin_user(
     password_hash: str,
     given_name: str = "Administrator",
     surname: str = "Admin",
+    mail: str = "",
 ) -> str:
     """Create a user in the base people container with full rights; returns its DN."""
     container = dnlib.join(ctx.users_rdn, ctx.base)
     ensure_container(ctx.directory, container)
     dn = f"uid={dnlib.escape_rdn_value(uid)},{container}"
+    attrs: dict[str, list[bytes]] = {
+        "objectClass": [c.encode() for c in _PERSON_CLASSES],
+        "uid": [uid.encode()],
+        "cn": [f"{given_name} {surname}".encode()],
+        "givenName": [given_name.encode()],
+        "sn": [surname.encode()],
+        "userPassword": [password_hash.encode()],
+    }
+    if mail:
+        attrs["mail"] = [mail.encode()]
     try:
-        ctx.directory.add(
-            dn,
-            {
-                "objectClass": [c.encode() for c in _PERSON_CLASSES],
-                "uid": [uid.encode()],
-                "cn": [f"{given_name} {surname}".encode()],
-                "givenName": [given_name.encode()],
-                "sn": [surname.encode()],
-                "userPassword": [password_hash.encode()],
-            },
-        )
+        ctx.directory.add(dn, attrs)
     except AlreadyExistsError:
         raise DirectoryError(f"{dn} already exists") from None
     role = _ensure_role(ctx, *SUPER_ADMIN_ROLE)

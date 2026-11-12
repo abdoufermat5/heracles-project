@@ -1,0 +1,74 @@
+# Production stack: the Heracles console. Your LDAP server is not part of it.
+#
+#   docker compose -f deploy/production/compose.yml up -d --build
+#   docker compose -f deploy/production/compose.yml logs heracles   # prints the setup token
+#
+# Without a configuration file the console starts in setup mode: open http://localhost:8420,
+# paste the setup token from the logs, and follow the steps (directory, administrator, plugins).
+# The configuration is written to the data volume (/var/lib/heracles/heracles.yaml) and the
+# console switches to normal mode without a restart.
+#
+# To skip the wizard, mount a configuration instead (see heracles.example.yaml):
+#     - ./heracles.yaml:/etc/heracles/heracles.yaml:ro
+# and drop the HERACLES_CONFIG line below. Keep secrets out of this file: use the setup
+# wizard, or Docker secrets / a root-only configuration file.
+
+services:
+  heracles:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    ports:
+      # Put a TLS-terminating reverse proxy in front for anything but a trial.
+      - "8420:8420"
+    environment:
+      # Absent file: setup mode. The wizard writes it here (data volume, mode 0600).
+      HERACLES_CONFIG: /var/lib/heracles/heracles.yaml
+      HERACLES_DATA_DIR: /var/lib/heracles
+    volumes:
+      - heracles-data:/var/lib/heracles
+    # Setup mode needs one process; --with-worker also runs the scheduled tasks (reminders,
+    # audit purge, ...). Several replicas are safe once the console is configured.
+    command: ["heracles", "serve", "--host", "0.0.0.0", "--port", "8420", "--with-worker"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8420/readyz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
+
+  # Optional: keep sessions, login throttling and task reports in PostgreSQL instead of the
+  # SQLite file of the data volume (needed to run several replicas on different hosts).
+  # Uncomment this service, then set in heracles.yaml:
+  #
+  #   api:
+  #     database:
+  #       url: postgresql://heracles:CHANGE_ME@postgres:5432/heracles
+  #
+  # postgres:
+  #   image: postgres:16
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_USER: heracles
+  #     POSTGRES_DB: heracles
+  #     POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+  #   secrets:
+  #     - postgres_password
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U heracles"]
+  #     interval: 5s
+  #     retries: 10
+
+# secrets:
+#   postgres_password:
+#     file: ./postgres_password.txt   # create it yourself; never commit it
+
+volumes:
+  heracles-data:
+  # postgres-data:
