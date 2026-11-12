@@ -4,6 +4,7 @@ import { RouterProvider, type RouterHistory } from '@tanstack/react-router'
 import { useMemo } from 'react'
 import { setUnauthenticatedHandler } from '@/api/client'
 import { createQueryClient } from '@/queryClient'
+import { DegradedProvider, SessionExpiry } from '@/components/resilience'
 import { Toaster } from '@/components/ui/sonner'
 import { ScopeProvider } from '@/lib/scope'
 import { ThemeProvider } from '@/lib/theme'
@@ -24,7 +25,10 @@ export function App({ history, client }: { history?: RouterHistory; client?: Que
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <ScopeProvider>
-          <RouterProvider router={router} />
+          <DegradedProvider>
+            <RouterProvider router={router} />
+          </DegradedProvider>
+          <SessionExpiry />
           <Toaster position="bottom-right" />
         </ScopeProvider>
       </ThemeProvider>

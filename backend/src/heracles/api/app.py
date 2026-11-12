@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import AsyncGenerator, Callable, Iterable
+from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
+from heracles.api import status as status_routes
 from heracles.api import v1, v2
 from heracles.api.errors import install_error_handlers
+from heracles.api.metrics import install_metrics
 from heracles.api.middleware import install_body_limit, install_middleware
 from heracles.api.settings import ApiSettings
 from heracles.api.state import AdminResolver, AppState, LogoutHook
@@ -31,8 +35,11 @@ from heracles.auth.sessions import InMemorySessionStore, SessionStore
 from heracles.auth.sessions_db import SqliteSessionStore
 from heracles.auth.webauthn import WebAuthnService
 from heracles.ldap import dn as dnlib
-from heracles.ldap.client import DirectoryClient, DirectoryError
+from heracles.ldap.client import DirectoryClient
 from heracles.storage import Database
+
+#: How long a stopping server waits for the running scheduled task.
+SCHEDULER_STOP_TIMEOUT = 30.0
 
 
 def _default_admin_resolver(admin_dns: Iterable[str]) -> AdminResolver:
@@ -71,6 +78,7 @@ def create_app(
     """
     app = FastAPI(
         title="Heracles",
+        lifespan=_lifespan,
         docs_url="/api/docs" if settings.enable_docs else None,
         redoc_url=None,
         openapi_url="/api/openapi.json" if settings.enable_docs else None,
@@ -164,8 +172,9 @@ def create_app(
     install_error_handlers(app)
     install_body_limit(app, settings)
     install_middleware(app)
+    install_metrics(app)
 
-    app.include_router(v2.build_router(extra_routers))
+    app.include_router(v2.build_router([status_routes.router, *extra_routers]))
     for public in public_routers:
         app.include_router(public)
     app.include_router(v1.router)
@@ -183,15 +192,28 @@ def _install_health(app: FastAPI) -> None:
 
     @app.get("/readyz", include_in_schema=False)
     def readyz() -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-        state: AppState = app.state.heracles
-        results: dict[str, bool] = {}
-        for dir_id, directory in state.directories.items():
-            try:
-                results[dir_id] = directory.get(directory.base_dn, ["objectClass"]) is not None
-            except DirectoryError:
-                results[dir_id] = False
-        ready = all(results.values())
-        return JSONResponse(
-            {"status": "ok" if ready else "unavailable", "directories": results},
-            status_code=200 if ready else 503,
-        )
+        if getattr(app.state, "draining", False):
+            return JSONResponse({"status": "draining"}, status_code=503)
+        report = status_routes.readiness(app.state.heracles)
+        return JSONResponse(report, status_code=200 if report["status"] == "ok" else 503)
+
+
+def _shutdown(app: FastAPI) -> None:
+    """Graceful stop once uvicorn has drained the in-flight requests (SIGTERM)."""
+    app.state.draining = True
+    thread = getattr(app.state, "scheduler_thread", None)
+    if thread is not None:
+        thread.stop(timeout=SCHEDULER_STOP_TIMEOUT)  # lets the running task finish
+    state: AppState = app.state.heracles
+    for directory in state.directories.values():
+        close = getattr(directory, "close", None)
+        if callable(close):
+            close()
+    if state.database is not None:
+        state.database.close()
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    yield
+    await run_in_threadpool(_shutdown, app)

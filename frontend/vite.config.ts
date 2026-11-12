@@ -3,8 +3,10 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { configDefaults } from 'vitest/config'
 import { defineConfig } from 'vite'
+import pkg from './package.json' with { type: 'json' }
 
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(process.env.HERACLES_BUILD_ID || pkg.version) },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, 'src') },

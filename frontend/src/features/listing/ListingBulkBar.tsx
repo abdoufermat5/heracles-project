@@ -1,6 +1,7 @@
 import { Copy, FolderInput, Lock, LockOpen, Pencil, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { useWritesAllowed } from '@/components/resilience'
 
 interface ListingBulkBarProps {
   type: string
@@ -33,6 +34,7 @@ export function ListingBulkBar({
   isDeleting = false,
 }: ListingBulkBarProps) {
   const { t } = useTranslation()
+  const writesAllowed = useWritesAllowed()
 
   if (selectedCount === 0) return null
 
@@ -47,6 +49,7 @@ export function ListingBulkBar({
       </span>
 
       <div className="flex items-center gap-1">
+        <fieldset disabled={!writesAllowed} className="m-0 flex min-w-0 items-center gap-1 border-0 p-0">
         {type === 'user' && onLock && (
           <>
             <Button
@@ -101,6 +104,7 @@ export function ListingBulkBar({
           <Trash2 className="size-3.5" aria-hidden />
           {t('common.delete')}
         </Button>
+        </fieldset>
 
         <Button
           size="icon-sm"

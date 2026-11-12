@@ -1,0 +1,25 @@
+export const resilienceEn = {
+  resilience: {
+    errorTitle: 'Something went wrong',
+    errorBody:
+      'The page could not be displayed. You can try again; if it keeps failing, send the details below to your administrator.',
+    details: 'Technical details',
+    requestId: 'Request ID',
+    retry: 'Retry',
+    copy: 'Copy details',
+    copied: 'Details copied',
+    degradedReadOnly: 'Directory unreachable — read-only, retrying',
+    degradedDown: 'Directory unreachable — retrying',
+    offline: 'You are offline — retrying',
+    newVersion: 'A new version is available',
+    reload: 'Reload',
+    expiredTitle: 'Your session expired',
+    expiredBody: 'Sign in again to continue. Your unsaved changes are kept.',
+    account: 'Account',
+    password: 'Password',
+    code: 'Verification code',
+    signIn: 'Sign in',
+    cancel: 'Go to the sign-in page',
+    failed: 'Sign-in failed',
+  },
+}

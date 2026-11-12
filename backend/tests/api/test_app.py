@@ -17,7 +17,7 @@ def test_health_endpoints(env: Env) -> None:
     assert env.client.get("/healthz").json() == {"status": "ok"}
     ready = env.client.get("/readyz")
     assert ready.status_code == 200
-    assert ready.json()["directories"] == {"main": True}
+    assert ready.json()["directories"]["main"]["ok"] is True
 
 
 def test_security_headers_and_request_id(env: Env) -> None:

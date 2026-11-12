@@ -98,6 +98,14 @@ class PluginsSettings(BaseModel):
     enabled: list[str] | None = None
 
 
+class MetricsSettings(BaseModel):
+    """The Prometheus endpoint (``api.metrics``); 404 unless enabled."""
+
+    enabled: bool = False
+    #: CIDRs allowed to scrape it (empty: any client, protect it at the proxy).
+    allowed_networks: list[str] = Field(default_factory=lambda: [])
+
+
 class ApiSettings(BaseModel):
     """Everything ``create_app`` needs besides the directories."""
 
@@ -113,6 +121,7 @@ class ApiSettings(BaseModel):
     webauthn: WebAuthnSettings = Field(default_factory=WebAuthnSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     plugins: PluginsSettings = Field(default_factory=PluginsSettings)
+    metrics: MetricsSettings = Field(default_factory=MetricsSettings)
     branding: BrandingSettings = Field(default_factory=BrandingSettings)
     #: Host names the server may build links from when no public address is configured
     #: (``cas_service_name``, the invitations ``public_base_url``): the request ``Host``
