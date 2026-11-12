@@ -30,7 +30,7 @@ describe('create from a template', () => {
     expect(within(preview).getByText('John Doe')).toBeInTheDocument()
     expect(within(preview).getByText('jdoe@example.com')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /Create User/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Create user/ }))
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
     const body = create.mock.calls[0]?.[1]
     expect(body?.template).toBe(TEMPLATE_DN)
@@ -46,7 +46,7 @@ describe('create from a template', () => {
     await userEvent.click(await screen.findByRole('combobox', { name: /Create from a template/ }))
     await userEvent.click(await screen.findByRole('option', { name: 'staff' }))
     await screen.findByLabelText(/^First name/)
-    await userEvent.click(screen.getByRole('button', { name: /Create User/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Create user/ }))
     expect((await screen.findAllByText('This field is required')).length).toBeGreaterThan(0)
     expect(create).not.toHaveBeenCalled()
   })
