@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import stat
 import zlib
+from pathlib import Path
 
 from heracles.acl.model import Ignored
 from heracles.acl.parser import parse_assignment, parse_role_value
@@ -218,3 +220,26 @@ def test_ldif_round_trip() -> None:
     assert report.errors == []
     assert "hrcDepartment" in converted
     assert "gosa" not in converted
+
+
+def test_cli_writes_the_result_privately_and_never_over_the_source(tmp_path: Path) -> None:
+    from heracles.cli.main import main
+
+    source = tmp_path / "export.ldif"
+    source.write_text(
+        dump_ldif(
+            [_entry(f"ou=sales,{BASE}", objectClass=["organizationalUnit", "gosaDepartment"])]
+        ),
+        encoding="utf-8",
+    )
+    target = tmp_path / "converted.ldif"
+    target.write_text("old", encoding="utf-8")
+    target.chmod(0o644)
+
+    assert main(["migrate-directory", str(source), str(target)]) == 0
+    assert "hrcDepartment" in target.read_text(encoding="utf-8")
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+    before = source.read_text(encoding="utf-8")
+    assert main(["migrate-directory", str(source), str(source)]) == 2
+    assert source.read_text(encoding="utf-8") == before

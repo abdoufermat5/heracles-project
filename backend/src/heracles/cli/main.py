@@ -180,6 +180,11 @@ def _migrate_directory(args: argparse.Namespace) -> int:
 
     from heracles.migrate.directory import migrate_ldif
 
+    if os.path.exists(args.target) and os.path.samefile(args.source, args.target):
+        print(
+            "heracles migrate-directory: the target must not be the source export", file=sys.stderr
+        )
+        return 2
     with open(args.source, encoding="utf-8") as src:
         converted, report = migrate_ldif(src.read())
     err = sys.stderr
@@ -200,7 +205,10 @@ def _migrate_directory(args: argparse.Namespace) -> int:
     if report.errors and not args.force:
         print(f"{len(report.errors)} error(s): nothing written (use --force)", file=err)
         return 1
-    with open(args.target, "w", encoding="utf-8") as out:
+    # the export holds password hashes: readable by the owner only
+    fd = os.open(args.target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as out:
+        os.fchmod(out.fileno(), 0o600)
         out.write(converted)
     return 0
 

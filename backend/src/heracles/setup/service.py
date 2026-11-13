@@ -139,8 +139,8 @@ def write_token(token: str) -> Path | None:
         path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as out:
+            os.fchmod(out.fileno(), 0o600)  # a file left over with looser rights, before the write
             out.write(token + "\n")
-        path.chmod(0o600)
     except OSError as exc:
         log.warning("setup_token_not_written", path=str(path), error=str(exc))
         return None

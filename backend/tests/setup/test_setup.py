@@ -206,3 +206,42 @@ def test_setup_required_detection(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert service.setup_required(config) is False
     monkeypatch.setenv("HERACLES_LDAP_URI", "ldap://x")
     assert service.setup_required(None) is False
+
+
+def test_a_failing_start_leaves_the_setup_retryable(
+    server: tuple[TestClient, mode.SetupState], directory: MemoryDirectory
+) -> None:
+    _client, state = server
+    real_build = state.build_app
+    attempts: list[int] = []
+
+    def flaky(path: Path) -> FastAPI:
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("cannot start yet")
+        return real_build(path)
+
+    state.build_app = flaky
+    client = TestClient(
+        mode.SetupDispatcher(mode.build_setup_app(state)), raise_server_exceptions=False
+    )
+    body: dict[str, Any] = {
+        "directory": {**DIRECTORY, "id": "main"},
+        "admin": {"uid": "root", "password": "correct horse battery 7"},
+        "plugins": ["posix"],
+    }
+    assert client.post("/api/v2/setup/apply", json=body, headers=AUTH).status_code == 500
+    assert state.token == TOKEN and service.token_path().exists()
+    again = client.post("/api/v2/setup/apply", json=body, headers=AUTH)
+    assert again.status_code == 200, again.text
+    assert state.token == "" and not service.token_path().exists()
+
+
+def test_token_file_is_private_even_when_a_looser_one_exists() -> None:
+    path = service.token_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("stale", encoding="utf-8")
+    path.chmod(0o644)
+    assert service.write_token("fresh") == path
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert path.read_text(encoding="utf-8") == "fresh\n"

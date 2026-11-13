@@ -214,9 +214,11 @@ def build_setup_router(state: SetupState) -> APIRouter:
             except service.SetupError as exc:
                 log.info("setup_apply_refused", reason=exc.message, fields=sorted(exc.fields))
                 raise validation(exc.message, exc.fields) from exc
+            # build first: when it fails the token stays valid and the apply can be retried
+            # (it is idempotent), instead of leaving a console nobody can authenticate to
+            app = state.build_app(result.config_path)
             service.remove_token()
             state.token = ""
-            app = state.build_app(result.config_path)
         service.record_setup_audit(app, result.admin_dn, spec.base_dn, _client_ip(request))
         state.on_applied(app)
         return {"ok": True, "config_path": str(result.config_path), "login_url": "/login"}
