@@ -5,7 +5,7 @@ import base64
 import pytest
 
 from heracles import demo
-from heracles.acl import admin
+from heracles.acl import FULL_RIGHTS, NO_RIGHTS, Rights, admin
 from heracles.acl.model import AclAssignment
 from heracles.acl.parser import parse_assignment
 from heracles.ldap.client import NoSuchObjectError
@@ -217,3 +217,60 @@ def test_check_rights(directory: MemoryDirectory) -> None:
 def test_grants_everything() -> None:
     assert admin.grants_everything(["0:all;cmdrw"])
     assert not admin.grants_everything(["0:all;sr", "0:user/user;cmdrw", "bad"])
+
+
+def test_missing_role_rights_compares_with_the_callers_rights(directory: MemoryDirectory) -> None:
+    role = f"cn=full-admin,ou=aclroles,{BASE}"
+
+    def everything(dn: str, obj: str, attribute: str) -> Rights:
+        del dn, obj, attribute
+        return FULL_RIGHTS
+
+    def nothing(dn: str, obj: str, attribute: str) -> Rights:
+        del dn, obj, attribute
+        return NO_RIGHTS
+
+    assert admin.missing_role_rights(directory, role, at=BASE, permissions=everything) == []
+    assert admin.missing_role_rights(directory, role, at=BASE, permissions=nothing) == ["all:rwcdm"]
+    assert (
+        admin.missing_role_rights(
+            directory, f"cn=ghost,ou=aclroles,{BASE}", at=BASE, permissions=nothing
+        )
+        == []
+    )
+
+
+def test_new_assignments_ignore_position_and_removals() -> None:
+    role = f"cn=helpdesk,ou=aclroles,{BASE}"
+    value = f"0:subtree:{_b64(role)}:{_b64('*')}"
+    moved = f"5:subtree:{_b64(role)}:{_b64('*')}"
+    # a renumbering grants nothing new
+    assert admin.new_assignments([value], [moved]) == []
+    assert admin.new_assignments([value], []) == []
+    assert [a.index for a in admin.new_assignments([], [moved])] == [5]
+    # a change of member, scope or filter is a new assignment
+    other = f"0:base:{_b64(role)}:{_b64('*')}"
+    assert [a.index for a in admin.new_assignments([value], [other])] == [0]
+
+
+def test_unheld_grants_checks_new_assignments_only(directory: MemoryDirectory) -> None:
+    stored = [str(item["raw"]) for item in admin.list_assignments(directory, BASE)]
+    role = f"cn=full-admin,ou=aclroles,{BASE}"
+    added = f"9:subtree:{_b64(role)}:{_b64('*')}"
+
+    def everything(dn: str, obj: str, attribute: str) -> Rights:
+        del dn, obj, attribute
+        return FULL_RIGHTS
+
+    def nothing(dn: str, obj: str, attribute: str) -> Rights:
+        del dn, obj, attribute
+        return NO_RIGHTS
+
+    assert admin.unheld_grants(directory, stored, stored, at=BASE, permissions=nothing) == []
+    assert (
+        admin.unheld_grants(directory, stored, [*stored, added], at=BASE, permissions=everything)
+        == []
+    )
+    assert admin.unheld_grants(
+        directory, stored, [*stored, added], at=BASE, permissions=nothing
+    ) == ["all:rwcdm"]

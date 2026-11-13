@@ -575,3 +575,27 @@ def test_create_with_empty_base_lands_at_the_top_of_the_directory(app_client: Te
     r = a.post("/objects/department", {"base": "", "tabs": tabs})
     assert r.status_code == 201, r.text
     assert r.json()["dn"].lower() == f"ou=top,{BASE}".lower()
+
+
+def test_delete_removes_references_in_the_directory(app_client: TestClient) -> None:
+    a = api(app_client, "admin")
+    created = a.post(
+        "/objects/user",
+        {
+            "base": LYON,
+            "tabs": {"main": {"values": {"uid": "tmpdel", "givenName": "Tmp", "sn": "Del"}}},
+        },
+    )
+    dn = created.json()["dn"]
+    group = f"cn=lyon-staff,ou=groups,{LYON}"
+    detail = a.get(f"/objects/group/{q(group)}").json()
+    members = detail["tabs"]["main"]["values"]["member"]
+    patched = a.patch(
+        f"/objects/group/{q(group)}",
+        {"tabs": {"main": {"values": {"member": [*members, dn]}}}},
+    )
+    assert patched.status_code == 200, patched.text
+
+    assert a.delete(f"/objects/user/{q(dn)}").status_code == 204
+    detail = a.get(f"/objects/group/{q(group)}").json()
+    assert dn not in detail["tabs"]["main"]["values"]["member"]

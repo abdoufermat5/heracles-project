@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 import types
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from fastapi.testclient import TestClient
 from heracles import demo
 from heracles.api.domain import Domain
 from heracles.api.state import AppState
+from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
 from heracles.server import build_demo_app
 
@@ -324,6 +326,29 @@ def test_delete_object(v1: V1) -> None:
     assert v1.call("DELETE", f"/objects/USER/{ASMITH}").status_code == 204
     assert v1.get(f"/objects/USER/{ASMITH}").status_code == 404
     assert v1.call("DELETE", f"/objects/USER/{ASMITH}").status_code == 404
+
+
+def test_own_password_change_needs_a_fresh_login(client: TestClient) -> None:
+    api = V1(client).login("asmith")
+    body = {"user": {"userPassword": "Another-pass-1"}}
+    state = app_state(client)
+    original = state.clock
+    state.clock = lambda: time.time() + 3600
+    refused = api.call("PATCH", f"/objects/USER/{ASMITH}", json=body)
+    assert refused.status_code == 403
+    assert "message" in refused.json() and "error" not in refused.json()  # v1 error shape
+    state.clock = original
+    again = V1(client).login("asmith")  # a fresh login is the v1 step-up
+    allowed = again.call("PATCH", f"/objects/USER/{ASMITH}", json=body)
+    assert allowed.status_code == 200, allowed.text
+
+
+def test_delete_drops_references(v1: V1, client: TestClient) -> None:
+    group = f"cn=admins,ou=groups,{BASE}"
+    directory_of(client).modify(group, [Modification("add", "member", [ASMITH.encode()])])
+    assert v1.call("DELETE", f"/objects/USER/{ASMITH}").status_code == 204
+    entry = directory_of(client).get(group)
+    assert entry is not None and ASMITH not in entry.texts("member")
 
 
 def test_acl_is_enforced(client: TestClient) -> None:

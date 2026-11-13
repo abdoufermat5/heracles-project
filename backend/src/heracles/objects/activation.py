@@ -110,11 +110,14 @@ class PluginManager:
         *,
         configured: Iterable[str] | None = None,
         store: PluginOverrideStore | None = None,
+        database: Database | None = None,
     ) -> None:
         self.plugins = list(plugins)
         self.available_classes = {c.lower() for c in available_classes}
         self.configured = None if configured is None else list(configured)
         self.store = store or PluginOverrideStore()
+        #: Application database shared with the plugins through the registry.
+        self.database = database
         #: Serialises toggles (and the registry swap that follows).
         self.lock = threading.RLock()
         #: Stored overrides the last registry was built from (see :meth:`refresh`).
@@ -158,6 +161,7 @@ class PluginManager:
         with self.lock:
             overrides = self.store.load()
             registry = TypeRegistry()
+            registry.database = self.database
             register_builtin_types(registry)
             registry.register_plugins(
                 self.plugins, self.available_classes, self.enabled_names(overrides)

@@ -8,10 +8,12 @@ from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Body, Query, Request, Response, status
 
-from heracles.api.deps import CurrentUser
+from heracles.api.deps import CurrentUser, StateDep
 from heracles.api.domain import Domain, DomainDep, TypeAclPolicy
 from heracles.api.errors import ApiError, forbidden, not_found
 from heracles.api.filter_rules import filter_checks
+from heracles.api.state import AppState
+from heracles.api.stepup import require_recent_auth
 from heracles.api.v1.common import V1Route, V1UserDep
 from heracles.api.v1.convert import bad_request, tabs_payload, to_v1
 from heracles.api.v1.names import (
@@ -77,16 +79,36 @@ def _template_context(service: ObjectService) -> ObjectService:
     return service
 
 
+def _changes_password(payload: dict[str, Any]) -> bool:
+    """True when the PATCH body sets ``userPassword`` on any tab."""
+    for tab in payload.values():
+        if not isinstance(tab, dict):
+            continue
+        values = cast("dict[str, Any]", tab).get("values")
+        if isinstance(values, dict) and "userPassword" in values:
+            return True
+    return False
+
+
 def _update(
-    domain: Domain, user: CurrentUser, info: TypeInfo, dn: str, payload: dict[str, Any]
+    domain: Domain,
+    user: CurrentUser,
+    info: TypeInfo,
+    dn: str,
+    payload: dict[str, Any],
+    state: AppState,
 ) -> ObjectState:
     _ensure_unlocked(domain, user, dn)
+    if dnlib.normalize(dn) == dnlib.normalize(user.dn) and _changes_password(payload):
+        # v1 authenticates once (POST /login returns a session token): a stolen token
+        # alone must not be enough to change the account password.
+        require_recent_auth(state, user.session)
     with object_errors():
         service, _policy = domain.service(user, info.name)
-        state = service.update(info.name, dn, payload)
-    if dnlib.normalize(state.dn) != dnlib.normalize(dn):
+        updated = service.update(info.name, dn, payload)
+    if dnlib.normalize(updated.dn) != dnlib.normalize(dn):
         domain.locks(user.directory_id, user.directory).release(dn, user.dn)
-    return state
+    return updated
 
 
 def _filter_checks(info: TypeInfo, flt: Filter) -> list[tuple[str, str]]:
@@ -368,9 +390,10 @@ def modify_object(
     body: Annotated[dict[str, Any], Body()],
     user: V1UserDep,
     domain: DomainDep,
+    state: StateDep,
 ) -> str:
     info = _info(domain, type)
-    return _update(domain, user, info, dn, tabs_payload(info, body)).dn
+    return _update(domain, user, info, dn, tabs_payload(info, body), state).dn
 
 
 # -- tabs -------------------------------------------------------------------------------------
@@ -410,10 +433,11 @@ def modify_object_tab(
     body: Annotated[dict[str, Any], Body()],
     user: V1UserDep,
     domain: DomainDep,
+    state: StateDep,
 ) -> str:
     info = _info(domain, type)
     found = _tab(info, tab)
-    return _update(domain, user, info, dn, tabs_payload(info, {found.name: body})).dn
+    return _update(domain, user, info, dn, tabs_payload(info, {found.name: body}), state).dn
 
 
 @router.delete(
@@ -423,10 +447,12 @@ def modify_object_tab(
     summary="Deactivate the tab",
     operation_id="disableTab",
 )
-def disable_tab(type: str, dn: str, tab: str, user: V1UserDep, domain: DomainDep) -> Response:
+def disable_tab(
+    type: str, dn: str, tab: str, user: V1UserDep, domain: DomainDep, state: StateDep
+) -> Response:
     info = _info(domain, type)
     found = _tab(info, tab)
-    _update(domain, user, info, dn, {found.tab.name: {"active": False, "values": {}}})
+    _update(domain, user, info, dn, {found.tab.name: {"active": False, "values": {}}}, state)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -483,11 +509,12 @@ def set_attribute(
     body: Annotated[Any, Body()],
     user: V1UserDep,
     domain: DomainDep,
+    state: StateDep,
 ) -> str:
     info = _info(domain, type)
     found = _tab(info, tab)
     payload = tabs_payload(info, {found.name: {attribute: body}})
-    return _update(domain, user, info, dn, payload).dn
+    return _update(domain, user, info, dn, payload, state).dn
 
 
 @router.delete(
@@ -497,16 +524,27 @@ def set_attribute(
     operation_id="resetAttributeValue",
 )
 def reset_attribute(
-    type: str, dn: str, tab: str, attribute: str, user: V1UserDep, domain: DomainDep
+    type: str,
+    dn: str,
+    tab: str,
+    attribute: str,
+    user: V1UserDep,
+    domain: DomainDep,
+    state: StateDep,
 ) -> JSON:
     info, found, attr, _state, _policy = _target(domain, user, type, dn, tab, attribute)
     default = attr.to_json(attr.default)
-    state = _update(
-        domain, user, info, dn, {found.tab.name: {"active": True, "values": {attr.name: default}}}
+    updated = _update(
+        domain,
+        user,
+        info,
+        dn,
+        {found.tab.name: {"active": True, "values": {attr.name: default}}},
+        state,
     )
     service, policy = domain.service(user, info.name)
     del service
-    return _current(found, attr, state, policy, state.dn)
+    return _current(found, attr, updated, policy, updated.dn)
 
 
 def _multi_target(
@@ -533,11 +571,12 @@ def add_values(
     body: Annotated[list[Any], Body()],
     user: V1UserDep,
     domain: DomainDep,
+    state: StateDep,
 ) -> str:
     info, found, attr, current = _multi_target(domain, user, type, dn, tab, attribute)
     merged = [*current, *[v for v in body if v not in current]]
     payload = {found.tab.name: {"active": True, "values": {attr.name: merged}}}
-    return _update(domain, user, info, dn, payload).dn
+    return _update(domain, user, info, dn, payload, state).dn
 
 
 @router.delete(
@@ -555,9 +594,10 @@ def delete_values(
     body: Annotated[list[Any], Body()],
     user: V1UserDep,
     domain: DomainDep,
+    state: StateDep,
 ) -> Response:
     info, found, attr, current = _multi_target(domain, user, type, dn, tab, attribute)
     remaining = [v for v in current if v not in body]
     payload = {found.tab.name: {"active": True, "values": {attr.name: remaining}}}
-    _update(domain, user, info, dn, payload)
+    _update(domain, user, info, dn, payload, state)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

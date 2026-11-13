@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+from heracles.acl import admin as acl_admin
 from heracles.attributes import (
     JSON,
     AnyAttribute,
@@ -28,13 +29,15 @@ from heracles.ldap.client import (
     NoSuchObjectError,
     Scope,
 )
-from heracles.objects import filters, renames
-from heracles.objects.diff import diff_modifications
+from heracles.ldap.filter import matches as filter_matches
+from heracles.objects import deletes, filters, renames
+from heracles.objects.diff import diff_modifications, raw_values
 from heracles.objects.errors import (
     ObjectConflictError,
     ObjectNotFoundError,
     ObjectValidationError,
     PermissionDeniedError,
+    UnknownTypeError,
 )
 from heracles.objects.hooks import TabContext
 from heracles.objects.listing_cache import ListingKey, ListingScope
@@ -43,6 +46,7 @@ from heracles.objects.policy import (
     TAB_ATTR,
     AccessPolicy,
     AllowAll,
+    AssignmentPolicy,
     EventContext,
     MovePolicy,
     NullEvents,
@@ -50,6 +54,7 @@ from heracles.objects.policy import (
 )
 from heracles.objects.registry import TypeInfo, TypeRegistry
 from heracles.objects.state import ObjectState, TabState
+from heracles.schema import names as schema
 
 DEFAULT_LIMIT = 50
 
@@ -114,6 +119,24 @@ def department_of(dn: str, container_rdn: str) -> str:
 
 def _text(raw: bytes) -> str:
     return raw.decode("utf-8", errors="replace")
+
+
+def _written_acl_entry(
+    info: TypeInfo, tabs: Mapping[str, TabState]
+) -> tuple[str, list[str]] | None:
+    """Tab owning the ACL assignment attribute and the values about to be written.
+
+    ``None`` when no active tab writes the attribute: nothing changes, nothing to check.
+    """
+    wanted = schema.ATTR.ACL_ENTRY.lower()
+    for tab in info.tabs:
+        state = tabs[tab.name]
+        if not state.active:
+            continue
+        for attr in tab.attributes():
+            if attr.name.lower() == wanted and attr.name in state.values:
+                return tab.name, [_text(v) for v in attr.to_ldap(state.values[attr.name])]
+    return None
 
 
 class ObjectService:
@@ -291,6 +314,12 @@ class ObjectService:
         else:
             search_base, ldap_scope = dnlib.join(info.type.rdn, base), Scope.ONE
         search_attrs = self._search_attrs(info)
+        if query:
+            search_attrs = self._readable_search_attrs(info, base, search_attrs)
+            if not search_attrs:
+                # the caller cannot read any searched attribute: matching nothing keeps
+                # the query from revealing the values of hidden attributes
+                return []
         flt = filters.and_(
             info.type.filter, extra_filter, filters.text_query(search_attrs, query or "")
         )
@@ -366,6 +395,31 @@ class ObjectService:
                 out.append(name)
         return out
 
+    def _readable_search_attrs(self, info: TypeInfo, base: str, names: StrList) -> StrList:
+        """Search attributes the caller may read for this type at the listing base.
+
+        The listing filter must not match values the caller cannot read (otherwise ``q=``
+        reveals hidden attribute values through which rows appear). The type-level rights
+        are checked once at ``base``, so this costs nothing per row. When none survives,
+        the RDN (or display) attribute is used if readable; otherwise nothing can match.
+        """
+        owners: dict[str, str] = {}
+        for tab in info.tabs:
+            for attr in tab.attributes():
+                owners.setdefault(attr.name.lower(), tab.name)
+        main = info.main_tab.name
+
+        def readable(name: str) -> bool:
+            return self.policy.can_read(base, owners.get(name.lower(), main), name)
+
+        found = [name for name in names if readable(name)]
+        if found:
+            return found
+        for name in dict.fromkeys(n for n in (info.type.main_attr, info.type.name_attr) if n):
+            if readable(name):
+                return [name]
+        return []
+
     def _row(
         self, info: TypeInfo, entry: Entry, locked: Callable[[Entry], bool] | None = None
     ) -> ListRow:
@@ -428,6 +482,9 @@ class ObjectService:
         rdn = f"{info.type.main_attr}={dnlib.escape_rdn_value(main_value)}"
         dn = f"{rdn},{dnlib.join(info.type.rdn, base)}"
         self._check_writes(dn, touched)
+        self._check_acl_grants(dn, info, new, {}, errors)
+        if errors:
+            raise ObjectValidationError(errors)
 
         classes: list[str] = []
         attrs: dict[str, list[bytes]] = {}
@@ -556,6 +613,7 @@ class ObjectService:
             moved_to = new_base if dnlib.normalize(new_base) != dnlib.normalize(old_base) else None
             self._check_move(dn, type_name, moved_to)
         self._check_writes(dn, touched)
+        self._check_acl_grants(dn, info, new, state.raw, errors)
         if errors:
             raise ObjectValidationError(errors)
 
@@ -632,6 +690,41 @@ class ObjectService:
         if new_base is not None and not policy.can_create(type_name, new_base):
             raise PermissionDeniedError(f"cannot move {dn} to {new_base}")
 
+    def _check_acl_grants(
+        self,
+        dn: str,
+        info: TypeInfo,
+        tabs: Mapping[str, TabState],
+        raw: Mapping[str, Sequence[bytes]],
+        errors: dict[str, str],
+    ) -> None:
+        """Refuse a new or changed ACL assignment granting more than the caller holds at ``dn``.
+
+        The rule lives on this single save path, so it covers every writer of the ACL
+        attribute (generic object API, UI tabs, plugins), not only the administration
+        endpoint. A policy without ``permissions`` (public forms, tests) does not restrict
+        assignments; a bootstrap administrator's policy returns full rights and passes.
+        """
+        policy = self.policy
+        found = _written_acl_entry(info, tabs)
+        if found is None or not isinstance(policy, AssignmentPolicy):
+            return
+        tab_name, saved = found
+        missing = acl_admin.unheld_grants(
+            self.directory,
+            [_text(value) for value in raw_values(raw, schema.ATTR.ACL_ENTRY)],
+            saved,
+            at=dn,
+            permissions=policy.permissions,
+        )
+        if missing:
+            errors.setdefault(
+                tab_name,
+                _("You cannot grant rights you do not hold: {rights}").format(
+                    rights=", ".join(missing)
+                ),
+            )
+
     def _rename(self, dn: str, new_rdn: str, superior: str | None) -> str:
         """Rename/move an entry, then rewrite the references to it and to what lies below."""
         below = renames.subtree_dns(self.directory, dn)
@@ -658,10 +751,12 @@ class ObjectService:
         active_tabs = [t for t in info.tabs if state.tabs[t.name].active]
         for tab in active_tabs:
             tab.before_delete(self._ctx(info, tab, dn, base, state.tabs, None, (), creating=False))
+        below = renames.subtree_dns(self.directory, dn)
         try:
             self.directory.delete(dn)
         except NoSuchObjectError:
             raise ObjectNotFoundError(dn) from None
+        deletes.propagate(self.directory, self.registry, below)
         for tab in active_tabs:
             tab.after_delete(self._ctx(info, tab, dn, base, state.tabs, None, (), creating=False))
         self.events.post_delete(ctx)
@@ -813,12 +908,21 @@ class ObjectService:
         errors: dict[str, str],
     ) -> None:
         targets: Sequence[object]
+        ref: ObjectRefAttr | None = None
         if isinstance(attr, ObjectRefAttr):
+            ref = attr
             targets = [value]
         elif isinstance(attr, ListAttr) and isinstance(attr.item, ObjectRefAttr):  # pyright: ignore[reportUnknownMemberType]
+            ref = attr.item
             targets = cast("list[object]", value) if isinstance(value, list) else []
         else:
             return
+        expected: list[TypeInfo] = []
+        for name in ref.ref_types:
+            try:
+                expected.append(self.registry.get(name))
+            except UnknownTypeError:
+                continue
         previous: object = None
         if old is not None and tab_name in old.original:
             previous = old.original[tab_name].values.get(attr.name)
@@ -830,8 +934,14 @@ class ObjectService:
         for target in targets:
             if not isinstance(target, str) or dnlib.normalize(target) in known:
                 continue
-            if self.directory.get(target, ["objectClass"]) is None:
+            entry = self.directory.get(target)
+            if entry is None:
                 errors[key] = _("Referenced object does not exist: {dn}").format(dn=target)
+                return
+            if expected and not any(filter_matches(entry, info.type.filter) for info in expected):
+                errors[key] = _("Referenced object is not a {type}: {dn}").format(
+                    type=expected[0].type.label, dn=target
+                )
                 return
 
     def _check_unique(

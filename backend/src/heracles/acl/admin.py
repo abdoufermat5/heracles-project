@@ -8,7 +8,7 @@ are carried through untouched (they can only be removed explicitly).
 from __future__ import annotations
 
 import base64
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -498,6 +498,108 @@ def grants_everything(templates: Iterable[str]) -> bool:
     return False
 
 
+def role_blocks(directory: DirectoryClient, role_dn: str) -> list[AclBlock]:
+    """Merged rights blocks of a role (empty when it is missing or has no usable value)."""
+    entry = directory.get(role_dn, [ATTR_ACL_TEMPLATE])
+    if entry is None:
+        return []
+    merged: dict[str, AclBlock] = {}
+    for raw in entry.texts(ATTR_ACL_TEMPLATE):
+        parsed = parse_role_value(raw)
+        if isinstance(parsed, Ignored):
+            continue
+        for key, block in parsed.block_map().items():
+            previous = merged.get(key)
+            merged[key] = (
+                block
+                if previous is None
+                else AclBlock(
+                    key,
+                    previous.rights.union(block.rights),
+                    previous.attributes + block.attributes,
+                )
+            )
+    return list(merged.values())
+
+
+def missing_role_rights(
+    directory: DirectoryClient,
+    role_dn: str,
+    *,
+    at: str,
+    permissions: Callable[[str, str, str], Rights],
+) -> list[str]:
+    """Rights the role grants at ``at`` that ``permissions`` does not return.
+
+    ``permissions(dn, object_key, attribute)`` is an effective-rights accessor (normally
+    :meth:`heracles.acl.evaluator.AclEvaluator.permissions`). The result lists the
+    offending blocks as ``<object key>:<rights>``; empty means the caller holds every
+    right the role grants, so assigning it grants nothing the caller does not have.
+    The ``s`` flag is not a right: self-only blocks only ever apply on the assignee's
+    own entry when the ACL engine evaluates them.
+    """
+    missing: list[str] = []
+    for block in role_blocks(directory, role_dn):
+        needed = block.all_rights()
+        if needed.is_empty:
+            continue
+        if not needed.issubset(permissions(at, block.object, "")):
+            missing.append(f"{block.object}:{needed.canonical().replace('s', '')}")
+    return missing
+
+
+def assignment_identity(parsed: AclAssignment) -> tuple[object, ...]:
+    """What an assignment grants, ignoring its position (a renumbering is not a change)."""
+    return (
+        parsed.scope,
+        dnlib.normalize(parsed.role_dn),
+        tuple("*" if m == ALL_USERS else dnlib.normalize(m) for m in parsed.members),
+        parsed.user_filter,
+        parsed.target_filter,
+    )
+
+
+def new_assignments(stored: Sequence[str], saved: Sequence[str]) -> list[AclAssignment]:
+    """Assignments of ``saved`` that are new or changed relative to ``stored``.
+
+    Identity ignores the index, so renumbering an assignment grants nothing new. Values
+    that cannot be parsed are skipped: they grant nothing the engine evaluates.
+    """
+    known = {
+        assignment_identity(parsed)
+        for raw in stored
+        if isinstance(parsed := parse_assignment(raw), AclAssignment)
+    }
+    added: list[AclAssignment] = []
+    for raw in saved:
+        parsed = parse_assignment(raw)
+        if isinstance(parsed, AclAssignment) and assignment_identity(parsed) not in known:
+            added.append(parsed)
+    return added
+
+
+def unheld_grants(
+    directory: DirectoryClient,
+    stored: Sequence[str],
+    saved: Sequence[str],
+    *,
+    at: str,
+    permissions: Callable[[str, str, str], Rights],
+) -> list[str]:
+    """``<object key>:<rights>`` of new or changed assignments granting more than ``permissions``.
+
+    ``stored`` are the assignment values already on the entry, ``saved`` the ones about to
+    replace them. Each new or changed assignment must be a subset of the caller's rights at
+    ``at`` (see :func:`missing_role_rights`); removed assignments are always allowed.
+    """
+    missing: list[str] = []
+    for parsed in new_assignments(stored, saved):
+        for block in missing_role_rights(directory, parsed.role_dn, at=at, permissions=permissions):
+            if block not in missing:
+                missing.append(block)
+    return missing
+
+
 def encode_member(dn: str) -> str:
     """Base64 form of a member as stored (exposed for tests and the health checks)."""
     return base64.b64encode(dn.encode("utf-8")).decode("ascii")
@@ -510,6 +612,7 @@ __all__ = [
     "RoleInfo",
     "all_assignments",
     "assignment_from_json",
+    "assignment_identity",
     "assignment_to_json",
     "assignments_using_role",
     "check_rights",
@@ -520,10 +623,14 @@ __all__ = [
     "grants_everything",
     "list_assignments",
     "list_roles",
+    "missing_role_rights",
+    "new_assignments",
     "reorder",
+    "role_blocks",
     "role_container",
     "set_assignments",
     "template_from_json",
     "template_to_json",
+    "unheld_grants",
     "update_role",
 ]

@@ -39,6 +39,7 @@ from heracles.api.v2 import objects as object_routes
 from heracles.attributes import set_default_password_checker, set_default_password_hasher
 from heracles.auth.mail import Mailer, MailSettings
 from heracles.auth.sessions import Session
+from heracles.core import setup_checks
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient
 from heracles.ldap.config import load_settings
@@ -77,6 +78,7 @@ def create_full_app(
                 next(iter(directories.values())).schema_object_classes(),
                 configured=settings.plugins.enabled,
                 store=PluginOverrideStore(database),
+                database=database,
             )
             registry = manager.build_registry()
         else:
@@ -206,6 +208,16 @@ def load_config(
     raw: Mapping[str, Any] = read_config(Path(path_text)) if path_text else {}
     api_settings = ApiSettings.model_validate(raw.get("api", {}))
     warn_about_config(raw, api_settings)
+    for cfg in ldap_settings.directories:
+        plain = setup_checks.plaintext_uris(cfg)
+        if plain:
+            log.warning(
+                "directory_plaintext_ldap",
+                directory=cfg.id,
+                uris=plain,
+                detail="the bind password and user passwords travel unencrypted; "
+                "use ldaps:// or starttls: true",
+            )
     directories: dict[str, DirectoryClient] = {
         cfg.id: PyLdapDirectory(cfg) for cfg in ldap_settings.directories
     }

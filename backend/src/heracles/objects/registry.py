@@ -13,6 +13,7 @@ from heracles.objects.errors import UnknownTypeError
 from heracles.objects.model import ObjectType, Tab
 from heracles.objects.policy import ObjectEvents
 from heracles.objects.task_runner import TaskRunner
+from heracles.storage import Database
 
 PLUGIN_GROUP = "heracles.plugins"
 
@@ -198,6 +199,8 @@ class TypeRegistry:
     """Registered object types, in registration order."""
 
     def __init__(self) -> None:
+        #: Application database when one is configured (shared state across replicas).
+        self.database: Database | None = None
         #: Plugin settings (plugin name → settings object), visible to tab hooks.
         self.settings: dict[str, Any] = {}
         #: Account lock hooks of enabled plugins.

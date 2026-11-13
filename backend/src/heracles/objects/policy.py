@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from heracles.ldap.client import Modification
 from heracles.objects.state import ObjectState
+
+if TYPE_CHECKING:
+    from heracles.acl.rights import Rights
 
 TAB_ATTR = "*"
 """Pseudo attribute name used for tab-level checks (activation/deactivation)."""
@@ -41,6 +44,19 @@ class MovePolicy(Protocol):
     """
 
     def can_move(self, dn: str) -> bool: ...
+
+
+@runtime_checkable
+class AssignmentPolicy(Protocol):
+    """A policy able to report the acting user's effective rights (the ACL engine).
+
+    Optional: the object layer asks it for the rights an ACL assignment would grant
+    and refuses the write when the caller holds less. A policy without ``permissions``
+    (public forms, tests) does not restrict assignments, and a policy that ignores the
+    ACLs (bootstrap administrators) returns full rights, so it never refuses one.
+    """
+
+    def permissions(self, dn: str, object_key: str, attribute: str) -> Rights: ...
 
 
 class AllowAll:

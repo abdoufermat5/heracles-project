@@ -48,3 +48,10 @@ def test_every_plugin_is_enabled_and_registers_all_its_types() -> None:
         for type_cls in plugin.types:
             needed = type_cls.required_object_classes or type_cls.tabs[0].object_classes
             assert all(c.lower() in available for c in needed), (point.name, type_cls.name)
+
+
+def test_demo_exposes_the_ipmi_tab_on_system_types(app_client: TestClient) -> None:
+    admin = Api(app_client).login("admin")
+    for type_name in ("server", "workstation"):
+        tabs = {t["name"] for t in admin.get(f"/types/{type_name}").json()["tabs"]}
+        assert "ipmi" in tabs, type_name

@@ -10,14 +10,41 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from heracles.acl import serialise_assignment
+from heracles.acl.model import AclAssignment, AclScope
 from heracles.api.state import AppState
 from heracles.demo import BASE
+from heracles.ldap.client import Modification
+from heracles.ldap.memory import MemoryDirectory
+from heracles.schema import names as schema
 from heracles.server import build_demo_app
 
 PARIS = f"ou=paris,{BASE}"
 HELPDESK_ROLE = f"cn=helpdesk,ou=aclroles,{BASE}"
+DELEGATE_ROLE = f"cn=dept-manager,ou=aclroles,{BASE}"
+FULL_ADMIN_ROLE = f"cn=full-admin,ou=aclroles,{BASE}"
 ADMIN = f"uid=admin,ou=people,{BASE}"
 BMARTIN = f"uid=bmartin,ou=people,{PARIS}"
+
+
+def _delegate(client: TestClient) -> None:
+    """Give bmartin a role that manages assignments without holding every right."""
+    state = cast("AppState", cast("FastAPI", client.app).state.heracles)
+    directory = cast("MemoryDirectory", state.directories["main"])
+    directory.add(
+        DELEGATE_ROLE,
+        {
+            "objectClass": [schema.OC.ACL_ROLE.encode()],
+            "cn": [b"dept-manager"],
+            schema.ATTR.ACL_TEMPLATE: [
+                b"0:user/user;rw,department/department;r,acl/aclAssignment;rw"
+            ],
+        },
+    )
+    value = serialise_assignment(
+        AclAssignment(3, AclScope.SUBTREE, DELEGATE_ROLE, (BMARTIN,))
+    ).encode()
+    directory.modify(BASE, [Modification("add", schema.ATTR.ACL_ENTRY, [value])])
 
 
 class Api:
@@ -197,6 +224,35 @@ def test_assignments_roundtrip_and_effect(client: TestClient, admin: Api) -> Non
     assert admin.get(f"/acl/assignments/{dnp('ou=none,' + BASE)}").status_code == 404
 
 
+def test_assignment_cannot_grant_rights_the_caller_does_not_hold(client: TestClient) -> None:
+    _delegate(client)
+    api = Api(client).login("bmartin")
+    escalation = {
+        "assignments": [{"scope": "subtree", "role": FULL_ADMIN_ROLE, "members": [BMARTIN]}]
+    }
+    refused = api.put(f"/acl/assignments/{dnp(PARIS)}", escalation)
+    assert refused.status_code == 403
+    assert "cannot grant rights you do not hold" in refused.json()["error"]["message"].lower()
+    # nothing was written
+    assert api.get(f"/acl/assignments/{dnp(PARIS)}").json()["assignments"] == []
+
+
+def test_assignment_may_grant_an_equal_or_lesser_role(client: TestClient) -> None:
+    _delegate(client)
+    api = Api(client).login("bmartin")
+    lesser = {"assignments": [{"scope": "subtree", "role": HELPDESK_ROLE, "members": [BMARTIN]}]}
+    assert api.put(f"/acl/assignments/{dnp(PARIS)}", lesser).status_code == 200
+    equal = {"assignments": [{"scope": "subtree", "role": DELEGATE_ROLE, "members": [BMARTIN]}]}
+    assert api.put(f"/acl/assignments/{dnp(PARIS)}", equal).status_code == 200
+
+
+def test_super_admin_assigns_any_role(client: TestClient, admin: Api) -> None:
+    payload = {"assignments": [{"scope": "subtree", "role": FULL_ADMIN_ROLE, "members": [BMARTIN]}]}
+    saved = admin.put(f"/acl/assignments/{dnp(PARIS)}", payload)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["assignments"][0]["role"] == FULL_ADMIN_ROLE
+
+
 def test_department_acl_tab(client: TestClient, admin: Api) -> None:
     descriptor = client.get("/api/v2/types/department").json()
     tab = next(t for t in descriptor["tabs"] if t["name"] == "acl")
@@ -233,6 +289,63 @@ def test_department_acl_tab(client: TestClient, admin: Api) -> None:
     assert stored[0]["scope"] == "base" and stored[0]["members"] == [
         {"dn": "*", "kind": "everyone"}
     ]
+
+
+def test_department_acl_tab_refuses_granting_above_the_caller(client: TestClient) -> None:
+    """The tab writes through the generic object API: the core subset rule covers it."""
+    editor_role = f"cn=tab-editor,ou=aclroles,{BASE}"
+    state = cast("AppState", cast("FastAPI", client.app).state.heracles)
+    directory = cast("MemoryDirectory", state.directories["main"])
+    directory.add(
+        editor_role,
+        {
+            "objectClass": [schema.OC.ACL_ROLE.encode()],
+            "cn": [b"tab-editor"],
+            schema.ATTR.ACL_TEMPLATE: [b"0:department/aclAssignment;rw,user/user;r"],
+        },
+    )
+    directory.modify(
+        BASE,
+        [
+            Modification(
+                "add",
+                schema.ATTR.ACL_ENTRY,
+                [
+                    serialise_assignment(
+                        AclAssignment(4, AclScope.SUBTREE, editor_role, (BMARTIN,))
+                    ).encode()
+                ],
+            )
+        ],
+    )
+    api = Api(client).login("bmartin")
+    paris = f"/api/v2/objects/department/{dnp(PARIS)}"
+    escalation = {
+        "tabs": {
+            "acl": {
+                "active": True,
+                "values": {
+                    "assignments": [
+                        {
+                            "index": 0,
+                            "scope": "subtree",
+                            "role": FULL_ADMIN_ROLE,
+                            "members": [BMARTIN],
+                            "user_filter": None,
+                            "target_filter": None,
+                        }
+                    ]
+                },
+            }
+        }
+    }
+    refused = client.patch(paris, json=escalation, headers=api.headers)
+    assert refused.status_code == 422, refused.text
+    error = refused.json()["error"]
+    assert "cannot grant rights you do not hold" in error["fields"]["acl"].lower()
+    assert "all:rwcdm" in error["fields"]["acl"]
+    stored = Api(client).login("admin").get(f"/acl/assignments/{dnp(PARIS)}").json()
+    assert stored["assignments"] == []
 
 
 def test_config_get_and_put(client: TestClient, admin: Api) -> None:

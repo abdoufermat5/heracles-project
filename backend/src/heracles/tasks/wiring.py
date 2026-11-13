@@ -84,6 +84,7 @@ def build_worker(config_path: str | os.PathLike[str] | None = None) -> Scheduler
             next(iter(directories.values())).schema_object_classes(),
             configured=api_settings.plugins.enabled,
             store=PluginOverrideStore(database),
+            database=database,
         )
         registry = manager.build_registry
     else:

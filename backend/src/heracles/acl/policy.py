@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Protocol
 
 from heracles.acl.evaluator import AclEvaluator
+from heracles.acl.rights import Rights
 
 
 class AccessPolicy(Protocol):
@@ -58,3 +59,7 @@ class AclAccessPolicy:
     def can_delete(self, dn: str, type_name: str) -> bool:
         key = self._types.get(type_name)
         return key is not None and self._ev.permissions(dn, key).delete
+
+    def permissions(self, dn: str, object_key: str, attribute: str = "") -> Rights:
+        """Effective rights of the user on ``object_key`` (and ``attribute``) at ``dn``."""
+        return self._ev.permissions(dn, object_key, attribute)

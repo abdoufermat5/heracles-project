@@ -11,7 +11,7 @@ from heracles.objects.state import TabState
 OBJECT_CLASS = "objectClass"
 
 
-def _raw(raw: Mapping[str, Sequence[bytes]], name: str) -> list[bytes]:
+def raw_values(raw: Mapping[str, Sequence[bytes]], name: str) -> list[bytes]:
     lname = name.lower()
     for key, values in raw.items():
         if key.lower() == lname:
@@ -65,7 +65,7 @@ def diff_modifications(
                 elif old_state.active and value == old_state.values.get(attr.name):
                     continue
                 new_raw = attr.to_ldap(value)
-                old_raw = _raw(raw, attr.name)
+                old_raw = raw_values(raw, attr.name)
                 if not new_raw:
                     if old_raw:
                         attr_mods.append(Modification("delete", attr.name))
@@ -76,7 +76,7 @@ def diff_modifications(
                 lname = attr.name.lower()
                 if not attr.stored or lname in skip or lname in active_attrs:
                     continue
-                if _raw(raw, attr.name):
+                if raw_values(raw, attr.name):
                     attr_mods.append(Modification("delete", attr.name))
             for oc in tab.object_classes:
                 lname = oc.lower()

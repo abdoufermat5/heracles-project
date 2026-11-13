@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 
 from heracles import demo
@@ -225,3 +228,46 @@ def test_super_admin_fix_reports_a_malformed_dn_instead_of_raising(
     monkeypatch.setattr(directory, "get", refuse)
     outcome = sc.run_fix(ctx, "super_admin", options={"dn": "not a dn"})
     assert outcome.failed == {"not a dn": "Choose an existing user."} and not outcome.fixed
+
+
+def test_plaintext_ldap_is_a_warning(directory: MemoryDirectory) -> None:
+    ctx = sc.context_for(directory, plaintext_uris=["ldap://ldap.test"])
+    result = sc.run_checks(ctx, ["transport"])[0]
+    assert result.status == "warning"
+    assert "ldap://ldap.test" in result.message
+    assert sc.run_checks(sc.context_for(directory), ["transport"])[0].status == "ok"
+
+
+def test_plaintext_uris_ignore_starttls_and_tls() -> None:
+    from heracles.ldap.config import DirectoryConfig
+
+    plain = DirectoryConfig(id="main", base_dn=BASE, uri="ldap://ldap.test ldaps://secure.test")
+    assert sc.plaintext_uris(plain) == ["ldap://ldap.test"]
+    assert sc.plaintext_uris(plain.model_copy(update={"starttls": True})) == []
+    assert (
+        sc.plaintext_uris(DirectoryConfig(id="main", base_dn=BASE, uri="ldaps://secure.test")) == []
+    )
+    assert sc.insecure_uris(plain) == []  # not a directory client
+
+
+def test_startup_warns_about_plaintext_ldap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from structlog.testing import capture_logs
+
+    from heracles import server
+    from heracles.ldap import pyldap
+    from heracles.ldap.config import DirectoryConfig
+
+    def client(config: DirectoryConfig) -> SimpleNamespace:
+        return SimpleNamespace(config=config)
+
+    monkeypatch.setattr(pyldap, "PyLdapDirectory", client)
+    path = tmp_path / "heracles.yaml"
+    path.write_text(
+        "directories:\n  - id: main\n    uri: ldap://ldap.test\n    base_dn: dc=test\n",
+        encoding="utf-8",
+    )
+    with capture_logs() as logs:
+        server.load_config(path)
+    assert any(entry["event"] == "directory_plaintext_ldap" for entry in logs)

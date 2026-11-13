@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import AsyncGenerator, Iterator, Mapping
+from collections.abc import AsyncGenerator, Iterator, Mapping, Sequence
 from contextlib import asynccontextmanager, contextmanager  # pyright: ignore[reportDeprecated]
 from datetime import UTC, datetime
 from importlib.metadata import entry_points
@@ -85,6 +85,34 @@ def _audit(user: CurrentUser, domain: Domain, action: str, kind: str, dn: str, *
 def _audit_plugin_switch(user: CurrentUser, domain: Domain, name: str, *, enabled: bool) -> None:
     state = "enabled" if enabled else "disabled"
     _audit(user, domain, "config", "plugin", user.directory.base_dn, f"plugin {name} {state}")
+
+
+def _refuse_granting_above_caller(
+    user: CurrentUser, domain: Domain, dn: str, items: Sequence[Mapping[str, Any]]
+) -> None:
+    """403 when a new or changed assignment would grant rights the caller does not hold at ``dn``.
+
+    Bootstrap administrators are exempt (their evaluator reports full rights). Unchanged
+    values pass: keeping a broader assignment that someone else created grants nothing new,
+    and removing assignments is always allowed. The object save path enforces the same rule
+    through the policy, so this endpoint keeps its documented 403 instead of a 422.
+    """
+    if domain.is_admin(user.dn):
+        return
+    stored = [str(item.get("raw", "")) for item in acl_admin.list_assignments(user.directory, dn)]
+    saved = [
+        acl_admin.assignment_from_json(item, f"assignments.{index}")
+        for index, item in enumerate(items)
+    ]
+    missing = acl_admin.unheld_grants(
+        user.directory,
+        stored,
+        saved,
+        at=dn,
+        permissions=domain.evaluator(user).permissions,
+    )
+    if missing:
+        raise forbidden("You cannot grant rights you do not hold: " + ", ".join(missing))
 
 
 @contextmanager  # pyright: ignore[reportDeprecated]
@@ -631,6 +659,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
     ) -> dict[str, Any]:
         _require(user, domain, ASSIGNMENT_KEY, "w", dn)
         with admin_errors():
+            _refuse_granting_above_caller(user, domain, dn, body.assignments)
             items = acl_admin.set_assignments(user.directory, dn, body.assignments)
         invalidate_acl_cache(user.session)
         _audit(user, domain, "acl", "acl_assignment", dn, f"assignments: {len(items)}")
