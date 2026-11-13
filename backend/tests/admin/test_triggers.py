@@ -206,3 +206,21 @@ def test_inactive_tab_does_not_fire(directory: MemoryDirectory, tmp_path: Path) 
     state.tabs["posix"].active = False
     events.post_create(EventContext("user", USER, None, state))
     assert not marker.exists()
+
+
+def test_output_that_is_not_utf8_does_not_break_the_hook() -> None:
+    result = run_hook(TabHook("user", "check", "printf 'caf\\351'; exit 1"), {})
+    assert not result.ok and result.exit_code == 1
+    assert result.output.startswith("caf")
+
+
+def test_the_command_line_is_not_logged() -> None:
+    from structlog.testing import capture_logs
+
+    hook = TabHook("user", "check", "echo --token=s3cr3t-in-the-command %uid%")
+    with capture_logs() as logs:
+        assert run_hook(hook, {"uid": ["bob"]}).ok
+        run_hook(TabHook("user", "check", "sleep 5 # s3cr3t"), {}, timeout=0.2)
+        run_hook(TabHook("user", "check", "exit 2 # s3cr3t"), {})
+    assert logs
+    assert "s3cr3t" not in repr(logs) and "bob" not in repr(logs)

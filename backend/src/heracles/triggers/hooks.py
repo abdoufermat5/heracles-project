@@ -239,8 +239,8 @@ def run_hook(
 ) -> HookResult:
     """Run one trigger; never raises for a failing command."""
     command = render_command(hook.command, attrs)
-    logged = render_command(hook.command, mask_attrs(attrs))
-    log.info("trigger_run", tab=hook.tab, mode=hook.mode, command=logged)
+    # the command line is never logged: it may carry secrets of its own (spec 08)
+    log.info("trigger_run", tab=hook.tab, mode=hook.mode)
     try:
         proc = subprocess.Popen(  # noqa: S603
             ["/bin/sh", "-c", command],
@@ -248,6 +248,8 @@ def run_hook(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",  # a command printing other bytes must not fail the operation
             env=dict(SAFE_ENV),
             start_new_session=True,
         )
@@ -261,7 +263,7 @@ def run_hook(
             os.killpg(proc.pid, signal.SIGKILL)
         with contextlib.suppress(subprocess.TimeoutExpired):
             proc.communicate(timeout=2)
-        log.warning("trigger_timeout", tab=hook.tab, mode=hook.mode, command=logged)
+        log.warning("trigger_timeout", tab=hook.tab, mode=hook.mode)
         return HookResult(hook, None, "The command timed out.", timed_out=True)
     done = subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr)
     output = ((done.stdout or "") + (done.stderr or "")).strip()[:MAX_OUTPUT]
