@@ -168,6 +168,9 @@ def confirm_recovery(body: RecoveryRequest, user: V1UserDep, state: StateDep) ->
         raise bad_request("Password rejected: " + "; ".join(exc.problems)) from None
     except RecoveryError:
         raise bad_request("Invalid or expired recovery token") from None
+    # A reset is what people do when the account may be compromised: whoever holds a
+    # session of it must not keep it (same as API v2).
+    state.sessions.delete_for_user(target)
     state.audit.record_by(
         user,
         "password",

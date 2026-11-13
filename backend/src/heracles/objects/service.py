@@ -28,7 +28,7 @@ from heracles.ldap.client import (
     NoSuchObjectError,
     Scope,
 )
-from heracles.objects import filters
+from heracles.objects import filters, renames
 from heracles.objects.diff import diff_modifications
 from heracles.objects.errors import (
     ObjectConflictError,
@@ -44,6 +44,7 @@ from heracles.objects.policy import (
     AccessPolicy,
     AllowAll,
     EventContext,
+    MovePolicy,
     NullEvents,
     ObjectEvents,
 )
@@ -230,7 +231,7 @@ class ObjectService:
         """
         info = self.registry.get(type_name)
         base = base or self.directory.base_dn
-        sort_key = sort or info.type.main_attr
+        sort_key = self._sort_key(info, sort)
         offset = _decode_cursor(cursor)
         limit = max(1, limit)
         entries: Sequence[Entry] | None = None
@@ -309,11 +310,29 @@ class ObjectService:
             ]
         except NoSuchObjectError:
             entries = []
-        entries.sort(
-            key=lambda e: ((e.text(sort_key) or "").lower(), dnlib.normalize(e.dn)),
-            reverse=descending,
-        )
+        main_tab = info.main_tab.name
+
+        def order(e: Entry) -> tuple[str, str]:
+            # an attribute the caller cannot read must not decide the order of the rows
+            text = (
+                (e.text(sort_key) or "") if self.policy.can_read(e.dn, main_tab, sort_key) else ""
+            )
+            return text.lower(), dnlib.normalize(e.dn)
+
+        entries.sort(key=order, reverse=descending)
         return entries
+
+    @staticmethod
+    def _sort_key(info: TypeInfo, requested: str | None) -> str:
+        """The requested sort column when it is a listing column, else the main attribute.
+
+        Other attributes (the password fetched for the account lock flag, say) are not
+        columns and are never a sort key.
+        """
+        columns = {c.lower() for c in (*info.type.columns, info.type.name_attr) if c}
+        if requested and requested.lower() in columns | {info.type.main_attr.lower()}:
+            return requested
+        return info.type.main_attr
 
     def count(self, type_name: str, base: str | None = None, scope: Scope = Scope.ONE) -> int:
         """Number of objects :meth:`list` would report as ``total`` (no rows, no sorting)."""
@@ -533,6 +552,9 @@ class ObjectService:
         ) != dnlib.normalize(old_base)
         if renamed and isinstance(new_main, str) and not errors:
             self._check_unique(info, new_base, new_main, dn, errors)
+        if renamed:
+            moved_to = new_base if dnlib.normalize(new_base) != dnlib.normalize(old_base) else None
+            self._check_move(dn, type_name, moved_to)
         self._check_writes(dn, touched)
         if errors:
             raise ObjectValidationError(errors)
@@ -557,10 +579,7 @@ class ObjectService:
                 if dnlib.normalize(new_base) != dnlib.normalize(old_base)
                 else None
             )
-            try:
-                new_dn = self.directory.rename(dn, new_rdn, superior)
-            except AlreadyExistsError:
-                raise ObjectConflictError(f"{new_rdn} already exists") from None
+            new_dn = self._rename(dn, new_rdn, superior)
         final_base = department_of(new_dn, info.type.rdn)
         for tab in info.tabs:
             was_active = state.original[tab.name].active
@@ -576,6 +595,52 @@ class ObjectService:
         result = self.load(type_name, new_dn)
         self.events.post_modify(EventContext(type_name, new_dn, state, result, mods))
         return result
+
+    # ------------------------------------------------------------------ move
+
+    def move(self, type_name: str, dn: str, base: str) -> str:
+        """Move an object to department ``base`` (``m`` on the object, ``c`` on the target).
+
+        References to the object (and to what lies below it) follow it. Returns the new DN.
+        """
+        info = self.registry.get(type_name)
+        if not info.type.editable:
+            raise PermissionDeniedError(f"{type_name} objects cannot be modified")
+        state = self.load(type_name, dn)
+        superior = dnlib.join(info.type.rdn, base)
+        if dnlib.normalize(superior) == dnlib.normalize(dnlib.parent(dn) or ""):
+            return state.dn
+        self._check_move(dn, type_name, base)
+        main_value = state.original[info.main_tab.name].values.get(info.type.main_attr)
+        if isinstance(main_value, str) and main_value:
+            errors: dict[str, str] = {}
+            self._check_unique(info, base, main_value, dn, errors)
+            if errors:
+                raise ObjectValidationError(errors)
+        ctx = EventContext(type_name, dn, state, state)
+        self.events.pre_modify(ctx)
+        new_dn = self._rename(dn, dnlib.rdn(dn), superior)
+        result = self.load(type_name, new_dn)
+        self.events.post_modify(EventContext(type_name, new_dn, state, result))
+        return new_dn
+
+    def _check_move(self, dn: str, type_name: str, new_base: str | None) -> None:
+        """The ``m`` right on ``dn`` and, for another department, ``c`` on that department."""
+        policy = self.policy
+        if isinstance(policy, MovePolicy) and not policy.can_move(dn):
+            raise PermissionDeniedError(f"cannot rename or move {dn}")
+        if new_base is not None and not policy.can_create(type_name, new_base):
+            raise PermissionDeniedError(f"cannot move {dn} to {new_base}")
+
+    def _rename(self, dn: str, new_rdn: str, superior: str | None) -> str:
+        """Rename/move an entry, then rewrite the references to it and to what lies below."""
+        below = renames.subtree_dns(self.directory, dn)
+        try:
+            new_dn = self.directory.rename(dn, new_rdn, superior)
+        except AlreadyExistsError:
+            raise ObjectConflictError(f"{new_rdn} already exists") from None
+        renames.propagate(self.directory, self.registry, below, dn, new_dn)
+        return new_dn
 
     # ---------------------------------------------------------------- delete
 

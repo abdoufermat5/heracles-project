@@ -397,6 +397,22 @@ def test_recovery(client: TestClient, v1: V1) -> None:
     assert v1.get("/recovery").status_code == 400
 
 
+def test_recovery_confirm_revokes_account_sessions(client: TestClient, v1: V1) -> None:
+    sessions = app_state(client).sessions
+    victim = sessions.create(ASMITH, "main")
+    bystander = sessions.create(ZULU, "main")
+    body = v1.get("/recovery", params={"email": "asmith@heracles.test"}).json()
+    payload = {
+        "token": body["token"],
+        "login": "asmith",
+        "password1": "N3w-passw0rd!x",
+        "password2": "N3w-passw0rd!x",
+    }
+    assert v1.call("PUT", "/recovery", json=payload).status_code == 204
+    assert sessions.get(victim.id) is None
+    assert sessions.get(bystander.id) is not None
+
+
 def test_recovery_token_requires_password_rights(client: TestClient) -> None:
     """A user who cannot set the password of an account cannot mint a reset token for it."""
     api = V1(client).login("bmartin")

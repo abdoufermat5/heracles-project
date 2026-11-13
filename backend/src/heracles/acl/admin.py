@@ -258,6 +258,18 @@ def assignments_using_role(directory: DirectoryClient, role_dn: str) -> list[tup
     return out
 
 
+def role_use_counts(directory: DirectoryClient) -> dict[str, int]:
+    """Number of assignments referencing each role (normalised role DN), in one search."""
+    counts: dict[str, int] = {}
+    for entry in _assignment_entries(directory):
+        for value in entry.values:
+            parsed = parse_assignment(value)
+            if isinstance(parsed, AclAssignment):
+                key = dnlib.normalize(parsed.role_dn)
+                counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def delete_role(directory: DirectoryClient, dn: str, *, force: bool = False) -> None:
     if get_role(directory, dn) is None:
         raise NoSuchObjectError(dn)

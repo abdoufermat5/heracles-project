@@ -445,6 +445,7 @@ def template_fields(ctx: ObjectService, type_name: str, template_dn: str) -> dic
     """
     info = ctx.registry.get(type_name)
     tpl = _load(ctx, info, template_dn)
+    _require_manage(ctx, info, tpl.info.base)
     defs = _definitions(tpl)
     defined = {k.lower() for k in defs}
     owners = _owners(info)
@@ -552,6 +553,7 @@ def apply_template(
     """
     info = ctx.registry.get(type_name)
     tpl = _load(ctx, info, template_dn)
+    _require_manage(ctx, info, tpl.info.base)
     owners = _owners(info)
     supplied = _clean_supplied(values)
     config_dn, counters = _counters(ctx.directory)

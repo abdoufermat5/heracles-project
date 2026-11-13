@@ -547,9 +547,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
     ) -> list[dict[str, Any]]:
         _require(user, domain, ROLE_KEY, "r")
         roles = acl_admin.list_roles(user.directory, base)
-        used: dict[str, int] = {}
-        for entry_dn, _index in _all_role_uses(user):
-            used[dnlib.normalize(entry_dn)] = used.get(dnlib.normalize(entry_dn), 0) + 1
+        used = acl_admin.role_use_counts(user.directory)
         out: list[dict[str, Any]] = []
         for role in roles:
             if not rights_of(user, domain, ROLE_KEY, role.dn).read:
@@ -558,18 +556,6 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
             item["used_by"] = used.get(dnlib.normalize(role.dn), 0)
             out.append(item)
         return out
-
-    def _all_role_uses(user: CurrentUser) -> list[tuple[str, int]]:
-        from heracles.acl.model import AclAssignment
-        from heracles.acl.parser import parse_assignment
-
-        uses: list[tuple[str, int]] = []
-        for group in acl_admin.all_assignments(user.directory):
-            for item in group["assignments"]:
-                parsed = parse_assignment(item["raw"])
-                if isinstance(parsed, AclAssignment):
-                    uses.append((parsed.role_dn, parsed.index))
-        return uses
 
     @router.get("/acl/roles/{dn:path}")
     def get_role(dn: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, Any]:

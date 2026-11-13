@@ -30,6 +30,11 @@ from heracles.objects.model import Tab
 from heracles.objects.policy import CompositeEvents, ObjectEvents
 from heracles.objects.registry import EventsContext
 
+#: How long a session keeps its ACL resolution before resolving again. Roles, assignments and
+#: group memberships changed by someone else (a revocation, say) apply to a live session
+#: within this time instead of at its next login.
+ACL_CACHE_SECONDS = 60.0
+
 _ACL_CACHE_KEY = "acl.resolved"
 #: How often a process compares its enabled plugins with the shared app database.
 PLUGIN_SYNC_SECONDS = 2.0
@@ -253,7 +258,11 @@ class Domain:
 
 def _cached_resolution(session: Session) -> ResolvedAcl | None:
     value = session.cache.get(_ACL_CACHE_KEY)
-    return value if isinstance(value, ResolvedAcl) else None
+    if not isinstance(value, ResolvedAcl):
+        return None
+    if time.monotonic() - value.resolved_at > ACL_CACHE_SECONDS:
+        return None  # a change made by another administrator reaches the session in time
+    return value
 
 
 def invalidate_acl_cache(session: Session) -> None:

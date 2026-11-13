@@ -33,6 +33,7 @@ from heracles.objects import (
     ObjectType,
     ObjectValidationError,
     PermissionDeniedError,
+    TypeInfo,
     UnknownTypeError,
     bulk,
     templates,
@@ -108,6 +109,15 @@ def _check_not_locked_by_other(domain: DomainDep, user: CurrentUserDep, dn: str)
     lock = domain.locks(user.directory_id, user.directory).get(dn)
     if lock is not None and dnlib.normalize(lock.user_dn) != dnlib.normalize(user.dn):
         raise locked_error(lock)
+
+
+def _may_edit(policy: TypeAclPolicy, info: TypeInfo, dn: str) -> bool:
+    """Whether the user holds some write, delete or move right on ``dn``."""
+    return (
+        any(policy.can_write(dn, tab.name, "") for tab in info.tabs)
+        or policy.can_delete(dn, info.name)
+        or policy.can_move(dn)
+    )
 
 
 # --------------------------------------------------------------- metadata
@@ -314,6 +324,8 @@ def list_objects(
             checks = filter_checks(domain.registry.get(type_name), filter_attributes(parsed))
         except FilterError as exc:
             raise ApiError(400, "validation", f"Invalid filter: {exc}") from None
+        except RecursionError:
+            raise ApiError(400, "validation", "Invalid filter: nested too deeply") from None
         except ValueError as exc:
             raise ApiError(
                 400, "validation", f"The attribute '{exc}' cannot be used in a filter"
@@ -517,8 +529,12 @@ def acquire_lock(
     type_name: str, dn: str, user: CurrentUserDep, domain: DomainDep
 ) -> dict[str, JSON]:
     with object_errors():
-        service, _policy = domain.service(user, type_name)
+        service, policy = domain.service(user, type_name)
+        info = domain.registry.get(type_name)
         service.load(type_name, dn)
+        # a lock keeps others out of the object: only someone who could edit it may take it
+        if not _may_edit(policy, info, dn):
+            raise PermissionDeniedError(f"cannot edit {dn}")
         lock = domain.locks(user.directory_id, user.directory).acquire(dn, user.dn)
     return {"lock": lock_json(lock)}
 
@@ -536,13 +552,10 @@ def move_object(
 ) -> dict[str, str]:
     _check_not_locked_by_other(domain, user, dn)
     with object_errors():
-        service, policy = domain.service(user, type_name)
-        service.load(type_name, dn)
-        if not policy.can_move(dn) or not policy.can_create(type_name, body.base):
-            raise PermissionDeniedError(f"cannot move {dn} to {body.base}")
-        info = domain.registry.get(type_name)
-        superior = dnlib.join(info.type.rdn, body.base)
-        new_dn = user.directory.rename(dn, dnlib.rdn(dn), superior)
+        service, _policy = domain.service(user, type_name)
+        # a blank department is the top of the directory, as for creation
+        new_dn = service.move(type_name, dn, body.base.strip() or user.directory.base_dn)
+    domain.locks(user.directory_id, user.directory).release(dn, user.dn)
     return {"dn": new_dn}
 
 
@@ -601,8 +614,18 @@ def list_snapshots(
     type_name: str, dn: str, user: CurrentUserDep, domain: DomainDep
 ) -> list[dict[str, JSON]]:
     with object_errors():
-        service, _policy = domain.service(user, type_name)
+        service, policy = domain.service(user, type_name)
+        info = domain.registry.get(type_name)
         service.load(type_name, dn)
+        evaluator = domain.evaluator(user)
+        key = info.acl_object(info.main_tab)
+        if not (
+            policy.can_read(dn, info.main_tab.name, "")
+            or evaluator.can_snapshot_create(dn, key)
+            or evaluator.can_snapshot_restore(dn, key)
+            or evaluator.can_snapshot_delete(dn, key)
+        ):
+            raise PermissionDeniedError(f"cannot read {dn}")
     snaps = domain.snapshots(user.directory_id, user.directory).list_for_dn(dn)
     return [snapshot_json(s) for s in snaps]
 

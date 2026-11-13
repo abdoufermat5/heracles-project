@@ -315,8 +315,9 @@ def dashboard(user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
                 for entry in directory.search(
                     base, info.type.filter, Scope.SUBTREE, ["userPassword"]
                 ):
-                    if policy.can_read(entry.dn, main_tab, main_attr):
-                        total += 1
+                    if not policy.can_read(entry.dn, main_tab, main_attr):
+                        continue  # accounts the caller cannot see are not counted either
+                    total += 1
                     stored = entry.text("userPassword")
                     if stored and is_locked(stored):
                         locked_users += 1

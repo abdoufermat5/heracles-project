@@ -32,6 +32,17 @@ class TypedPolicy(Protocol):
     def for_type(self, type_name: str) -> AccessPolicy: ...
 
 
+@runtime_checkable
+class MovePolicy(Protocol):
+    """A policy that also decides on the ``m`` right (rename / change of DN).
+
+    Optional: a policy without ``can_move`` (such as the public forms one, which only
+    creates) does not restrict renames.
+    """
+
+    def can_move(self, dn: str) -> bool: ...
+
+
 class AllowAll:
     """Default policy."""
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import re
+import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -111,6 +112,8 @@ class ResolvedAcl:
     rules: dict[str, list[Rule]] = field(default_factory=lambda: {})
     views: dict[str, tuple[Rule, ...]] = field(default_factory=lambda: {})
     warnings: list[AclWarning] = field(default_factory=lambda: [])
+    #: ``time.monotonic()`` of the resolution: callers refresh a resolution that grew old.
+    resolved_at: float = field(default_factory=time.monotonic)
 
     @property
     def targets_by_depth(self) -> list[str]:

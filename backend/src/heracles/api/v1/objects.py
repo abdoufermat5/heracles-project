@@ -214,6 +214,8 @@ def search_objects(
             parsed_filter = parse_filter(filter)
         except FilterError as exc:
             raise bad_request(f"Invalid filter: {exc}") from None
+        except RecursionError:
+            raise bad_request("Invalid filter: nested too deeply") from None
         filter_checks = _filter_checks(info, parsed_filter)
     if templates:
         module = _templates()
@@ -245,7 +247,8 @@ def search_objects(
         if not all(policy.can_read(entry.dn, tab, attr) for tab, attr in filter_checks):
             continue
         if not wanted:
-            result[entry.dn] = entry.text(info.type.name_attr) or ""
+            readable_name = policy.can_read(entry.dn, info.main_tab.name, info.type.name_attr)
+            result[entry.dn] = (entry.text(info.type.name_attr) or "") if readable_name else ""
             continue
         row: dict[str, JSON] = {}
         for name, mode in wanted.items():

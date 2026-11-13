@@ -21,6 +21,8 @@ def mount_spa(app: FastAPI, directory: Path) -> bool:
     def spa(path: str) -> Response:  # pyright: ignore[reportUnusedFunction]
         if path == "api" or path.startswith("api/"):
             return JSONResponse(error_body("not_found", "Not found"), status_code=404)
+        if "\x00" in path:  # not a file name: resolve() would raise
+            return FileResponse(index, headers={"Cache-Control": "no-cache"})
         candidate = (root / path).resolve()
         if path and candidate.is_file() and candidate.is_relative_to(root):
             headers = (
