@@ -6,9 +6,11 @@ import argparse
 import os
 import sys
 from collections.abc import Sequence
+from urllib.parse import urlsplit
 
 from heracles.cli import admin as admin_commands
 from heracles.cli import init as init_command
+from heracles.cli.secrets import SecretError, read_secret_file
 from heracles.setup import service as setup_service
 
 
@@ -213,14 +215,54 @@ def _migrate_directory(args: argparse.Namespace) -> int:
     return 0
 
 
+#: Where ``db migrate-to-postgres`` reads the destination when ``--to`` is omitted.
+DATABASE_URL_ENV = "HERACLES_DATABASE_URL"
+
+
+def _carries_password(url: str) -> bool:
+    try:
+        return urlsplit(url).password is not None
+    except ValueError:
+        return False
+
+
+def _destination(args: argparse.Namespace) -> str | None:
+    """The PostgreSQL URL: ``--to``, ``--to-file``, or ``$HERACLES_DATABASE_URL``."""
+    if args.to is not None:
+        if _carries_password(args.to):
+            print(
+                "warning: --to puts the database password in the process list and the shell"
+                f" history; use --to-file or ${DATABASE_URL_ENV}",
+                file=sys.stderr,
+            )
+        return args.to
+    if args.to_file is not None:
+        try:
+            return read_secret_file(args.to_file, "database URL")
+        except SecretError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return None
+    from_env = os.environ.get(DATABASE_URL_ENV) or None
+    if from_env is not None:
+        return from_env
+    print(
+        f"error: no destination: use --to, --to-file or ${DATABASE_URL_ENV}",
+        file=sys.stderr,
+    )
+    return None
+
+
 def _db_migrate_to_postgres(args: argparse.Namespace) -> int:
     from pathlib import Path
 
     from heracles.storage import DatabaseError
     from heracles.storage.copy import copy_sqlite_to_postgres
 
+    url = _destination(args)
+    if url is None:
+        return 2
     try:
-        copied = copy_sqlite_to_postgres(Path(args.source), args.to)
+        copied = copy_sqlite_to_postgres(Path(args.source), url)
     except DatabaseError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -306,7 +348,14 @@ def main(
         help="copy the SQLite application database into PostgreSQL (to run several replicas)",
     )
     to_pg.add_argument("--from", dest="source", required=True, help="the SQLite file")
-    to_pg.add_argument("--to", required=True, help="postgresql://user:password@host/db (empty)")
+    destination = to_pg.add_mutually_exclusive_group()
+    destination.add_argument(
+        "--to",
+        help=f"postgresql://user:password@host/db (empty); ${DATABASE_URL_ENV} also works",
+    )
+    destination.add_argument(
+        "--to-file", help="read the URL from this file ('-' for standard input)"
+    )
     to_pg.set_defaults(func=_db_migrate_to_postgres)
 
     init_command.register(sub)

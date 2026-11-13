@@ -5,13 +5,18 @@ from __future__ import annotations
 import argparse
 import getpass
 import json
+import os
 import sys
 from collections.abc import Callable, Mapping
 from typing import Any
 
 from heracles.auth.passwords import PasswordPolicy
+from heracles.cli.secrets import SecretError, read_secret_file
 from heracles.core import setup_checks
 from heracles.ldap.client import DirectoryClient, DirectoryError
+
+#: Where ``create-admin`` reads the password when no option is given.
+PASSWORD_ENV = "HERACLES_ADMIN_PASSWORD"  # noqa: S105  (a variable name, not a secret)
 
 type DirectoryFactory = Callable[[argparse.Namespace], Mapping[str, DirectoryClient]]
 
@@ -85,16 +90,44 @@ def run_fix(args: argparse.Namespace, factory: DirectoryFactory) -> int:
     return 1 if outcome.failed else 0
 
 
+def _password(args: argparse.Namespace) -> str | None:
+    """The password from the option, the file, the environment, or an interactive prompt."""
+    if args.password is not None:
+        print(
+            "warning: --password puts the password in the process list and the shell history;"
+            " use --password-file or $" + PASSWORD_ENV,
+            file=sys.stderr,
+        )
+        return args.password
+    if args.password_file is not None:
+        try:
+            return read_secret_file(args.password_file, "password")
+        except SecretError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return None
+    from_env = os.environ.get(PASSWORD_ENV) or None
+    if from_env is not None:
+        return from_env
+    if not sys.stdin.isatty():
+        print(
+            f"error: no password given: use --password-file, ${PASSWORD_ENV}, or run interactively",
+            file=sys.stderr,
+        )
+        return None
+    password = getpass.getpass("Password: ")
+    if password != getpass.getpass("Repeat password: "):
+        print("error: the passwords differ", file=sys.stderr)
+        return None
+    return password
+
+
 def run_create_admin(args: argparse.Namespace, factory: DirectoryFactory) -> int:
     directory = _directory(args, factory)
     if directory is None:
         return 2
-    password = args.password
+    password = _password(args)
     if password is None:
-        password = getpass.getpass("Password: ")
-        if password != getpass.getpass("Repeat password: "):
-            print("error: the passwords differ", file=sys.stderr)
-            return 2
+        return 2
     policy = PasswordPolicy()
     problems = policy.problems(password)
     if problems:
@@ -140,7 +173,13 @@ def register(sub: Any, factory: DirectoryFactory) -> None:
     create = sub.add_parser("create-admin", help="create a user with full rights")
     common(create)
     create.add_argument("--uid", required=True)
-    create.add_argument("--password", help="password (prompted when omitted)")
+    source = create.add_mutually_exclusive_group()
+    source.add_argument("--password", help="password (visible in the process list: prefer a file)")
+    source.add_argument(
+        "--password-file",
+        help=f"read the password from this file ('-' for standard input); ${PASSWORD_ENV} also"
+        " works",
+    )
 
     def do_create(a: argparse.Namespace) -> int:
         return run_create_admin(a, factory)
