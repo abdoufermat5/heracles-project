@@ -14,6 +14,8 @@ UI_PORT ?= 5173
 DNS_PORT ?= 15353
 CONFIG ?= $(HERACLES_CONFIG)
 IMAGE ?= heracles
+# Build id the server announces (X-Heracles-Version) and the bundle was built with; empty: the package version.
+BUILD_ID ?=
 VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(BACKEND)/pyproject.toml)
 
 .PHONY: bundle-check help install install-backend install-frontend \
@@ -76,8 +78,8 @@ frontend: ## Vite dev server only, proxied to the backend on $(PORT)
 build: ## Build the frontend (frontend/dist)
 	cd $(FRONTEND) && pnpm build
 
-docker-build: ## Build the production image (IMAGE=heracles; tags: backend version + latest)
-	docker build -f deploy/Dockerfile -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
+docker-build: ## Build the production image (IMAGE=heracles BUILD_ID=...; tags: backend version + latest)
+	docker build -f deploy/Dockerfile --build-arg HERACLES_BUILD_ID=$(BUILD_ID) -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
 
 demo: build ## Build the UI and serve everything from the demo backend
 	@echo "→ http://$(HOST):$(PORT)  ·  login admin / heracles"
@@ -117,7 +119,7 @@ typecheck: ## pyright (strict) + tsc
 	cd $(BACKEND) && uv run pyright
 	cd $(FRONTEND) && pnpm exec tsc -b
 
-check: lint-backend typecheck test ## Everything CI runs (except frontend lint)
+check: lint typecheck test ## Everything CI runs (lint, types, tests; build + bundle-check: `make build bundle-check`)
 
 bench: ## API latency and LDAP round trips per endpoint on a large demo directory (USERS=5000)
 	cd $(BACKEND) && uv run python scripts/bench.py --users $(or $(USERS),5000)

@@ -27,6 +27,13 @@ api:
   # Host names the console may build links from (invitations, CAS). Set your public name.
   allowed_hosts: ["heracles.example.org"]
 
+  # Reverse proxy in front of the console (TLS termination): the address the console sees it
+  # connect from (in a container, the Docker network gateway, e.g. 172.16.0.0/12). Only a listed peer is
+  # believed when it sends X-Forwarded-For / X-Forwarded-Proto, which the client address of the
+  # login throttling, the audit log and the HSTS header rely on.
+  # login:
+  #   trusted_proxies: ["172.16.0.0/12"]
+
   session:
     cookie_secure: true             # false only when you serve plain http (trials)
     # idle_timeout_seconds: 1800

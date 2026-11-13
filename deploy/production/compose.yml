@@ -20,14 +20,22 @@ services:
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
     ports:
-      # Put a TLS-terminating reverse proxy in front for anything but a trial.
-      - "8420:8420"
+      # Published on the loopback interface only: put a TLS-terminating reverse proxy on this
+      # host in front of it (and list its address under api.login.trusted_proxies in heracles.yaml).
+      # To reach the console directly from other machines (a trial on plain http), publish
+      # "8420:8420" instead and set api.session.cookie_secure to false.
+      - "127.0.0.1:8420:8420"
     environment:
       # Absent file: setup mode. The wizard writes it here (data volume, mode 0600).
       HERACLES_CONFIG: /var/lib/heracles/heracles.yaml
       HERACLES_DATA_DIR: /var/lib/heracles
     volumes:
       - heracles-data:/var/lib/heracles
+    # The process runs as an unprivileged user and listens on a port above 1024: it needs no
+    # capability and must not gain any.
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     # Setup mode needs one process; --with-worker also runs the scheduled tasks (reminders,
     # audit purge, ...). Several replicas are safe once the console is configured.
     command: ["heracles", "serve", "--host", "0.0.0.0", "--port", "8420", "--with-worker"]

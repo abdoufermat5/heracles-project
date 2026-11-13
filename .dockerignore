@@ -10,3 +10,11 @@ docs
 deploy/ldap/compat-schema
 .git
 .claude
+# local secrets and test output never belong in an image layer (Vite inlines `.env*` values into the bundle)
+**/.env
+**/.env.*
+!**/.env.example
+**/.secrets
+frontend/test-results
+frontend/playwright-report
+frontend/coverage
