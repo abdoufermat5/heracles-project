@@ -160,6 +160,9 @@ function FieldControl({
       control = (
         <Input
           id={id}
+          // a secret is never shown on screen, not even to the people allowed to change it
+          type={field.secret ? 'password' : 'text'}
+          autoComplete={field.secret ? 'new-password' : 'off'}
           className={cn(field.kind === 'path' && 'font-mono text-xs')}
           value={field.hidden ? '' : typeof value === 'string' ? value : ''}
           placeholder={field.hidden ? t('config.hidden') : undefined}

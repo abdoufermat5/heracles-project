@@ -212,6 +212,14 @@ describe('configuration screen', () => {
     expect(salt).toHaveAttribute('placeholder', 'Hidden')
   })
 
+  it('masks a secret value even for users who can write', async () => {
+    signIn()
+    renderApp('/admin/config')
+    await userEvent.click(await screen.findByRole('button', { name: 'Notifications & mail' }))
+    const salt = await screen.findByLabelText('Token salt')
+    expect(salt).toHaveAttribute('type', 'password')
+  })
+
   it('edits the triggers table and saves the list', async () => {
     signIn()
     renderApp('/admin/config')

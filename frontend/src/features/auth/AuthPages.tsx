@@ -16,18 +16,17 @@ import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { isApiError } from '@/api/client'
 import { api } from '@/api/endpoints'
-import { qk, useDirectories } from '@/api/hooks'
+import { useDirectories } from '@/api/hooks'
 import type { SecondFactorMethod } from '@/api/types'
 import { Logo } from '@/components/Logo'
 import { useBranding } from './branding'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { APP_VERSION } from '@/lib/appVersion'
 import { cn } from '@/lib/utils'
 import { getAssertion, WebAuthnClientError, webauthnSupported } from '@/lib/webauthn'
 import { SsoEntry } from './SsoEntry'
-
-const APP_VERSION = '0.1.0'
 
 function BrandMark({ tone }: { tone: 'default' | 'onPrimary' }) {
   const { data: brand } = useBranding()
@@ -335,6 +334,13 @@ export function LoginPage() {
     }
   }, [currentDir, form])
 
+  // a new session: nothing cached for a previous one (another account) may be shown
+  const signedIn = async () => {
+    qc.clear()
+    if (search.redirect) router.history.push(search.redirect)
+    else await navigate({ to: '/' })
+  }
+
   const onSubmit = form.handleSubmit(async (v) => {
     setError(null)
     try {
@@ -347,9 +353,7 @@ export function LoginPage() {
         })
         return
       }
-      await qc.invalidateQueries({ queryKey: qk.me })
-      if (search.redirect) router.history.push(search.redirect)
-      else await navigate({ to: '/' })
+      await signedIn()
     } catch (e) {
       setError(isApiError(e) && e.status !== 401 ? e.message : t('auth.invalidCredentials'))
     }
@@ -410,7 +414,8 @@ export function SecondFactorPage() {
   const [pending, setPending] = useState(false)
 
   const finish = async () => {
-    await qc.invalidateQueries({ queryKey: qk.me })
+    // a new session: nothing cached for a previous one may be shown
+    qc.clear()
     if (search.redirect) router.history.push(search.redirect)
     else await navigate({ to: '/' })
   }

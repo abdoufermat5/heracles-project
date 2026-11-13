@@ -24,6 +24,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { RouteError } from '@/components/resilience'
 import { AdminGate, type AdminCapability } from '@/features/admin/AdminGate'
 import { parseListSearch, type ListSearch } from '@/features/listing/urlState'
+import { safeRedirect } from '@/lib/safeUrl'
 
 // Pages are split out of the entry bundle: the router loads a page's chunk before
 // rendering its route, and on link intent (`defaultPreload`).
@@ -93,11 +94,6 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: Outlet,
   notFoundComponent: NotFound,
 })
-
-/** Only same-origin absolute paths are accepted as post-login targets. */
-function safeRedirect(v: unknown): string | undefined {
-  return typeof v === 'string' && v.startsWith('/') && !v.startsWith('//') ? v : undefined
-}
 
 // First-run setup: the server answers 503 `setup_required` everywhere else until it is done.
 const setupRoute = createRoute({ getParentRoute: () => rootRoute, path: '/setup', component: SetupPage })

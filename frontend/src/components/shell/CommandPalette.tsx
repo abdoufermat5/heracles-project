@@ -23,7 +23,7 @@ import { comboLabels } from '@/lib/hotkeys'
 import { TypeIcon } from '@/lib/icons'
 import { nameValue, rdnValue } from '@/lib/objects'
 import { useTheme } from '@/lib/theme'
-import { addRecentItem, getRecentItems } from './recent'
+import { addRecentItem, clearRecentItems, getRecentItems } from './recent'
 import {
   buildPaletteActions,
   currentObjectOf,
@@ -113,6 +113,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       await api.logout()
     } finally {
       qc.clear()
+      clearRecentItems()
       void navigate({ to: '/login' })
     }
   }

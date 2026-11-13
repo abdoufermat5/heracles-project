@@ -43,6 +43,7 @@ import { setTechnicalDetails, useTechnicalDetails } from '@/lib/preferences'
 import { useScope } from '@/lib/scope'
 import { useTheme, type ThemeChoice } from '@/lib/theme'
 import { cn } from '@/lib/utils'
+import { clearRecentItems } from './recent'
 import { CommandPalette } from './CommandPalette'
 import { SidebarNav } from './Sidebar'
 import { ShortcutSheet, useShellHotkeys } from './ShortcutSheet'
@@ -151,6 +152,7 @@ export function UserMenu({ portal = false }: { portal?: boolean }) {
       await api.logout()
     } finally {
       qc.clear()
+      clearRecentItems()
       void navigate({ to: '/login' })
     }
   }

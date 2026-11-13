@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 import { setSetupRequiredHandler, setUnauthenticatedHandler } from '@/api/client'
 import { createQueryClient } from '@/queryClient'
 import { DegradedProvider, SessionExpiry } from '@/components/resilience'
+import { clearRecentItems } from '@/components/shell/recent'
 import { Toaster } from '@/components/ui/sonner'
 import { ScopeProvider } from '@/lib/scope'
 import { ThemeProvider } from '@/lib/theme'
@@ -16,6 +17,7 @@ export function App({ history, client }: { history?: RouterHistory; client?: Que
     const r = createAppRouter(queryClient, history)
     setUnauthenticatedHandler(() => {
       queryClient.clear()
+      clearRecentItems()
       void r.navigate({ to: '/login', search: { redirect: undefined } })
     })
     setSetupRequiredHandler(() => {

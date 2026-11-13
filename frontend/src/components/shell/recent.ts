@@ -28,3 +28,12 @@ export function addRecentItem(item: Omit<RecentItem, 'visitedAt'>) {
     /* ignore */
   }
 }
+
+/** Forget the visited objects: they belong to the person who signed out (shared browsers). */
+export function clearRecentItems() {
+  try {
+    localStorage.removeItem(RECENT_KEY)
+  } catch {
+    /* ignore */
+  }
+}

@@ -4,6 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { safeLinkHref } from '@/lib/safeUrl'
 import { cn } from '@/lib/utils'
 import type { FieldInputProps } from './types'
 
@@ -24,6 +25,8 @@ export function TextInputField({
   icon?: React.ReactNode
 }) {
   const rawValue = typeof p.value === 'string' ? p.value : ''
+  // a directory value may be anything: only http(s) URLs become links
+  const linkHref = type === 'url' && rawValue ? safeLinkHref(rawValue) : null
 
   return (
     <div className="relative flex w-full items-center">
@@ -52,9 +55,9 @@ export function TextInputField({
         autoComplete="off"
         placeholder={p.readOnly && !rawValue ? '—' : undefined}
       />
-      {p.readOnly && type === 'url' && rawValue && (
+      {p.readOnly && type === 'url' && linkHref && (
         <a
-          href={rawValue.startsWith('http') ? rawValue : `https://${rawValue}`}
+          href={linkHref}
           target="_blank"
           rel="noopener noreferrer"
           className="text-primary hover:text-primary/80 ml-2 inline-flex items-center gap-1 text-xs"

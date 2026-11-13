@@ -56,6 +56,25 @@ describe('full flow', () => {
     expect(await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening)/ })).toBeInTheDocument()
   })
 
+  it('drops what an earlier session cached when someone signs in', async () => {
+    const { client } = renderApp('/login')
+    client.setQueryData(['objects', 'user', 'list', {}], { items: [{ dn: 'uid=previous-user' }] })
+    await userEvent.type(await screen.findByLabelText('Username'), 'admin')
+    await userEvent.type(screen.getByLabelText('Password'), 'secret')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening)/ })
+    expect(client.getQueryData(['objects', 'user', 'list', {}])).toBeUndefined()
+  })
+
+  it('does not follow a redirect that leaves the origin', async () => {
+    const { history } = renderApp('/login?redirect=%2F%2Fevil.example')
+    await userEvent.type(await screen.findByLabelText('Username'), 'admin')
+    await userEvent.type(screen.getByLabelText('Password'), 'secret')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await screen.findByRole('heading', { name: /^Good (morning|afternoon|evening)/ })
+    expect(history.location.pathname).toBe('/')
+  })
+
   it('rejects wrong credentials', async () => {
     renderApp('/')
     await userEvent.type(await screen.findByLabelText('Username'), 'admin')

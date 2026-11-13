@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { AuthLayout } from '@/features/auth/AuthPages'
+import { safeLinkHref } from '@/lib/safeUrl'
 import { PublicApiError, publicApi, type PublicField, type PublicForm } from './api'
 import { useCaptcha } from './useCaptcha'
 
@@ -164,6 +165,8 @@ function FormBody({ form, token }: { form: PublicForm; token?: string }) {
   const [done, setDone] = useState<string | null>(null)
 
   const ready = !form.captcha || captcha.answer !== null
+  // the terms address is set by whoever edits the form object: only http(s) / same-origin links
+  const tosHref = form.tos_url ? safeLinkHref(form.tos_url) : null
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -245,9 +248,13 @@ function FormBody({ form, token }: { form: PublicForm; token?: string }) {
             <Checkbox className="mt-0.5" checked={terms} onCheckedChange={(c) => setTerms(c === true)} />
             <span>
               {t('publicForms.acceptTerms')}{' '}
-              <a href={form.tos_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">
-                {t('publicForms.readTerms')}
-              </a>
+              {tosHref ? (
+                <a href={tosHref} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">
+                  {t('publicForms.readTerms')}
+                </a>
+              ) : (
+                t('publicForms.readTerms')
+              )}
             </span>
           </label>
           <FieldError id="pf-terms" message={fieldErrors.accept_terms} />

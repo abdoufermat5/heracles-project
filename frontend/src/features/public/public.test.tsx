@@ -1,6 +1,17 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
+import { server } from '@/mocks/server'
 import { renderApp } from '@/test/utils'
+
+/** The `register` form of the mock server with another terms address. */
+async function withTermsUrl(tos_url: string) {
+  const res = await fetch('/api/v2/public/forms/register')
+  const form = (await res.json()) as Record<string, unknown>
+  server.use(
+    http.get('/api/v2/public/forms/register', () => HttpResponse.json({ ...form, tos_url })),
+  )
+}
 
 describe('public form page', () => {
   it('solves the check in the background, then submits', async () => {
@@ -31,5 +42,20 @@ describe('public form page', () => {
     renderApp('/forms/join?token=old-token')
     expect(await screen.findByRole('alert')).toHaveTextContent('expired or has already been used')
     expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument()
+  })
+
+  it('links the terms only when the address is http(s)', async () => {
+    await withTermsUrl('https://example.org/terms')
+    renderApp('/forms/register')
+    const link = await screen.findByRole('link', { name: 'Read the terms' })
+    expect(link).toHaveAttribute('href', 'https://example.org/terms')
+  })
+
+  it('never turns a script address of the terms into a link', async () => {
+    await withTermsUrl('javascript:alert(document.domain)')
+    renderApp('/forms/register')
+    await screen.findByLabelText(/First name/)
+    expect(screen.queryByRole('link', { name: 'Read the terms' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Read the terms/)).toBeInTheDocument()
   })
 })
