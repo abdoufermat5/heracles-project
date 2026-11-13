@@ -117,6 +117,11 @@ class PyLdapDirectory:
 
     # -- server health -----------------------------------------------------------------
 
+    @property
+    def config(self) -> DirectoryConfig:
+        """The connection settings this client was built from (read-only)."""
+        return self._config
+
     def server_states(self) -> dict[str, str]:
         """``uri -> "up" | "down"`` (down: skipped until its backoff elapses)."""
         now = self._clock()

@@ -441,10 +441,31 @@ def _b64decode(text: str) -> bytes:
         raise ValidationError(_("Invalid base64 data.")) from None
 
 
+#: Default cap of a ``file`` value (the JSON form is base64, 4/3 larger).
+MAX_FILE_BYTES = 1024 * 1024
+#: Default cap of an ``image`` value (a portrait photo stays well under it).
+MAX_IMAGE_BYTES = 512 * 1024
+
+
+def _size_label(size: int) -> str:
+    """Human-readable size used in validation messages."""
+    if size and size % (1024 * 1024) == 0:
+        return f"{size // (1024 * 1024)} MiB"
+    return f"{max(size, 0) // 1024} KiB"
+
+
 class FileAttr(Attribute[bytes]):
-    """Binary file; JSON value is a base64 string."""
+    """Binary file; JSON value is a base64 string.
+
+    ``max_bytes`` is the largest accepted value (1 MiB by default): the value lives in one
+    LDAP attribute and travels back to the editor as base64.
+    """
 
     kind = "file"
+
+    def __init__(self, *args: Any, max_bytes: int | None = MAX_FILE_BYTES, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.max_bytes = max_bytes
 
     def from_ldap(self, values: list[bytes]) -> bytes | None:
         return values[0] if values else None
@@ -462,17 +483,33 @@ class FileAttr(Attribute[bytes]):
     def to_json(self, value: bytes | None) -> JSON:
         return base64.b64encode(value).decode("ascii") if value else None
 
+    def _validate(self, value: bytes) -> list[str]:
+        if self.max_bytes is not None and len(value) > self.max_bytes:
+            return [
+                _("The file is too large (maximum {size}).").format(
+                    size=_size_label(self.max_bytes)
+                )
+            ]
+        return []
+
 
 class ImageAttr(FileAttr):
     """JPEG or PNG image; JSON value is a ``data:`` URL.
 
-    ``max_size`` is advertised to the UI only; just the magic bytes are checked.
+    ``max_size`` is the display size advertised to the UI; ``max_bytes`` (512 KiB by
+    default) caps the stored file and the magic bytes are checked.
     """
 
     kind = "image"
 
-    def __init__(self, *args: Any, max_size: tuple[int, int] | None = None, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        *args: Any,
+        max_size: tuple[int, int] | None = None,
+        max_bytes: int | None = MAX_IMAGE_BYTES,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, max_bytes=max_bytes, **kwargs)
         self.max_size = max_size
 
     @staticmethod
@@ -503,9 +540,10 @@ class ImageAttr(FileAttr):
         return f"data:{mime};base64,{base64.b64encode(value).decode('ascii')}"
 
     def _validate(self, value: bytes) -> list[str]:
+        problems = super()._validate(value)
         if self.mime_type(value) is None:
-            return [_("The image must be a JPEG or PNG file.")]
-        return []
+            problems.append(_("The image must be a JPEG or PNG file."))
+        return problems
 
     def describe_extra(self) -> dict[str, JSON]:
         width, height = self.max_size if self.max_size else (None, None)
@@ -613,6 +651,16 @@ class ObjectRefAttr(_DnAttr):
     def __init__(self, *args: Any, ref_type: str, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.ref_type = ref_type
+
+    @property
+    def ref_types(self) -> tuple[str, ...]:
+        """Every type a value may name; a subclass accepting several widens ``describe_extra``."""
+        declared = self.describe_extra().get("ref_types")
+        if isinstance(declared, list):
+            names = tuple(str(name) for name in declared)  # pyright: ignore[reportUnknownVariableType]
+            if names:
+                return names
+        return (self.ref_type,)
 
     def describe_extra(self) -> dict[str, JSON]:
         return {"ref_type": self.ref_type}

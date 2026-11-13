@@ -110,7 +110,15 @@ class LockService:
         return lock
 
     def get(self, object_dn: str) -> Lock | None:
-        """Return the lock on ``object_dn`` if any."""
+        """Return the lock on ``object_dn`` if any (DNs compare case-insensitively)."""
+        lock = self._stored(object_dn)
+        if lock is not None:
+            return lock
+        # The lock entry is keyed by the md5 of the spelling used to acquire it; another
+        # spelling of the same DN (an LDAP DN is case-insensitive) names the same object.
+        return self._by_normalized_dn(dnlib.normalize(object_dn))
+
+    def _stored(self, object_dn: str) -> Lock | None:
         flt = (
             f"(&(objectClass={schema.OC.LOCK})"
             f"({_A.LOCK_OBJECT_DN}={escape_filter_value(encode_object_dn(object_dn))}))"
@@ -122,6 +130,19 @@ class LockService:
                     return lock
         except NoSuchObjectError:
             return None
+        return None
+
+    def _by_normalized_dn(self, wanted: str) -> Lock | None:
+        try:
+            entries = list(
+                self._dir.search(self.locks_base, f"(objectClass={schema.OC.LOCK})", Scope.ONE)
+            )
+        except NoSuchObjectError:
+            return None
+        for entry in entries:
+            lock = self._to_lock(entry)
+            if lock is not None and dnlib.normalize(lock.object_dn) == wanted:
+                return lock
         return None
 
     def list_by_user(self, user_dn: str) -> list[Lock]:

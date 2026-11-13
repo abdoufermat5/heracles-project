@@ -1,12 +1,16 @@
 import hashlib
 import zlib
+from collections.abc import Mapping, Sequence
+from typing import cast
 
 import pytest
 
 from heracles.core.snapshots import SnapshotError, SnapshotService
-from heracles.ldap.client import NoSuchObjectError, Scope
+from heracles.ldap import dn as dnlib
+from heracles.ldap.client import DirectoryError, Entry, NoSuchObjectError, Scope
 from heracles.ldap.ldif import parse_ldif
 from heracles.ldap.memory import MemoryDirectory
+from tests.core.conftest import LDIF
 
 SUB = "ou=sub,ou=people,dc=heracles,dc=test"
 ALICE = "uid=alice,ou=people,dc=heracles,dc=test"
@@ -167,3 +171,75 @@ def test_restore_refuses_entries_outside_the_snapshotted_subtree(
         svc.restore(snap.dn)
     assert directory.get(f"uid=carol,{SUB}") is not None  # nothing was deleted
     assert directory.get(f"cn=intruder,{foreign}") is None
+
+
+class _FlakyDirectory(MemoryDirectory):
+    """A directory whose ``add`` fails for one DN (to exercise the restore rollback)."""
+
+    def __init__(self, base_dn: str) -> None:
+        super().__init__(base_dn)
+        self.failing: str | None = None
+
+    def add(self, dn: str, attrs: Mapping[str, Sequence[bytes]]) -> None:
+        if self.failing is not None and dnlib.normalize(dn) == dnlib.normalize(self.failing):
+            raise DirectoryError("injected add failure")
+        super().add(dn, attrs)
+
+
+class _CountingDirectory(MemoryDirectory):
+    """Counts single-entry reads (a batched lookup must not read every candidate)."""
+
+    def __init__(self, base_dn: str) -> None:
+        super().__init__(base_dn)
+        self.get_calls = 0
+
+    def get(self, dn: str, attrs: Sequence[str] | None = None) -> Entry | None:
+        self.get_calls += 1
+        return super().get(dn, attrs)
+
+
+def test_restore_failure_rolls_back_to_the_live_subtree() -> None:
+    directory = cast("_FlakyDirectory", _FlakyDirectory.from_ldif(LDIF))
+    svc = SnapshotService(directory, clock=lambda: 1_700_000_000.123456)
+    snap = svc.create(SUB)
+    directory.delete(f"uid=carol,{SUB}")
+    extra = f"uid=extra,{SUB}"
+    directory.add(extra, {"objectClass": [b"inetOrgPerson"], "sn": [b"E"]})
+    directory.failing = f"uid=carol,{SUB}"
+
+    with pytest.raises(DirectoryError):
+        svc.restore(snap.dn)
+
+    assert directory.get(extra) is not None  # the state before the attempt is back
+    assert directory.get(f"uid=carol,{SUB}") is None
+    assert len(svc.list_for_dn(SUB)) == 2  # the snapshot taken before the restore
+
+
+def test_restore_failure_without_a_live_subtree_leaves_nothing() -> None:
+    directory = cast("_FlakyDirectory", _FlakyDirectory.from_ldif(LDIF))
+    svc = SnapshotService(directory, clock=lambda: 1_700_000_000.123456)
+    snap = svc.create(SUB)
+    directory.delete(SUB, recursive=True)
+    directory.failing = f"uid=carol,{SUB}"
+
+    with pytest.raises(DirectoryError):
+        svc.restore(snap.dn)
+
+    assert directory.get(SUB) is None
+
+
+def test_list_deleted_reads_every_entry_in_one_search() -> None:
+    directory = cast("_CountingDirectory", _CountingDirectory.from_ldif(LDIF))
+    svc = SnapshotService(directory, clock=lambda: 1_700_000_000.123456)
+    for dn in (
+        SUB,
+        f"uid=carol,{SUB}",
+        ALICE,
+        "ou=people,dc=heracles,dc=test",
+        "dc=heracles,dc=test",
+    ):
+        svc.create(dn)
+    directory.get_calls = 0
+
+    assert svc.list_deleted() == []
+    assert directory.get_calls == 0

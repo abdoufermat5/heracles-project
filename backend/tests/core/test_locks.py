@@ -89,3 +89,21 @@ def test_dn_with_special_chars(svc: LockService) -> None:
     svc.acquire(odd, CAROL)
     lock = svc.get(odd)
     assert lock is not None and lock.object_dn == odd
+
+
+def test_lock_lookup_and_release_ignore_dn_case(svc: LockService) -> None:
+    lock = svc.acquire(OBJ, CAROL)
+    assert svc.get(OBJ.upper()) == lock
+    assert svc.release(OBJ.upper(), CAROL)
+    assert svc.get(OBJ) is None
+
+
+def test_acquiring_under_another_spelling_is_a_noop(
+    svc: LockService, directory: MemoryDirectory
+) -> None:
+    first = svc.acquire(OBJ, CAROL)
+    n = len(directory)
+    assert svc.acquire(OBJ.upper(), CAROL) == first
+    assert len(directory) == n
+    with pytest.raises(LockedError):
+        svc.acquire(OBJ.upper(), ALICE)

@@ -28,6 +28,7 @@ from heracles.ldap.client import (
     Scope,
     SizeLimitExceededError,
 )
+from heracles.ldap.config import DirectoryConfig
 from heracles.ldap.filter import escape_filter_value
 from heracles.schema import names as schema
 
@@ -143,6 +144,8 @@ class CheckContext:
     #: ``(plugin name, required objectClasses)`` of the plugins that are available in the
     #: schema but switched off.
     disabled_plugins: Sequence[tuple[str, Sequence[str]]] = ()
+    #: ``ldap://`` endpoints without StartTLS: credentials travel in clear text.
+    plaintext_uris: Sequence[str] = ()
 
     @property
     def base(self) -> str:
@@ -173,16 +176,31 @@ class CheckContext:
         return self.config.acl_role_rdn
 
 
+def plaintext_uris(config: DirectoryConfig) -> list[str]:
+    """``ldap://`` servers of a directory that are not upgraded with StartTLS."""
+    if config.starttls:
+        return []
+    return [u for u in config.all_uris if u.lower().startswith("ldap://")]
+
+
+def insecure_uris(directory: object) -> list[str]:
+    """Plaintext endpoints of a directory client (empty for one without settings)."""
+    config = getattr(directory, "config", None)
+    return plaintext_uris(config) if isinstance(config, DirectoryConfig) else []
+
+
 def context_for(
     directory: DirectoryClient,
     bootstrap_admins: Sequence[str] = (),
     disabled_plugins: Sequence[tuple[str, Sequence[str]]] = (),
+    plaintext_uris: Sequence[str] | None = None,
 ) -> CheckContext:
     return CheckContext(
         directory,
         effective_settings(directory),
         frozenset(dnlib.normalize(d) for d in bootstrap_admins),
         disabled_plugins,
+        tuple(plaintext_uris if plaintext_uris is not None else insecure_uris(directory)),
     )
 
 
@@ -345,6 +363,19 @@ def check_bind_write(ctx: CheckContext) -> CheckResult:
             "bind_write", "error", "The directory account cannot write to the base entry."
         )
     return CheckResult("bind_write", "ok", "The directory account can write.")
+
+
+def check_transport(ctx: CheckContext) -> CheckResult:
+    if not ctx.plaintext_uris:
+        return CheckResult("transport", "ok", "The directory connection is encrypted.")
+    return CheckResult(
+        "transport",
+        "warning",
+        "The directory connection uses ldap:// without StartTLS: the bind password and "
+        "every password sent through the console travel unencrypted ("
+        + ", ".join(ctx.plaintext_uris)
+        + "). Use ldaps:// or enable StartTLS.",
+    )
 
 
 _PERSON_CLASSES = (_STD.INET_ORG_PERSON, _STD.ORGANIZATIONAL_PERSON, _STD.PERSON)
@@ -751,6 +782,7 @@ type FixFn = Callable[[CheckContext, Sequence[str], Mapping[str, str]], FixResul
 CHECKS: Final[tuple[tuple[str, CheckFn, FixFn | None], ...]] = (
     ("root_object", check_root, fix_root),
     ("bind_write", check_bind_write, None),
+    ("transport", check_transport, None),
     ("hidden_users", check_hidden_users, fix_hidden_users),
     ("super_admin", check_super_admin, fix_super_admin),
     ("default_roles", check_default_roles, fix_default_roles),

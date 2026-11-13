@@ -65,7 +65,8 @@ def _holds_dn(attr: AnyAttribute) -> bool:
     return False
 
 
-def _type_of(registry: TypeRegistry, entry: Entry) -> TypeInfo | None:
+def type_of(registry: TypeRegistry, entry: Entry) -> TypeInfo | None:
+    """The first registered type whose filter matches ``entry``, or ``None``."""
     for info in registry.list():
         if ldapfilter.matches(entry, info.type.filter):
             return info
@@ -106,7 +107,7 @@ def find_references(
         found = _matched_attributes(entry, attrs, wanted, target_dn)
         if not found:
             continue
-        info = _type_of(registry, entry)
+        info = type_of(registry, entry)
         if info is None:
             continue
         label = _label(info, entry)
@@ -137,4 +138,5 @@ __all__ = [
     "ReferenceHit",
     "dn_attributes",
     "find_references",
+    "type_of",
 ]

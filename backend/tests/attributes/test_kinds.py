@@ -211,6 +211,23 @@ def test_image_validation_and_json() -> None:
     assert attr.describe()["image"] == {"max_width": 10, "max_height": 20}
 
 
+def test_binary_values_have_a_size_cap() -> None:
+    image = ImageAttr("a", "A")
+    assert image.validate(PNG + b"\x00" * (512 * 1024)) != []
+    assert image.validate(PNG + b"\x00" * (512 * 1024 - len(PNG))) == []
+
+    small = ImageAttr("b", "B", max_bytes=len(PNG))
+    assert small.validate(PNG) == []
+    assert small.validate(PNG + b"\x00") != []
+
+    file = FileAttr("c", "C")
+    assert file.validate(b"\x00" * (1024 * 1024)) == []
+    assert file.validate(b"\x00" * (1024 * 1024 + 1)) != []
+
+    unlimited = FileAttr("d", "D", max_bytes=None)
+    assert unlimited.validate(b"\x00" * (2 * 1024 * 1024)) == []
+
+
 def test_password_semantics() -> None:
     calls: list[str] = []
 

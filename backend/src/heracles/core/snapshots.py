@@ -14,6 +14,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+import structlog
+
 from heracles.core.containers import ensure_container
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import (
@@ -27,6 +29,8 @@ from heracles.ldap.client import (
 from heracles.ldap.filter import escape_filter_value
 from heracles.ldap.ldif import dump_ldif, parse_ldif
 from heracles.schema import names as schema
+
+log = structlog.get_logger(__name__)
 
 _A = schema.ATTR
 _MAX_ATTEMPTS = 50
@@ -189,7 +193,32 @@ class SnapshotService:
             if under is not None and not dnlib.is_descendant(snap.object_dn, under):
                 continue
             latest[key] = snap
-        return [s for s in latest.values() if self._dir.get(s.object_dn, ["objectClass"]) is None]
+        if not latest:
+            return []
+        existing: set[str] | None = None
+        out: list[Snapshot] = []
+        for snap in latest.values():
+            if dnlib.is_descendant(snap.object_dn, self._dir.base_dn):
+                if existing is None:
+                    existing = self._existing_dns()
+                found = dnlib.normalize(snap.object_dn) in existing
+            else:  # outside the managed base: the batched search cannot see it
+                found = self._dir.get(snap.object_dn, ["objectClass"]) is not None
+            if not found:
+                out.append(snap)
+        return out
+
+    def _existing_dns(self) -> set[str]:
+        """Normalised DNs of every entry, in one search instead of one read per candidate."""
+        try:
+            return {
+                dnlib.normalize(e.dn)
+                for e in self._dir.search(
+                    self._dir.base_dn, "(objectClass=*)", Scope.SUBTREE, ["1.1"]
+                )
+            }
+        except NoSuchObjectError:
+            return set()
 
     def ldif(self, snapshot_dn: str) -> str:
         """Decompressed, integrity-checked LDIF of a snapshot."""
@@ -211,7 +240,9 @@ class SnapshotService:
     def restore(self, snapshot_dn: str) -> list[str]:
         """Re-import the snapshot, replacing the existing subtree.
 
-        Returns the DNs written, parents first.
+        Returns the DNs written, parents first. A live subtree is snapshotted first; when
+        an add fails, that safety snapshot is restored (or, when nothing was live, the
+        partial import is dropped) and the error is raised again.
 
         Raises:
             NoSuchObjectError: the snapshot, or the parent of the restored
@@ -227,11 +258,44 @@ class SnapshotService:
         parent = dnlib.parent(root)
         if parent is not None and self._dir.get(parent, ["objectClass"]) is None:
             raise NoSuchObjectError(parent)
-        if self._dir.get(root, ["objectClass"]) is not None:
-            self._dir.delete(root, recursive=True)
+        live = self._dir.get(root, ["objectClass"]) is not None
+        safety: Snapshot | None = None
+        if live:
+            current = self.get(snapshot_dn)
+            safety = self.create(
+                root,
+                object_type=current.object_type if current is not None else None,
+                description="Before restore",
+            )
+        try:
+            return self._import(records)
+        except DirectoryError:
+            if safety is not None:
+                try:
+                    self._import(
+                        sorted(parse_ldif(self.ldif(safety.dn)), key=lambda e: dnlib.depth(e.dn))
+                    )
+                except DirectoryError as exc:  # keep the original error
+                    log.warning(
+                        "snapshot_rollback_failed",
+                        snapshot=safety.dn,
+                        error=type(exc).__name__,
+                    )
+            else:
+                self._discard(root)
+            raise
+
+    def _import(self, records: list[Entry]) -> list[str]:
+        """Replace the subtree at ``records[0].dn`` with the records, parents first."""
+        root = records[0].dn
+        self._discard(root)
         for entry in records:
             self._dir.add(entry.dn, entry.attrs)
         return [e.dn for e in records]
+
+    def _discard(self, root: str) -> None:
+        if self._dir.get(root, ["objectClass"]) is not None:
+            self._dir.delete(root, recursive=True)
 
     def delete(self, snapshot_dn: str) -> None:
         """Remove a snapshot entry."""
