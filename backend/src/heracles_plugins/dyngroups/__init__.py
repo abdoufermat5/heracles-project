@@ -12,11 +12,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from heracles.api.filter_rules import filter_checks
 from heracles.attributes import ListAttr, ObjectRefAttr, StringAttr
 from heracles.i18n import _
 from heracles.ldap.client import DirectoryClient, DirectoryError, Modification, NoSuchObjectError
+from heracles.ldap.filter import filter_attributes, parse_filter
 from heracles.objects import Plugin, Section, Tab, TabAttachment
 from heracles.objects.hooks import TabContext
+from heracles.objects.policy import TypedPolicy
 from heracles_plugins.dyngroups.membership import (
     DEFAULT_MAX_MEMBERS,
     MemberRule,
@@ -59,6 +62,29 @@ class MemberRuleAttr(StringAttr):
         except MemberRuleError as exc:
             errors.append(_(str(exc)))
         return errors
+
+
+def unreadable_filter_attribute(ctx: TabContext, rule: str) -> str | None:
+    """First attribute the rule's filter tests that the acting user may not read on users.
+
+    The rule is evaluated with the server's own rights, so a filter is an oracle on every
+    attribute it names (a password hash could be probed one character at a time through the
+    resulting membership): it may only test what the editor could read (the S-04 rule of
+    the listing filters). Without a policy (tools, tests) everything is allowed.
+    """
+    policy = ctx.policy
+    if policy is None:
+        return None
+    parsed = parse_member_rule(rule)
+    names = filter_attributes(parse_filter(parsed.filter))
+    try:
+        checks = filter_checks(ctx.registry.get("user"), names)
+    except ValueError as exc:
+        return str(exc)
+    if isinstance(policy, TypedPolicy):
+        policy = policy.for_type("user")
+    base = parsed.base or ctx.base  # a delegated editor reads within his own department
+    return next((attr for tab, attr in checks if not policy.can_read(base, tab, attr)), None)
 
 
 class DynamicGroupTab(Tab):
@@ -113,6 +139,18 @@ class DynamicGroupTab(Tab):
         rule = ctx.values.get("memberURL")
         if not isinstance(rule, str) or not rule:
             return  # reported as required by the validation
+        if ctx.creating or ctx.activating or ctx.was_touched("memberURL"):
+            try:
+                hidden = unreadable_filter_attribute(ctx, rule)
+            except MemberRuleError as exc:
+                ctx.error("memberURL", _(str(exc)))
+                return
+            if hidden is not None:
+                ctx.error(
+                    "memberURL",
+                    _("The rule tests an attribute you cannot read: {name}").format(name=hidden),
+                )
+                return
         try:
             members = evaluate_members(
                 ctx.directory, rule, max_members=settings_of(ctx).max_members

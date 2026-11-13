@@ -207,3 +207,41 @@ def test_refresh_updates_changed_groups_only(
         dn("carol"),
         dn("erin"),
     ]
+
+
+# ---------------------------------------------------- the rule is an oracle (S-04)
+
+
+class _Policy:
+    """Everything allowed except reading the attributes in ``hidden``."""
+
+    def __init__(self, *hidden: str) -> None:
+        self._hidden = set(hidden)
+
+    def can_read(self, dn: str, tab: str, attr: str) -> bool:
+        return attr not in self._hidden
+
+    def can_write(self, dn: str, tab: str, attr: str) -> bool:
+        return True
+
+    def can_create(self, type_name: str, base: str) -> bool:
+        return True
+
+    def can_delete(self, dn: str, type_name: str) -> bool:
+        return True
+
+
+def _create_with(service: ObjectService, policy: _Policy, rule: str) -> str:
+    restricted = ObjectService(service.directory, service.registry, policy=policy)
+    return new_group(restricted, rule)
+
+
+def test_a_rule_may_only_test_attributes_the_editor_can_read(service: ObjectService) -> None:
+    assert _create_with(service, _Policy("l"), "(departmentNumber=sales)")
+    with pytest.raises(ObjectValidationError) as hidden:
+        _create_with(service, _Policy("l"), "(&(departmentNumber=sales)(l=Par*))")
+    assert "dynamic.memberURL" in hidden.value.fields
+    # write-only attributes (password hashes) can never be probed
+    with pytest.raises(ObjectValidationError) as secret:
+        _create_with(service, _Policy(), "(userPassword={SSHA}a*)")
+    assert "userpassword" in secret.value.fields["dynamic.memberURL"]

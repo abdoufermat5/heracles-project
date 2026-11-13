@@ -15,6 +15,7 @@ from datetime import datetime
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, Entry, Modification
 from heracles.schema import names as schema
+from heracles_plugins._secrets import is_secret_name
 from heracles_plugins._tasks import (
     TaskReport,
     bool_of,
@@ -27,6 +28,10 @@ from heracles_plugins._tasks import (
 TASK_CLASS = "hrcTasksAutomaticGroups"
 TASK_FILTER = task_filter(TASK_CLASS)
 _RULE = re.compile(r"(?P<attr>[A-Za-z][A-Za-z0-9-]*):(?P<regex>.*)", re.DOTALL)
+
+
+class ForbiddenAttributeError(ValueError):
+    """The rule tests an attribute whose values are secrets."""
 
 
 @dataclass(slots=True)
@@ -55,11 +60,19 @@ class AutomaticGroupsReport(TaskReport):
 
 
 def parse_rule(rule: str, default_attribute: str) -> tuple[str, re.Pattern[str]]:
-    """Split ``[attribute:]regex``; raises ``re.error`` for an invalid expression."""
+    """Split ``[attribute:]regex``.
+
+    Raises ``re.error`` for an invalid expression and :class:`ForbiddenAttributeError` when the
+    attribute holds secrets: the task runs with the server's rights and its result (who joins
+    the group) is visible, so a rule such as ``userPassword:^{SSHA}ab`` would be an oracle.
+    """
     match = _RULE.fullmatch(rule.strip())
-    if match is None:
-        return default_attribute, re.compile(rule.strip())
-    return match["attr"], re.compile(match["regex"])
+    attribute, expression = (
+        (default_attribute, rule.strip()) if match is None else (match["attr"], match["regex"])
+    )
+    if is_secret_name(attribute):
+        raise ForbiddenAttributeError(attribute)
+    return attribute, re.compile(expression)
 
 
 def _matches(user: Entry, attribute: str, regex: re.Pattern[str]) -> bool:
@@ -141,6 +154,9 @@ def run_automatic_groups(
             )
         except re.error:
             report.errors.append(f"{task.dn}: invalid rule")
+            return False
+        except ForbiddenAttributeError as exc:
+            report.errors.append(f"{task.dn}: the rule cannot test {exc}")
             return False
         users = expand_members(directory, task.texts("hrcTasksAutomaticGroupsMembers"), [attribute])
         uses_dn = _uses_dn(group)

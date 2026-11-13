@@ -126,6 +126,23 @@ def test_hidden_values_and_actions_filter(directory: MemoryDirectory) -> None:
     assert not any("s3cret" in a for a in attrs)
 
 
+def test_secret_looking_attributes_are_never_logged_whatever_the_settings() -> None:
+    from heracles_plugins.audit.events import describe_values
+
+    for name in (
+        "sambaNTPassword",
+        "hrcIpmiPassword",
+        "hrcZimbraServerPassword",
+        "krbPrincipalKey",
+    ):
+        line = describe_values(name, [b"31D6CFE0D16AE931B73C59D7E0C089C0"], ())
+        assert line == f"{name}: ***"
+    assert describe_values("userPassword;binary", [b"x"], ("userPassword",)) == (
+        "userPassword;binary: ***"
+    )
+    assert describe_values("description", [b"hello"], ()) == "description: hello"
+
+
 def test_audit_failure_does_not_break_the_operation(
     service: ObjectService, directory: MemoryDirectory, monkeypatch: pytest.MonkeyPatch
 ) -> None:

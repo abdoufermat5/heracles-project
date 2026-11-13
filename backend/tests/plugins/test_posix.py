@@ -317,3 +317,33 @@ def test_virtual_values_respect_read_acl(
     assert "groupMembership" not in values
     assert values["uidNumber"] == 1101
     assert not any(k.startswith("_") for k in values)
+
+
+class _NoGroupMemberWrite(_NoMembershipRead):
+    """Policy: everything allowed except writing the members of a POSIX group."""
+
+    def can_read(self, dn: str, tab: str, attr: str) -> bool:
+        return True
+
+    def can_write(self, dn: str, tab: str, attr: str) -> bool:
+        return attr != "memberUid"
+
+
+def test_memberships_need_the_right_to_change_the_group(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    dev = posix_group(directory, "dev", 3000)
+    ops = posix_group(directory, "ops", 3001)
+    restricted = ObjectService(directory, service.registry, policy=_NoGroupMemberWrite())
+    with pytest.raises(ObjectValidationError) as refused:
+        new_user(restricted, posix_values={"groupMembership": [dev]})
+    assert "posix.groupMembership" in refused.value.fields
+    dn = new_user(service, posix_values={"groupMembership": [dev]})
+    # neither adding nor removing is allowed without the right on the groups
+    for wanted in ([dev, ops], []):
+        with pytest.raises(ObjectValidationError):
+            restricted.update("user", dn, {"posix": {"values": {"groupMembership": wanted}}})
+    entry = directory.get(dev) or pytest.fail()
+    assert entry.texts("memberUid") == ["jdoe"]
+    # other attributes of the account stay editable
+    restricted.update("user", dn, {"posix": {"values": {"loginShell": "/bin/sh"}}})

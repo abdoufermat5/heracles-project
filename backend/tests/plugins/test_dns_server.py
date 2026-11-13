@@ -239,3 +239,20 @@ def test_handle_answers_a_query_without_sockets(server: DnsServer) -> None:
 def test_handle_malformed_wire_returns_formerr(server: DnsServer) -> None:
     response = dns.message.from_wire(server.handle(b"\x01\x02\x03\x04"))
     assert response.rcode() == dns.rcode.FORMERR
+
+
+def test_a_failing_reload_is_not_retried_on_every_query(
+    directory: MemoryDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[int] = []
+
+    def broken(_directory: object) -> list[object]:
+        calls.append(1)
+        raise RuntimeError("directory down")
+
+    monkeypatch.setattr("heracles_plugins.dns.server.load_zones", broken)
+    instance = DnsServer(directory, HOST, 0, refresh=60)
+    wire = dns.message.make_query("www.example.com", "A").to_wire()
+    for _ in range(5):
+        dns.message.from_wire(instance.handle(wire))
+    assert len(calls) == 1

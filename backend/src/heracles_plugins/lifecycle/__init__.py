@@ -105,7 +105,11 @@ def plugin() -> Plugin:
 def _run(ctx: TaskRunContext) -> LifecycleReport:
     settings = ctx.settings if isinstance(ctx.settings, LifecycleSettings) else None
     return run_lifecycle(
-        ctx.directory, ctx.now, settings, lock_hooks=ctx.registry.account_lock_hooks
+        ctx.directory,
+        ctx.now,
+        settings,
+        lock_hooks=ctx.registry.account_lock_hooks,
+        registry=ctx.registry,
     )
 
 

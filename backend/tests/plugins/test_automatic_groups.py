@@ -11,6 +11,7 @@ from heracles.ldap.client import Entry
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
+from heracles_plugins.automatic_groups.runner import ForbiddenAttributeError
 
 BASE = "dc=test"
 PEOPLE = f"ou=people,{BASE}"
@@ -223,3 +224,16 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
             BASE,
             {"main": {"values": {**values, "cn": "other", "hrcTasksAutomaticGroupsOfName": None}}},
         )
+
+
+def test_a_rule_cannot_test_secret_attributes(directory: MemoryDirectory) -> None:
+    # The membership it produces would be an oracle on password hashes.
+    for rule in ("userPassword:^\\{SSHA\\}ab", "sambaNTPassword:^A"):
+        with pytest.raises(ForbiddenAttributeError):
+            ag.parse_rule(rule, "uid")
+    a = add_user(directory, "a", userPassword="{SSHA}abc")
+    add_group(directory, [a])
+    add_task(directory, [a], "userPassword:^\\{SSHA\\}ab")
+    report = ag.run_automatic_groups(directory, NOW)
+    assert report.tasks_run == 0 and "cannot test userPassword" in report.errors[0]
+    assert members(directory) == [a]

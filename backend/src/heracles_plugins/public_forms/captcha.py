@@ -123,7 +123,8 @@ class Captcha:
             payload = base64.urlsafe_b64decode(body.encode())
         except (binascii.Error, ValueError):
             return False
-        if not hmac.compare_digest(signature, self._sign(payload)):
+        # Bytes: compare_digest raises TypeError on a non-ASCII str (a 500 on a public route).
+        if not hmac.compare_digest(signature.encode(), self._sign(payload).encode()):
             return False
         try:
             data: dict[str, Any] = json.loads(payload)

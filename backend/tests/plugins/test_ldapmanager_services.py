@@ -121,6 +121,24 @@ def test_duplicates_and_missing_object_class(directory: MemoryDirectory) -> None
     assert bare.error == "The entry has no objectClass"
 
 
+def test_privileged_attributes_are_recognised_with_attribute_options() -> None:
+    plain = parse_ldif(f"dn: uid=x,{BASE}\nobjectClass: top\nuserPassword: x\n")[0]
+    tagged = parse_ldif(f"dn: uid=x,{BASE}\nobjectClass: top\nuserPassword;binary: x\n")[0]
+    assert importer.privileged_content(plain) is not None
+    assert importer.privileged_content(tagged) is not None
+    harmless = parse_ldif(f"dn: uid=x,{BASE}\nobjectClass: top\ndescription;lang-fr: x\n")[0]
+    assert importer.privileged_content(harmless) is None
+
+
+def test_export_hides_secrets_that_no_tab_describes() -> None:
+    from heracles_plugins.ldapmanager.access import Access
+
+    # e.g. the Samba hashes of an entry whose plugin is switched off: no tab knows them
+    assert not Access._attribute_visible("dn", "sambaNTPassword", [])  # pyright: ignore[reportPrivateUsage]
+    assert not Access._attribute_visible("dn", "krbPrincipalKey", [])  # pyright: ignore[reportPrivateUsage]
+    assert Access._attribute_visible("dn", "objectClass", [])  # pyright: ignore[reportPrivateUsage]
+
+
 # -- CSV ----------------------------------------------------------------------------------------
 def test_parse_csv_with_and_without_header() -> None:
     parsed = csvlib.parse_csv('a,b\n1,2\n\n3,"x,y"\n', ",", has_header=True)

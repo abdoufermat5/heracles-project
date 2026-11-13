@@ -15,6 +15,7 @@ import heracles_plugins.public_forms as forms
 from heracles.attributes import set_default_password_hasher
 from heracles.auth.mail import MemoryMailer
 from heracles.auth.passwords import PasswordPolicy, is_locked
+from heracles.ldap.client import DirectoryError
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
@@ -349,6 +350,50 @@ def test_a_failed_submission_gives_the_token_back(
     )
     assert directory.get(dn) is not None
     assert resolve_invitation_token(directory, token, NOW) is None
+
+
+def test_a_locked_form_never_leaves_a_usable_account_when_the_lock_fails(
+    service: ObjectService,
+    directory: MemoryDirectory,
+    template: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    new_form(service, template, hrcPublicFormDefaultLocked=True)
+    form = load(service)
+
+    def broken(*_args: object) -> None:
+        raise DirectoryError("down")
+
+    monkeypatch.setattr("heracles_plugins.public_forms.forms.lock_user", broken)
+    with pytest.raises(DirectoryError):
+        submit_form(directory, service.registry, form, visitor(), context=None, now=NOW)
+    assert directory.get(f"uid=jdoe,ou=people,{BASE}") is None
+
+
+class _NoRead:
+    """Policy: everything allowed but reading objects."""
+
+    def can_read(self, dn: str, tab: str, attr: str) -> bool:
+        return False
+
+    def can_write(self, dn: str, tab: str, attr: str) -> bool:
+        return True
+
+    def can_create(self, type_name: str, base: str) -> bool:
+        return True
+
+    def can_delete(self, dn: str, type_name: str) -> bool:
+        return True
+
+
+def test_a_form_template_must_be_readable_by_the_editor(
+    service: ObjectService, template: str
+) -> None:
+    restricted = ObjectService(service.directory, service.registry, policy=_NoRead())
+    with pytest.raises(ObjectValidationError) as refused:
+        new_form(restricted, template)
+    assert "main.hrcPublicFormTemplateDN" in refused.value.fields
+    new_form(service, template)  # readable: accepted
 
 
 def test_values_outside_the_form_are_refused(service: ObjectService, template: str) -> None:

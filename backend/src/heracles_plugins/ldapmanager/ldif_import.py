@@ -38,6 +38,11 @@ class EntryResult:
     error: str | None = None
 
 
+def _base_name(name: str) -> str:
+    """Lower-cased attribute name without its options (``userPassword;binary``)."""
+    return name.partition(";")[0].strip().lower()
+
+
 def configuration_entry(directory: DirectoryClient) -> Callable[[Entry], bool]:
     """Predicate for the entries only administrators may import.
 
@@ -51,13 +56,13 @@ def configuration_entry(directory: DirectoryClient) -> Callable[[Entry], bool]:
     def check(entry: Entry) -> bool:
         if dnlib.normalize(entry.dn) == config_dn:
             return True
-        names = {name.lower() for name in entry.attrs}
+        names = {_base_name(name) for name in entry.attrs}
         if schema.TAB_HOOK_ATTR.lower() in names:
             return True
         return any(
             value.decode("utf-8", "replace").lower() in classes
             for name, values in entry.attrs.items()
-            if name.lower() == "objectclass"
+            if _base_name(name) == "objectclass"
             for value in values
         )
 
@@ -85,10 +90,10 @@ _PRIVILEGED_CLASSES = frozenset(c.lower() for c in (schema.OC.ACL_ROLE, schema.O
 def privileged_content(entry: Entry) -> str | None:
     """Why a record may only be imported by an administrator (``None``: it may)."""
     for name in entry.attrs:
-        if name.lower() in PRIVILEGED_ATTRIBUTES:
+        if _base_name(name) in PRIVILEGED_ATTRIBUTES:
             return f"Setting {name} (password hash, ACL or role membership) needs an administrator"
     for name, values in entry.attrs.items():
-        if name.lower() == "objectclass" and any(
+        if _base_name(name) == "objectclass" and any(
             v.decode("utf-8", "replace").lower() in _PRIVILEGED_CLASSES for v in values
         ):
             return "ACL and role entries can only be imported by an administrator"

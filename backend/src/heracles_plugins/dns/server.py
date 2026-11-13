@@ -313,12 +313,16 @@ class DnsServer:
             return self._zones
 
     def _load_locked(self) -> None:
-        """Reload the zones; a failure keeps the previous snapshot."""
+        """Reload the zones; a failure keeps the previous snapshot.
+
+        A failure also counts as an attempt: the directory is asked again only after the
+        refresh interval, not on every query (which would hammer a struggling directory while
+        every other query waits on the lock).
+        """
         try:
             self._zones = load_zones(self._directory)
         except Exception:
             log.warning("dns_zone_reload_failed", exc_info=True)
-            return
         self._loaded_at = time.time()
 
     def _serve(self, server: socketserver.BaseServer, name: str) -> threading.Thread:

@@ -25,6 +25,7 @@ from heracles_plugins.automatic_groups.runner import (
     TASK_FILTER,
     AutomaticGroupsReport,
     AutomaticGroupsSettings,
+    ForbiddenAttributeError,
     MembershipChange,
     parse_rule,
     run_automatic_groups,
@@ -94,6 +95,11 @@ class AutomaticGroupsTask(TaskObjectType):
                 except re.error:
                     ctx.error(
                         "hrcTasksAutomaticGroupsRegexPattern", _("Invalid regular expression.")
+                    )
+                except ForbiddenAttributeError as exc:
+                    ctx.error(
+                        "hrcTasksAutomaticGroupsRegexPattern",
+                        _("The rule cannot test the attribute {name}.").format(name=exc),
                     )
 
 

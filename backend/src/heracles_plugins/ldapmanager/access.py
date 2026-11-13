@@ -13,6 +13,7 @@ from heracles.ldap.client import Entry
 from heracles.ldap.filter import Filter, matches, parse_filter
 from heracles.objects import TypeInfo
 from heracles.objects.model import Tab
+from heracles_plugins._secrets import is_secret_name
 
 #: ACL object of the LDIF import and export pages.
 LDIF_OBJECT = "ldif/ldifManager"
@@ -68,7 +69,11 @@ class Access:
         """
         infos = self._types_of(entry) if types is None else types
         if not infos:
-            return entry if self.can_export_ldif(entry.dn) else None
+            if not self.can_export_ldif(entry.dn):
+                return None
+            return Entry(
+                entry.dn, {n: list(v) for n, v in entry.attrs.items() if not is_secret_name(n)}
+            )
         policies = [(info, TypeAclPolicy(self.evaluator, info)) for info in infos]
         if not any(p.can_read(entry.dn, info.main_tab.name, "") for info, p in policies):
             return None
@@ -115,8 +120,9 @@ class Access:
                     continue
                 if policy.can_read(dn, tab.name, attr.name):
                     return True
-        # structural attributes (objectClass, RDN helpers...) described by no tab
-        return not known
+        # structural attributes (objectClass, RDN helpers...) described by no tab; a secret
+        # whose plugin is switched off is described by no tab either, but is never exported
+        return not known and not is_secret_name(name)
 
 
 def _find(tab: type[Tab], lowered: str) -> AnyAttribute | None:

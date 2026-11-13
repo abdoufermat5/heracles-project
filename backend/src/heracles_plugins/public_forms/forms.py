@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -16,7 +17,14 @@ from heracles.attributes import (
 from heracles.auth.passwords import lock
 from heracles.core.containers import ensure_container
 from heracles.ldap import dn as dnlib
-from heracles.ldap.client import DirectoryClient, Entry, Modification, NoSuchObjectError, Scope
+from heracles.ldap.client import (
+    DirectoryClient,
+    DirectoryError,
+    Entry,
+    Modification,
+    NoSuchObjectError,
+    Scope,
+)
 from heracles.ldap.filter import escape_filter_value
 from heracles.objects import (
     ObjectNotFoundError,
@@ -381,7 +389,15 @@ def submit_form(
             release_token(directory, claimed)
         raise
     if form.default_locked and info.name == "user":
-        lock_user(directory, registry, dn)
+        try:
+            lock_user(directory, registry, dn)
+        except DirectoryError:
+            # The form promised a locked account: never leave a usable one behind.
+            with contextlib.suppress(DirectoryError):
+                directory.delete(dn, recursive=True)
+            if claimed is not None:
+                release_token(directory, claimed)
+            raise
     if context is not None:
         complete_registration(directory, context, dn, now)
     return dn

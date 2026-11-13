@@ -43,6 +43,72 @@ class NetgroupSettings:
     rdn: str = "ou=netgroups"
 
 
+def _normalized(values: object) -> dict[str, str]:
+    """Selected netgroup DNs by normalised DN (spelling and case of a DN are not significant)."""
+    items = cast("list[object]", values) if isinstance(values, list) else []
+    return {dnlib.normalize(str(d)): str(d) for d in items}
+
+
+def _check_membership_rights(ctx: TabContext, name: str, position: int) -> None:
+    """The memberships live on the netgroups: the editor needs the right to change those.
+
+    ``position`` is the field of the triple holding ``name`` (0 host, 1 user).
+    """
+    if not ctx.was_touched("nisMembership"):
+        return
+    wanted = _normalized(ctx.values.get("nisMembership"))
+    current: dict[str, str] = {}
+    for entry in ctx.directory.search(
+        ctx.directory.base_dn,
+        "(objectClass=nisNetgroup)",
+        Scope.SUBTREE,
+        attrs=["nisNetgroupTriple"],
+    ):
+        for raw in entry.texts("nisNetgroupTriple"):
+            triple = parse_triple(raw)
+            if triple is not None and triple[position] == name:
+                current[dnlib.normalize(entry.dn)] = entry.dn
+                break
+    for key in wanted.keys() ^ current.keys():
+        netgroup_dn = wanted.get(key) or current[key]
+        if not ctx.can_write_object("netgroup", netgroup_dn, "main", "nisNetgroupTriple"):
+            ctx.error(
+                "nisMembership", _("Cannot change the members of {dn}").format(dn=netgroup_dn)
+            )
+            return
+
+
+def _drop_renamed(ctx: TabContext, attr: str, position: int, name: str) -> None:
+    """Remove the triples of the previous login (``uid``) or host name (``cn``) of a renamed
+    object: triples hold names, not DNs, so they would keep granting the old name."""
+    if ctx.original is None:
+        return
+    old = ctx.original[ctx.info.main_tab.name].values.get(attr)
+    if not isinstance(old, str) or not old.strip() or old.strip().lower() == name.lower():
+        return
+    for entry in ctx.directory.search(
+        ctx.directory.base_dn,
+        "(objectClass=nisNetgroup)",
+        Scope.SUBTREE,
+        attrs=["nisNetgroupTriple"],
+    ):
+        stale = [
+            t
+            for t in entry.texts("nisNetgroupTriple")
+            if (p := parse_triple(t)) is not None and p[position] == old.strip()
+        ]
+        if stale:
+            with contextlib.suppress(DirectoryError):
+                ctx.directory.modify(
+                    entry.dn,
+                    [
+                        Modification(
+                            "delete", "nisNetgroupTriple", [t.encode("utf-8") for t in stale]
+                        )
+                    ],
+                )
+
+
 def _extract_name_from_ref(ref: str, attr_prefix: str) -> str:
     """Extract 'name' from 'attr=name,...' or return the raw string."""
     parts = dnlib.split(ref)
@@ -212,11 +278,19 @@ class NetgroupUserTab(Tab):
         ctx.values["nisMembership"] = memberships
 
     @classmethod
+    def prepare(cls, ctx: TabContext) -> None:
+        uid = str(ctx.main_values().get("uid") or "").strip()
+        if uid:
+            _check_membership_rights(ctx, uid, 1)
+
+    @classmethod
     def after_save(cls, ctx: TabContext) -> None:
         uid = str(ctx.main_values().get("uid") or "").strip()
         if not uid:
             return
-        desired = set(ctx.values.get("nisMembership") or [])
+        if "nisMembership" not in ctx.values:
+            return  # unreadable by the acting user: unchanged, not "member of no netgroup"
+        desired = _normalized(ctx.values["nisMembership"])
         entries = ctx.directory.search(
             ctx.directory.base_dn,
             "(objectClass=nisNetgroup)",
@@ -233,8 +307,8 @@ class NetgroupUserTab(Tab):
                 current[entry.dn] = user_triples
 
         # Add to newly selected netgroups
-        for dn in desired:
-            if dn not in current:
+        for key, dn in desired.items():
+            if key not in {dnlib.normalize(c) for c in current}:
                 new_triple = format_triple(host="-", user=uid)
                 with contextlib.suppress(DirectoryError):
                     ctx.directory.modify(
@@ -244,7 +318,7 @@ class NetgroupUserTab(Tab):
 
         # Remove from unselected netgroups
         for dn, triples_to_remove in current.items():
-            if dn not in desired:
+            if dnlib.normalize(dn) not in desired:
                 with contextlib.suppress(DirectoryError):
                     ctx.directory.modify(
                         dn,
@@ -256,6 +330,7 @@ class NetgroupUserTab(Tab):
                             )
                         ],
                     )
+        _drop_renamed(ctx, "uid", 1, uid)
 
     @classmethod
     def before_delete(cls, ctx: TabContext) -> None:
@@ -331,11 +406,19 @@ class NetgroupSystemTab(Tab):
         ctx.values["nisMembership"] = memberships
 
     @classmethod
+    def prepare(cls, ctx: TabContext) -> None:
+        cn = str(ctx.main_values().get("cn") or "").strip()
+        if cn:
+            _check_membership_rights(ctx, cn, 0)
+
+    @classmethod
     def after_save(cls, ctx: TabContext) -> None:
         cn = str(ctx.main_values().get("cn") or "").strip()
         if not cn:
             return
-        desired = set(ctx.values.get("nisMembership") or [])
+        if "nisMembership" not in ctx.values:
+            return  # unreadable by the acting user: unchanged, not "member of no netgroup"
+        desired = _normalized(ctx.values["nisMembership"])
         entries = ctx.directory.search(
             ctx.directory.base_dn,
             "(objectClass=nisNetgroup)",
@@ -350,8 +433,8 @@ class NetgroupSystemTab(Tab):
                 current[entry.dn] = host_triples
 
         # Add to newly selected netgroups
-        for dn in desired:
-            if dn not in current:
+        for key, dn in desired.items():
+            if key not in {dnlib.normalize(c) for c in current}:
                 new_triple = format_triple(host=cn, user="-")
                 with contextlib.suppress(DirectoryError):
                     ctx.directory.modify(
@@ -361,7 +444,7 @@ class NetgroupSystemTab(Tab):
 
         # Remove from unselected netgroups
         for dn, triples_to_remove in current.items():
-            if dn not in desired:
+            if dnlib.normalize(dn) not in desired:
                 with contextlib.suppress(DirectoryError):
                     ctx.directory.modify(
                         dn,
@@ -373,6 +456,7 @@ class NetgroupSystemTab(Tab):
                             )
                         ],
                     )
+        _drop_renamed(ctx, "cn", 0, cn)
 
     @classmethod
     def before_delete(cls, ctx: TabContext) -> None:

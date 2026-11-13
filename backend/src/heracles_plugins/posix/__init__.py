@@ -309,6 +309,7 @@ class PosixAccountTab(Tab):
         except IdAllocationError as exc:
             ctx.error("uidNumber", str(exc))
             return
+        cls._check_membership_rights(ctx, uid)
 
         # shadowLastChange
         today = today_epoch_days()
@@ -323,6 +324,24 @@ class PosixAccountTab(Tab):
                 values["shadowLastChange"] = str(today - max_age - 1)
         elif ctx.activating or password_changed:
             values["shadowLastChange"] = str(today)
+
+    @classmethod
+    def _check_membership_rights(cls, ctx: TabContext, uid: str) -> None:
+        """The memberships live on the groups: the editor needs the right to change those."""
+        if not ctx.was_touched("groupMembership"):
+            return
+        raw = ctx.values.get("groupMembership")
+        wanted = {
+            dnlib.normalize(d): d for d in cast("list[object]", raw or []) if isinstance(d, str)
+        }
+        current = {dnlib.normalize(g.dn): g.dn for g in _groups_with_member(ctx.directory, uid)}
+        for key in wanted.keys() ^ current.keys():
+            group_dn = wanted.get(key) or current[key]
+            if not ctx.can_write_object("posix_group", group_dn, "main", "memberUid"):
+                ctx.error(
+                    "groupMembership", _("Cannot change the members of {dn}").format(dn=group_dn)
+                )
+                return
 
     @classmethod
     def _prepare_ids(cls, ctx: TabContext, uid: str, settings: PosixSettings, force: bool) -> None:

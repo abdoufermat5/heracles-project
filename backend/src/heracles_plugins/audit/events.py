@@ -24,6 +24,7 @@ from heracles.ldap.client import (
 )
 from heracles.ldap.filter import escape_filter_value
 from heracles.objects.policy import EventContext, NullEvents
+from heracles_plugins._secrets import is_secret_name
 
 log = structlog.get_logger(__name__)
 
@@ -40,7 +41,7 @@ class AuditSettings:
     #: Audited actions.
     actions: tuple[str, ...] = ACTIONS
     #: Attributes whose values are never written to the log (only their names).
-    hidden_attributes: tuple[str, ...] = ("userPassword",)
+    hidden_attributes: tuple[str, ...] = ("userPassword", "hrcMobilePUK")
     #: Object types that are not audited (the log itself and its helpers).
     ignored_types: tuple[str, ...] = ("audit_event",)
 
@@ -61,7 +62,8 @@ def describe_values(
 ) -> str:
     """``attr: v1, v2`` (``attr: ***`` for hidden attributes)."""
     prefix = f"{op} " if op else ""
-    if name.lower() in {h.lower() for h in hidden}:
+    # Listed attributes and anything named like a secret (hashes, service passwords, keys).
+    if is_secret_name(name, hidden):
         return f"{prefix}{name}: ***"
     if not values:
         return f"{prefix}{name}: (removed)"

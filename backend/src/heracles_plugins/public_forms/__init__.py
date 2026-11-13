@@ -37,8 +37,9 @@ from heracles.attributes import (
 from heracles.core.containers import ensure_container
 from heracles.i18n import _
 from heracles.ldap import dn as dnlib
-from heracles.objects import ObjectType, Plugin, Section, Tab, UnknownTypeError
+from heracles.objects import ObjectType, Plugin, Section, Tab, TypeInfo, UnknownTypeError
 from heracles.objects.hooks import TabContext
+from heracles.objects.policy import TypedPolicy
 from heracles_plugins.public_forms.captcha import Captcha
 from heracles_plugins.public_forms.forms import (
     ALTERED_ATTR,
@@ -79,6 +80,14 @@ class PublicFormsSettings:
     max_body_bytes: int = 1_048_576
     #: Default container (documentation; the type fixes ``rdn`` today).
     forms_rdn: str = "ou=forms"
+
+
+def _may_read(ctx: TabContext, info: TypeInfo, dn: str) -> bool:
+    """Whether the acting user may read the object ``dn`` of type ``info`` (no policy: yes)."""
+    policy = ctx.policy
+    if isinstance(policy, TypedPolicy):
+        policy = policy.for_type(info.name)
+    return policy is None or policy.can_read(dn, info.main_tab.name, info.type.main_attr)
 
 
 def _public_link(values: dict[str, Any]) -> str | None:
@@ -184,6 +193,11 @@ class PublicForm(ObjectType):
                             "hrcPublicFormTemplateDN",
                             _("The template is not an object of this type."),
                         )
+                    elif (
+                        ctx.creating or ctx.was_touched("hrcPublicFormTemplateDN")
+                    ) and not _may_read(ctx, info, template):
+                        # Its values are copied into new objects and shown to anonymous visitors.
+                        ctx.error("hrcPublicFormTemplateDN", _("You cannot read this template."))
             if ctx.creating:
                 ensure_container(ctx.directory, dnlib.join(PublicForm.rdn, ctx.base))
 

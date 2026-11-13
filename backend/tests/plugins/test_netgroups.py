@@ -159,6 +159,58 @@ def test_user_membership_tab_sync(service: ObjectService, directory: MemoryDirec
     assert "(-,jdoe,)" not in ng_entry.texts("nisNetgroupTriple")
 
 
+class _NoMembershipRead:
+    """Policy: everything allowed except reading the virtual nisMembership."""
+
+    def can_read(self, dn: str, tab: str, attr: str) -> bool:
+        return attr != "nisMembership"
+
+    def can_write(self, dn: str, tab: str, attr: str) -> bool:
+        return True
+
+    def can_create(self, type_name: str, base: str) -> bool:
+        return True
+
+    def can_delete(self, dn: str, type_name: str) -> bool:
+        return True
+
+
+def test_saving_without_read_access_to_the_memberships_keeps_them(
+    service: ObjectService, directory: MemoryDirectory, registry: TypeRegistry
+) -> None:
+    ng_dn = service.create("netgroup", PARIS, {"main": {"values": {"cn": "dev"}}})
+    user_dn = service.create(
+        "user",
+        PARIS,
+        {
+            "main": {"values": {"uid": "jdoe", "sn": "Doe", "givenName": "John"}},
+            "netgroup": {"values": {"nisMembership": [ng_dn]}},
+        },
+    )
+    restricted = ObjectService(directory, registry, policy=_NoMembershipRead())
+    restricted.update("user", user_dn, {"main": {"values": {"description": "edited"}}})
+    entry = directory.get(ng_dn) or pytest.fail()
+    assert "(-,jdoe,)" in entry.texts("nisNetgroupTriple")
+
+
+def test_membership_dns_are_compared_normalised(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    ng_dn = service.create("netgroup", PARIS, {"main": {"values": {"cn": "dev"}}})
+    user_dn = service.create(
+        "user",
+        PARIS,
+        {
+            "main": {"values": {"uid": "jdoe", "sn": "Doe", "givenName": "John"}},
+            "netgroup": {"values": {"nisMembership": [ng_dn]}},
+        },
+    )
+    shouted = ng_dn.upper().replace("DC=TEST", "dc=test")
+    service.update("user", user_dn, {"netgroup": {"values": {"nisMembership": [shouted]}}})
+    entry = directory.get(ng_dn) or pytest.fail()
+    assert entry.texts("nisNetgroupTriple").count("(-,jdoe,)") == 1
+
+
 def test_system_membership_tab_sync(service: ObjectService, directory: MemoryDirectory) -> None:
     # 1. Create a netgroup
     ng_dn = service.create(
@@ -199,3 +251,54 @@ def test_system_membership_tab_sync(service: ObjectService, directory: MemoryDir
     ng_entry = directory.get(ng_dn)
     assert ng_entry is not None
     assert "(srv-web-01,-,)" not in ng_entry.texts("nisNetgroupTriple")
+
+
+class _NoNetgroupWrite(_NoMembershipRead):
+    """Policy: everything allowed except changing the triples of a netgroup."""
+
+    def can_read(self, dn: str, tab: str, attr: str) -> bool:
+        return True
+
+    def can_write(self, dn: str, tab: str, attr: str) -> bool:
+        return attr != "nisNetgroupTriple"
+
+
+def test_memberships_need_the_right_to_change_the_netgroup(
+    service: ObjectService, directory: MemoryDirectory, registry: TypeRegistry
+) -> None:
+    ng_dn = service.create("netgroup", PARIS, {"main": {"values": {"cn": "dev"}}})
+    restricted = ObjectService(directory, registry, policy=_NoNetgroupWrite())
+    values = {"uid": "jdoe", "sn": "Doe", "givenName": "John"}
+    with pytest.raises(ObjectValidationError) as refused:
+        restricted.create(
+            "user",
+            PARIS,
+            {"main": {"values": values}, "netgroup": {"values": {"nisMembership": [ng_dn]}}},
+        )
+    assert "netgroup.nisMembership" in refused.value.fields
+    user_dn = service.create(
+        "user",
+        PARIS,
+        {"main": {"values": values}, "netgroup": {"values": {"nisMembership": [ng_dn]}}},
+    )
+    with pytest.raises(ObjectValidationError):
+        restricted.update("user", user_dn, {"netgroup": {"values": {"nisMembership": []}}})
+    entry = directory.get(ng_dn) or pytest.fail()
+    assert "(-,jdoe,)" in entry.texts("nisNetgroupTriple")
+
+
+def test_renaming_a_user_does_not_leave_the_old_login_in_the_netgroups(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    ng_dn = service.create("netgroup", PARIS, {"main": {"values": {"cn": "dev"}}})
+    user_dn = service.create(
+        "user",
+        PARIS,
+        {
+            "main": {"values": {"uid": "jdoe", "sn": "Doe", "givenName": "John"}},
+            "netgroup": {"values": {"nisMembership": [ng_dn]}},
+        },
+    )
+    service.update("user", user_dn, {"main": {"values": {"uid": "jsmith"}}})
+    triples = (directory.get(ng_dn) or pytest.fail()).texts("nisNetgroupTriple")
+    assert triples == ["(-,jsmith,)"]

@@ -136,6 +136,19 @@ def test_move_to_department(directory: MemoryDirectory) -> None:
     assert lc.run_lifecycle(directory, NOW + timedelta(days=2), settings).accounts == []
 
 
+def test_a_moved_account_keeps_its_group_memberships(directory: MemoryDirectory) -> None:
+    a = add_user(directory, "a", TODAY - timedelta(days=1))
+    directory.add(
+        f"cn=g,{GROUPS}",
+        {"objectClass": [b"groupOfNames"], "cn": [b"g"], "member": [a.encode()]},
+    )
+    add_task(directory, [a])
+    settings = lc.LifecycleSettings(action="move", target_department=ARCHIVED)
+    lc.run_lifecycle(directory, NOW, settings)
+    new_dn = f"uid=a,ou=people,{ARCHIVED}"
+    assert entry(directory, f"cn=g,{GROUPS}").texts("member") == [new_dn]
+
+
 def test_set_attribute_and_closure_lock(directory: MemoryDirectory) -> None:
     a = add_user(directory, "a", TODAY - timedelta(days=1), employeeType="staff")
     add_task(directory, [a], hrcTasksLifeCycleEnableAccountClosure="TRUE")

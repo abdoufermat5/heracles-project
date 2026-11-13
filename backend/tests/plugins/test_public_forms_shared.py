@@ -46,3 +46,10 @@ def test_the_submission_limit_is_shared(tmp_path: Path) -> None:
     assert a.retry_after("5.6.7.8") == 0
     now[0] += 3601
     assert a.retry_after("1.2.3.4") == 0
+
+
+def test_a_forged_token_with_non_ascii_signature_is_refused_not_a_crash() -> None:
+    captcha = Captcha(b"k" * 32, difficulty=0, min_fill=0)
+    body = captcha.new_challenge()["token"].partition(".")[0]
+    assert captcha.verify(f"{body}.é€", "1") is False
+    assert captcha.verify("é.é", "1") is False

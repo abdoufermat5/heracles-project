@@ -12,7 +12,8 @@ from heracles.auth.passwords import lock
 from heracles.core.containers import ensure_container
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Entry, Modification
-from heracles.objects.registry import AccountLockHook
+from heracles.objects import renames
+from heracles.objects.registry import AccountLockHook, TypeRegistry
 from heracles_plugins._tasks import (
     TaskReport,
     bool_of,
@@ -86,14 +87,23 @@ def _set_attribute(directory: DirectoryClient, entry: Entry, name: str, value: s
     return True
 
 
-def _move(directory: DirectoryClient, entry: Entry, department: str) -> str | None:
-    """Move below ``ou=people`` of ``department``; ``None`` when already there."""
+def _move(
+    directory: DirectoryClient, entry: Entry, department: str, registry: TypeRegistry
+) -> str | None:
+    """Move below ``ou=people`` of ``department``; ``None`` when already there.
+
+    Like every rename made by the object service, the references to the account (group
+    members, role occupants, ACL assignments, ...) are rewritten to its new DN.
+    """
     superior = dnlib.join(USER_CONTAINER_RDN, department)
     parent = dnlib.parent(entry.dn)
     if parent is not None and dnlib.normalize(parent) == dnlib.normalize(superior):
         return None
     ensure_container(directory, superior)
-    return directory.rename(entry.dn, dnlib.rdn(entry.dn), superior)
+    below = renames.subtree_dns(directory, entry.dn)
+    new_dn = directory.rename(entry.dn, dnlib.rdn(entry.dn), superior)
+    renames.propagate(directory, registry, below, entry.dn, new_dn)
+    return new_dn
 
 
 def _apply(
@@ -102,6 +112,7 @@ def _apply(
     entry: Entry,
     settings: LifecycleSettings,
     hooks: Sequence[AccountLockHook],
+    registry: TypeRegistry,
 ) -> LifecycleRecord | None:
     done: list[str] = []
     closure = bool_of(task, "hrcTasksLifeCycleEnableAccountClosure") is True
@@ -115,7 +126,7 @@ def _apply(
         done.append(f"set:{settings.attribute}")
     new_dn = entry.dn
     if settings.action == "move" and settings.target_department:
-        moved = _move(directory, entry, settings.target_department)
+        moved = _move(directory, entry, settings.target_department, registry)
         if moved is not None:
             new_dn = moved
             done.append("move")
@@ -130,6 +141,7 @@ def run_lifecycle(
     settings: LifecycleSettings | None = None,
     *,
     lock_hooks: Sequence[AccountLockHook] = (),
+    registry: TypeRegistry | None = None,
 ) -> LifecycleReport:
     """Run every due lifecycle task once.
 
@@ -138,9 +150,11 @@ def run_lifecycle(
     the grace period ``hrcTasksLifeCyclePostEndDate`` (days) is today or past, and applies
     ``settings.action``. With ``hrcTasksLifeCycleEnableAccountClosure`` the account is also
     locked. Every action is idempotent, so an account already processed is not reported
-    again. ``lock_hooks`` is ``registry.account_lock_hooks`` (they run on lock).
+    again. ``lock_hooks`` is ``registry.account_lock_hooks`` (they run on lock); ``registry`` tells
+    which attributes hold DNs, to rewrite the references to a moved account.
     """
     settings = settings or LifecycleSettings()
+    known_types = registry if registry is not None else TypeRegistry()
     now = utc(now)
     today = now.date()
     report = LifecycleReport()
@@ -168,7 +182,7 @@ def run_lifecycle(
             if entry is None:
                 continue
             try:
-                record = _apply(directory, task, entry, settings, lock_hooks)
+                record = _apply(directory, task, entry, settings, lock_hooks, known_types)
             except DirectoryError as exc:
                 report.errors.append(f"{entry.dn}: {type(exc).__name__}")
                 continue
