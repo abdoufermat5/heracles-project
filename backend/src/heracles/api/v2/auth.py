@@ -33,6 +33,7 @@ from heracles.auth.recovery import RecoveryError
 from heracles.auth.second_factor import WebAuthnCredential
 from heracles.auth.sessions import CLIENT_KEY, Session, client_info, session_ref
 from heracles.auth.webauthn import ASSERTION_KEY, REGISTRATION_KEY, WebAuthnError
+from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Scope
 from heracles.ldap.filter import escape_filter_value
 
@@ -308,6 +309,20 @@ def second_factor(
         return StatusResponse()
     if body.method not in session.second_factor_methods:
         raise validation("Method not available", {"method": "Method not available"})
+    # Cap across logins: the per-session failure budget is renewed by every new login (the
+    # password is right), so the code would be open to unlimited guessing. Each *exhausted*
+    # session counts as one failure of the account (key below), which then backs off
+    # exponentially; the per-session budget itself is unaffected.
+    key = state.limiter.key("second-factor", dnlib.normalize(session.user_dn))
+    wait = state.limiter.retry_after(key)
+    if wait > 0:
+        raise ApiError(
+            429,
+            "rate_limited",
+            "Too many attempts, try again later",
+            extra={"retry_after": math.ceil(wait)},
+            headers={"Retry-After": str(math.ceil(wait))},
+        )
     if body.method == "webauthn":
         verified = _verify_webauthn(state, session, body.credential)
     else:
@@ -316,8 +331,10 @@ def second_factor(
         _audit_second_factor_failed(state, request, session, body.method)
         session.second_factor_failures += 1
         if session.second_factor_failures >= state.settings.login.max_second_factor_failures:
+            state.limiter.record_failure(key)
             state.sessions.delete(session.id)
         raise unauthenticated("Invalid code")
+    state.limiter.record_success(key)
     # Persist what this request already changed (a consumed WebAuthn challenge) before the
     # row is renamed: the old id stops working right below.
     state.sessions.save(session)
@@ -815,6 +832,9 @@ def recovery_confirm(
             "Invalid or expired recovery link", {"token": "Invalid or expired token"}
         ) from None
     state.limiter.record_success(key)
+    # A reset is what people do when the account may be compromised: whoever holds a session
+    # of it must not keep it.
+    state.sessions.delete_for_user(user_dn)
     state.audit.record(
         directory,
         "password",

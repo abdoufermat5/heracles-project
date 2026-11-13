@@ -52,6 +52,19 @@ class SqliteTokenStore:
                 (key, record.kind, record.token_hash, record.created_at),
             )
 
+    def valid(self, user_dn: str, token_hash: str, *, kind: str, max_age: float) -> bool:
+        with self._db.connection() as conn:
+            row = conn.execute(
+                "SELECT token_hash, created_at FROM recovery_tokens"
+                " WHERE user_key = ? AND kind = ?",
+                (dnlib.normalize(user_dn), kind),
+            ).fetchone()
+        return (
+            row is not None
+            and self._clock() - row["created_at"] <= max_age
+            and hmac.compare_digest(row["token_hash"], token_hash)
+        )
+
     def consume(self, user_dn: str, token_hash: str, *, kind: str, max_age: float) -> bool:
         key = dnlib.normalize(user_dn)
         # BEGIN IMMEDIATE serialises the read and the delete across processes, so of

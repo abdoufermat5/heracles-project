@@ -47,6 +47,10 @@ class TokenStore(Protocol):
         """Store a token; previous tokens of the same user and kind are replaced."""
         ...
 
+    def valid(self, user_dn: str, token_hash: str, *, kind: str, max_age: float) -> bool:
+        """True if a matching, unexpired token exists (nothing is consumed)."""
+        ...
+
     def consume(self, user_dn: str, token_hash: str, *, kind: str, max_age: float) -> bool:
         """Atomically delete a matching, unexpired token; True if it was valid."""
         ...
@@ -65,6 +69,15 @@ class InMemoryTokenStore:
     def put(self, record: TokenRecord) -> None:
         with self._lock:
             self._records[(dnlib.normalize(record.user_dn), record.kind)] = record
+
+    def valid(self, user_dn: str, token_hash: str, *, kind: str, max_age: float) -> bool:
+        with self._lock:
+            record = self._records.get((dnlib.normalize(user_dn), kind))
+            return (
+                record is not None
+                and self._clock() - record.created_at <= max_age
+                and hmac.compare_digest(record.token_hash, token_hash)
+            )
 
     def consume(self, user_dn: str, token_hash: str, *, kind: str, max_age: float) -> bool:
         key = (dnlib.normalize(user_dn), kind)
@@ -207,14 +220,15 @@ class RecoveryService:
         current = entry.text("userPassword") if entry else None
         if current and is_locked(current):
             raise RecoveryError
-        # Validate the password first so a policy failure does not burn the token.
+        digest = hash_token(token)
+        max_age = self._config.ttl_seconds
+        # The token is checked before the password policy: a policy verdict must reach only
+        # the holder of a valid token (otherwise it tells whether ``login`` exists), and a
+        # policy failure must not burn the token.
+        if not self._store.valid(user_dn, digest, kind=TOKEN_TYPE_RECOVERY, max_age=max_age):
+            raise RecoveryError
         self._policy.validate(password)
-        if not self._store.consume(
-            user_dn,
-            hash_token(token),
-            kind=TOKEN_TYPE_RECOVERY,
-            max_age=self._config.ttl_seconds,
-        ):
+        if not self._store.consume(user_dn, digest, kind=TOKEN_TYPE_RECOVERY, max_age=max_age):
             raise RecoveryError
         new_value = self._policy.hash_new(password, current_stored=current)
         directory.modify(

@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from heracles import demo
 from heracles.api.settings import ApiSettings
+from heracles.auth.routes import safe_next
 from heracles.auth.sso import SsoSettings
 from heracles.server import create_full_app
 
@@ -267,3 +268,18 @@ def test_basic_is_rate_limited(basic_client: TestClient) -> None:
             basic_client.get("/api/v2/auth/login/basic", headers=basic("asmith", "no")).status_code
         )
     assert 429 in codes
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["/\t/evil.example", "/\n/evil.example", "/\r\nSet-Cookie: x=y", "/caf\u00e9", "/a\x00b"],
+)
+def test_safe_next_refuses_control_and_non_ascii_characters(value: str) -> None:
+    # browsers drop tabs/newlines from URLs: "/<TAB>/host" would be read as "//host"
+    assert safe_next(value) == "/"
+
+
+def test_safe_next_keeps_ordinary_paths() -> None:
+    assert safe_next("/types/user?x=1&y=a%20b") == "/types/user?x=1&y=a%20b"
+    assert safe_next(None) == "/"
+    assert safe_next("https://evil.example") == "/"

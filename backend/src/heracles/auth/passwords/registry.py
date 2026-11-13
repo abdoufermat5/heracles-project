@@ -56,8 +56,8 @@ class PasswordMethodRegistry:
         return None
 
     def verify(self, password: str, stored: str) -> bool:
-        """Verify against any known scheme; locked values never verify."""
-        if is_locked(stored):
+        """Verify against any known scheme; locked values and empty passwords never verify."""
+        if not password or is_locked(stored):
             return False
         method = self.detect(stored)
         return method.verify(password, stored) if method is not None else False

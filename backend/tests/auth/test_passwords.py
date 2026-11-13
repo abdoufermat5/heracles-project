@@ -106,6 +106,14 @@ def test_verify_only_and_special_methods() -> None:
     assert not REG.verify("", "")
 
 
+def test_empty_password_never_verifies() -> None:
+    # ``{CLEAR}`` with nothing after it is an empty clear-text password: it must not
+    # accept an empty attempt (nor any other scheme's hash of the empty string).
+    assert not REG.verify("", "{CLEAR}")
+    assert not REG.verify("", REG.hash("", "ssha"))
+    assert not REG.verify("", "{MD5}1B2M2Y8AsgTpgAmY7PhCfg==")
+
+
 @pytest.mark.parametrize("stored", ["{SSHA}!!!", "{SSHA}", "{MD5}@@", "{CRYPT}$6$bad", "{ARGON2}x"])
 def test_malformed_values_do_not_verify(stored: str) -> None:
     assert not REG.verify("secret", stored)

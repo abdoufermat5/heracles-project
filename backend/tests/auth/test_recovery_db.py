@@ -52,6 +52,17 @@ def test_consume_once(store: TokenStore, clock: Clock) -> None:
     assert store.consume(DN, hash_token("t1"), kind="recovery", max_age=MAX_AGE) is False
 
 
+def test_valid_does_not_consume(store: TokenStore, clock: Clock) -> None:
+    store.put(_record("t", clock))
+    assert store.valid(DN, hash_token("t"), kind="recovery", max_age=MAX_AGE) is True
+    assert store.valid(DN, hash_token("t"), kind="recovery", max_age=MAX_AGE) is True
+    assert store.valid(DN, hash_token("guess"), kind="recovery", max_age=MAX_AGE) is False
+    clock.now += MAX_AGE + 1
+    assert store.valid(DN, hash_token("t"), kind="recovery", max_age=MAX_AGE) is False
+    clock.now -= MAX_AGE + 1
+    assert store.consume(DN, hash_token("t"), kind="recovery", max_age=MAX_AGE) is True
+
+
 def test_put_replaces_previous_token(store: TokenStore, clock: Clock) -> None:
     store.put(_record("old", clock))
     store.put(_record("new", clock))

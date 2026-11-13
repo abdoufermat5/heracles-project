@@ -112,3 +112,32 @@ def test_token_for_other_user_is_rejected(env: Env) -> None:
         {"login": "other", "token": token, "password": "brand-new-pass"},
     )
     assert r.status_code == 422
+
+
+def test_policy_verdict_does_not_reveal_whether_the_login_exists(env: Env) -> None:
+    env.post("/api/v2/auth/recovery", {"email": "jdoe@example.com"})
+    login, _ = _token_from_mail(env)
+
+    def probe(name: str) -> dict[str, object]:
+        r = env.post(
+            "/api/v2/auth/recovery/confirm",
+            {"login": name, "token": "not-a-real-token", "password": "abc"},
+        )
+        assert r.status_code == 422
+        return dict(r.json()["error"])
+
+    assert probe(login) == probe("nobody")
+    assert "password" not in probe(login).get("fields", {})  # type: ignore[operator]
+
+
+def test_recovery_signs_the_account_out_everywhere(env: Env) -> None:
+    assert env.login().status_code == 200
+    assert env.client.get("/api/v2/auth/me").status_code == 200
+    env.post("/api/v2/auth/recovery", {"email": "jdoe@example.com"})
+    login, token = _token_from_mail(env)
+    r = env.post(
+        "/api/v2/auth/recovery/confirm",
+        {"login": login, "token": token, "password": "brand-new-pass"},
+    )
+    assert r.status_code == 200
+    assert env.client.get("/api/v2/auth/me").status_code == 401

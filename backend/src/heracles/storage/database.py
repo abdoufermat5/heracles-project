@@ -212,7 +212,14 @@ class SqliteDatabase(Database):
             except BaseException:
                 conn.execute("ROLLBACK")
                 raise
-            conn.execute("COMMIT")
+            try:
+                conn.execute("COMMIT")
+            except BaseException:
+                # A failed COMMIT leaves the transaction open: the next BEGIN on this
+                # thread's connection would fail for good.
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
 
     def close(self) -> None:
         if self._memory is not None:

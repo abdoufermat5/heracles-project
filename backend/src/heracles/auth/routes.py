@@ -63,8 +63,19 @@ def _config(state: AppState, directory: DirectoryClient) -> SsoConfig:
 
 
 def safe_next(value: str | None) -> str:
-    """Only same-origin absolute paths are accepted as post-login targets."""
-    if value and value.startswith("/") and not value.startswith("//") and "\\" not in value:
+    """Only same-origin absolute paths are accepted as post-login targets.
+
+    Control characters are refused: browsers drop tabs and line breaks from a URL, so
+    ``/<TAB>/host`` would be read as ``//host``. Non-ASCII text cannot be sent in a header.
+    """
+    if (
+        value
+        and value.startswith("/")
+        and not value.startswith("//")
+        and "\\" not in value
+        and value.isascii()
+        and value.isprintable()
+    ):
         return value
     return "/"
 

@@ -203,6 +203,29 @@ def test_second_factor_failures_drop_session(env: Env) -> None:
     assert r.json()["error"]["code"] == "unauthenticated"
 
 
+def test_second_factor_guesses_are_throttled_across_logins(env: Env) -> None:
+    secret = _enroll(env)
+    # A right password renews the per-session budget and the login throttle every time:
+    # exhausted sessions must back the account off (3 free ones in the test limiter).
+    for _ in range(3):
+        assert env.login().status_code == 200
+        for _ in range(5):
+            bad = env.post("/api/v2/auth/second-factor", {"method": "totp", "code": "000000"})
+            assert bad.status_code == 401
+    assert env.login().status_code == 200
+    # even the right code is refused while the account is throttled ...
+    code = pyotp.TOTP(secret).at(int(env.clock.now))
+    blocked = env.post("/api/v2/auth/second-factor", {"method": "totp", "code": code})
+    assert blocked.status_code == 429
+    # ... and works once the delay is over
+    env.clock.advance(120)
+    env.login()
+    code = pyotp.TOTP(secret).at(int(env.clock.now))
+    assert (
+        env.post("/api/v2/auth/second-factor", {"method": "totp", "code": code}).status_code == 200
+    )
+
+
 def test_unavailable_method_is_rejected(env: Env) -> None:
     _enroll(env)
     env.login()
