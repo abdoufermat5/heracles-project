@@ -81,6 +81,15 @@ class SqliteSecondFactorStore:
                 (self._k(user_dn), step),
             )
 
+    def consume_totp_step(self, user_dn: str, step: int) -> bool:
+        # One statement, so the comparison and the write cannot interleave between processes.
+        with self._db.transaction() as conn:
+            cur = conn.execute(
+                "UPDATE second_factor_totp SET last_step = ? WHERE user_key = ? AND last_step < ?",
+                (step, self._k(user_dn), step),
+            )
+            return cur.rowcount == 1
+
     # -- recovery codes ------------------------------------------------------------------------
     def recovery_hashes(self, user_dn: str) -> list[str]:
         with self._db.connection() as conn:

@@ -204,9 +204,13 @@ def basic(user: str, password: str) -> dict[str, str]:
 
 
 @pytest.fixture
-def basic_client() -> Iterator[TestClient]:
-    app = make_app(SsoSettings(login_method="http-basic", http_auth_enabled=True))
-    with TestClient(app, follow_redirects=False) as client:
+def basic_app() -> FastAPI:
+    return make_app(SsoSettings(login_method="http-basic", http_auth_enabled=True))
+
+
+@pytest.fixture
+def basic_client(basic_app: FastAPI) -> Iterator[TestClient]:
+    with TestClient(basic_app, follow_redirects=False) as client:
         yield client
 
 
@@ -283,3 +287,49 @@ def test_safe_next_keeps_ordinary_paths() -> None:
     assert safe_next("/types/user?x=1&y=a%20b") == "/types/user?x=1&y=a%20b"
     assert safe_next(None) == "/"
     assert safe_next("https://evil.example") == "/"
+
+
+# -- audit --------------------------------------------------------------------------------------
+AUDIT_CONTAINER = f"ou=audit,{demo.BASE}"
+
+
+def audit_events(app: FastAPI, action: str) -> list[dict[str, list[str]]]:
+    """The audit events of ``action`` written into the app's directory."""
+    directory = app.state.heracles.directories["main"]
+    if directory.get(AUDIT_CONTAINER) is None:
+        return []
+    return [
+        {k: [v.decode() for v in values] for k, values in entry.attrs.items()}
+        for entry in directory.search(AUDIT_CONTAINER, f"(hrcAuditAction={action})")
+    ]
+
+
+def test_cas_login_is_audited(cas_app: FastAPI, cas_client: TestClient) -> None:
+    fake_cas(cas_app, {"ST-1": "asmith"})
+    cas_client.get("/api/v2/auth/cas/callback", params={"ticket": "ST-1"})
+    events = audit_events(cas_app, "login")
+    assert len(events) == 1
+    assert events[0]["hrcAuditAuthorDN"][0].startswith("uid=asmith,")
+    assert events[0]["hrcAuditAttributes"] == ["method: cas"]
+
+
+def test_cas_unknown_account_is_audited(cas_app: FastAPI, cas_client: TestClient) -> None:
+    fake_cas(cas_app, {"ST-2": "nobody"})
+    cas_client.get("/api/v2/auth/cas/callback", params={"ticket": "ST-2"})
+    events = audit_events(cas_app, "login_failed")
+    assert len(events) == 1
+    assert events[0]["hrcAuditResult"] == ["failure"]
+    assert events[0]["hrcAuditObject"] == ["nobody"]
+    assert "login: nobody" in events[0]["hrcAuditAttributes"]
+
+
+def test_basic_login_is_audited(basic_app: FastAPI, basic_client: TestClient) -> None:
+    basic_client.get("/api/v2/auth/login/basic", headers=basic("asmith", "wrong"))
+    ok = basic_client.get("/api/v2/auth/login/basic", headers=basic("asmith", "heracles"))
+    assert ok.status_code == 302
+    failed = audit_events(basic_app, "login_failed")
+    assert len(failed) == 1 and failed[0]["hrcAuditResult"] == ["failure"]
+    assert failed[0]["hrcAuditAttributes"] == ["login: asmith", "reason: invalid credentials"]
+    events = audit_events(basic_app, "login")
+    assert len(events) == 1
+    assert events[0]["hrcAuditAttributes"] == ["method: http-basic"]

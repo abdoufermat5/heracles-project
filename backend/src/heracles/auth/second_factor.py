@@ -35,6 +35,10 @@ class SecondFactorStore(Protocol):
     def set_totp_secret(self, user_dn: str, secret: str | None) -> None: ...
     def last_totp_step(self, user_dn: str) -> int: ...
     def set_last_totp_step(self, user_dn: str, step: int) -> None: ...
+    def consume_totp_step(self, user_dn: str, step: int) -> bool:
+        """Atomically accept ``step`` if it is newer than the last accepted one."""
+        ...
+
     def recovery_hashes(self, user_dn: str) -> list[str]: ...
     def set_recovery_hashes(self, user_dn: str, hashes: list[str]) -> None: ...
     def consume_recovery_hash(self, user_dn: str, digest: str) -> bool:
@@ -83,6 +87,14 @@ class InMemorySecondFactorStore:
     def set_last_totp_step(self, user_dn: str, step: int) -> None:
         with self._lock:
             self._steps[self._k(user_dn)] = step
+
+    def consume_totp_step(self, user_dn: str, step: int) -> bool:
+        key = self._k(user_dn)
+        with self._lock:
+            if key not in self._totp or step <= self._steps.get(key, 0):
+                return False
+            self._steps[key] = step
+            return True
 
     def recovery_hashes(self, user_dn: str) -> list[str]:
         return list(self._recovery.get(self._k(user_dn), []))
@@ -250,8 +262,13 @@ class SecondFactorService:
         for offset in (0, -1, 1):
             at = now + offset * TOTP_STEP_SECONDS
             step = int(at // TOTP_STEP_SECONDS)
-            if step > last and secrets.compare_digest(totp.at(int(at)), code):
-                self.store.set_last_totp_step(user_dn, step)
+            # The store accepts the step only when it is newer than every accepted one:
+            # two requests presenting the same code cannot both succeed.
+            if (
+                step > last
+                and secrets.compare_digest(totp.at(int(at)), code)
+                and self.store.consume_totp_step(user_dn, step)
+            ):
                 return True
         return False
 

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 
+import pyotp
 import pytest
 
 from heracles.auth.second_factor import (
@@ -85,6 +87,40 @@ def test_service_on_store(store: SecondFactorStore) -> None:
     store.add_webauthn_credential(DN, WebAuthnCredential(b"k", b"pk", 0))
     store.set_recovery_hashes(DN, ["h"])
     assert svc.methods_for(DN) == ["totp", "webauthn", "recovery"]
+
+
+def test_totp_step_is_accepted_once(store: SecondFactorStore) -> None:
+    secret = "JBSWY3DPEHPK3PXP"
+    store.set_totp_secret(DN, secret)
+    now = 1_800_000_000.0
+    service = SecondFactorService(store, clock=lambda: now)
+    code = pyotp.TOTP(secret).at(int(now))
+    assert service.verify_totp(SAME_DN, code) is True
+    assert service.verify_totp(DN, code) is False  # replayed: the step is gone
+    assert store.consume_totp_step(DN, int(now // 30)) is False
+    assert service.verify_totp(DN, pyotp.TOTP(secret).at(int(now) + 30)) is True
+
+
+def test_only_one_request_consumes_a_totp_step(store: SecondFactorStore) -> None:
+    """The compare-and-set is atomic, so two requests with one code cannot both pass."""
+    store.set_totp_secret(DN, "JBSWY3DPEHPK3PXP")
+    step = 60_000_000
+    barrier = threading.Barrier(8)
+    results: list[bool] = []
+    lock = threading.Lock()
+
+    def take() -> None:
+        barrier.wait()
+        accepted = store.consume_totp_step(DN, step)
+        with lock:
+            results.append(accepted)
+
+    threads = [threading.Thread(target=take) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert results.count(True) == 1
 
 
 def test_sqlite_store_survives_a_restart(tmp_path: Path) -> None:

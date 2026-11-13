@@ -21,7 +21,7 @@ from heracles.auth.login import (
 from heracles.auth.mail import MemoryMailer, SmtpMailer
 from heracles.auth.ratelimit import RateLimiter
 from heracles.auth.second_factor import InMemorySecondFactorStore, SecondFactorService
-from heracles.auth.sessions import InMemorySessionStore
+from heracles.auth.sessions import InMemorySessionStore, session_ref
 from heracles.auth.webauthn import WebAuthnService, WebAuthnSettings
 from tests.auth.fakes import FakeDirectory
 
@@ -110,6 +110,24 @@ def test_find_user_requires_exactly_one_match() -> None:
     assert authenticate_bind(d, by_mail, "solo@example.com", "pw").startswith("uid=c,")
 
 
+def test_unknown_login_pays_the_bind_cost() -> None:
+    """A login that matches nobody is bound against a dummy DN, like a wrong password."""
+    d = FakeDirectory()
+    dn = d.add_user("a", "pw")
+    with pytest.raises(InvalidLoginError):
+        authenticate_bind(d, LoginConfig(), "a", "wrong")
+    with pytest.raises(InvalidLoginError):
+        authenticate_bind(d, LoginConfig(), "ghost", "wrong")
+    assert d.bind_attempts == [
+        (dn, "wrong"),
+        (f"uid=heracles-unknown-login,{d.base_dn}", "wrong"),
+    ]
+    d.bind_attempts.clear()
+    with pytest.raises(InvalidLoginError):
+        authenticate_bind(d, LoginConfig(), "ghost", "")
+    assert d.bind_attempts == []  # an empty password never binds, known user or not
+
+
 def test_header_auth_and_trusted_networks() -> None:
     d = FakeDirectory()
     dn = d.add_user("a", "pw")
@@ -152,6 +170,29 @@ def test_rate_limiter_exponential_backoff() -> None:
     rl.record_failure(key)
     rl.record_success(key)
     assert rl.retry_after(key) == 0
+
+
+def test_attempt_counts_before_the_credentials_are_checked() -> None:
+    clock = Clock()
+    rl = RateLimiter(free_attempts=1, base_delay=2.0, max_delay=60.0, clock=clock)
+    key = rl.key("1.2.3.4", "jdoe")
+    assert rl.attempt(key) == 0.0
+    assert rl.attempt(key) == pytest.approx(2.0)  # the second try is blocked ...
+    assert rl.retry_after(key) == pytest.approx(2.0)
+    clock.now += 2.0
+    assert rl.attempt(key) == 0.0  # ... and was not counted: one failure so far
+    assert rl.retry_after(key) == pytest.approx(4.0)  # the second one: delay doubles
+    rl.record_success(key)
+    assert rl.retry_after(key) == 0.0
+
+
+def test_sessions_match_a_user_dn_whatever_its_case() -> None:
+    store = InMemorySessionStore()
+    made = store.create("UID=JDoe, OU=People, DC=Example, DC=Com", "main")
+    lookup = "uid=jdoe,ou=people,dc=example,dc=com"
+    assert [i.ref for i in store.list_for_user(lookup)] == [session_ref(made.id)]
+    assert store.delete_for_user(lookup) == 1
+    assert store.get(made.id) is None
 
 
 def test_rate_limiter_table_is_bounded() -> None:

@@ -12,6 +12,7 @@ from __future__ import annotations
 import sqlite3
 import time
 from collections.abc import Callable
+from typing import Any
 
 from heracles.storage import Database
 
@@ -82,27 +83,48 @@ class SqliteRateLimiter:
             conn.execute(
                 "DELETE FROM ratelimit_failures WHERE last_failure < ?", (now - self._forget,)
             )
-            row = conn.execute(
-                "SELECT failures FROM ratelimit_failures WHERE key = ?", (key,)
-            ).fetchone()
-            if row is None:
-                self._make_room(conn)
-                failures = 1
-            else:
-                failures = int(row["failures"]) + 1
-            over = failures - self._free
-            blocked_until = 0.0
-            if over >= 0:
-                delay = min(self._max, self._base * (2 ** min(over, _MAX_EXPONENT)))
-                blocked_until = now + delay
+            self._count_failure(conn, key, now)
+
+    def attempt(self, key: str) -> float:
+        """Check the key and count the attempt in one transaction (see ``LoginLimiter``)."""
+        now = self._clock()
+        with self._db.transaction() as conn:
             conn.execute(
-                "INSERT INTO ratelimit_failures (key, failures, blocked_until, last_failure)"
-                " VALUES (?, ?, ?, ?)"
-                " ON CONFLICT (key) DO UPDATE SET failures = excluded.failures,"
-                " blocked_until = excluded.blocked_until,"
-                " last_failure = excluded.last_failure",
-                (key, failures, blocked_until, now),
+                "DELETE FROM ratelimit_failures WHERE last_failure < ?", (now - self._forget,)
             )
+            row = conn.execute(
+                "SELECT blocked_until FROM ratelimit_failures WHERE key = ?", (key,)
+            ).fetchone()
+            if row is not None:
+                wait = max(0.0, float(row["blocked_until"]) - now)
+                if wait > 0:
+                    return wait
+            self._count_failure(conn, key, now)
+            return 0.0
+
+    def _count_failure(self, conn: Any, key: str, now: float) -> None:
+        """Count one failure of ``key`` inside the caller's transaction."""
+        row = conn.execute(
+            "SELECT failures FROM ratelimit_failures WHERE key = ?", (key,)
+        ).fetchone()
+        if row is None:
+            self._make_room(conn)
+            failures = 1
+        else:
+            failures = int(row["failures"]) + 1
+        over = failures - self._free
+        blocked_until = 0.0
+        if over >= 0:
+            delay = min(self._max, self._base * (2 ** min(over, _MAX_EXPONENT)))
+            blocked_until = now + delay
+        conn.execute(
+            "INSERT INTO ratelimit_failures (key, failures, blocked_until, last_failure)"
+            " VALUES (?, ?, ?, ?)"
+            " ON CONFLICT (key) DO UPDATE SET failures = excluded.failures,"
+            " blocked_until = excluded.blocked_until,"
+            " last_failure = excluded.last_failure",
+            (key, failures, blocked_until, now),
+        )
 
     def record_success(self, key: str) -> None:
         with self._db.transaction() as conn:

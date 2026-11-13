@@ -20,6 +20,14 @@ class LoginLimiter(Protocol):
         """Seconds the caller must wait (0 when allowed)."""
         ...
 
+    def attempt(self, key: str) -> float:
+        """Atomically check the key and count one attempt: seconds to wait, 0 to go ahead.
+
+        The attempt is counted before the credentials are checked, so a burst of parallel
+        requests cannot all pass the check; a successful sign-in calls :meth:`record_success`.
+        """
+        ...
+
     def record_failure(self, key: str) -> None: ...
 
     def record_success(self, key: str) -> None: ...
@@ -70,17 +78,36 @@ class RateLimiter:
                 return 0.0
             return max(0.0, entry.blocked_until - now)
 
+    def attempt(self, key: str) -> float:
+        """Check the key and count the attempt in one locked step (see :class:`LoginLimiter`)."""
+        now = self._clock()
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is not None and now - entry.last_failure > self._forget:
+                del self._entries[key]
+                entry = None
+            if entry is not None:
+                wait = max(0.0, entry.blocked_until - now)
+                if wait > 0:
+                    return wait
+            self._count_failure(key, now)
+            return 0.0
+
     def record_failure(self, key: str) -> None:
         now = self._clock()
         with self._lock:
-            if key not in self._entries and len(self._entries) >= self._max_entries:
-                self._make_room(now)
-            entry = self._entries.setdefault(key, _Entry())
-            entry.failures += 1
-            entry.last_failure = now
-            over = entry.failures - self._free
-            if over >= 0:
-                entry.blocked_until = now + min(self._max, self._base * (2**over))
+            self._count_failure(key, now)
+
+    def _count_failure(self, key: str, now: float) -> None:
+        """Count one failure of ``key``; the caller holds the lock."""
+        if key not in self._entries and len(self._entries) >= self._max_entries:
+            self._make_room(now)
+        entry = self._entries.setdefault(key, _Entry())
+        entry.failures += 1
+        entry.last_failure = now
+        over = entry.failures - self._free
+        if over >= 0:
+            entry.blocked_until = now + min(self._max, self._base * (2**over))
 
     def record_success(self, key: str) -> None:
         with self._lock:

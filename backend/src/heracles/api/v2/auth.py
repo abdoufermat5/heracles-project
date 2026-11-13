@@ -251,7 +251,9 @@ def list_directories(state: StateDep) -> list[DirectoryInfo]:
 def login(body: LoginBody, request: Request, response: Response, state: StateDep) -> LoginResponse:
     directory_id, directory = _directory(state, body.directory)
     key = state.limiter.key(client_ip(request, state), body.username)
-    wait = state.limiter.retry_after(key)
+    # The attempt is counted before the bind: parallel requests on one key cannot all slip
+    # past the check before the first failure lands.
+    wait = state.limiter.attempt(key)
     if wait > 0:
         raise ApiError(
             429,
@@ -263,7 +265,6 @@ def login(body: LoginBody, request: Request, response: Response, state: StateDep
     try:
         user_dn = authenticate_bind(directory, state.login_config, body.username, body.password)
     except InvalidLoginError:
-        state.limiter.record_failure(key)
         log.info("login_failed", directory=directory_id)
         audit_login_failed(state, request, directory, body.username, "invalid credentials")
         raise unauthenticated(_GENERIC_LOGIN_ERROR) from None
@@ -374,7 +375,7 @@ def reauth(
     if not body.password and not (body.method and body.code):
         raise validation("Enter your password", {"password": "Required"})
     key = state.limiter.key(client_ip(request, state), user.dn)
-    wait = state.limiter.retry_after(key)
+    wait = state.limiter.attempt(key)
     if wait > 0:
         raise ApiError(
             429,
@@ -395,7 +396,6 @@ def reauth(
             ok = False
         field_name = "password"
     if not ok:
-        state.limiter.record_failure(key)
         log.info("reauth_failed", user=user.dn)
         # 422, not 401: a wrong confirmation must not end the session.
         raise validation("Wrong password or code", {field_name: "Wrong value"})
@@ -790,8 +790,7 @@ def recovery_request(
     if state.settings.recovery.enabled:
         directory = state.directories.get(body.directory or next(iter(state.directories), ""))
         key = state.limiter.key(client_ip(request, state), "recovery:" + body.email)
-        if directory is not None and state.limiter.retry_after(key) <= 0:
-            state.limiter.record_failure(key)
+        if directory is not None and state.limiter.attempt(key) <= 0:
             tasks.add_task(_recover, state, directory, body.email, client_ip(request, state))
     return StatusResponse()
 
@@ -804,7 +803,7 @@ def recovery_confirm(
         raise ApiError(404, "not_found", "Not found")
     _, directory = _directory(state, body.directory)
     key = state.limiter.key(client_ip(request, state), "recovery-confirm:" + body.login)
-    wait = state.limiter.retry_after(key)
+    wait = state.limiter.attempt(key)
     if wait > 0:
         raise ApiError(
             429,
@@ -818,7 +817,6 @@ def recovery_confirm(
     except PasswordPolicyError as exc:
         raise validation("Password rejected", {"password": "; ".join(exc.problems)}) from None
     except RecoveryError:
-        state.limiter.record_failure(key)
         state.audit.record(
             directory,
             "password",

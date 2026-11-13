@@ -10,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from heracles.ldap import dn as dnlib
+
 IDLE_TIMEOUT_SECONDS = 30 * 60
 ABSOLUTE_TIMEOUT_SECONDS = 12 * 3600
 
@@ -198,13 +200,13 @@ class InMemorySessionStore:
 
     def list_for_user(self, user_dn: str) -> list[SessionInfo]:
         now = self._clock()
-        wanted = user_dn.lower()
+        wanted = dnlib.normalize(user_dn)
         with self._lock:
             self._purge(now)
             found = [
                 s
                 for s in self._sessions.values()
-                if s.user_dn.lower() == wanted and not s.second_factor_pending
+                if dnlib.normalize(s.user_dn) == wanted and not s.second_factor_pending
             ]
         infos = [
             SessionInfo(
@@ -222,12 +224,12 @@ class InMemorySessionStore:
     def delete_for_user(
         self, user_dn: str, *, ref: str | None = None, keep: str | None = None
     ) -> int:
-        wanted = user_dn.lower()
+        wanted = dnlib.normalize(user_dn)
         with self._lock:
             doomed = [
                 sid
                 for sid, s in self._sessions.items()
-                if s.user_dn.lower() == wanted
+                if dnlib.normalize(s.user_dn) == wanted
                 and (ref is None or session_ref(sid) == ref)
                 and (keep is None or session_ref(sid) != keep)
             ]

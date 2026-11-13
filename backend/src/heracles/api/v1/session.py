@@ -40,7 +40,7 @@ def login(body: LoginRequest, request: Request, state: StateDep) -> str:
     if directory is None:
         raise validation("Unknown directory", {"directory": "Unknown directory"})
     key = state.limiter.key(client_ip(request, state), login_name)
-    wait = state.limiter.retry_after(key)
+    wait = state.limiter.attempt(key)
     if wait > 0:
         raise ApiError(
             429,

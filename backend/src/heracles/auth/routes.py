@@ -14,6 +14,7 @@ from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
+from heracles.api.auth_audit import audit_login, audit_login_failed
 from heracles.api.deps import StateDep, client_ip, session_from_cookie
 from heracles.api.errors import ApiError, not_found, unauthenticated, validation
 from heracles.api.hosts import request_base
@@ -170,8 +171,9 @@ def _landing(next_path: str, methods: list[str]) -> str:
 
 
 def _rate_limited(state: AppState, request: Request, login: str) -> str:
+    """Count one attempt of ``login`` and return its key, or raise 429 when it is blocked."""
     key = state.limiter.key(client_ip(request, state), login)
-    wait = state.limiter.retry_after(key)
+    wait = state.limiter.attempt(key)
     if wait > 0:
         raise ApiError(
             429,
@@ -228,11 +230,12 @@ def cas_callback(
     key = _rate_limited(state, request, "cas:" + principal.name)
     user_dn = find_user_dn(client, state.login_config, principal.name)
     if user_dn is None:
-        state.limiter.record_failure(key)
         log.info("cas_unknown_account", directory=directory_id)
+        audit_login_failed(state, request, client, principal.name, "unknown account")
         return failure
     state.limiter.record_success(key)
     response = RedirectResponse("/", status_code=302)
+    audit_login(state, request, client, user_dn, "cas")
     methods = _open_session(request, response, state, user_dn, directory_id, sso="cas")
     response.headers["location"] = _landing(target, methods)
     log.info("login_ok", directory=directory_id, user=user_dn, method="cas")
@@ -331,10 +334,11 @@ def login_basic(
     try:
         user_dn = authenticate_bind(client, state.login_config, login, password)
     except InvalidLoginError:
-        state.limiter.record_failure(key)
+        audit_login_failed(state, request, client, login, "invalid credentials")
         raise _challenge("Invalid username or password") from None
     state.limiter.record_success(key)
     response = RedirectResponse("/", status_code=302)
+    audit_login(state, request, client, user_dn, "http-basic")
     methods = _open_session(request, response, state, user_dn, directory_id)
     response.headers["location"] = _landing(safe_next(next), methods)
     log.info("login_ok", directory=directory_id, user=user_dn, method="http-basic")

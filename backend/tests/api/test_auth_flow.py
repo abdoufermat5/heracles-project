@@ -71,7 +71,9 @@ def test_filter_injection_is_escaped(env: Env) -> None:
     assert r.status_code == 401
     r = env.login(username="jdoe)(uid=*", password="s3cretpass")
     assert r.status_code == 401
-    assert env.directory.bind_attempts == []
+    # Neither pattern matched a user: only the fixed dummy bind was attempted.
+    dummy = f"uid=heracles-unknown-login,{env.directory.base_dn}"
+    assert env.directory.bind_attempts == [(dummy, "x"), (dummy, "s3cretpass")]
 
 
 def test_validation_error_format(env: Env) -> None:

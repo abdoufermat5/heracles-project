@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from heracles.auth.sessions import SessionStore
-from heracles.auth.sessions_db import SqliteSessionStore
+from heracles.auth.sessions import SessionStore, session_ref
+from heracles.auth.sessions_db import MIGRATIONS, SqliteSessionStore
 from heracles.storage import Database
 
 IDLE = 600.0
@@ -365,6 +365,46 @@ def test_unstorable_values_do_not_follow_a_rotation(pair: Pair) -> None:
     rotated = pair.first.rotate(made.id)
     assert rotated is not None
     assert rotated.cache == {"reauth_at": 1.0}
+
+
+def test_sessions_are_found_under_any_spelling_of_the_dn(pair: Pair) -> None:
+    made = pair.first.create("UID=JDoe, OU=People, DC=Example, DC=Com", "main")
+    assert [i.ref for i in pair.second.list_for_user(DN)] == [session_ref(made.id)]
+    assert pair.second.delete_for_user(DN) == 1
+    assert pair.first.get(made.id) is None
+
+
+def test_rows_written_before_the_user_key_are_keyed_at_start(pair: Pair) -> None:
+    made = pair.first.create("UID=JDoe, OU=People, DC=Example, DC=Com", "main")
+    with pair.db.transaction() as conn:
+        conn.execute("UPDATE sessions SET user_key = NULL")
+    again = SqliteSessionStore(
+        pair.db, idle_timeout=IDLE, absolute_timeout=ABSOLUTE, clock=pair.clock
+    )
+    assert [i.ref for i in again.list_for_user(DN)] == [session_ref(made.id)]
+
+
+def test_a_database_of_the_previous_release_gains_the_user_key(tmp_path: Path) -> None:
+    clock = Clock()
+    db = Database(tmp_path / "h.db")
+    db.migrate("sessions", MIGRATIONS[:1])  # the schema before the normalised key
+    with db.transaction() as conn:
+        conn.execute(
+            "INSERT INTO sessions (id_hash, user_dn, directory_id, created_at, last_seen)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (
+                "a" * 64,
+                "UID=JDoe, OU=People, DC=Example, DC=Com",
+                "main",
+                clock.now,
+                clock.now,
+            ),
+        )
+    try:
+        store = SqliteSessionStore(db, idle_timeout=IDLE, absolute_timeout=ABSOLUTE, clock=clock)
+        assert [i.ref for i in store.list_for_user(DN)] == ["a" * 32]
+    finally:
+        db.close()
 
 
 def test_sessions_survive_a_restart(tmp_path: Path) -> None:

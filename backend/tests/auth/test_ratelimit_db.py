@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -148,6 +149,50 @@ def test_hostile_keys_are_inert(db: Database) -> None:
     assert _count(db) == 1
     limiter.record_success(key)
     assert _count(db) == 0
+
+
+def test_attempt_counts_before_the_credentials_are_checked(db: Database) -> None:
+    clock = Clock()
+    limiter = SqliteRateLimiter(db, free_attempts=1, base_delay=2.0, max_delay=60.0, clock=clock)
+    key = "k"
+    assert limiter.attempt(key) == 0.0
+    assert limiter.attempt(key) == pytest.approx(2.0)
+    assert limiter.retry_after(key) == pytest.approx(2.0)
+    clock.now += 2.0
+    assert limiter.attempt(key) == 0.0  # the blocked try above was not counted
+    assert limiter.retry_after(key) == pytest.approx(4.0)
+    limiter.record_success(key)
+    assert limiter.retry_after(key) == 0.0
+
+
+def test_attempt_never_lets_more_than_free_attempts_through(tmp_path: Path) -> None:
+    """Parallel workers take their attempt in one transaction: exactly ``free_attempts``."""
+    clock = Clock()
+    path = tmp_path / "h.db"
+    databases = [Database(path) for _ in range(8)]
+    try:
+        limiters = [
+            SqliteRateLimiter(db, free_attempts=3, base_delay=60.0, clock=clock) for db in databases
+        ]
+        barrier = threading.Barrier(len(limiters))
+        waits: list[float] = []
+        lock = threading.Lock()
+
+        def take(limiter: SqliteRateLimiter) -> None:
+            barrier.wait()
+            wait = limiter.attempt("k")
+            with lock:
+                waits.append(wait)
+
+        threads = [threading.Thread(target=take, args=(limiter,)) for limiter in limiters]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert sum(1 for wait in waits if wait == 0.0) == 3
+    finally:
+        for db in databases:
+            db.close()
 
 
 def _count(db: Database) -> int:

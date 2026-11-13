@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import ipaddress
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -58,17 +59,30 @@ def find_user_dn(directory: DirectoryClient, config: LoginConfig, login: str) ->
     return matches[0] if matches else None
 
 
+#: RDN of the DN that an unknown login is bound against. A login that matches no user must
+#: cost a bind too, or the response time tells an attacker whether the account exists.
+_UNKNOWN_LOGIN_RDN = "uid=heracles-unknown-login"
+
+
+def _bind_unknown_login(directory: DirectoryClient, password: str) -> None:
+    """Do the work of a bind for a login that matched no user; the result is ignored."""
+    with contextlib.suppress(DirectoryError):
+        directory.check_password(f"{_UNKNOWN_LOGIN_RDN},{directory.base_dn}", password)
+
+
 def authenticate_bind(
     directory: DirectoryClient, config: LoginConfig, login: str, password: str
 ) -> str:
     """Look the user up and bind with ``password``; return the user DN.
 
-    An empty password is always refused (it would turn into an anonymous bind).
+    An empty password is always refused (it would turn into an anonymous bind). An unknown
+    login is bound against a fixed dummy DN, so both outcomes cost the same.
     """
     if not password:
         raise InvalidLoginError
     dn = find_user_dn(directory, config, login)
     if dn is None:
+        _bind_unknown_login(directory, password)
         raise InvalidLoginError
     try:
         ok = directory.check_password(dn, password)

@@ -2,7 +2,9 @@
 
 A session row holds the scalar fields of :class:`~heracles.auth.sessions.Session` plus its
 ``cache`` as JSON (never pickle). The row key is the SHA-256 of the session id, so a leaked
-database does not hand out live cookies.
+database does not hand out live cookies. ``user_dn`` keeps the DN as the directory spells
+it; ``user_key`` holds its normalised form, so listing and revoking a person's sessions
+does not depend on the letter case.
 
 Handlers mutate the session they got from :meth:`SqliteSessionStore.get` in place, so a
 change only reaches the other processes through :meth:`SqliteSessionStore.save` (the API
@@ -35,6 +37,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from heracles.auth.sessions import CLIENT_KEY, Session, SessionInfo
+from heracles.ldap import dn as dnlib
 from heracles.storage import Database
 
 COMPONENT = "sessions"
@@ -55,6 +58,12 @@ MIGRATIONS: tuple[str, ...] = (
     );
     CREATE INDEX sessions_last_seen ON sessions (last_seen);
     CREATE INDEX sessions_created_at ON sessions (created_at);
+    """,
+    # ``user_dn`` keeps the DN as the directory spells it; ``user_key`` is its normalised
+    # form, so listing and revoking a person's sessions does not depend on the letter case.
+    """
+    ALTER TABLE sessions ADD COLUMN user_key TEXT;
+    CREATE INDEX sessions_user_key ON sessions (user_key);
     """,
 )
 
@@ -163,6 +172,19 @@ class SqliteSessionStore:
         self._side: OrderedDict[str, dict[str, tuple[str, Any]]] = OrderedDict()
         self._side_lock = threading.Lock()
         database.migrate(COMPONENT, MIGRATIONS)
+        self._backfill_user_keys()
+
+    def _backfill_user_keys(self) -> None:
+        """Key rows written before the column existed: normalising a DN is not SQL."""
+        with self._db.transaction() as conn:
+            rows = conn.execute(
+                "SELECT id_hash, user_dn FROM sessions WHERE user_key IS NULL"
+            ).fetchall()
+            for row in rows:
+                conn.execute(
+                    "UPDATE sessions SET user_key = ? WHERE id_hash = ?",
+                    (dnlib.normalize(row["user_dn"]), row["id_hash"]),
+                )
 
     @property
     def idle_timeout(self) -> float:
@@ -285,10 +307,12 @@ class SqliteSessionStore:
                 (now - self._idle, now - self._absolute),
             )
             conn.execute(
-                "INSERT INTO sessions (id_hash, user_dn, directory_id, created_at, last_seen,"
-                " second_factor_pending, second_factor_methods) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO sessions (id_hash, user_key, user_dn, directory_id, created_at,"
+                " last_seen, second_factor_pending, second_factor_methods)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     _digest(session_id),
+                    dnlib.normalize(user_dn),
                     user_dn,
                     directory_id,
                     now,
@@ -368,8 +392,8 @@ class SqliteSessionStore:
         with self._db.connection() as conn:
             rows = conn.execute(
                 "SELECT id_hash, directory_id, created_at, last_seen, cache FROM sessions"
-                " WHERE user_dn = ? AND second_factor_pending = 0",
-                (user_dn,),
+                " WHERE user_key = ? AND second_factor_pending = 0",
+                (dnlib.normalize(user_dn),),
             ).fetchall()
         infos: list[SessionInfo] = []
         for row in rows:
@@ -395,7 +419,7 @@ class SqliteSessionStore:
         removed = 0
         with self._db.transaction() as conn:
             rows = conn.execute(
-                "SELECT id_hash FROM sessions WHERE user_dn = ?", (user_dn,)
+                "SELECT id_hash FROM sessions WHERE user_key = ?", (dnlib.normalize(user_dn),)
             ).fetchall()
             for row in rows:
                 key = str(row["id_hash"])
