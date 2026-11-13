@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterator
 from typing import cast
 
@@ -20,7 +21,7 @@ from dns.rdtypes.ANY.TXT import TXT
 from dns.rdtypes.IN.A import A
 
 from heracles.ldap.memory import MemoryDirectory
-from heracles_plugins.dns.server import DnsServer
+from heracles_plugins.dns.server import DnsServer, _UdpServer  # pyright: ignore[reportPrivateUsage]
 
 HOST = "127.0.0.1"
 BASE = "dc=example,dc=test"
@@ -86,6 +87,10 @@ def directory() -> MemoryDirectory:
         child_entry(FORWARD, "long", tXTRecord="x" * 300),
     )
     d.add(
+        f"relativeDomainName=huge,{FORWARD_DN}",
+        child_entry(FORWARD, "huge", tXTRecord="y" * 1200),
+    )
+    d.add(
         f"relativeDomainName=*,{FORWARD_DN}",
         child_entry(FORWARD, "*", aRecord="192.0.2.99"),
     )
@@ -119,6 +124,47 @@ def tcp_query(server: DnsServer, name: str, rdtype: str) -> dns.message.Message:
 
 def test_start_binds_an_ephemeral_udp_port(server: DnsServer) -> None:
     assert server.bound_port > 0
+
+
+def test_udp_truncates_big_answers_and_sets_tc(server: DnsServer) -> None:
+    plain = dns.message.make_query("huge.example.com", "TXT", use_edns=False)
+    truncated = dns.query.udp(plain, HOST, port=server.bound_port, timeout=2)
+    assert truncated.flags & dns.flags.TC
+    assert not truncated.answer
+    assert len(truncated.to_wire()) <= 512
+
+    large = dns.message.make_query("huge.example.com", "TXT", use_edns=True, payload=4096)
+    complete = dns.query.udp(large, HOST, port=server.bound_port, timeout=2)
+    assert not (complete.flags & dns.flags.TC)
+    assert complete.answer
+    record = cast("dns.rdata.Rdata", complete.answer[0][0])
+    assert isinstance(record, TXT)
+    assert b"".join(record.strings) == b"y" * 1200
+
+
+def test_udp_worker_pool_drops_datagrams_when_saturated(
+    directory: MemoryDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    instance = DnsServer(directory, HOST, 0)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow(wire: bytes, *, udp: bool = False) -> bytes:
+        del wire, udp
+        entered.set()
+        release.wait(5)
+        return b""
+
+    monkeypatch.setattr(instance, "handle", slow)
+    udp = _UdpServer((HOST, 0), instance, workers=1, queue_size=1)
+    try:
+        assert udp.enqueue(b"first", (HOST, 1000)) is True
+        assert entered.wait(2)
+        assert udp.enqueue(b"second", (HOST, 1000)) is True  # fills the queue
+        assert udp.enqueue(b"third", (HOST, 1000)) is False  # dropped, no thread created
+        release.set()
+    finally:
+        udp.server_close()
 
 
 def test_udp_answers_a_with_zone_ttl(server: DnsServer) -> None:

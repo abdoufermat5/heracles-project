@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -14,6 +13,7 @@ from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Entry, Modification
 from heracles.objects import renames
 from heracles.objects.registry import AccountLockHook, TypeRegistry
+from heracles_plugins._patterns import PatternError, compile_checked, search
 from heracles_plugins._tasks import (
     TaskReport,
     bool_of,
@@ -162,9 +162,9 @@ def run_lifecycle(
     def process(task: Entry) -> bool:
         pattern = (task.text("hrcTasksLifeCycleRegexPattern") or "").strip()
         try:
-            regex = re.compile(pattern) if pattern else None
-        except re.error:
-            report.errors.append(f"{task.dn}: invalid login pattern")
+            regex = compile_checked(pattern) if pattern else None
+        except PatternError as exc:
+            report.errors.append(f"{task.dn}: invalid login pattern ({exc})")
             return False
         grace = timedelta(days=max(int_of(task, "hrcTasksLifeCyclePostEndDate") or 0, 0))
         members = expand_members(
@@ -173,7 +173,7 @@ def run_lifecycle(
             [settings.end_date_attribute],
         )
         for member in members:
-            if regex is not None and regex.search(member.text("uid") or "") is None:
+            if regex is not None and not search(regex, member.text("uid") or ""):
                 continue
             end = date_of(member, settings.end_date_attribute)
             if end is None or today < end + grace:

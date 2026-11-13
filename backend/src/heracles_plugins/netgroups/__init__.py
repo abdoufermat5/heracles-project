@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import contextlib
-import inspect
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, cast, overload
+from typing import cast
+
+import structlog
 
 from heracles.attributes import (
     ListAttr,
@@ -18,7 +18,14 @@ from heracles.core.containers import ensure_container
 from heracles.i18n import _
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryError, Modification, Scope
-from heracles.objects import ObjectType, Plugin, Section, Tab, TabAttachment, TypeInfo
+from heracles.objects import (
+    ObjectType,
+    ObjectValidationError,
+    Plugin,
+    Section,
+    Tab,
+    TabAttachment,
+)
 from heracles.objects.hooks import TabContext
 from heracles_plugins.netgroups.triple import (
     TripleAttr,
@@ -27,7 +34,8 @@ from heracles_plugins.netgroups.triple import (
 )
 
 PLUGIN_NAME = "netgroups"
-SYSTEM_TYPES = ("workstation", "terminal", "server", "printer")
+
+log = structlog.get_logger(__name__)
 
 
 def virtual[A](attr: A) -> A:
@@ -78,6 +86,20 @@ def _check_membership_rights(ctx: TabContext, name: str, position: int) -> None:
             return
 
 
+def _write_membership(ctx: TabContext, netgroup_dn: str, changes: list[Modification]) -> None:
+    """Apply one membership change; a failure fails the save instead of disappearing."""
+    try:
+        ctx.directory.modify(netgroup_dn, changes)
+    except DirectoryError as exc:
+        raise ObjectValidationError(
+            {
+                f"{ctx.tab_name}.nisMembership": _("Cannot update netgroup {dn}: {error}").format(
+                    dn=netgroup_dn, error=type(exc).__name__
+                )
+            }
+        ) from None
+
+
 def _drop_renamed(ctx: TabContext, attr: str, position: int, name: str) -> None:
     """Remove the triples of the previous login (``uid``) or host name (``cn``) of a renamed
     object: triples hold names, not DNs, so they would keep granting the old name."""
@@ -98,7 +120,7 @@ def _drop_renamed(ctx: TabContext, attr: str, position: int, name: str) -> None:
             if (p := parse_triple(t)) is not None and p[position] == old.strip()
         ]
         if stale:
-            with contextlib.suppress(DirectoryError):
+            try:
                 ctx.directory.modify(
                     entry.dn,
                     [
@@ -106,6 +128,12 @@ def _drop_renamed(ctx: TabContext, attr: str, position: int, name: str) -> None:
                             "delete", "nisNetgroupTriple", [t.encode("utf-8") for t in stale]
                         )
                     ],
+                )
+            except DirectoryError as exc:
+                log.warning(
+                    "netgroup_stale_triple_not_removed",
+                    netgroup=entry.dn,
+                    error=type(exc).__name__,
                 )
 
 
@@ -310,26 +338,26 @@ class NetgroupUserTab(Tab):
         for key, dn in desired.items():
             if key not in {dnlib.normalize(c) for c in current}:
                 new_triple = format_triple(host="-", user=uid)
-                with contextlib.suppress(DirectoryError):
-                    ctx.directory.modify(
-                        dn,
-                        [Modification("add", "nisNetgroupTriple", [new_triple.encode("utf-8")])],
-                    )
+                _write_membership(
+                    ctx,
+                    dn,
+                    [Modification("add", "nisNetgroupTriple", [new_triple.encode("utf-8")])],
+                )
 
         # Remove from unselected netgroups
         for dn, triples_to_remove in current.items():
             if dnlib.normalize(dn) not in desired:
-                with contextlib.suppress(DirectoryError):
-                    ctx.directory.modify(
-                        dn,
-                        [
-                            Modification(
-                                "delete",
-                                "nisNetgroupTriple",
-                                [t.encode("utf-8") for t in triples_to_remove],
-                            )
-                        ],
-                    )
+                _write_membership(
+                    ctx,
+                    dn,
+                    [
+                        Modification(
+                            "delete",
+                            "nisNetgroupTriple",
+                            [t.encode("utf-8") for t in triples_to_remove],
+                        )
+                    ],
+                )
         _drop_renamed(ctx, "uid", 1, uid)
 
     @classmethod
@@ -350,7 +378,7 @@ class NetgroupUserTab(Tab):
                 if (p := parse_triple(t)) is not None and p[1] == uid
             ]
             if triples_to_remove:
-                with contextlib.suppress(DirectoryError):
+                try:
                     ctx.directory.modify(
                         entry.dn,
                         [
@@ -360,6 +388,12 @@ class NetgroupUserTab(Tab):
                                 [t.encode("utf-8") for t in triples_to_remove],
                             )
                         ],
+                    )
+                except DirectoryError as exc:
+                    log.warning(
+                        "netgroup_membership_not_removed",
+                        netgroup=entry.dn,
+                        error=type(exc).__name__,
                     )
 
 
@@ -436,26 +470,26 @@ class NetgroupSystemTab(Tab):
         for key, dn in desired.items():
             if key not in {dnlib.normalize(c) for c in current}:
                 new_triple = format_triple(host=cn, user="-")
-                with contextlib.suppress(DirectoryError):
-                    ctx.directory.modify(
-                        dn,
-                        [Modification("add", "nisNetgroupTriple", [new_triple.encode("utf-8")])],
-                    )
+                _write_membership(
+                    ctx,
+                    dn,
+                    [Modification("add", "nisNetgroupTriple", [new_triple.encode("utf-8")])],
+                )
 
         # Remove from unselected netgroups
         for dn, triples_to_remove in current.items():
             if dnlib.normalize(dn) not in desired:
-                with contextlib.suppress(DirectoryError):
-                    ctx.directory.modify(
-                        dn,
-                        [
-                            Modification(
-                                "delete",
-                                "nisNetgroupTriple",
-                                [t.encode("utf-8") for t in triples_to_remove],
-                            )
-                        ],
-                    )
+                _write_membership(
+                    ctx,
+                    dn,
+                    [
+                        Modification(
+                            "delete",
+                            "nisNetgroupTriple",
+                            [t.encode("utf-8") for t in triples_to_remove],
+                        )
+                    ],
+                )
         _drop_renamed(ctx, "cn", 0, cn)
 
     @classmethod
@@ -476,7 +510,7 @@ class NetgroupSystemTab(Tab):
                 if (p := parse_triple(t)) is not None and p[0] == cn
             ]
             if triples_to_remove:
-                with contextlib.suppress(DirectoryError):
+                try:
                     ctx.directory.modify(
                         entry.dn,
                         [
@@ -487,88 +521,35 @@ class NetgroupSystemTab(Tab):
                             )
                         ],
                     )
+                except DirectoryError as exc:
+                    log.warning(
+                        "netgroup_membership_not_removed",
+                        netgroup=entry.dn,
+                        error=type(exc).__name__,
+                    )
 
 
 # --------------------------------------------------------------- plugin entry
 
 
-class _NetgroupTabs(Sequence[TabAttachment]):
-    """Dynamic tabs sequence attaching to user and system types as they are available."""
-
-    def __init__(self) -> None:
-        self._all_tabs: list[TabAttachment] = [
-            TabAttachment("user", NetgroupUserTab),
-            TabAttachment("workstation", NetgroupSystemTab),
-            TabAttachment("terminal", NetgroupSystemTab),
-            TabAttachment("server", NetgroupSystemTab),
-            TabAttachment("printer", NetgroupSystemTab),
-        ]
-
-    def __len__(self) -> int:
-        return len(self._all_tabs)
-
-    @overload
-    def __getitem__(self, index: int) -> TabAttachment: ...
-
-    @overload
-    def __getitem__(self, index: slice) -> Sequence[TabAttachment]: ...
-
-    def __getitem__(self, index: int | slice) -> TabAttachment | Sequence[TabAttachment]:
-        return self._all_tabs[index]
-
-    def __iter__(self) -> Iterator[TabAttachment]:
-        # Identify the registry from the caller frame of register_plugin
-        caller_frame = inspect.currentframe()
-        registry: Any = None
-        while caller_frame:
-            f_locals = caller_frame.f_locals
-            if "self" in f_locals and hasattr(f_locals["self"], "_types"):
-                registry = f_locals["self"]
-                break
-            caller_frame = caller_frame.f_back
-
-        yield TabAttachment("user", NetgroupUserTab)
-
-        if registry is None:
-            for type_name in SYSTEM_TYPES:
-                yield TabAttachment(type_name, NetgroupSystemTab)
-            return
-
-        types_dict: dict[str, TypeInfo] = registry._types
-        for type_name in SYSTEM_TYPES:
-            if type_name in types_dict:
-                yield TabAttachment(type_name, NetgroupSystemTab)
-
-        # Hook register_type on this registry for system types that arrive later
-        orig_register = registry.register_type
-        if not getattr(registry, "_netgroup_hooked", False):
-            registry._netgroup_hooked = True
-
-            def hooked_register_type(type_cls: type[ObjectType]) -> TypeInfo:
-                info = orig_register(type_cls)
-                if type_cls.name in SYSTEM_TYPES and info.tab(NetgroupSystemTab.name) is None:
-                    registry.attach_tab(type_cls.name, NetgroupSystemTab)
-                return info
-
-            registry.register_type = hooked_register_type
-
-
-def _in_demo_test() -> bool:
-    for frame in inspect.stack():
-        if frame.function == "test_every_plugin_is_enabled_and_registers_all_its_types":
-            return True
-    return False
+#: The user tab plus a membership tab on every system type. Types absent from a registry
+#: (plugin off, schema without them) are skipped by ``register_plugins``.
+TABS: tuple[TabAttachment, ...] = (
+    TabAttachment("user", NetgroupUserTab),
+    TabAttachment("workstation", NetgroupSystemTab),
+    TabAttachment("terminal", NetgroupSystemTab),
+    TabAttachment("server", NetgroupSystemTab),
+    TabAttachment("printer", NetgroupSystemTab),
+)
 
 
 def plugin() -> Plugin:
     """Entry point of the Netgroup plugin."""
-    if _in_demo_test():
-        return Plugin(name=PLUGIN_NAME, version="0.1.0")
     return Plugin(
         name=PLUGIN_NAME,
         version="0.1.0",
         types=(Netgroup,),
-        tabs=_NetgroupTabs(),
+        tabs=TABS,
         required_object_classes=("nisNetgroup",),
         settings=NetgroupSettings(),
     )

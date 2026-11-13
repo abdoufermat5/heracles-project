@@ -237,7 +237,7 @@ def test_crud_classes_and_subclasses(service: ObjectService) -> None:
     )
 
 
-def test_crud_tsig_key_and_dns_zone(service: ObjectService) -> None:
+def test_crud_tsig_key_and_dns_zone(service: ObjectService, directory: MemoryDirectory) -> None:
     cfg_dn = create_section(service, "dhcp_configuration", PARIS, {"cn": "dns-dhcp"})
 
     # TSIG Key
@@ -251,9 +251,11 @@ def test_crud_tsig_key_and_dns_zone(service: ObjectService) -> None:
             "dhcpKeySecret": "c2VjcmV0ZGF0YTEyMw==",
         },
     )
-    assert service.load("dhcp_tsig_key", key_dn).tabs["main"].values["dhcpKeyAlgorithm"] == (
-        "hmac-sha256"
-    )
+    loaded_values = service.load("dhcp_tsig_key", key_dn).tabs["main"].values
+    assert loaded_values["dhcpKeyAlgorithm"] == "hmac-sha256"
+    assert loaded_values["dhcpKeySecret"] is None  # write-only: never sent back
+    entry = directory.get(key_dn)
+    assert entry is not None and entry.text("dhcpKeySecret") == "c2VjcmV0ZGF0YTEyMw=="
 
     # DNS Zone referencing TSIG Key
     zone_dn = create_section(
@@ -267,6 +269,23 @@ def test_crud_tsig_key_and_dns_zone(service: ObjectService) -> None:
         },
     )
     assert service.load("dhcp_dns_zone", zone_dn).tabs["main"].values["dhcpKeyDN"] == key_dn
+
+
+def test_tsig_secret_is_write_only_and_kept_when_empty(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    cfg_dn = create_section(service, "dhcp_configuration", PARIS, {"cn": "tsig-pw-dhcp"})
+    key_dn = create_section(
+        service,
+        "dhcp_tsig_key",
+        cfg_dn,
+        {"cn": "key-pw", "dhcpKeyAlgorithm": "hmac-md5", "dhcpKeySecret": "AAAA"},
+    )
+    service.update("dhcp_tsig_key", key_dn, {"main": {"values": {"dhcpKeySecret": ""}}})
+    assert (directory.get(key_dn) or pytest.fail()).text("dhcpKeySecret") == "AAAA"
+
+    service.update("dhcp_tsig_key", key_dn, {"main": {"values": {"dhcpKeySecret": "BBBB"}}})
+    assert (directory.get(key_dn) or pytest.fail()).text("dhcpKeySecret") == "BBBB"
 
 
 def test_crud_failover_peer(service: ObjectService, directory: MemoryDirectory) -> None:

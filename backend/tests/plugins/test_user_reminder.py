@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
+from ipaddress import ip_network
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 import heracles_plugins.user_reminder as ur
 from heracles.auth.mail import MemoryMailer
@@ -13,7 +18,12 @@ from heracles.ldap.client import Entry
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
-from heracles_plugins.user_reminder.prolong import ProlongError, prolong_account
+from heracles.storage import Database
+from heracles_plugins.user_reminder.prolong import (
+    ProlongError,
+    build_prolong_router,
+    prolong_account,
+)
 from heracles_plugins.user_reminder.runner import hash_token
 
 BASE = "dc=test"
@@ -467,3 +477,71 @@ def test_mail_template_crud(service: ObjectService, directory: MemoryDirectory) 
     assert dn == f"cn=second,ou=mailTemplate,{BASE}"
     entry = directory.get(dn)
     assert entry is not None and entry.text("hrcMailTemplateBody") == "Bye {uid}"
+
+
+# ------------------------------------------------------- prolongation endpoint
+
+
+class RecordingGuard:
+    """A limiter recording the keys it is asked about."""
+
+    def __init__(self) -> None:
+        self.failures: list[str] = []
+
+    def key(self, ip: str, login: str) -> str:
+        return f"{ip}|{login.strip().lower()}"
+
+    def retry_after(self, key: str) -> float:
+        return 0.0
+
+    def attempt(self, key: str) -> float:
+        return 0.0
+
+    def record_failure(self, key: str) -> None:
+        self.failures.append(key)
+
+    def record_success(self, key: str) -> None:
+        return None
+
+
+def prolong_app(
+    directory: MemoryDirectory, state: object, guard: RecordingGuard | None = None
+) -> FastAPI:
+    app = FastAPI()
+    app.state.heracles = state
+    app.include_router(
+        build_prolong_router(
+            lambda: directory,
+            ur.UserReminderSettings(),
+            limiter=guard,
+        )
+    )
+    return app
+
+
+def test_prolong_uses_the_forwarded_address_behind_a_trusted_proxy() -> None:
+    directory = MemoryDirectory(BASE)
+    directory.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
+    guard = RecordingGuard()
+    state = SimpleNamespace(trusted_proxies=[ip_network("10.0.0.0/8")], database=None)
+    client = TestClient(prolong_app(directory, state, guard), client=("10.0.0.5", 50000))
+    response = client.post(
+        "/api/v2/reminder/prolong",
+        json={"login": "ghost", "token": "nope"},
+        headers={"X-Forwarded-For": "203.0.113.9"},
+    )
+    assert response.status_code == 400
+    assert guard.failures == ["203.0.113.9|ghost"]
+
+
+def test_prolong_uses_the_shared_limiter_when_a_database_is_configured(tmp_path: Path) -> None:
+    directory = MemoryDirectory(BASE)
+    directory.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
+    database = Database(tmp_path / "heracles.db")
+    state = SimpleNamespace(trusted_proxies=[], database=database)
+    client = TestClient(prolong_app(directory, state), client=("192.0.2.7", 50000))
+    response = client.post("/api/v2/reminder/prolong", json={"login": "ghost", "token": "nope"})
+    assert response.status_code == 400
+    with database.connection() as conn:
+        rows = conn.execute("SELECT key FROM ratelimit_failures").fetchall()
+    assert [str(row["key"]) for row in rows] == ["192.0.2.7|ghost"]

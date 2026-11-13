@@ -15,8 +15,8 @@ from heracles.ldap.client import NoSuchObjectError, Scope
 from heracles.objects import ObjectType, Section, Tab
 from heracles.objects.hooks import TabContext
 from heracles_plugins.dhcp.attributes import (
-    Base64StringAttr,
     HwAddressAttr,
+    SecretBase64Attr,
     dhcp_comments_attr,
     dhcp_options_attr,
     dhcp_range_attr,
@@ -591,7 +591,7 @@ class DhcpTSigKey(ObjectType):
                 required=True,
                 pattern=r"^(hmac-md5|hmac-sha1|hmac-sha256|hmac-sha512)$",
             ),
-            Base64StringAttr("dhcpKeySecret", _("Key secret"), required=True),
+            SecretBase64Attr("dhcpKeySecret", _("Key secret"), required=True),
         )
         configuration = Section(
             _("Parameters"),

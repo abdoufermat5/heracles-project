@@ -227,6 +227,14 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
         service.update(
             "lifecycle_task", dn, {"main": {"values": {"hrcTasksLifeCycleRegexPattern": "("}}}
         )
+    for refused in ("(a+)+$", "a" * 300):
+        with pytest.raises(ObjectValidationError) as unsafe:
+            service.update(
+                "lifecycle_task",
+                dn,
+                {"main": {"values": {"hrcTasksLifeCycleRegexPattern": refused}}},
+            )
+        assert "main.hrcTasksLifeCycleRegexPattern" in unsafe.value.fields
     with pytest.raises(ObjectValidationError):
         service.create("lifecycle_task", BASE, {"main": {"values": {"cn": "nomembers"}}})
 

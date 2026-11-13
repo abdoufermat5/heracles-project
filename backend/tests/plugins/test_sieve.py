@@ -105,7 +105,7 @@ def test_create_server_with_sieve_service(
     assert vals["hrcSieveConnectPort"] == 4190
     assert vals["hrcSieveConnectOptions"] == "/tls"
     assert vals["hrcSieveAdmin"] == "sieveadmin"
-    assert vals["hrcSievePassword"] == "sievepassword"
+    assert vals["hrcSievePassword"] is None  # write-only: never sent back
 
 
 def test_update_and_deactivate_sieve_tab(
@@ -187,3 +187,24 @@ def test_mail_servers_helper_sieve(service: ObjectService, directory: MemoryDire
         },
     )
     assert sieve.mail_servers(directory) == ["sieve-srv"]
+
+
+def test_admin_password_is_write_only_and_kept_when_empty(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    dn = service.create(
+        "server",
+        BASE,
+        {
+            "main": {"values": {"cn": "sieve-pw"}},
+            "sieve": {"active": True, "values": {"hrcSievePassword": "first-secret"}},
+        },
+    )
+    assert service.load("server", dn).tabs["sieve"].values["hrcSievePassword"] is None
+    assert (directory.get(dn) or pytest.fail()).text("hrcSievePassword") == "first-secret"
+
+    service.update("server", dn, {"sieve": {"values": {"hrcSievePassword": ""}}})
+    assert (directory.get(dn) or pytest.fail()).text("hrcSievePassword") == "first-secret"
+
+    service.update("server", dn, {"sieve": {"values": {"hrcSievePassword": "second-secret"}}})
+    assert (directory.get(dn) or pytest.fail()).text("hrcSievePassword") == "second-secret"

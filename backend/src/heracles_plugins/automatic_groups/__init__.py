@@ -12,13 +12,12 @@ longer match are removed too. The group may be a ``groupOfNames`` or a POSIX gro
 
 from __future__ import annotations
 
-import re
-
 from heracles.attributes import BooleanAttr, ListAttr, ObjectRefAttr, StringAttr
 from heracles.i18n import _
 from heracles.objects import Plugin, Section
 from heracles.objects.hooks import TabContext
 from heracles.objects.task_runner import TaskRunContext, TaskRunner
+from heracles_plugins._patterns import PatternError
 from heracles_plugins._tasks import TaskObjectType, TaskTab
 from heracles_plugins.automatic_groups.runner import (
     TASK_CLASS,
@@ -92,10 +91,8 @@ class AutomaticGroupsTask(TaskObjectType):
             if isinstance(pattern, str) and pattern:
                 try:
                     parse_rule(pattern, "uid")
-                except re.error:
-                    ctx.error(
-                        "hrcTasksAutomaticGroupsRegexPattern", _("Invalid regular expression.")
-                    )
+                except PatternError as exc:
+                    ctx.error("hrcTasksAutomaticGroupsRegexPattern", str(exc))
                 except ForbiddenAttributeError as exc:
                     ctx.error(
                         "hrcTasksAutomaticGroupsRegexPattern",

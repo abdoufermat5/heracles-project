@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 from dataclasses import dataclass
 
 from heracles.attributes import (
@@ -130,17 +129,8 @@ class IpamSubnet(ObjectType):
 # --------------------------------------------------------------- plugin entry
 
 
-def _in_demo_test() -> bool:
-    for frame in inspect.stack():
-        if frame.function == "test_every_plugin_is_enabled_and_registers_all_its_types":
-            return True
-    return False
-
-
 def plugin() -> Plugin:
     """Entry point of the IPAM plugin."""
-    if _in_demo_test():
-        return Plugin(name=PLUGIN_NAME, version="0.1.0")
     return Plugin(
         name=PLUGIN_NAME,
         version="0.1.0",

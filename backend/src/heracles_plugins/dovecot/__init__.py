@@ -6,6 +6,7 @@ from heracles.attributes import IntAttr, SelectAttr, StringAttr
 from heracles.i18n import _
 from heracles.ldap.client import DirectoryClient, NoSuchObjectError, Scope
 from heracles.objects import Plugin, Section, Tab, TabAttachment
+from heracles_plugins._secrets import CleartextSecretAttr
 
 PLUGIN_NAME = "dovecot"
 
@@ -103,10 +104,10 @@ class DovecotServiceTab(Tab):
             _("Admin user"),
             description=_("Dovecot administrator login"),
         ),
-        StringAttr(
+        CleartextSecretAttr(
             "hrcDovecotPassword",
             _("Admin password"),
-            description=_("Dovecot administrator password"),
+            description=_("Dovecot administrator password (leave empty to keep it)"),
         ),
     )
 

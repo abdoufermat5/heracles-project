@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Query
@@ -14,7 +15,13 @@ from heracles.api.domain import DomainDep
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.v2.objects import object_errors
 from heracles.attributes import JSON
-from heracles.ldap.client import DirectoryError, NoSuchObjectError, Scope
+from heracles.ldap.client import (
+    DirectoryClient,
+    DirectoryError,
+    NoSuchObjectError,
+    Scope,
+    SizeLimitExceededError,
+)
 from heracles.ldap.filter import FilterError, filter_attributes, matches, parse_filter
 from heracles.ldap.ldif import FOLD_WIDTH, LdifError, dump_entry, iter_ldif, parse_ldif
 from heracles.objects import (
@@ -29,6 +36,14 @@ from heracles_plugins.ldapmanager.access import Access
 
 _SCOPES = {"base": Scope.BASE, "one": Scope.ONE, "sub": Scope.SUBTREE, "subtree": Scope.SUBTREE}
 PREVIEW_ROWS = 10
+
+
+@dataclass(slots=True)
+class LdifManagerSettings:
+    """Settings of the LDIF / CSV tools."""
+
+    #: Most entries one LDIF export may match; a wider export is refused (narrow the filter).
+    max_export_entries: int = 50_000
 
 
 class LdifImportBody(BaseModel):
@@ -66,9 +81,32 @@ def _templates() -> Any:
         raise ApiError(501, "not_implemented", "Object templates are not available") from None
 
 
+def check_export_size(
+    directory: DirectoryClient,
+    start: str,
+    filterstr: str,
+    scope: Scope,
+    limit: int,
+) -> None:
+    """Refuse an export matching more than ``limit`` entries, with a clear field error.
+
+    The entries themselves are streamed after this check (only the count is read), so a
+    wide export never loads the whole subtree in memory just to be rejected.
+    """
+    try:
+        for _entry in directory.search(start, filterstr, scope, attrs=["1.1"], size_limit=limit):
+            pass
+    except SizeLimitExceededError:
+        raise validation(
+            f"At most {limit} entries can be exported at once; narrow the filter.",
+            {"filter": "too many entries"},
+        ) from None
+
+
 def build_router(ctx: PluginRouterContext) -> APIRouter:
     """Router factory (``Plugin.api_routers``)."""
-    del ctx
+    settings = ctx.settings if isinstance(ctx.settings, LdifManagerSettings) else None
+    max_export = settings.max_export_entries if settings is not None else 50_000
     router = APIRouter(tags=["ldapmanager"])
 
     @router.get("/ldapmanager/access")
@@ -103,6 +141,7 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             raise validation(f"Invalid filter: {exc}", {"filter": str(exc)}) from None
         if directory.get(start) is None:
             raise not_found(f"Entry not found: {start}")
+        check_export_size(directory, start, filter, _SCOPES[scope], max_export)
 
         def entries() -> Any:
             try:

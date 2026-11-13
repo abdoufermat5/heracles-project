@@ -119,3 +119,23 @@ def test_weblink_with_full_url(service: ObjectService, directory: MemoryDirector
     entry = directory.get(dn)
     assert entry is not None
     assert entry.text("hrcWebLink") == "https://console.example.org:8443"
+
+
+def test_weblink_plugin_has_static_tabs(directory: MemoryDirectory) -> None:
+    plugin = weblink.plugin()
+    assert plugin.tabs == weblink.TABS
+    assert {attachment.type_name for attachment in plugin.tabs} == {
+        "workstation",
+        "server",
+        "component",
+        "printer",
+    }
+
+
+def test_weblink_tabs_skip_absent_target_types(directory: MemoryDirectory) -> None:
+    reg = TypeRegistry()
+    register_builtin_types(reg)
+    classes = {c.lower() for c in directory.schema_object_classes()}
+    status = reg.register_plugin(weblink.plugin(), classes)
+    assert status.enabled
+    assert all(info.tab("weblink") is None for info in reg.list())

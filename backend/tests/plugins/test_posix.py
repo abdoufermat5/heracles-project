@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
+from threading import Barrier, Thread
+from typing import cast
 
 import pytest
 
@@ -11,8 +14,9 @@ from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
+from heracles.storage import Database
 from heracles_plugins.posix import EpochDaysAttr, ascii_gecos, posix_status
-from heracles_plugins.posix.ids import next_free_id, parse_range
+from heracles_plugins.posix.ids import IdReservations, next_free_id, parse_range
 
 BASE = "dc=test"
 PEOPLE = f"ou=people,{BASE}"
@@ -86,7 +90,103 @@ def test_next_free_id_exhausted(directory: MemoryDirectory) -> None:
         next_free_id(directory, "posixGroup", "gidNumber", base="10-12")
 
 
+def test_concurrent_allocations_get_distinct_ids(directory: MemoryDirectory) -> None:
+    reservations = IdReservations()
+    start = Barrier(2)
+    results: list[int] = []
+
+    def allocate() -> None:
+        start.wait()
+        results.append(
+            next_free_id(
+                directory,
+                "posixGroup",
+                "gidNumber",
+                base="1100",
+                reservations=reservations,
+            )
+        )
+
+    threads = [Thread(target=allocate) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sorted(results) == [1101, 1102]
+
+
+def test_reserved_ids_are_skipped_until_they_expire() -> None:
+    now = [1000.0]
+    reservations = IdReservations(ttl=10, clock=lambda: now[0])
+    assert reservations.reserve("uidNumber", 1101) is True
+    assert reservations.reserve("uidNumber", 1101) is False
+    assert reservations.taken("uidNumber") == {1101}
+
+    now[0] += 11
+    assert reservations.taken("uidNumber") == set()
+    assert reservations.reserve("uidNumber", 1101) is True
+
+
+def test_reservations_are_shared_through_the_database(tmp_path: Path) -> None:
+    database = Database(tmp_path / "heracles.db")
+    first = IdReservations(database)
+    second = IdReservations(database)
+    assert first.reserve("gidNumber", 1101) is True
+    assert second.reserve("gidNumber", 1101) is False
+    assert second.taken("gidNumber") == {1101}
+
+
 # ------------------------------------------------------------ account tab
+
+
+def test_login_shell_options_come_from_the_configured_shells(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    settings = service.registry.settings["posix"]
+    settings.shells = ["/bin/ksh", "/bin/false"]
+    settings.default_shell = "/bin/ksh"
+    info = service.registry.get("user")
+    tab = info.tab("posix") or pytest.fail()
+    descriptor = (tab.attribute("loginShell") or pytest.fail()).describe()
+    assert descriptor["default"] == "/bin/ksh"
+    options = cast("list[dict[str, str]]", descriptor["options"])
+    assert [option["value"] for option in options] == ["/bin/ksh", "/bin/false"]
+
+    dn = new_user(service)
+    entry = directory.get(dn) or pytest.fail()
+    assert entry.text("loginShell") == "/bin/ksh"
+    service.update("user", dn, {"posix": {"values": {"loginShell": "/bin/false"}}})
+    assert (directory.get(dn) or pytest.fail()).text("loginShell") == "/bin/false"
+    with pytest.raises(ObjectValidationError) as refused:
+        service.update("user", dn, {"posix": {"values": {"loginShell": "/bin/zsh"}}})
+    assert "posix.loginShell" in refused.value.fields
+
+
+def test_gecos_uses_the_stored_cn_not_the_name_parts(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    dn = f"uid=legacy,{PEOPLE}"
+    directory.add(
+        dn,
+        {
+            "objectClass": [
+                b"inetOrgPerson",
+                b"organizationalPerson",
+                b"person",
+                b"posixAccount",
+                b"shadowAccount",
+            ],
+            "uid": [b"legacy"],
+            "cn": [b"Stored Name"],
+            "givenName": [b"Other"],
+            "sn": [b"Name"],
+            "uidNumber": [b"5000"],
+            "gidNumber": [b"5000"],
+            "homeDirectory": [b"/home/legacy"],
+        },
+    )
+    service.update("user", dn, {"posix": {"values": {"loginShell": "/bin/sh"}}})
+    assert (directory.get(dn) or pytest.fail()).text("gecos") == "Stored Name"
 
 
 def test_activation_allocates_ids_and_creates_personal_group(

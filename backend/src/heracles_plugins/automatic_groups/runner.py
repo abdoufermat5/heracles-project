@@ -15,6 +15,7 @@ from datetime import datetime
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, Entry, Modification
 from heracles.schema import names as schema
+from heracles_plugins._patterns import PatternError, compile_checked, search
 from heracles_plugins._secrets import is_secret_name
 from heracles_plugins._tasks import (
     TaskReport,
@@ -62,7 +63,8 @@ class AutomaticGroupsReport(TaskReport):
 def parse_rule(rule: str, default_attribute: str) -> tuple[str, re.Pattern[str]]:
     """Split ``[attribute:]regex``.
 
-    Raises ``re.error`` for an invalid expression and :class:`ForbiddenAttributeError` when the
+    Raises :class:`~heracles_plugins._patterns.PatternError` for an invalid or unsafe
+    expression (too long, nested quantifiers) and :class:`ForbiddenAttributeError` when the
     attribute holds secrets: the task runs with the server's rights and its result (who joins
     the group) is visible, so a rule such as ``userPassword:^{SSHA}ab`` would be an oracle.
     """
@@ -72,11 +74,11 @@ def parse_rule(rule: str, default_attribute: str) -> tuple[str, re.Pattern[str]]
     )
     if is_secret_name(attribute):
         raise ForbiddenAttributeError(attribute)
-    return attribute, re.compile(expression)
+    return attribute, compile_checked(expression)
 
 
 def _matches(user: Entry, attribute: str, regex: re.Pattern[str]) -> bool:
-    return any(regex.search(v) is not None for v in user.texts(attribute))
+    return any(search(regex, v) for v in user.texts(attribute))
 
 
 def _uses_dn(group: Entry) -> bool:
@@ -152,8 +154,8 @@ def run_automatic_groups(
                 task.text("hrcTasksAutomaticGroupsRegexPattern") or ".*",
                 settings.default_attribute,
             )
-        except re.error:
-            report.errors.append(f"{task.dn}: invalid rule")
+        except PatternError as exc:
+            report.errors.append(f"{task.dn}: invalid rule ({exc})")
             return False
         except ForbiddenAttributeError as exc:
             report.errors.append(f"{task.dn}: the rule cannot test {exc}")

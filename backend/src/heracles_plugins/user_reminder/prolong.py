@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from heracles.auth.ratelimit import RateLimiter
+from heracles.auth.ratelimit import LoginLimiter, RateLimiter
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import (
     DirectoryClient,
@@ -104,25 +104,55 @@ def prolong_account(
     return new
 
 
+def _client_ip(request: Request) -> str:
+    """The client address, honouring ``X-Forwarded-For`` behind a configured trusted proxy."""
+    state = getattr(request.app.state, "heracles", None)
+    if state is not None:
+        from heracles.api.deps import client_ip
+
+        return client_ip(request, state)
+    return request.client.host if request.client else "unknown"
+
+
 def build_prolong_router(
     get_directory: Callable[[], DirectoryClient],
     settings: Any,
     *,
     clock: Callable[[], float] = time.time,
-    limiter: RateLimiter | None = None,
+    limiter: LoginLimiter | None = None,
 ) -> APIRouter:
     """Router for ``POST /api/v2/reminder/prolong``.
 
     ``settings`` is the plugin settings object (``prolongation_days``), read at each request.
-    Failed attempts are rate limited per client address and login.
+    Failed attempts are rate limited per client address (through the trusted proxies) and
+    login. The limiter is the shared one when the application database is configured, so
+    attempts are counted across replicas; an explicit ``limiter`` wins.
     """
     router = APIRouter(prefix=PATH, tags=["reminder"])
-    guard = limiter if limiter is not None else RateLimiter()
+    guards: dict[int, LoginLimiter] = {}
+
+    def guard_for(request: Request) -> LoginLimiter:
+        if limiter is not None:
+            return limiter
+        state = getattr(request.app.state, "heracles", None)
+        database = getattr(state, "database", None)
+        slot = id(database)
+        found = guards.get(slot)
+        if found is None:
+            if database is not None:
+                from heracles.auth.ratelimit_db import SqliteRateLimiter
+
+                found = SqliteRateLimiter(database)
+            else:
+                found = RateLimiter()
+            guards[slot] = found
+        return found
 
     @router.post("/prolong")
     def prolong(body: ProlongRequest, request: Request) -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]
-        ip = request.client.host if request.client else "unknown"
+        ip = _client_ip(request)
         key = RateLimiter.key(ip, body.login)
+        guard = guard_for(request)
         wait = guard.retry_after(key)
         if wait > 0:
             raise HTTPException(

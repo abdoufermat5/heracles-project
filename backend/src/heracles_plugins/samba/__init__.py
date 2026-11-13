@@ -38,7 +38,7 @@ from heracles.ldap.filter import escape_filter_value
 from heracles.objects import ObjectType, Plugin, Section, Tab, TabAttachment
 from heracles.objects.hooks import TabContext
 from heracles_plugins.posix import settings_of as posix_settings_of
-from heracles_plugins.posix.ids import IdAllocationError, next_free_id
+from heracles_plugins.posix.ids import IdAllocationError, next_free_id, reservations_of
 from heracles_plugins.samba.flags import (
     DOMAIN_COMPUTERS_RID,
     DOMAIN_USERS_RID,
@@ -567,6 +567,7 @@ class SambaWorkstationTab(Tab):
                         "uidNumber",
                         base=posix.uid_number_base,
                         min_id=posix.min_id,
+                        reservations=reservations_of(ctx.registry),
                     )
                 )
             if ctx.activating or not values.get("sambaSID") or ctx.was_touched("sambaDomainName"):

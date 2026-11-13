@@ -6,6 +6,7 @@ from heracles.attributes import BooleanAttr, IntAttr, SelectAttr, StringAttr
 from heracles.i18n import _
 from heracles.ldap.client import DirectoryClient, NoSuchObjectError, Scope
 from heracles.objects import Plugin, Section, Tab, TabAttachment
+from heracles_plugins._secrets import CleartextSecretAttr
 
 PLUGIN_NAME = "cyrus"
 
@@ -103,10 +104,10 @@ class CyrusServiceTab(Tab):
             _("Admin user"),
             description=_("Cyrus administrator login"),
         ),
-        StringAttr(
+        CleartextSecretAttr(
             "hrcCyrusPassword",
             _("Admin password"),
-            description=_("Cyrus administrator password"),
+            description=_("Cyrus administrator password (leave empty to keep it)"),
         ),
     )
     options = Section(

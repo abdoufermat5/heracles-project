@@ -112,7 +112,7 @@ def test_create_server_with_cyrus_service(
     assert vals["hrcCyrusConnectOptions1"] == "/ssl"
     assert vals["hrcCyrusConnectOptions2"] == "/validate-cert"
     assert vals["hrcCyrusAdmin"] == "cyrusadmin"
-    assert vals["hrcCyrusPassword"] == "cyruspassword"
+    assert vals["hrcCyrusPassword"] is None  # write-only: never sent back
     assert vals["hrcCyrusUseSlashes"] is True
     assert vals["hrcCyrusAutocreateFolders"] == "Drafts,Sent,Trash,Archive"
 
@@ -200,3 +200,25 @@ def test_mail_servers_helper_cyrus(service: ObjectService, directory: MemoryDire
         },
     )
     assert cyrus.mail_servers(directory) == ["cyrus-mail"]
+
+
+def test_admin_password_is_write_only_and_kept_when_empty(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    dn = service.create(
+        "server",
+        BASE,
+        {
+            "main": {"values": {"cn": "cyrus-pw"}},
+            "cyrus": {"active": True, "values": {"hrcCyrusPassword": "first-secret"}},
+        },
+    )
+    assert service.load("server", dn).tabs["cyrus"].values["hrcCyrusPassword"] is None
+    assert (directory.get(dn) or pytest.fail()).text("hrcCyrusPassword") == "first-secret"
+
+    # An empty value keeps the stored password (the field is write-only: it reads as empty).
+    service.update("server", dn, {"cyrus": {"values": {"hrcCyrusPassword": ""}}})
+    assert (directory.get(dn) or pytest.fail()).text("hrcCyrusPassword") == "first-secret"
+
+    service.update("server", dn, {"cyrus": {"values": {"hrcCyrusPassword": "second-secret"}}})
+    assert (directory.get(dn) or pytest.fail()).text("hrcCyrusPassword") == "second-secret"

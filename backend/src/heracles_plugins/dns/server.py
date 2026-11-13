@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import queue
 import socket
 import socketserver
 import threading
@@ -131,15 +132,73 @@ def _ttl_of(zones: Sequence[Zone], answer: Answer) -> int:
     return zone.ttl if zone is not None else DEFAULT_TTL
 
 
-class _UdpServer(socketserver.ThreadingUDPServer):
-    """UDP server answering one datagram per request."""
+class _UdpServer(socketserver.UDPServer):
+    """UDP server: datagrams are queued to a bounded worker pool.
+
+    One thread per datagram lets a flood create threads without limit. A small fixed
+    pool reads the queue instead; when the queue is full the datagram is dropped (UDP
+    clients retry) instead of growing memory or threads.
+    """
 
     allow_reuse_address = True
-    daemon_threads = True
 
-    def __init__(self, address: tuple[str, int], dns_server: DnsServer) -> None:
+    def __init__(
+        self,
+        address: tuple[str, int],
+        dns_server: DnsServer,
+        *,
+        workers: int = 4,
+        queue_size: int = 256,
+    ) -> None:
         self.dns_server = dns_server
+        self._queue: queue.Queue[tuple[bytes, tuple[str, int]] | None] = queue.Queue(
+            maxsize=queue_size
+        )
+        self._workers: list[threading.Thread] = []
         super().__init__(address, _UdpHandler)
+        for index in range(max(1, workers)):
+            thread = threading.Thread(target=self._work, name=f"dns-udp-{index}", daemon=True)
+            thread.start()
+            self._workers.append(thread)
+
+    def enqueue(self, payload: bytes, address: tuple[str, int]) -> bool:
+        """Queue one datagram; False when the pool is saturated (the datagram is dropped)."""
+        try:
+            self._queue.put_nowait((payload, address))
+            return True
+        except queue.Full:
+            log.warning("dns_udp_saturated", queue=self._queue.maxsize)
+            return False
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        payload, _socket = cast(tuple[bytes, socket.socket], request)
+        self.enqueue(payload, cast(tuple[str, int], client_address))
+
+    def _work(self) -> None:
+        while True:
+            item = self._queue.get()
+            try:
+                if item is None:
+                    return
+                payload, address = item
+                response = self.dns_server.handle(payload, udp=True)
+                with contextlib.suppress(OSError):
+                    self.socket.sendto(response, address)
+            except Exception:
+                log.warning("dns_query_failed", exc_info=True)
+            finally:
+                self._queue.task_done()
+
+    def server_close(self) -> None:
+        super().server_close()
+        for _worker in self._workers:
+            try:
+                self._queue.put(None, timeout=_TCP_TIMEOUT)
+            except queue.Full:  # pragma: no cover - a worker drains the queue
+                break
+        for worker in self._workers:
+            worker.join(timeout=_TCP_TIMEOUT)
+        self._workers = []
 
 
 class _TcpServer(socketserver.ThreadingTCPServer):
@@ -154,18 +213,10 @@ class _TcpServer(socketserver.ThreadingTCPServer):
 
 
 class _UdpHandler(socketserver.BaseRequestHandler):
-    """One datagram, one response; a broken datagram never stops the server."""
+    """Unused: :class:`_UdpServer` queues the datagram to its worker pool instead."""
 
     def handle(self) -> None:
-        server = cast(_UdpServer, self.server)
-        payload, sock = cast(tuple[bytes, socket.socket], self.request)
-        try:
-            response = server.dns_server.handle(payload)
-        except Exception:
-            log.warning("dns_query_failed", exc_info=True)
-            return
-        with contextlib.suppress(OSError):
-            sock.sendto(response, self.client_address)
+        return None
 
 
 class _TcpHandler(socketserver.BaseRequestHandler):
@@ -272,17 +323,22 @@ class DnsServer:
         self._tcp_server = None
         self._threads = []
 
-    def handle(self, wire: bytes) -> bytes:
-        """Turn one query message into one response message."""
+    def handle(self, wire: bytes, *, udp: bool = False) -> bytes:
+        """Turn one query message into one response message.
+
+        ``udp`` bounds the answer to the request's EDNS payload (512 bytes without EDNS):
+        dnspython truncates the message and sets the TC bit, so the client retries over TCP.
+        """
         dns: Any = _import_dns()
         try:
             request = dns.message.from_wire(wire)
         except Exception:
             return _failure(dns, _message_id(wire), dns.rcode.FORMERR)
+        size = (request.payload or 512) if udp else 0
         if request.opcode() != dns.opcode.QUERY:
             response = dns.message.make_response(request)
             response.set_rcode(dns.rcode.NOTIMP)
-            return response.to_wire()
+            return response.to_wire(max_size=size, prefer_truncation=True)
         if not request.question:
             return _failure(dns, request.id, dns.rcode.FORMERR)
         question = request.question[0]
@@ -297,7 +353,7 @@ class DnsServer:
             _append(dns, response.authority, (answer.soa,), ttl, answer.zone)
         if answer.nxdomain:
             response.set_rcode(dns.rcode.NXDOMAIN)
-        return response.to_wire()
+        return response.to_wire(max_size=size, prefer_truncation=True)
 
     # -- zone snapshot ---------------------------------------------------------
 

@@ -15,6 +15,7 @@ from heracles.attributes import (
 )
 from heracles.i18n import _
 from heracles.objects import Plugin, Section, Tab, TabAttachment
+from heracles_plugins._secrets import CleartextSecretAttr
 
 PLUGIN_NAME = "quota"
 
@@ -130,7 +131,11 @@ class ServiceQuotaTab(Tab):
         _("LDAP access"),
         StringAttr("hrcQuotaLdapServer", _("LDAP server")),
         StringAttr("hrcQuotaLdapServerUserDn", _("LDAP user DN")),
-        StringAttr("hrcQuotaLdapServerUserPassword", _("LDAP password")),
+        CleartextSecretAttr(
+            "hrcQuotaLdapServerUserPassword",
+            _("LDAP password"),
+            description=_("Leave empty to keep the current password"),
+        ),
     )
 
 

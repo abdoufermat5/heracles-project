@@ -10,11 +10,16 @@ Also serves the raw LDIF of one object: ``GET /api/v2/objects/{type}/{dn}/ldif``
 from __future__ import annotations
 
 from heracles.objects import Plugin
-from heracles_plugins.ldapmanager.router import build_router
+from heracles_plugins.ldapmanager.router import LdifManagerSettings, build_router
 
 PLUGIN_NAME = "ldapmanager"
 
 
 def plugin() -> Plugin:
     """Entry point of the ldapmanager plugin."""
-    return Plugin(name=PLUGIN_NAME, version="0.1.0", api_routers=(build_router,))
+    return Plugin(
+        name=PLUGIN_NAME,
+        version="0.1.0",
+        api_routers=(build_router,),
+        settings=LdifManagerSettings(),
+    )

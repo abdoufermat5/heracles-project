@@ -218,6 +218,14 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
             dn,
             {"main": {"values": {"hrcTasksAutomaticGroupsRegexPattern": "("}}},
         )
+    for refused in ("(a+)+$", "a" * 300):
+        with pytest.raises(ObjectValidationError) as unsafe:
+            service.update(
+                "automatic_groups_task",
+                dn,
+                {"main": {"values": {"hrcTasksAutomaticGroupsRegexPattern": refused}}},
+            )
+        assert "main.hrcTasksAutomaticGroupsRegexPattern" in unsafe.value.fields
     with pytest.raises(ObjectValidationError):
         service.create(
             "automatic_groups_task",

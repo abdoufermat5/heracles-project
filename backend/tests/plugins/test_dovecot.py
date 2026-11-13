@@ -108,7 +108,7 @@ def test_create_server_with_dovecot_service(
     assert vals["hrcDovecotConnectOptions1"] == "/ssl"
     assert vals["hrcDovecotConnectOptions2"] == "/novalidate-cert"
     assert vals["hrcDovecotAdmin"] == "dovecotadmin"
-    assert vals["hrcDovecotPassword"] == "secretpassword"
+    assert vals["hrcDovecotPassword"] is None  # write-only: never sent back
 
 
 def test_update_and_deactivate_dovecot_tab(
@@ -219,3 +219,24 @@ def test_mail_servers_helper(service: ObjectService, directory: MemoryDirectory)
         },
     )
     assert dovecot.mail_servers(directory) == ["mail-a", "mail-b"]
+
+
+def test_admin_password_is_write_only_and_kept_when_empty(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    dn = service.create(
+        "server",
+        BASE,
+        {
+            "main": {"values": {"cn": "mail-pw"}},
+            "dovecot": {"active": True, "values": {"hrcDovecotPassword": "first-secret"}},
+        },
+    )
+    assert service.load("server", dn).tabs["dovecot"].values["hrcDovecotPassword"] is None
+    assert (directory.get(dn) or pytest.fail()).text("hrcDovecotPassword") == "first-secret"
+
+    service.update("server", dn, {"dovecot": {"values": {"hrcDovecotPassword": ""}}})
+    assert (directory.get(dn) or pytest.fail()).text("hrcDovecotPassword") == "first-secret"
+
+    service.update("server", dn, {"dovecot": {"values": {"hrcDovecotPassword": "second-secret"}}})
+    assert (directory.get(dn) or pytest.fail()).text("hrcDovecotPassword") == "second-secret"

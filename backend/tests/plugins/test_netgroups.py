@@ -8,6 +8,7 @@ import pytest
 
 import heracles_plugins.netgroups as netgroups
 import heracles_plugins.systems as systems
+from heracles.ldap.client import DirectoryError
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
@@ -285,6 +286,31 @@ def test_memberships_need_the_right_to_change_the_netgroup(
         restricted.update("user", user_dn, {"netgroup": {"values": {"nisMembership": []}}})
     entry = directory.get(ng_dn) or pytest.fail()
     assert "(-,jdoe,)" in entry.texts("nisNetgroupTriple")
+
+
+def test_a_failed_netgroup_write_fails_the_save(
+    service: ObjectService,
+    directory: MemoryDirectory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ng_dn = service.create("netgroup", PARIS, {"main": {"values": {"cn": "dev"}}})
+    user_dn = service.create(
+        "user",
+        PARIS,
+        {"main": {"values": {"uid": "jdoe", "sn": "Doe", "givenName": "John"}}},
+    )
+    real_modify = directory.modify
+
+    def failing(dn: str, changes: Any) -> None:
+        if any(change.attr.lower() == "nisnetgrouptriple" for change in changes):
+            raise DirectoryError("read-only netgroup")
+        real_modify(dn, changes)
+
+    monkeypatch.setattr(directory, "modify", failing)
+    with pytest.raises(ObjectValidationError) as refused:
+        service.update("user", user_dn, {"netgroup": {"values": {"nisMembership": [ng_dn]}}})
+    assert "netgroup.nisMembership" in refused.value.fields
+    assert "read-only netgroup" not in str(refused.value)  # the type, not the message
 
 
 def test_renaming_a_user_does_not_leave_the_old_login_in_the_netgroups(

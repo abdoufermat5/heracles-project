@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import csv
+import heapq
 import io
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -233,18 +234,41 @@ def _matches(event: Event, query: AuditQuery) -> bool:
     return True
 
 
-def find_events(directory: DirectoryClient, query: AuditQuery) -> list[Event]:
-    """Matching events, newest first."""
+def page_events(
+    directory: DirectoryClient,
+    query: AuditQuery,
+    *,
+    after: tuple[str, str] | None = None,
+    limit: int = DEFAULT_LIMIT,
+) -> tuple[list[Event], bool]:
+    """One page of matching events, newest first, reading the log as a stream.
+
+    The directory is read one page at a time and only the newest ``limit + 1``
+    matching events are kept: the response uses the same time as reading the whole
+    log, but its memory does not grow with the size of the log. ``after`` is the
+    cursor's ``(stamp, dn)``; events at or above it were shown already. Returns the
+    page and whether older events exist.
+    """
+    kept: list[tuple[tuple[str, str], Event]] = []
     try:
         entries = directory.search(
             audit_container(directory), _ldap_filter(query), Scope.ONE, list(_EVENT_ATTRS)
         )
-        parsed = [e for entry in entries if (e := parse_event(entry)) is not None]
+        for entry in entries:
+            event = parse_event(entry)
+            if event is None or not _matches(event, query):
+                continue
+            if after is not None and event.sort_key >= after:
+                continue
+            item = (event.sort_key, event)
+            if len(kept) < limit + 1:
+                heapq.heappush(kept, item)
+            elif item > kept[0]:
+                heapq.heapreplace(kept, item)
     except NoSuchObjectError:
-        return []
-    found = [e for e in parsed if _matches(e, query)]
-    found.sort(key=lambda e: e.sort_key, reverse=True)
-    return found
+        return [], False
+    ordered = [event for _key, event in sorted(kept, key=lambda pair: pair[0], reverse=True)]
+    return ordered[:limit], len(ordered) > limit
 
 
 def _safe(cell: str) -> str:
@@ -325,20 +349,17 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             result=result.strip(),
             q=q.strip(),
         )
-        events = find_events(user.directory, query)
         labels = Labels(user.directory)
         if format == "csv":
-            body = csv_export(events[:MAX_EXPORT], labels)
+            events, _more = page_events(user.directory, query, limit=MAX_EXPORT)
+            body = csv_export(events, labels)
             return Response(
                 body,
                 media_type="text/csv; charset=utf-8",
                 headers={"Content-Disposition": 'attachment; filename="audit-log.csv"'},
             )
         after = decode_cursor(cursor)
-        if after is not None:
-            events = [e for e in events if e.sort_key < after]
-        page = events[:limit]
-        more = len(events) > limit
+        page, more = page_events(user.directory, query, after=after, limit=limit)
         return {
             "items": [event_json(e, labels) for e in page],
             "next_cursor": encode_cursor(page[-1]) if more and page else None,

@@ -295,6 +295,7 @@ def test_server_service_quota(service: ObjectService, directory: MemoryDirectory
     assert tab.active
     assert tab.values["hrcQuotaBlockSize"] == 4096
     assert tab.values["hrcQuotaMsgFromSupport"] == "support@example.org"
+    assert tab.values["hrcQuotaLdapServerUserPassword"] is None  # write-only
 
     # Update serviceQuota
     service.update(
@@ -319,3 +320,33 @@ def test_server_service_quota(service: ObjectService, directory: MemoryDirectory
     entry = stored_entry(directory, server_dn)
     assert not entry.has_object_class("hrcQuotaService")
     assert entry.get("hrcQuotaDevice") == []
+
+
+def test_ldap_password_is_write_only_and_kept_when_empty(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    server_dn = service.create(
+        "server",
+        BASE,
+        {
+            "main": {"values": {"cn": "srv-quota-pw"}},
+            "serviceQuota": {"active": True, "values": {"hrcQuotaLdapServerUserPassword": "first"}},
+        },
+    )
+    loaded = service.load("server", server_dn)
+    assert loaded.tabs["serviceQuota"].values["hrcQuotaLdapServerUserPassword"] is None
+    assert stored_entry(directory, server_dn).text("hrcQuotaLdapServerUserPassword") == "first"
+
+    service.update(
+        "server",
+        server_dn,
+        {"serviceQuota": {"values": {"hrcQuotaLdapServerUserPassword": ""}}},
+    )
+    assert stored_entry(directory, server_dn).text("hrcQuotaLdapServerUserPassword") == "first"
+
+    service.update(
+        "server",
+        server_dn,
+        {"serviceQuota": {"values": {"hrcQuotaLdapServerUserPassword": "second"}}},
+    )
+    assert stored_entry(directory, server_dn).text("hrcQuotaLdapServerUserPassword") == "second"

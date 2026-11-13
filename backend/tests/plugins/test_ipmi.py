@@ -129,3 +129,33 @@ def test_ipmi_on_workstation(service: ObjectService, directory: MemoryDirectory)
     assert entry is not None
     assert entry.text("hrcIpmiIP") == "10.0.5.10"
     assert entry.text("hrcIpmiPassword") == "calvin"
+
+
+def test_ipmi_plugin_exposes_static_tabs() -> None:
+    plugin = ipmi.plugin()
+    assert plugin.tabs == ipmi.TABS
+    assert plugin.required_object_classes == ("hrcIpmiClient",)
+
+
+def test_ipmi_tabs_attach_to_both_system_types(registry: TypeRegistry) -> None:
+    assert registry.get("server").tab("ipmi") is ipmi.IpmiClientTab
+    assert registry.get("workstation").tab("ipmi") is ipmi.IpmiClientTab
+
+
+def test_ipmi_tabs_skip_absent_target_types(directory: MemoryDirectory) -> None:
+    reg = TypeRegistry()
+    register_builtin_types(reg)
+    classes = {c.lower() for c in directory.schema_object_classes()}
+    status = reg.register_plugin(ipmi.plugin(), classes)
+    assert status.enabled
+    assert all(info.tab("ipmi") is None for info in reg.list())
+
+
+def test_ipmi_tabs_attach_when_systems_register_later(directory: MemoryDirectory) -> None:
+    reg = TypeRegistry()
+    register_builtin_types(reg)
+    classes = {c.lower() for c in directory.schema_object_classes()}
+    statuses = reg.register_plugins([ipmi.plugin(), systems.plugin()], classes)
+    assert all(status.enabled for status in statuses)
+    assert reg.get("server").tab("ipmi") is ipmi.IpmiClientTab
+    assert reg.get("workstation").tab("ipmi") is ipmi.IpmiClientTab

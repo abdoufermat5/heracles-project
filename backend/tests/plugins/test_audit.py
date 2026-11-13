@@ -18,6 +18,7 @@ from heracles.objects import (
 )
 from heracles.objects.builtin import register_builtin_types
 from heracles_plugins.audit.events import write_event
+from heracles_plugins.audit.router import AuditQuery, page_events
 
 BASE = "dc=test"
 PEOPLE = f"ou=people,{BASE}"
@@ -342,3 +343,75 @@ def test_events_for_lists_events_about_and_by_the_user(
     assert len(found) == 3
     stamps = [e.text("hrcAuditDateTime") or "" for e in found]
     assert stamps == sorted(stamps, reverse=True)
+
+
+# --------------------------------------------------------------- paging
+
+
+def empty_query(**overrides: object) -> AuditQuery:
+    values: dict[str, object] = {
+        "start": None,
+        "end": None,
+        "actor": "",
+        "object": "",
+        "actions": [],
+        "type": "",
+        "result": "",
+        "q": "",
+    }
+    values.update(overrides)
+    return AuditQuery(**values)  # type: ignore[arg-type]
+
+
+def test_page_events_reads_newest_first_and_pages(directory: MemoryDirectory) -> None:
+    if directory.get(AUDIT) is None:
+        directory.add(AUDIT, {"objectClass": [b"organizationalUnit"], "ou": [b"audit"]})
+    for minute in range(5):
+        write_event(
+            directory,
+            action="modify",
+            object_type="user",
+            object_dn=f"uid=u{minute},{PEOPLE}",
+            author_dn=ADMIN,
+            now=NOW + timedelta(minutes=minute),
+        )
+    query = empty_query()
+    first, more = page_events(directory, query, limit=2)
+    assert [e.object for e in first] == [
+        f"uid=u4,{PEOPLE}",
+        f"uid=u3,{PEOPLE}",
+    ]
+    assert more is True
+
+    second, more = page_events(directory, query, after=first[-1].sort_key, limit=2)
+    assert [e.object for e in second] == [
+        f"uid=u2,{PEOPLE}",
+        f"uid=u1,{PEOPLE}",
+    ]
+    assert more is True
+
+    last, more = page_events(directory, query, after=second[-1].sort_key, limit=2)
+    assert [e.object for e in last] == [f"uid=u0,{PEOPLE}"]
+    assert more is False
+
+
+def test_page_events_applies_filters_while_reading(directory: MemoryDirectory) -> None:
+    if directory.get(AUDIT) is None:
+        directory.add(AUDIT, {"objectClass": [b"organizationalUnit"], "ou": [b"audit"]})
+    for index, (action, login) in enumerate(
+        [("login", "alice"), ("login", "bob"), ("modify", "alice"), ("login", "alice")]
+    ):
+        write_event(
+            directory,
+            action=action,
+            object_type="user",
+            object_dn=f"uid={login},{PEOPLE}",
+            author_dn=ADMIN,
+            attributes=[f"login: {login}"],
+            now=NOW + timedelta(minutes=index),
+        )
+    query = empty_query(actions=["login"], q="alice")
+    page, more = page_events(directory, query, limit=10)
+    assert more is False
+    assert [e.action for e in page] == ["login", "login"]
+    assert all("login: alice" in e.attributes for e in page)

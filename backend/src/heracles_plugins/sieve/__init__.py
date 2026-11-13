@@ -6,6 +6,7 @@ from heracles.attributes import IntAttr, SelectAttr, StringAttr
 from heracles.i18n import _
 from heracles.ldap.client import DirectoryClient, NoSuchObjectError, Scope
 from heracles.objects import Plugin, Section, Tab, TabAttachment
+from heracles_plugins._secrets import CleartextSecretAttr
 
 PLUGIN_NAME = "sieve"
 
@@ -84,10 +85,10 @@ class SieveServiceTab(Tab):
             _("Admin user"),
             description=_("ManageSieve administrator login"),
         ),
-        StringAttr(
+        CleartextSecretAttr(
             "hrcSievePassword",
             _("Admin password"),
-            description=_("ManageSieve administrator password"),
+            description=_("ManageSieve administrator password (leave empty to keep it)"),
         ),
     )
 

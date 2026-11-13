@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from typing import Any, cast
 
 from heracles.attributes import (
+    JSON,
     BooleanAttr,
     DateAttr,
     DepartmentAttr,
@@ -18,6 +19,7 @@ from heracles.attributes import (
     IntAttr,
     ListAttr,
     ObjectRefAttr,
+    Option,
     SelectAttr,
     StringAttr,
     TextAttr,
@@ -34,9 +36,20 @@ from heracles.ldap.client import (
     NoSuchObjectError,
 )
 from heracles.ldap.filter import escape_filter_value
-from heracles.objects import ObjectType, Plugin, Section, Tab, TabAttachment
+from heracles.objects import (
+    ObjectType,
+    ObjectValidationError,
+    Plugin,
+    Section,
+    Tab,
+    TabAttachment,
+)
 from heracles.objects.hooks import TabContext
-from heracles_plugins.posix.ids import IdAllocationError, next_free_id
+from heracles_plugins.posix.ids import (
+    IdAllocationError,
+    next_free_id,
+    reservations_of,
+)
 
 PLUGIN_NAME = "posix"
 EPOCH = date(1970, 1, 1)
@@ -66,8 +79,46 @@ class PosixSettings:
 
 
 def settings_of(ctx: TabContext) -> PosixSettings:
+    global _live_settings
     value = ctx.settings.get(PLUGIN_NAME)
-    return value if isinstance(value, PosixSettings) else PosixSettings()
+    if isinstance(value, PosixSettings):
+        _live_settings = value
+        return value
+    return PosixSettings()
+
+
+#: The settings object of the last registered POSIX plugin. Descriptors have no request
+#: context, so the shell select reads the configured shells from here (the registry keeps
+#: the same object, and the console updates it when the configuration changes).
+_live_settings: PosixSettings | None = None
+
+
+class ShellAttr(SelectAttr):
+    """Login shell: the allowed values are the shells configured at runtime."""
+
+    def _configured(self) -> tuple[tuple[str, ...], str]:
+        settings = _live_settings
+        if settings is None:
+            return tuple(PosixSettings().shells), PosixSettings().default_shell
+        return tuple(settings.shells), settings.default_shell
+
+    def _allowed(self) -> tuple[Option, ...]:
+        shells, _default = self._configured()
+        return tuple(Option(shell, shell) for shell in shells) or self.options
+
+    def _validate(self, value: str) -> list[str]:
+        allowed = {option.value for option in self._allowed()}
+        if allowed and value not in allowed:
+            return [_("Invalid choice.")]
+        return []
+
+    def describe_extra(self) -> dict[str, JSON]:
+        return {"options": [{"value": o.value, "label": o.label} for o in self._allowed()]}
+
+    def describe(self) -> dict[str, JSON]:
+        out = super().describe()
+        out["default"] = self._configured()[1]
+        return out
 
 
 def today_epoch_days() -> int:
@@ -136,6 +187,23 @@ def ascii_gecos(text: str) -> str:
     return folded if allowed else ""
 
 
+def _gecos_name(ctx: TabContext, main: dict[str, Any]) -> str:
+    """The name ``gecos`` is built from: ``cn`` (spec 06).
+
+    ``cn`` is computed from the given name and the surname *after* the tab hooks, so
+    a creation or a rename has no fresh ``cn`` yet: build it the same way (the display
+    name attribute of the user type). An entry whose stored ``cn`` differs from that
+    join (a legacy entry) keeps its ``cn``.
+    """
+    name_tab = ctx.info.main_tab.name
+    changed = ctx.was_touched("givenName", name_tab) or ctx.was_touched("sn", name_tab)
+    cn = main.get("cn")
+    if isinstance(cn, str) and cn.strip() and not changed:
+        return cn
+    parts = [p for p in (main.get("givenName"), main.get("sn")) if isinstance(p, str) and p]
+    return " ".join(parts) if parts else (cn if isinstance(cn, str) else "")
+
+
 # ------------------------------------------------------------------ helpers
 
 
@@ -171,6 +239,37 @@ def _group_by_cn(directory: DirectoryClient, cn: str, *, with_gid: bool) -> Entr
 def _gid_of(entry: Entry) -> int | None:
     text = entry.text("gidNumber")
     return int(text) if text and text.strip().isdigit() else None
+
+
+def _other_holder(
+    directory: DirectoryClient, object_class: str, attr: str, value: object, own_dn: str | None
+) -> str | None:
+    """DN of another entry of ``object_class`` already holding ``attr=value``."""
+    if not isinstance(value, int):
+        return None
+    flt = f"(&(objectClass={object_class})({attr}={value}))"
+    for entry in _search(directory, flt, [attr]):
+        if own_dn is None or dnlib.normalize(entry.dn) != dnlib.normalize(own_dn):
+            return entry.dn
+    return None
+
+
+def _refuse_duplicate(
+    directory: DirectoryClient,
+    object_class: str,
+    attr: str,
+    value: object,
+    own_dn: str | None,
+    field: str,
+) -> None:
+    """Fail the save (post-write check) when another entry got the same id meanwhile."""
+    holder = _other_holder(directory, object_class, attr, value, own_dn)
+    if holder is not None:
+        raise ObjectValidationError(
+            {
+                field: _("This id is already used by {dn}.").format(dn=holder),
+            }
+        )
 
 
 def _remove_member_everywhere(directory: DirectoryClient, uid: str) -> None:
@@ -218,11 +317,9 @@ class PosixAccountTab(Tab):
             description=_("Path to the home directory (default /home/<login>)"),
             pattern=r"/.*",
         ),
-        SelectAttr(
+        ShellAttr(
             "loginShell",
             _("Shell"),
-            options=[(s, s) for s in PosixSettings().shells],
-            default=PosixSettings().default_shell,
         ),
         virtual(
             ObjectRefAttr(
@@ -298,10 +395,7 @@ class PosixAccountTab(Tab):
         if not values.get("loginShell"):
             values["loginShell"] = settings.default_shell
         main = ctx.main_values()
-        full_name = " ".join(
-            p for p in (main.get("givenName"), main.get("sn")) if isinstance(p, str) and p
-        )
-        values["gecos"] = ascii_gecos(full_name) or None
+        values["gecos"] = ascii_gecos(_gecos_name(ctx, main)) or None
         force = bool(values.get("force_ids"))
 
         try:
@@ -347,6 +441,7 @@ class PosixAccountTab(Tab):
     def _prepare_ids(cls, ctx: TabContext, uid: str, settings: PosixSettings, force: bool) -> None:
         values = ctx.values
         directory = ctx.directory
+        reservations = reservations_of(ctx.registry)
         if ctx.activating and not force:
             values["uidNumber"] = next_free_id(
                 directory,
@@ -354,6 +449,7 @@ class PosixAccountTab(Tab):
                 "uidNumber",
                 base=settings.uid_number_base,
                 min_id=settings.min_id,
+                reservations=reservations,
             )
         elif force and not isinstance(values.get("uidNumber"), int):
             ctx.error("uidNumber", _("Required when ids are forced."))
@@ -390,6 +486,7 @@ class PosixAccountTab(Tab):
             "gidNumber",
             base=settings.gid_number_base,
             min_id=settings.min_id,
+            reservations=reservations,
         )
         values[PENDING_GROUP] = True
 
@@ -400,11 +497,22 @@ class PosixAccountTab(Tab):
             return
         directory = ctx.directory
         values = ctx.values
+        _refuse_duplicate(
+            directory,
+            "posixAccount",
+            "uidNumber",
+            values.get("uidNumber"),
+            ctx.dn,
+            "posix.uidNumber",
+        )
         # personal primary group
         if values.pop(PENDING_GROUP, False):
             gid = values.get("gidNumber")
             if isinstance(gid, int):
-                cls._create_personal_group(ctx, uid, gid)
+                group_dn = cls._create_personal_group(ctx, uid, gid)
+                _refuse_duplicate(
+                    directory, "posixGroup", "gidNumber", gid, group_dn, "posix.gidNumber"
+                )
         # login renamed: follow memberUid references
         old_uid = None
         if ctx.original is not None:
@@ -438,7 +546,7 @@ class PosixAccountTab(Tab):
                     )
 
     @classmethod
-    def _create_personal_group(cls, ctx: TabContext, uid: str, gid: int) -> None:
+    def _create_personal_group(cls, ctx: TabContext, uid: str, gid: int) -> str:
         directory = ctx.directory
         settings = settings_of(ctx)
         container = dnlib.join(settings.groups_rdn, ctx.base)
@@ -459,6 +567,7 @@ class PosixAccountTab(Tab):
                     "description": [_("Group of user {uid}").format(uid=uid).encode()],
                 },
             )
+        return group_dn
 
     @classmethod
     def on_deactivate(cls, ctx: TabContext) -> None:
@@ -535,20 +644,35 @@ class PosixGroup(ObjectType):
                         "gidNumber",
                         base=settings.gid_number_base,
                         min_id=settings.min_id,
+                        reservations=reservations_of(ctx.registry),
                     )
                 except IdAllocationError as exc:
                     ctx.error("gidNumber", str(exc))
 
+        @classmethod
+        def after_save(cls, ctx: TabContext) -> None:
+            _refuse_duplicate(
+                ctx.directory,
+                "posixGroup",
+                "gidNumber",
+                ctx.values.get("gidNumber"),
+                ctx.dn,
+                "main.gidNumber",
+            )
+
 
 def plugin() -> Plugin:
     """Entry point of the POSIX plugin."""
+    global _live_settings
+    settings = PosixSettings()
+    _live_settings = settings
     return Plugin(
         name=PLUGIN_NAME,
         version="0.1.0",
         types=(PosixGroup,),
         tabs=(TabAttachment("user", PosixAccountTab),),
         required_object_classes=("posixAccount", "shadowAccount", "posixGroup"),
-        settings=PosixSettings(),
+        settings=settings,
     )
 
 
@@ -557,6 +681,7 @@ __all__ = [
     "PosixAccountTab",
     "PosixGroup",
     "PosixSettings",
+    "ShellAttr",
     "ascii_gecos",
     "plugin",
     "posix_status",

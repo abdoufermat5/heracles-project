@@ -12,13 +12,12 @@ a grace period in days after the end date and whether to also lock the account.
 
 from __future__ import annotations
 
-import re
-
 from heracles.attributes import BooleanAttr, IntAttr, ListAttr, ObjectRefAttr, StringAttr
 from heracles.i18n import _
 from heracles.objects import Plugin, Section
 from heracles.objects.hooks import TabContext
 from heracles.objects.task_runner import TaskRunContext, TaskRunner
+from heracles_plugins._patterns import PatternError, compile_checked
 from heracles_plugins._tasks import TaskObjectType, TaskTab
 from heracles_plugins.lifecycle.runner import (
     TASK_CLASS,
@@ -85,9 +84,9 @@ class LifecycleTask(TaskObjectType):
             pattern = ctx.values.get("hrcTasksLifeCycleRegexPattern")
             if isinstance(pattern, str) and pattern:
                 try:
-                    re.compile(pattern)
-                except re.error:
-                    ctx.error("hrcTasksLifeCycleRegexPattern", _("Invalid regular expression."))
+                    compile_checked(pattern)
+                except PatternError as exc:
+                    ctx.error("hrcTasksLifeCycleRegexPattern", str(exc))
 
 
 def plugin() -> Plugin:

@@ -45,6 +45,27 @@ class Base64StringAttr(StringAttr):
         return errors
 
 
+class SecretBase64Attr(Base64StringAttr):
+    """A base64 key stored in the entry and never sent back to clients.
+
+    Write-only: the loaded value is ``None``; the empty value keeps the stored key, any
+    other text replaces it (after base64 validation).
+    """
+
+    write_only = True
+
+    def from_ldap(self, values: list[bytes]) -> str | None:
+        return None
+
+    def to_json(self, value: str | None) -> None:
+        return None
+
+    def validate(self, value: str | None) -> list[str]:
+        if value is None:
+            return []  # unchanged; "required" is enforced by the service on creation
+        return super().validate(value)
+
+
 class HwAddressAttr(CompositeAttr):
     """Hardware address '<type> <mac>' exposing type select and MAC address."""
 

@@ -5,13 +5,15 @@ from __future__ import annotations
 import pytest
 
 from heracles import demo
-from heracles.ldap.client import Entry
+from heracles.api.errors import ApiError
+from heracles.ldap.client import Entry, Scope
 from heracles.ldap.ldif import parse_ldif
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import TypeRegistry
 from heracles.objects.builtin import register_builtin_types
 from heracles_plugins.ldapmanager import csv_import as csvlib
 from heracles_plugins.ldapmanager import ldif_import as importer
+from heracles_plugins.ldapmanager.router import check_export_size
 
 BASE = demo.BASE
 
@@ -208,3 +210,16 @@ def test_row_values_and_payload() -> None:
 
 def test_entry_helper_is_importable() -> None:
     assert Entry("cn=x").dn == "cn=x"
+
+
+def test_export_size_check_refuses_too_many_entries(directory: MemoryDirectory) -> None:
+    with pytest.raises(ApiError) as refused:
+        check_export_size(directory, BASE, "(objectClass=*)", Scope.SUBTREE, 2)
+    assert refused.value.status == 422
+    assert refused.value.fields == {"filter": "too many entries"}
+
+    # The whole demo subtree fits under a wide cap, and an exact fit is allowed.
+    total = len(list(directory.search(BASE, "(objectClass=*)", Scope.SUBTREE)))
+    check_export_size(directory, BASE, "(objectClass=*)", Scope.SUBTREE, total)
+    with pytest.raises(ApiError):
+        check_export_size(directory, BASE, "(objectClass=*)", Scope.SUBTREE, total - 1)
