@@ -190,3 +190,54 @@ def test_pass_limited_to_kinds() -> None:
     scheduler = make(TaskRunner("one", one, kind="k1"), TaskRunner("two", run, kind="k2"))
     runs = scheduler.run_pass(["a"], kinds=["k1"])
     assert runs is not None and [r.kind for r in runs] == ["k1"] and seen == ["dc=a"]
+
+
+def _timed_scheduler(now: list[float], *runners: TaskRunner) -> tuple[Scheduler, TaskStore]:
+    registry = TypeRegistry()
+    registry.task_runners.extend(("demo", r) for r in runners)
+    store = TaskStore(Database(":memory:"), clock=lambda: now[0])
+    scheduler = Scheduler(registry, {"a": MemoryDirectory("dc=a")}, store, lease_seconds=600)
+    return scheduler, store
+
+
+def test_a_long_pass_renews_its_lease() -> None:
+    now = [100.0]
+    stolen: list[bool] = []
+    ran: list[str] = []
+
+    def slow(name: str, others_try: bool) -> TaskRunner:
+        def run(_ctx: TaskRunContext) -> FakeReport:
+            ran.append(name)
+            now[0] += 400.0  # each runner takes 400 s: the pass outlives one 600 s lease
+            if others_try:
+                stolen.append(store.acquire_lease("other", 600))
+            return FakeReport()
+
+        return TaskRunner(name, run)
+
+    scheduler, store = _timed_scheduler(now, slow("r1", False), slow("r2", True), slow("r3", False))
+    runs = scheduler.run_pass()
+    assert runs is not None and ran == ["r1", "r2", "r3"]
+    assert stolen == [False]  # without renewal the first lease would have expired at 700
+
+
+def test_a_pass_stops_when_its_lease_was_taken_over() -> None:
+    now = [100.0]
+    ran: list[str] = []
+
+    def first(_ctx: TaskRunContext) -> FakeReport:
+        ran.append("first")
+        now[0] += 700.0  # the lease expires, another replica takes it
+        assert store.acquire_lease("other", 600)
+        return FakeReport()
+
+    def second(_ctx: TaskRunContext) -> FakeReport:
+        ran.append("second")
+        return FakeReport()
+
+    scheduler, store = _timed_scheduler(
+        now, TaskRunner("first", first), TaskRunner("second", second)
+    )
+    runs = scheduler.run_pass()
+    assert runs is not None and [r.runner for r in runs] == ["first"]
+    assert ran == ["first"]

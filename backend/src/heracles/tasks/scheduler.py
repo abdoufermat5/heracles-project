@@ -289,6 +289,11 @@ class Scheduler:
                         break
                     if only is not None and runner.kind not in only:
                         continue
+                    # a long pass must not outlive its lease: another replica would start the
+                    # same runners (reminder mails twice); renew it, stop when it is lost
+                    if not self.store.acquire_lease(owner, self._lease_seconds):
+                        log.warning("tasks.pass_aborted", reason="lease lost")
+                        return runs
                     run = self._run_one(registry, dir_id, directory, plugin_name, runner)
                     self.store.record(run)
                     runs.append(run)
