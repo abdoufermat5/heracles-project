@@ -54,6 +54,24 @@ describe('locales', () => {
       expect(typeof lookup(fr, `setup.check.${id}`)).toBe('string')
     expect(fr.hooks.modes.premodify).not.toBe(en.hooks.modes.premodify)
   })
+
+  it('gives every health check a title, an explanation and a resolution in both languages', () => {
+    // The server decides which checks exist; the four maps must cover each of them, or the
+    // screen shows a raw key. The set is read from the explanation map, the one a new check
+    // is written in first.
+    const ids = Object.keys(en.settingsUI.health.checkExpl)
+    expect(ids.length).toBeGreaterThan(0)
+    for (const id of ids) {
+      for (const tree of [en, fr]) {
+        expect(typeof lookup(tree, `setup.check.${id}`)).toBe('string')
+        expect(typeof lookup(tree, `settingsUI.health.checkExpl.${id}`)).toBe('string')
+        expect(typeof lookup(tree, `settingsUI.health.checkFix.${id}`)).toBe('string')
+      }
+      expect(lookup(fr, `settingsUI.health.checkExpl.${id}`)).not.toBe(
+        lookup(en, `settingsUI.health.checkExpl.${id}`),
+      )
+    }
+  })
 })
 
 describe('config model', () => {

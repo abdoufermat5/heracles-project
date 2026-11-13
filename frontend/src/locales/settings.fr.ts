@@ -168,6 +168,7 @@ export const settingsFr: typeof settingsEn = {
         departments: 'Vérifie la présence du marqueur de département sur les unités organisationnelles.',
         duplicate_ids: 'Recherche les doublons d\'identifiants numériques uidNumber ou gidNumber.',
         plugin_data: 'Compte les entrées qui utilisent le schéma de modules désactivés (leurs onglets sont masqués dans la console).',
+        transport: 'Vérifie que la connexion à l\'annuaire est chiffrée, pour que le mot de passe de connexion et ceux saisis dans la console ne circulent jamais en clair.',
       },
       checkFix: {
         root_object: 'Ajoute les classes organisationnelles manquantes à l\'entrée racine.',
@@ -181,6 +182,7 @@ export const settingsFr: typeof settingsEn = {
         departments: 'Ajoute la classe d\'objet de département aux unités organisationnelles.',
         duplicate_ids: 'Rapport seul. Réattribuez manuellement des identifiants uniques aux entrées en conflit.',
         plugin_data: 'Rapport seul. Réactivez le module ou nettoyez les entrées.',
+        transport: 'Rapport seul. Utilisez une URI ldaps://, ou ldap:// avec StartTLS, dans la configuration de l\'annuaire.',
       },
     },
     tasks: {

@@ -345,6 +345,7 @@ export const adminFr: typeof adminEn = {
       departments: 'Départements',
       duplicate_ids: 'Identifiants en double',
       plugin_data: 'Données de modules désactivés',
+      transport: 'Sécurité de la connexion',
     },
     affected: 'Entrées concernées',
     applyFix: 'Corriger la sélection ({{count}})',

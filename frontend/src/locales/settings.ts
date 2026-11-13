@@ -170,6 +170,7 @@ export const settingsEn = {
         departments: 'Checks organizational units for department structural markers.',
         duplicate_ids: 'Scans for duplicate numeric uidNumber or gidNumber identifiers across accounts.',
         plugin_data: 'Counts entries that use the schema of plugins that are switched off (their tabs are hidden in the console).',
+        transport: 'Checks that the connection to the directory is encrypted, so the bind password and the passwords sent through the console never travel in clear.',
       },
       checkFix: {
         root_object: 'Adds the missing organizational classes to the directory base entry.',
@@ -183,6 +184,7 @@ export const settingsEn = {
         departments: 'Adds the department auxiliary object class to the organizational units.',
         duplicate_ids: 'Report only. Manually reassign duplicate numeric IDs on the conflicting entries to prevent Unix permission collisions.',
         plugin_data: 'Report only. Enable the plugin again, or clean up the entries.',
+        transport: 'Report only. Use an ldaps:// URI, or ldap:// with StartTLS, in the directory configuration.',
       },
     },
     tasks: {

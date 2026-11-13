@@ -333,6 +333,7 @@ export const adminEn = {
       departments: 'Departments',
       duplicate_ids: 'Duplicate identifiers',
       plugin_data: 'Data of disabled plugins',
+      transport: 'Connection security',
     },
     affected: 'Affected entries',
     applyFix: 'Fix {{count}} selected',
