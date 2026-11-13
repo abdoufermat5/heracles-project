@@ -30,7 +30,7 @@ def ensure_container(directory: DirectoryClient, container_dn: str) -> None:
                 current,
                 {
                     schema.STD_ATTR.OBJECT_CLASS: [schema.STD_OC.ORGANIZATIONAL_UNIT.encode()],
-                    schema.STD_ATTR.OU: [value.strip().encode("utf-8")],
+                    schema.STD_ATTR.OU: [dnlib.unescape_rdn_value(dnlib.strip_rdn(value)).encode()],
                 },
             )
         except AlreadyExistsError:

@@ -140,6 +140,11 @@ class Registry:
         with self._lock:
             self._collectors.append(collector)
 
+    def remove_collector(self, collector: Collector) -> None:
+        """Forget a collector registered with :meth:`add_collector` (no-op when unknown)."""
+        with self._lock:
+            self._collectors = [c for c in self._collectors if c != collector]
+
     def render(self) -> str:
         lines: list[str] = []
         for metric in list(self._metrics):

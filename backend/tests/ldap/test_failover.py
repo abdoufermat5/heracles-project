@@ -152,3 +152,26 @@ def test_replicas_do_not_take_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(DirectoryUnavailableError):
         d.add("cn=x,dc=x", {"cn": [b"x"]})
     assert ("ldap://r", "add") not in calls
+
+
+def test_check_password_refuses_an_empty_dn_without_binding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    d, calls = _directory(monkeypatch, {"ldap://a": "ok"}, Clock(), uri="ldap://a")
+    assert d.check_password("", "anything") is False
+    assert d.check_password("  ", "anything") is False
+    assert d.check_password("uid=a,dc=x", "") is False
+    assert calls == []  # no connection was even opened
+    assert d.check_password("uid=a,dc=x", "pw") is True
+    assert calls == [("ldap://a", "bind")]
+
+
+def test_close_unregisters_the_metrics_collector(monkeypatch: pytest.MonkeyPatch) -> None:
+    from heracles import metrics
+
+    mod, _calls = _make_stub({"ldap://a": "ok"})
+    monkeypatch.setattr(pyldap, "_import_ldap", lambda: mod)
+    d = pyldap.PyLdapDirectory(DirectoryConfig(id="short-lived", base_dn="dc=x", uri="ldap://a"))
+    assert 'directory="short-lived"' in metrics.REGISTRY.render()
+    d.close()
+    assert 'directory="short-lived"' not in metrics.REGISTRY.render()

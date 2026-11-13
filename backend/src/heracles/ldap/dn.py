@@ -24,6 +24,23 @@ def escape_rdn_value(value: str) -> str:
     return "".join(out)
 
 
+def _is_escaped(text: str, index: int) -> bool:
+    """True when the character at ``index`` is preceded by an odd number of backslashes."""
+    count = 0
+    while index - 1 - count >= 0 and text[index - 1 - count] == "\\":
+        count += 1
+    return count % 2 == 1
+
+
+def strip_rdn(text: str) -> str:
+    """Trim surrounding whitespace; an escaped trailing space is part of the value."""
+    text = text.lstrip()
+    end = len(text)
+    while end and text[end - 1].isspace() and not _is_escaped(text, end - 1):
+        end -= 1
+    return text[:end]
+
+
 def split(dn: str) -> list[str]:
     """Split a DN into RDN strings, honouring backslash escapes."""
     if "\\" not in dn:  # nothing escaped: every comma separates
@@ -39,14 +56,57 @@ def split(dn: str) -> list[str]:
             current.append(ch)
             escaped = True
         elif ch == ",":
-            parts.append("".join(current).strip())
+            parts.append(strip_rdn("".join(current)))
             current = []
         else:
             current.append(ch)
-    tail = "".join(current).strip()
+    tail = strip_rdn("".join(current))
     if tail or parts:
         parts.append(tail)
     return [p for p in parts if p]
+
+
+_HEX = frozenset("0123456789abcdefABCDEF")
+#: Characters that must be escaped inside an RDN value (RFC 4514 section 2.4).
+_VALUE_SPECIAL = frozenset('"+,;<>\\')
+
+
+def unescape_rdn_value(value: str) -> str:
+    """Decode the escapes of an RDN value: ``\\<char>`` and ``\\XX`` (UTF-8 hex pairs)."""
+    if "\\" not in value:
+        return value
+    out = bytearray()
+    i = 0
+    size = len(value)
+    while i < size:
+        ch = value[i]
+        if ch == "\\" and i + 1 < size:
+            pair = value[i + 1 : i + 3]
+            if len(pair) == 2 and pair[0] in _HEX and pair[1] in _HEX:
+                out.append(int(pair, 16))
+                i += 3
+            else:
+                out += value[i + 1].encode("utf-8", "surrogatepass")
+                i += 2
+            continue
+        out += ch.encode("utf-8", "surrogatepass")
+        i += 1
+    return out.decode("utf-8", "surrogateescape")
+
+
+def _canonical_value(value: str) -> str:
+    """Lower-cased value in one escaping style, so that ``\\,``, ``\\2c`` and ``\\2C`` agree."""
+    text = unescape_rdn_value(strip_rdn(value)).lower()
+    last = len(text) - 1
+    out: list[str] = []
+    for i, ch in enumerate(text):
+        if ch in _VALUE_SPECIAL or (i == 0 and ch in "# ") or (i == last and ch == " "):
+            out.append("\\" + ch)
+        elif ch == "\x00":
+            out.append("\\00")
+        else:
+            out.append(ch)
+    return "".join(out)
 
 
 @lru_cache(maxsize=32768)
@@ -58,7 +118,7 @@ def normalize(dn: str) -> str:
     normalized: list[str] = []
     for rdn in split(dn):
         attr, sep, value = rdn.partition("=")
-        normalized.append(f"{attr.strip().lower()}{sep}{value.strip().lower()}")
+        normalized.append(f"{attr.strip().lower()}{sep}{_canonical_value(value)}")
     return ",".join(normalized)
 
 

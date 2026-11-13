@@ -204,7 +204,12 @@ class PyLdapDirectory:
         return self._config.base_dn
 
     def close(self) -> None:
-        """Unbind and drop the idle connections (one in use is kept by its operation)."""
+        """Unbind and drop the idle connections (one in use is kept by its operation).
+
+        The directory also stops reporting metrics: short-lived clients (the setup console
+        tests connections) must not stay registered, and referenced, for the process lifetime.
+        """
+        metrics.REGISTRY.remove_collector(self._collect)
         with self._lock:
             idle, self._idle = self._idle, []
         for _uri, conn in idle:
@@ -230,7 +235,11 @@ class PyLdapDirectory:
                 conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
                 conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
         if cfg.starttls and not secure:
-            conn.start_tls_s()
+            try:
+                conn.start_tls_s()
+            except ldap.LDAPError:
+                self._unbind(conn)
+                raise
         return conn
 
     def _checkout(self, uri: str) -> tuple[Any, bool]:
@@ -427,7 +436,8 @@ class PyLdapDirectory:
         return dnlib.join(new_rdn, superior)
 
     def check_password(self, dn: str, password: str) -> bool:
-        if not password:
+        # An empty DN is an anonymous bind, which some servers accept whatever the password.
+        if not dn.strip() or not password:
             return False
         ldap = self._ldap
         last: BaseException | None = None

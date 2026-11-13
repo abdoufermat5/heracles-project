@@ -86,17 +86,7 @@ def _rdn_pair(rdn: str) -> tuple[str, str]:
     attr, sep, value = rdn.partition("=")
     if not sep or not attr.strip():
         raise DirectoryError(f"invalid RDN: {rdn!r}")
-    out: list[str] = []
-    escaped = False
-    for ch in value.strip():
-        if escaped:
-            out.append(ch)
-            escaped = False
-        elif ch == "\\":
-            escaped = True
-        else:
-            out.append(ch)
-    return attr.strip(), "".join(out)
+    return attr.strip(), dnlib.unescape_rdn_value(dnlib.strip_rdn(value))
 
 
 class MemoryDirectory:
