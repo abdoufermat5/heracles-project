@@ -41,3 +41,10 @@ def test_parse_invalid(bad: str) -> None:
 def test_round_trip() -> None:
     now = datetime(2030, 12, 31, 23, 59, 59, tzinfo=UTC)
     assert parse_generalized_time(format_generalized_time(now)) == now
+
+
+def test_overflow_is_reported_as_invalid() -> None:
+    with pytest.raises(ValueError):
+        parse_generalized_time("99991231235959-0100")  # 10000-01-01 in UTC
+    with pytest.raises(ValueError):
+        parse_generalized_time("20200101000000+9900")  # offset beyond 24 hours

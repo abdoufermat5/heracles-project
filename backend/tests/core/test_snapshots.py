@@ -141,3 +141,29 @@ def test_corruption_detected(svc: SnapshotService, directory: MemoryDirectory) -
     with pytest.raises(SnapshotError):
         svc.ldif(snap.dn)
     assert len(list(directory.search(BASE, scope=Scope.ONE))) == 1
+
+
+def test_restore_refuses_entries_outside_the_snapshotted_subtree(
+    svc: SnapshotService, directory: MemoryDirectory
+) -> None:
+    from heracles.ldap.client import Modification
+
+    snap = svc.create(SUB)
+    foreign = "dc=heracles,dc=test"
+    forged = zlib.compress(
+        (
+            f"dn: {SUB}\nobjectClass: organizationalUnit\nou: sub\n\n"
+            f"dn: cn=intruder,{foreign}\nobjectClass: organizationalRole\ncn: intruder\n"
+        ).encode()
+    )
+    directory.modify(
+        snap.dn,
+        [
+            Modification("replace", "hrcSnapshotData", [forged]),
+            Modification("delete", "hrcSnapshotHash"),
+        ],
+    )
+    with pytest.raises(SnapshotError):
+        svc.restore(snap.dn)
+    assert directory.get(f"uid=carol,{SUB}") is not None  # nothing was deleted
+    assert directory.get(f"cn=intruder,{foreign}") is None

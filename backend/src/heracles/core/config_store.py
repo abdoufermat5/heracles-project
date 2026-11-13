@@ -36,6 +36,8 @@ from heracles.schema import names as schema
 type Kind = Literal["str", "text", "int", "bool", "list", "select", "path"]
 
 CACHE_TTL_SECONDS: Final = 30.0
+#: How long the fallback of an unreadable configuration entry is reused.
+FAILURE_TTL_SECONDS: Final = 2.0
 _TRUE: Final = "TRUE"
 _FALSE: Final = "FALSE"
 
@@ -523,14 +525,19 @@ def effective_settings(
                 hit = None
         if hit is not None and now - hit[0] < CACHE_TTL_SECONDS:
             return hit[1]
+    unreadable = False
     try:
         snapshot = read_config(directory)
     except Exception:  # an unreachable entry must not break callers
         snapshot = ConfigSnapshot(False)
+        unreadable = True
     config = merge(snapshot, yaml)
     if yaml is None:
+        # the YAML fallback of a failed read is kept for a moment only: the stricter values
+        # stored in the directory (password policy, ...) must not be lost for the whole TTL
+        stamp = now - (CACHE_TTL_SECONDS - FAILURE_TTL_SECONDS) if unreadable else now
         with _lock, contextlib.suppress(TypeError):
-            _cache[directory] = (now, config)
+            _cache[directory] = (stamp, config)
     return config
 
 

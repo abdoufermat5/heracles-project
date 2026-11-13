@@ -7,7 +7,7 @@ exists). Fixes only touch the DNs they are given and report what they did.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Final, Literal
 
 import structlog
@@ -205,7 +205,7 @@ def _department_of(ctx: CheckContext, dn: str) -> str:
 
 
 def _rdn_value(dn: str) -> str:
-    return dnlib.rdn(dn).partition("=")[2]
+    return dnlib.unescape_rdn_value(dnlib.strip_rdn(dnlib.rdn(dn).partition("=")[2]))
 
 
 def _in_container(dn: str, container_rdn: str) -> bool:
@@ -226,13 +226,42 @@ def _add_classes(directory: DirectoryClient, entry: Entry, classes: Sequence[str
 _REFERENCE_ATTRS = ("member", "uniqueMember", "roleOccupant", "owner", "manager", "seeAlso")
 
 
+def _renamed_assignments(values: Sequence[str], target: str, new: str) -> list[str] | None:
+    """ACL assignment values with ``target`` (a normalised DN) replaced by ``new``.
+
+    ``None`` when no value refers to it; values that do not parse are kept untouched.
+    """
+    out: list[str] = []
+    changed = False
+    for value in values:
+        parsed = parse_assignment(value)
+        if isinstance(parsed, AclAssignment) and target in {
+            dnlib.normalize(d) for d in (parsed.role_dn, *parsed.members) if d != "*"
+        }:
+            role = new if dnlib.normalize(parsed.role_dn) == target else parsed.role_dn
+            members = tuple(
+                new if m != "*" and dnlib.normalize(m) == target else m for m in parsed.members
+            )
+            value = serialise_assignment(replace(parsed, role_dn=role, members=members))
+            changed = True
+        out.append(value)
+    return out if changed else None
+
+
 def _propagate_rename(directory: DirectoryClient, old: str, new: str, base: str) -> None:
-    """Rewrite references to ``old`` in the usual DN-valued attributes."""
+    """Rewrite references to ``old`` in the usual DN-valued attributes and ACL assignments."""
     quoted = escape_filter_value(old)
-    flt = "(|" + "".join(f"({a}={quoted})" for a in _REFERENCE_ATTRS) + ")"
+    acl_attr = schema.ATTR.ACL_ENTRY
+    clauses = [f"({a}={quoted})" for a in _REFERENCE_ATTRS]
+    clauses.append(f"({acl_attr}=*)")  # DNs are encoded inside the assignment values
     try:
-        holders = list(directory.search(base, flt, Scope.SUBTREE, list(_REFERENCE_ATTRS)))
-    except DirectoryError:
+        holders = list(
+            directory.search(
+                base, "(|" + "".join(clauses) + ")", Scope.SUBTREE, [*_REFERENCE_ATTRS, acl_attr]
+            )
+        )
+    except DirectoryError as exc:
+        log.warning("rename_references_not_updated", dn=old, error=type(exc).__name__)
         return
     target = dnlib.normalize(old)
     for holder in holders:
@@ -242,6 +271,9 @@ def _propagate_rename(directory: DirectoryClient, old: str, new: str, base: str)
             if any(dnlib.normalize(v) == target for v in values):
                 rewritten = [new if dnlib.normalize(v) == target else v for v in values]
                 mods.append(Modification("replace", attr, [v.encode() for v in rewritten]))
+        assignments = _renamed_assignments(holder.texts(acl_attr), target, new)
+        if assignments is not None:
+            mods.append(Modification("replace", acl_attr, [v.encode() for v in assignments]))
         if mods:
             directory.modify(holder.dn, mods)
 
@@ -445,7 +477,11 @@ def fix_super_admin(ctx: CheckContext, dns: Sequence[str], options: Mapping[str,
     del dns
     result = FixResult("super_admin")
     user = options.get("dn", "").strip()
-    if not user or ctx.directory.get(user) is None:
+    try:
+        exists = bool(user) and ctx.directory.get(user) is not None
+    except DirectoryError:  # not a valid DN
+        exists = False
+    if not exists:
         result.failed[user or "dn"] = "Choose an existing user."
         return result
     try:

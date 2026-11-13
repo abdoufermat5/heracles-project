@@ -221,6 +221,9 @@ class SnapshotService:
         if not records:
             raise SnapshotError(f"{snapshot_dn} is empty")
         root = records[0].dn
+        stray = [e.dn for e in records if not dnlib.is_descendant(e.dn, root)]
+        if stray:  # checked before anything is deleted: a snapshot holds one subtree
+            raise SnapshotError(f"{snapshot_dn} holds entries outside {root}: {stray[0]}")
         parent = dnlib.parent(root)
         if parent is not None and self._dir.get(parent, ["objectClass"]) is None:
             raise NoSuchObjectError(parent)

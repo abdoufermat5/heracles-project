@@ -111,3 +111,24 @@ def test_every_field_has_an_attribute() -> None:
     keys = {f.key for f in cs.CONFIG_FIELDS}
     assert keys <= set(schema.CONFIG_ATTRS)
     assert {f.section for f in cs.CONFIG_FIELDS} <= set(cs.SECTIONS)
+
+
+def test_a_failed_read_is_retried_soon_and_does_not_stick_for_the_whole_ttl(
+    directory: MemoryDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from heracles.ldap.client import DirectoryUnavailableError
+
+    cs.save_config(directory, {"password_min_length": 14})
+    cs.invalidate(directory)
+    real_get = directory.get
+    clock = [1000.0]
+    monkeypatch.setattr(cs.time, "monotonic", lambda: clock[0])
+
+    def down(_dn: str, _attrs: object = None) -> None:
+        raise DirectoryUnavailableError("down")
+
+    monkeypatch.setattr(directory, "get", down)
+    assert cs.effective_settings(directory).password_min_length == 8  # YAML fallback
+    monkeypatch.setattr(directory, "get", real_get)
+    clock[0] += cs.FAILURE_TTL_SECONDS + 0.1  # far below the 30 s cache TTL
+    assert cs.effective_settings(directory).password_min_length == 14

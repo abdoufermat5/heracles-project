@@ -3,6 +3,8 @@ from __future__ import annotations
 import pytest
 
 from heracles import demo
+from heracles.acl.model import AclAssignment
+from heracles.acl.parser import parse_assignment
 from heracles.core import setup_checks as sc
 from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
@@ -186,3 +188,40 @@ def test_duplicate_ids_report_only(directory: MemoryDirectory) -> None:
         sc.run_fix(ctx, "duplicate_ids")
     with pytest.raises(sc.UnknownCheckError):
         sc.run_fix(ctx, "nope")
+
+
+def test_move_rewrites_acl_assignments_that_name_the_moved_entry(
+    directory: MemoryDirectory,
+) -> None:
+    ctx = sc.context_for(directory)
+    stray = f"cn=stray-group,ou=lyon,{BASE}"
+    directory.add(stray, {"objectClass": [b"groupOfNames"], "cn": [b"stray-group"], "member": []})
+    role = sc._ensure_role(ctx, *sc.SUPER_ADMIN_ROLE)  # pyright: ignore[reportPrivateUsage]
+    sc._add_base_assignment(ctx, role, stray)  # pyright: ignore[reportPrivateUsage]
+
+    outcome = sc.run_fix(ctx, "groups_tree", [stray])
+    moved = f"cn=stray-group,ou=groups,ou=lyon,{BASE}"
+    assert outcome.fixed == [moved]
+    base_entry = directory.get(BASE)
+    assert base_entry is not None
+    members = [
+        m
+        for value in base_entry.texts("hrcAclEntry")
+        if isinstance(parsed := parse_assignment(value), AclAssignment)
+        for m in parsed.members
+    ]
+    assert moved in members and stray not in members
+
+
+def test_super_admin_fix_reports_a_malformed_dn_instead_of_raising(
+    directory: MemoryDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from heracles.ldap.client import DirectoryError
+
+    def refuse(_dn: str, _attrs: object = None) -> None:
+        raise DirectoryError("Invalid DN syntax")
+
+    ctx = sc.context_for(directory)
+    monkeypatch.setattr(directory, "get", refuse)
+    outcome = sc.run_fix(ctx, "super_admin", options={"dn": "not a dn"})
+    assert outcome.failed == {"not a dn": "Choose an existing user."} and not outcome.fixed

@@ -43,6 +43,15 @@ def parse_generalized_time(text: str) -> datetime:
         )
     except ValueError as exc:
         raise ValueError(f"invalid GeneralizedTime: {text!r}") from exc
+    try:
+        return _apply_fraction_and_zone(base, match)
+    except OverflowError as exc:  # year 9999 plus a fraction or an offset
+        raise ValueError(f"invalid GeneralizedTime: {text!r}") from exc
+
+
+def _apply_fraction_and_zone(base: datetime, match: re.Match[str]) -> datetime:
+    minute = match["mi"]
+    second = match["s"]
     frac = match["frac"]
     if frac:
         fraction = float("0." + frac)
