@@ -62,6 +62,7 @@ const en = {
     openMenu: 'Open navigation menu',
     search: 'Search',
     searchPlaceholder: 'Search…',
+    reset: 'Reset',
   },
   user: {
     menu: 'User menu',
@@ -273,7 +274,6 @@ const en = {
     accountLockedSuccess: 'Account locked.',
     accountUnlockedSuccess: 'Account unlocked.',
     actions: 'Actions',
-    backToList: 'Back to {{type, lcfirst}}',
     saveShortcut: 'Save changes (⌘S)',
     saving: 'Saving…',
   },
@@ -283,7 +283,6 @@ const en = {
     locked: 'Locked',
     count_one: '{{count}} item',
     count_other: '{{count}} items',
-    create: 'New {{type, lcfirst}}',
     searchPlaceholder: 'Search {{type, lcfirst}}…',
     search: 'Search',
     scope: 'Search scope',
