@@ -330,6 +330,13 @@ def list_objects(
             raise ApiError(
                 400, "validation", f"The attribute '{exc}' cannot be used in a filter"
             ) from None
+    passwordless: set[str] = set()
+
+    def user_row_locked(entry: Entry) -> bool:
+        if not entry.text("userPassword"):
+            passwordless.add(dnlib.normalize(entry.dn))
+        return _account_locked(entry)
+
     with object_errors():
         if offset > 0 and cursor is None:
             cursor = encode_cursor(offset)
@@ -344,13 +351,16 @@ def list_objects(
             sort=sort,
             descending=order == "desc",
             extra_attrs=["userPassword"] if type_name == "user" else (),
-            locked=_account_locked if type_name == "user" else None,
+            locked=user_row_locked if type_name == "user" else None,
             extra_filter=filter or "",
             filter_checks=checks,
         )
     body = page.to_json()
     if type_name == "user":
         _count_groups(user, domain, body)
+        _flag_passwords(body, passwordless)
+    elif type_name == "group":
+        _count_members(user, domain, body)
     return body
 
 
@@ -360,6 +370,41 @@ def _account_locked(entry: Entry) -> bool:
 
     stored = entry.text("userPassword")
     return bool(stored) and is_locked(stored or "")
+
+
+def _flag_passwords(body: dict[str, JSON], passwordless: set[str]) -> None:
+    """Set ``password_set`` on user rows: False when the account has no password at all.
+
+    A locked account still has its password; only an entry without ``userPassword`` cannot
+    sign in because nothing was ever set, which the UI reports instead of "active".
+    """
+    raw = body.get("items")
+    if not isinstance(raw, list):
+        return
+    for item in raw:
+        if isinstance(item, dict) and isinstance(dn := item.get("dn"), str):
+            item["password_set"] = dnlib.normalize(dn) not in passwordless
+
+
+def _count_members(user: CurrentUserDep, domain: DomainDep, body: dict[str, JSON]) -> None:
+    """Fill ``members_count`` on group rows: the number of ``member`` values of each group.
+
+    One read per row of the page (bounded by the page size). A row whose ``member``
+    attribute the caller may not read gets no count.
+    """
+    raw = body.get("items")
+    if not isinstance(raw, list):
+        return
+    info = domain.registry.get("group")
+    acl_object = info.acl_object(info.main_tab)
+    evaluator = domain.evaluator(user)
+    for item in (cast(dict[str, JSON], i) for i in raw if isinstance(i, dict)):
+        dn = item.get("dn")
+        if not isinstance(dn, str) or not evaluator.permissions(dn, acl_object, "member").read:
+            continue
+        entry = user.directory.get(dn, ["member"])
+        if entry is not None:
+            item["members_count"] = len(entry.texts("member"))
 
 
 def _count_groups(user: CurrentUserDep, domain: DomainDep, body: dict[str, JSON]) -> None:

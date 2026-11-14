@@ -315,6 +315,10 @@ export interface ObjectListItem {
   values: Record<string, unknown>
   locked: boolean
   groups_count?: number
+  /** User rows: false when the entry has no password at all. */
+  password_set?: boolean
+  /** Group rows: number of members (absent when the caller cannot read them). */
+  members_count?: number
 }
 
 export interface ObjectList {
