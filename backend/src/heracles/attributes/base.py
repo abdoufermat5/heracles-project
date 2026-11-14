@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any, Protocol
 
+from heracles.attributes.keys import help_key
 from heracles.i18n import _
 
 type JSON = bool | int | float | str | list[JSON] | dict[str, JSON] | None
@@ -151,12 +152,22 @@ class Attribute[T](ABC):
             out["max_length"] = self.max_length
         return out
 
-    def describe_extra(self) -> dict[str, JSON]:
-        """Kind specific descriptor keys (options, ref_type, item, ...)."""
+    def describe_extra(self, key: str = "") -> dict[str, JSON]:
+        """Kind specific descriptor keys (options, ref_type, item, ...).
+
+        ``key`` is the stable label key of the attribute (see ``heracles.attributes.keys``);
+        kinds that send labels of their own derive their keys from it.
+        """
         return {}
 
-    def describe(self) -> dict[str, JSON]:
-        """Return the ``AttributeDescriptor`` JSON exposed by the API."""
+    def describe(self, key: str = "") -> dict[str, JSON]:
+        """Return the ``AttributeDescriptor`` JSON exposed by the API.
+
+        ``key`` is the stable label key of the attribute; the descriptor carries it (with
+        the help and option keys derived from it) so a client translates labels without
+        depending on their English wording. Unscoped calls (templates, public forms) omit
+        the keys.
+        """
         out: dict[str, JSON] = {
             "name": self.name,
             "label": self.label,
@@ -170,7 +181,11 @@ class Attribute[T](ABC):
         }
         if not self.stored:
             out["stored"] = False  # virtual attribute: not available in templates
-        out.update(self.describe_extra())
+        if key:
+            out["label_key"] = key
+            if self.description:
+                out["description_key"] = help_key(key)
+        out.update(self.describe_extra(key))
         return out
 
 

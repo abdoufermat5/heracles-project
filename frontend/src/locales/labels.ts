@@ -221,8 +221,38 @@ export const labelsEn = {
       setup_check: 'Health check',
     },
     /**
-     * Sections, tabs, help texts and options, keyed by the English wording the server
-     * sends (see `localText`). English needs none: the server wording is the fallback.
+     * ACL category ids (delegated administration), which name the rights matrix
+     * categories and differ from the type names. Keyed by the category id.
+     */
+    aclCategories: {
+      acl: 'Access roles',
+      alias: 'Mail distributions',
+      archivedObject: 'Archived objects',
+      auditEvent: 'Audit events',
+      config: 'Configuration',
+      configuration: 'PGP server info',
+      dhcpConfiguration: 'DHCP configurations',
+      dnsAcl: 'DNS access lists',
+      dnsView: 'DNS views',
+      dnsZone: 'DNS zones',
+      ejbcaCertificate: 'PKI certificates',
+      mailTemplate: 'Mail templates',
+      mobilePhone: 'Mobile phones',
+      ogroup: 'Groups',
+      pgpKey: 'PGP keys',
+      phoneMacro: 'Phone macros',
+      publicForm: 'Public forms',
+      sambaDomain: 'Samba domains',
+      sogo: 'Calendar resources',
+      tasks: 'Archive tasks',
+      webApplication: 'Web applications',
+    },
+
+    /**
+     * Section, tab, help and option texts, keyed by the stable descriptor keys the
+     * server derives from the definitions (`label_key`, `description_key`, option
+     * `label_key`; see `lib/labels.ts`). English needs none: the server wording is the
+     * fallback.
      */
     texts: {} as Record<string, string>,
   },

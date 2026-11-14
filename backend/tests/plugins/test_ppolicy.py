@@ -332,7 +332,7 @@ def test_user_tab_ppolicy_always_active_and_no_deactivation(
     # Check tab descriptor: optional must be False
     desc = service.registry.get("user").tab("ppolicy")
     assert desc is not None
-    assert desc.describe()["optional"] is False
+    assert desc.describe("user")["optional"] is False
 
     # Deactivation attempt must be rejected
     with pytest.raises(ObjectValidationError) as exc:

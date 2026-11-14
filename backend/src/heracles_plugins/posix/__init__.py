@@ -23,6 +23,7 @@ from heracles.attributes import (
     SelectAttr,
     StringAttr,
     TextAttr,
+    option_key,
 )
 from heracles.core.containers import ensure_container
 from heracles.i18n import _
@@ -112,11 +113,20 @@ class ShellAttr(SelectAttr):
             return [_("Invalid choice.")]
         return []
 
-    def describe_extra(self) -> dict[str, JSON]:
-        return {"options": [{"value": o.value, "label": o.label} for o in self._allowed()]}
+    def describe_extra(self, key: str = "") -> dict[str, JSON]:
+        return {
+            "options": [
+                {
+                    "value": o.value,
+                    "label": o.label,
+                    **({"label_key": option_key(key, o.value)} if key else {}),
+                }
+                for o in self._allowed()
+            ]
+        }
 
-    def describe(self) -> dict[str, JSON]:
-        out = super().describe()
+    def describe(self, key: str = "") -> dict[str, JSON]:
+        out = super().describe(key)
         out["default"] = self._configured()[1]
         return out
 

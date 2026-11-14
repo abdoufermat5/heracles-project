@@ -131,6 +131,8 @@ export interface Me {
   is_admin: boolean
   directory: string
   base: string
+  /** Default mail domain of the directory (`''` when unset), for the create-user wizard. */
+  mail_domain: string
 }
 
 /** Password recovery request and confirmation bodies. */
@@ -232,6 +234,8 @@ export type AttributeKind =
 export interface SelectOption {
   value: string
   label: string
+  /** Stable key of the label (attribute key plus the option value). */
+  label_key?: string
 }
 
 export interface AttributeConstraints {
@@ -245,6 +249,9 @@ export interface AttributeConstraints {
 export interface AttributeDescriptor {
   name: string
   label: string
+  /** Stable key of the label (type and attribute names), and of the help text. */
+  label_key?: string
+  description_key?: string
   description?: string
   kind: AttributeKind
   required?: boolean
@@ -262,12 +269,17 @@ export interface AttributeDescriptor {
 export interface SectionDescriptor {
   name: string
   label: string
+  /** Stable key of the label (type, tab and section names). */
+  label_key?: string
   attributes: AttributeDescriptor[]
 }
 
 export interface TabDescriptor {
   name: string
   label: string
+  /** Stable key of the label and help text (type and tab names). */
+  label_key?: string
+  description_key?: string
   optional: boolean
   description?: string
   sections: SectionDescriptor[]
@@ -276,6 +288,8 @@ export interface TabDescriptor {
 export interface ColumnDescriptor {
   key: string
   label: string
+  /** Stable key of the label (the attribute's key). */
+  label_key?: string
 }
 
 export interface TypeDescriptor {

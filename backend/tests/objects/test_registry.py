@@ -59,9 +59,9 @@ def test_register_and_describe_user(registry: TypeRegistry) -> None:
     assert desc["name"] == "user"
     assert desc["main_attr"] == "uid" and desc["name_attr"] == "cn"
     assert desc["columns"] == [
-        {"key": "uid", "label": "Login"},
-        {"key": "cn", "label": "Name"},
-        {"key": "mail", "label": "Email"},
+        {"key": "uid", "label": "Login", "label_key": "type/user/attr/uid"},
+        {"key": "cn", "label": "Name", "label_key": "type/user/attr/cn"},
+        {"key": "mail", "label": "Email", "label_key": "type/user/attr/mail"},
     ]
     tabs: Any = desc["tabs"]
     assert [t["name"] for t in tabs] == ["main", "roles", "posix", "ssh"]
@@ -73,6 +73,21 @@ def test_register_and_describe_user(registry: TypeRegistry) -> None:
     pwd = next(a for s in sections for a in s["attributes"] if a["name"] == "userPassword")
     assert pwd["kind"] == "password"
     assert tabs[2]["sections"][0]["attributes"][2]["default"] == "/bin/bash"
+
+
+def test_descriptor_labels_carry_stable_keys(registry: TypeRegistry) -> None:
+    """Every label slot is keyed by the declarations, so renaming it keeps its translation."""
+    desc = registry.describe("user")
+    tabs: Any = desc["tabs"]
+    main = tabs[0]
+    assert main["label_key"] == "type/user/tab/main"
+    assert main["sections"][0]["label_key"] == "type/user/tab/main/section/identity"
+    attr = next(a for s in main["sections"] for a in s["attributes"] if a["name"] == "userPassword")
+    assert attr["label_key"] == "type/user/attr/userPassword"
+    option = next(
+        a for s in main["sections"] for a in s["attributes"] if a["name"] == "preferredLanguage"
+    )["options"][0]
+    assert option["label_key"] == f"type/user/attr/preferredLanguage/option/{option['value']}"
 
 
 def test_summaries_and_lookup(registry: TypeRegistry) -> None:

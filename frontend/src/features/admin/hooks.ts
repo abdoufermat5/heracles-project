@@ -39,8 +39,10 @@ function translateCatalog(t: TFunction, catalog: Catalog): Catalog {
     ...catalog,
     categories: catalog.categories.map((category) => ({
       ...category,
-      label: t(`labels.typePlurals.${category.category}`, {
-        defaultValue: localText(t, category.label),
+      label: t(`labels.aclCategories.${category.category}`, {
+        defaultValue: t(`labels.typePlurals.${category.category}`, {
+          defaultValue: localText(t, category.label),
+        }),
       }),
       objects: category.objects.map((object) => ({
         ...object,
@@ -52,7 +54,7 @@ function translateCatalog(t: TFunction, catalog: Catalog): Catalog {
               : localText(t, object.label),
         attributes: object.attributes.map((attribute) => ({
           ...attribute,
-          label: attributeLabel(t, attribute.name, attribute.label),
+          label: attributeLabel(t, attribute.name, attribute.label, attribute.label_key),
         })),
       })),
     })),

@@ -20,6 +20,8 @@ export interface Capabilities {
 export interface CatalogAttribute {
   name: string
   label: string
+  /** Stable key of the label (derived from the type and attribute names). */
+  label_key?: string
 }
 
 export interface CatalogObject {

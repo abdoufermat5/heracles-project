@@ -1,6 +1,6 @@
 import { beforeAll, afterAll } from 'vitest'
 import i18n from '@/i18n'
-import { attributeLabel, typeLabel, typeLabelPlural } from './labels'
+import { attributeLabel, localText, typeLabel, typeLabelPlural } from './labels'
 
 describe('label layer', () => {
   // French is a separate chunk: load it once so the fixed translators have it.
@@ -34,5 +34,26 @@ describe('label layer', () => {
     const fr = i18n.getFixedT('fr')
     expect(attributeLabel(fr, 'cn', 'Name')).toBe('Nom')
     expect(attributeLabel(fr, 'pluginAttribute', 'Plugin label')).toBe('Plugin label')
+  })
+
+  it('translates a descriptor text by its stable key, whatever the wording', () => {
+    const fr = i18n.getFixedT('fr')
+    expect(attributeLabel(fr, 'sn', 'Last name', 'type/user/attr/sn')).toBe('Nom de famille')
+    // Renaming the English label on the server does not drop the translation.
+    expect(attributeLabel(fr, 'sn', 'Surname', 'type/user/attr/sn')).toBe('Nom de famille')
+    expect(localText(fr, 'type/user/tab/main/section/identity', 'Identity')).toBe('Identité')
+    expect(localText(fr, 'type/user/tab/main/section/identity', 'Who is this?')).toBe('Identité')
+  })
+
+  it('shows the server wording for a key the catalogue does not know', () => {
+    const fr = i18n.getFixedT('fr')
+    expect(localText(fr, 'type/vendor_widget/attr/x', 'Widget')).toBe('Widget')
+    expect(
+      attributeLabel(fr, 'vendorAttribute', 'Widget', 'type/vendor_widget/attr/vendorAttribute'),
+    ).toBe('Widget')
+  })
+
+  it('shows a payload text that has no key as sent', () => {
+    expect(localText(i18n.getFixedT('fr'), 'Configuration')).toBe('Configuration')
   })
 })

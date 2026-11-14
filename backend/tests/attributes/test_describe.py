@@ -74,3 +74,18 @@ def test_composite_and_image_descriptor() -> None:
         "max_width": 200,
         "max_height": 200,
     }
+
+
+def test_descriptor_keys_are_derived_from_the_declarations() -> None:
+    attr = SelectAttr("shell", "Shell", options=[("/bin/bash", "bash")])
+    d = attr.describe("type/user/attr/shell")
+    assert d["label_key"] == "type/user/attr/shell"
+    assert d["options"] == [
+        {
+            "value": "/bin/bash",
+            "label": "bash",
+            "label_key": "type/user/attr/shell/option/%2Fbin%2Fbash",
+        }
+    ]
+    # Unscoped calls (templates, public forms) carry no keys; the wording is the label.
+    assert "label_key" not in SelectAttr("shell", "Shell").describe()

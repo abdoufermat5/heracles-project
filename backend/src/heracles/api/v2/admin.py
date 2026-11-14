@@ -26,6 +26,7 @@ from heracles.api.domain import Domain, DomainDep, invalidate_acl_cache
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.settings import ApiSettings
 from heracles.api.state import AppState
+from heracles.attributes import attribute_key
 from heracles.core import config_store, setup_checks
 from heracles.core.generalized_time import format_generalized_time, parse_generalized_time
 from heracles.ldap import dn as dnlib
@@ -284,7 +285,11 @@ def build_catalog(registry: TypeRegistry) -> dict[str, Any]:
                     "tab": tab.name,
                     "main": tab is info.main_tab,
                     "attributes": [
-                        {"name": a.name, "label": a.label}
+                        {
+                            "name": a.name,
+                            "label": a.label,
+                            "label_key": attribute_key(info.type.name, a.name),
+                        }
                         for a in tab.attributes()
                         if a.kind not in ("hidden", "display") and a.stored
                     ],

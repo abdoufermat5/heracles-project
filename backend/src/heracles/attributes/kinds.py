@@ -18,6 +18,7 @@ from heracles.attributes.base import (
     ValidationError,
     is_empty,
 )
+from heracles.attributes.keys import option_key
 from heracles.i18n import _
 from heracles.ldap import dn as dnlib
 
@@ -545,7 +546,7 @@ class ImageAttr(FileAttr):
             problems.append(_("The image must be a JPEG or PNG file."))
         return problems
 
-    def describe_extra(self) -> dict[str, JSON]:
+    def describe_extra(self, key: str = "") -> dict[str, JSON]:
         width, height = self.max_size if self.max_size else (None, None)
         return {"image": {"max_width": width, "max_height": height}}
 
@@ -570,8 +571,15 @@ def _options(options: Sequence[OptionLike]) -> tuple[Option, ...]:
     return tuple(o if isinstance(o, Option) else Option(o[0], o[1]) for o in options)
 
 
-def _options_json(options: Sequence[Option]) -> JSON:
-    return [{"value": o.value, "label": o.label} for o in options]
+def _options_json(options: Sequence[Option], key: str = "") -> JSON:
+    return [
+        {
+            "value": o.value,
+            "label": o.label,
+            **({"label_key": option_key(key, o.value)} if key else {}),
+        }
+        for o in options
+    ]
 
 
 class SelectAttr(_StrAttr):
@@ -588,8 +596,8 @@ class SelectAttr(_StrAttr):
             return [_("Invalid choice.")]
         return []
 
-    def describe_extra(self) -> dict[str, JSON]:
-        return {"options": _options_json(self.options)}
+    def describe_extra(self, key: str = "") -> dict[str, JSON]:
+        return {"options": _options_json(self.options, key)}
 
 
 class MultiSelectAttr(Attribute[list[str]]):
@@ -625,8 +633,8 @@ class MultiSelectAttr(Attribute[list[str]]):
             return [_("Invalid choice.")]
         return []
 
-    def describe_extra(self) -> dict[str, JSON]:
-        return {"options": _options_json(self.options)}
+    def describe_extra(self, key: str = "") -> dict[str, JSON]:
+        return {"options": _options_json(self.options, key)}
 
 
 # ---------------------------------------------------------------------------
@@ -662,7 +670,7 @@ class ObjectRefAttr(_DnAttr):
                 return names
         return (self.ref_type,)
 
-    def describe_extra(self) -> dict[str, JSON]:
+    def describe_extra(self, key: str = "") -> dict[str, JSON]:
         return {"ref_type": self.ref_type}
 
 

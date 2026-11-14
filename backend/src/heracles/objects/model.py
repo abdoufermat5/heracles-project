@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-from heracles.attributes import JSON, AnyAttribute
+from heracles.attributes import JSON, AnyAttribute, attribute_key, help_key, section_key, tab_key
 
 if TYPE_CHECKING:
     from heracles.objects.hooks import TabContext
@@ -37,12 +37,13 @@ class Section:
     def __set_name__(self, owner: type, name: str) -> None:
         self.name = name
 
-    def describe(self) -> dict[str, JSON]:
+    def describe(self, type_name: str, tab_name: str) -> dict[str, JSON]:
         """Section part of the ``TypeDescriptor``."""
         return {
             "name": self.name,
             "label": self.label,
-            "attributes": [a.describe() for a in self.attributes],
+            "label_key": section_key(type_name, tab_name, self.name),
+            "attributes": [a.describe(attribute_key(type_name, a.name)) for a in self.attributes],
         }
 
 
@@ -128,15 +129,20 @@ class Tab:
         """Called after the object was deleted (tab was active)."""
 
     @classmethod
-    def describe(cls) -> dict[str, JSON]:
+    def describe(cls, type_name: str) -> dict[str, JSON]:
         """Tab part of the ``TypeDescriptor``."""
-        return {
+        key = tab_key(type_name, cls.name)
+        out: dict[str, JSON] = {
             "name": cls.name,
             "label": cls.display_label(),
+            "label_key": key,
             "optional": cls.optional,
             "description": cls.description,
-            "sections": [s.describe() for s in cls.sections],
+            "sections": [s.describe(type_name, cls.name) for s in cls.sections],
         }
+        if cls.description:
+            out["description_key"] = help_key(key)
+        return out
 
 
 @dataclass(frozen=True, slots=True)

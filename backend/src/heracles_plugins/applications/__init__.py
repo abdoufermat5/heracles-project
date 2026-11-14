@@ -180,8 +180,8 @@ class WebApplication(ObjectType):
 class ApplicationRefAttr(ObjectRefAttr):
     """DN of an application or of a web application."""
 
-    def describe_extra(self) -> dict[str, JSON]:
-        out = super().describe_extra()
+    def describe_extra(self, key: str = "") -> dict[str, JSON]:
+        out = super().describe_extra(key)
         out["ref_types"] = ["application", "web_application"]
         return out
 

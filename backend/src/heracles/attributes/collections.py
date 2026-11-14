@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import Any, cast
 
 from heracles.attributes.base import JSON, Attribute, ValidationError, is_empty
+from heracles.attributes.keys import field_key, item_key
 from heracles.i18n import _
 
 
@@ -63,8 +64,8 @@ class ListAttr[T](Attribute[list[T]]):
                     errors.append(message)
         return errors
 
-    def describe_extra(self) -> dict[str, JSON]:
-        return {"item": self.item.describe()}
+    def describe_extra(self, key: str = "") -> dict[str, JSON]:
+        return {"item": self.item.describe(item_key(key) if key else "")}
 
 
 class CompositeAttr(Attribute[dict[str, Any]]):
@@ -152,5 +153,5 @@ class CompositeAttr(Attribute[dict[str, Any]]):
                 )
         return errors
 
-    def describe_extra(self) -> dict[str, JSON]:
-        return {"fields": [f.describe() for f in self.fields]}
+    def describe_extra(self, key: str = "") -> dict[str, JSON]:
+        return {"fields": [f.describe(field_key(key, f.name) if key else "") for f in self.fields]}

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from importlib.metadata import entry_points
 from typing import Any, Protocol, cast
 
-from heracles.attributes import JSON, AnyAttribute
+from heracles.attributes import JSON, AnyAttribute, attribute_key
 from heracles.ldap.client import DirectoryClient, Entry, Modification
 from heracles.objects.errors import UnknownTypeError
 from heracles.objects.model import ObjectType, Tab
@@ -70,7 +70,13 @@ class TypeInfo:
         columns: list[JSON] = []
         for key in self.type.columns:
             attr = self.find_attribute(key)
-            columns.append({"key": key, "label": attr.label if attr else key})
+            columns.append(
+                {
+                    "key": key,
+                    "label": attr.label if attr else key,
+                    "label_key": attribute_key(self.type.name, key),
+                }
+            )
         return {
             "name": self.type.name,
             "label": self.type.label,
@@ -80,7 +86,7 @@ class TypeInfo:
             "name_attr": self.type.name_attr,
             "columns": columns,
             "supports_templates": bool(self.type.rdn),
-            "tabs": [t.describe() for t in self.tabs],
+            "tabs": [t.describe(self.type.name) for t in self.tabs],
         }
 
 

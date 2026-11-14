@@ -9,6 +9,16 @@ from heracles.attributes.base import (
     is_empty,
 )
 from heracles.attributes.collections import CompositeAttr, ListAttr
+from heracles.attributes.keys import (
+    attribute_key,
+    field_key,
+    help_key,
+    item_key,
+    option_key,
+    section_key,
+    segment,
+    tab_key,
+)
 from heracles.attributes.kinds import (
     BooleanAttr,
     DateAttr,
@@ -65,8 +75,16 @@ __all__ = [
     "TextAttr",
     "UrlAttr",
     "ValidationError",
+    "attribute_key",
+    "field_key",
+    "help_key",
     "is_empty",
+    "item_key",
+    "option_key",
     "parse_generalized_time",
+    "section_key",
+    "segment",
     "set_default_password_checker",
     "set_default_password_hasher",
+    "tab_key",
 ]

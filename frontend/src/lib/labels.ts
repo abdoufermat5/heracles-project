@@ -26,44 +26,61 @@ export function typeLabelPlural(
 /**
  * Section, tab, help and option texts have no id that is unique on its own (a section
  * named `identity` exists on four different types with four different labels), so the
- * catalogue `labels.texts` is keyed by the English source text the server sends —
- * `.` and `:` are replaced because i18next reads them as key separators. A text the
- * catalogue does not know keeps the server wording.
+ * descriptor carries a stable key for each of them (`label_key`, `description_key`,
+ * option `label_key`). The server derives every key from the definitions — type, tab,
+ * section, attribute and option value — never from the English wording: renaming a
+ * label on the server keeps its translation. A key the catalogue does not know falls
+ * back to the wording the server sent.
  */
-function textKey(text: string): string {
-  return `labels.texts.${text.replace(/[.:]/g, '_')}`
+function translate(t: TFunction, key: string | undefined, fallback: string): string {
+  return key ? t(`labels.texts.${key}`, { defaultValue: fallback }) : fallback
 }
 
-/** Translation of any label or help text coming from the API, by its English wording. */
-export function localText(t: TFunction, text: string): string {
-  return text ? t(textKey(text), { defaultValue: text }) : text
+/**
+ * Translation of a label or help text coming from the API, by its stable key.
+ * Payloads that are not descriptors (the ACL catalog) pass the wording alone, with no
+ * key: it is shown as sent.
+ */
+export function localText(t: TFunction, key: string, fallback?: string): string {
+  return fallback === undefined ? key : translate(t, key, fallback)
 }
 
 /**
  * Label of a tab. Plugin tabs are translated by their stable id (`labels.tabs.<name>`);
- * the other tabs (`main` on every type, …) by their wording.
+ * the other tabs by the key of their descriptor.
  */
-export function tabLabel(t: TFunction, tab: { name: string; label: string }): string {
-  return t(`labels.tabs.${tab.name}`, { defaultValue: localText(t, tab.label) })
+export function tabLabel(
+  t: TFunction,
+  tab: { name: string; label: string; label_key?: string },
+): string {
+  const byName = t(`labels.tabs.${tab.name}`, { defaultValue: '' })
+  return byName || translate(t, tab.label_key, tab.label)
 }
 
 /**
- * Attribute label: the same attribute id carries different wording on different types
- * (`l` is "City" on a person and "Name" on a locality), so the server wording is looked
- * up first, then the id catalogue.
+ * Attribute label: the descriptor's (type-scoped) key first — the same attribute id
+ * carries different wording on different types, `l` being "City" on a user and "Name"
+ * on a locality — then the id catalogue used by the ACL catalog.
  */
-export function attributeLabel(t: TFunction, name: string, fallback: string): string {
-  return t(textKey(fallback), { defaultValue: t(`labels.attributes.${name}`, { defaultValue: fallback }) })
+export function attributeLabel(
+  t: TFunction,
+  name: string,
+  fallback: string,
+  key?: string,
+): string {
+  const translated = key ? t(`labels.texts.${key}`, { defaultValue: '' }) : ''
+  if (translated) return translated
+  return t(`labels.attributes.${name}`, { defaultValue: fallback })
 }
 
 /** A type descriptor with every server-provided text translated into the active language. */
 export function localizeDescriptor(t: TFunction, d: TypeDescriptor): TypeDescriptor {
   const attr = (a: AttributeDescriptor): AttributeDescriptor => ({
     ...a,
-    label: attributeLabel(t, a.name, a.label),
-    ...(a.description ? { description: localText(t, a.description) } : {}),
+    label: attributeLabel(t, a.name, a.label, a.label_key),
+    ...(a.description ? { description: translate(t, a.description_key, a.description) } : {}),
     ...(a.options
-      ? { options: a.options.map((o) => ({ ...o, label: localText(t, o.label) })) }
+      ? { options: a.options.map((o) => ({ ...o, label: translate(t, o.label_key, o.label) })) }
       : {}),
     ...(a.item ? { item: attr(a.item) } : {}),
     ...(a.fields ? { fields: a.fields.map(attr) } : {}),
@@ -71,15 +88,18 @@ export function localizeDescriptor(t: TFunction, d: TypeDescriptor): TypeDescrip
   return {
     ...d,
     label: typeLabel(t, d),
-    columns: d.columns.map((c) => ({ ...c, label: attributeLabel(t, c.key, c.label) })),
+    columns: d.columns.map((c) => ({
+      ...c,
+      label: attributeLabel(t, c.key, c.label, c.label_key),
+    })),
     tabs: d.tabs.map((tb) => ({
       ...tb,
       // the main tab of a type is named after the type
       label: tb.name === 'main' && tb.label === d.label ? typeLabel(t, d) : tabLabel(t, tb),
-      ...(tb.description ? { description: localText(t, tb.description) } : {}),
+      ...(tb.description ? { description: translate(t, tb.description_key, tb.description) } : {}),
       sections: tb.sections.map((s) => ({
         ...s,
-        label: localText(t, s.label),
+        label: translate(t, s.label_key, s.label),
         attributes: s.attributes.map(attr),
       })),
     })),
