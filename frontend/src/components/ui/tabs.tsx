@@ -58,13 +58,24 @@ function TabsList({
 
 function TabsTrigger({
   className,
+  onPointerDown,
+  onBlur,
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
   return (
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
+      // A tab chosen with the pointer shows no focus ring (data-pointer); keyboard focus does.
+      onPointerDown={(e) => {
+        onPointerDown?.(e)
+        e.currentTarget.dataset.pointer = ""
+      }}
+      onBlur={(e) => {
+        onBlur?.(e)
+        delete e.currentTarget.dataset.pointer
+      }}
       className={cn(
-        "relative inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-none bg-transparent px-2.5 text-body font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50 group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:flex-none group-data-[orientation=vertical]/tabs:justify-start",
+        "relative inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-none bg-transparent px-2.5 text-body font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-[pointer]:focus-visible:ring-0 disabled:pointer-events-none disabled:opacity-50 group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:flex-none group-data-[orientation=vertical]/tabs:justify-start",
         "data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none",
         "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:-bottom-px group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-px group-data-[orientation=vertical]/tabs:after:w-0.5 data-[state=active]:after:opacity-100",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",

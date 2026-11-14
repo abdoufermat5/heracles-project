@@ -55,7 +55,6 @@ describe('second factors panel', () => {
     )
     expect(await screen.findByText('Not set up')).toBeInTheDocument()
     expect(screen.getByText('No security keys.')).toBeInTheDocument()
-    expect(screen.getByText('0 unused codes')).toBeInTheDocument()
     expect(db.secondFactors.has(userDn(0).toLowerCase())).toBe(false)
     expect(screen.getByRole('button', { name: 'Reset second factors' })).toBeDisabled()
   })

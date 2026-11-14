@@ -27,6 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { ErrorState } from '@/components/ErrorState'
+import { snapshotDescription } from '@/features/people/utils'
 import { formatDateTime } from '@/lib/objects'
 import { useSnapshotMutations, useSnapshots, type SnapshotEntry } from './api'
 
@@ -148,7 +149,7 @@ export function SnapshotsPanel({ type, dn, onRestored }: Props) {
                 <TableCell className="whitespace-nowrap tabular-nums">
                   {formatDateTime(s.created_at, i18n.language)}
                 </TableCell>
-                <TableCell>{s.description || t('snapshots.noDescription')}</TableCell>
+                <TableCell>{snapshotDescription(t, s.description)}</TableCell>
                 <TableCell className="text-muted-foreground">{s.source ?? t('snapshots.noDescription')}</TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-1">

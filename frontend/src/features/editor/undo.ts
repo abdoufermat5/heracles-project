@@ -22,12 +22,13 @@ export function useUndoableSave(type: string) {
     async (dn: string): Promise<string | null> => {
       try {
         const snap = await objectsApi.createSnapshot(type, dn, 'Before edit (undo point)')
+        void qc.invalidateQueries({ queryKey: qk.snapshots(type, dn) })
         return snap.id
       } catch {
         return null
       }
     },
-    [type],
+    [qc, type],
   )
 
   /** Success toast; with `snapshotId` it offers Undo for ten seconds. */

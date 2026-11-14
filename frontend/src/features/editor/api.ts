@@ -4,6 +4,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { API_BASE, ApiError, dnPath, isApiError, request } from '@/api/client'
+import { useCapabilities } from '@/features/admin/hooks'
 import { qk } from '@/api/hooks'
 import type { TypeDescriptor, Values } from '@/api/types'
 
@@ -389,22 +390,24 @@ function moveRequest(type: string, dn: string, base: string) {
 }
 
 /**
- * Raw LDIF from the server. Resolves to `null` when the endpoint is not available
- * (404 / 501), so callers can fall back to a locally built text.
+ * Whether the raw-LDIF endpoint can exist. It is served by the import / export plugin, which
+ * the capabilities report; a server that predates the flag is assumed to have it (the dialog
+ * then shows the server's refusal, never invented content).
  */
+export function useLdifAvailable(): boolean {
+  const caps = useCapabilities()
+  if (caps.data) return caps.data.io !== false
+  return caps.isError
+}
+
+/** Raw LDIF from the server; a failed request is an error, never a stand-in text. */
 export function useObjectLdif(type: string, dn: string | null, open: boolean) {
   return useQuery({
     queryKey: objectKeys.ldif(type, dn ?? ''),
-    queryFn: async () => {
-      try {
-        return await objectsApi.objectLdif(type, dn ?? '')
-      } catch (e) {
-        if (isApiError(e) && (e.status === 404 || e.status === 501)) return null
-        throw e
-      }
-    },
+    queryFn: () => objectsApi.objectLdif(type, dn ?? ''),
     enabled: open && dn !== null,
     staleTime: 0,
     gcTime: 0,
+    retry: false,
   })
 }

@@ -162,6 +162,7 @@ export const objectsEn = {
     removeKeyConfirm: 'Remove',
     keyRemoved: 'Security key removed.',
     recoveryCodes: 'Recovery codes',
+    recoveryCount_zero: 'No recovery codes left',
     recoveryCount_one: '{{count}} unused code',
     recoveryCount_other: '{{count}} unused codes',
     none: 'This user has no second factor: signing in needs only the password.',
@@ -173,6 +174,25 @@ export const objectsEn = {
     resetDone: 'Second factors reset.',
     viewOnly: 'You can view these second factors but not remove them.',
     failed: 'The second factors could not be changed.',
+  },
+  editorUI: {
+    close: 'Close',
+    ldifUnavailable: 'The LDIF view is unavailable: the import / export module is not enabled.',
+    ldifForbidden: 'You are not allowed to export this entry.',
+    ldifError: 'The LDIF could not be loaded.',
+    backToList: 'Back to the list: {{plural, lcfirst}}',
+    readonly: 'read-only',
+  },
+  listingUI: {
+    create: 'Create {{type, lcfirst}}',
+    createUser: 'New user',
+    noMatchesFilters: 'No objects match the filters',
+    noMatchesFiltersHelp: 'Change or clear the filters to see more results.',
+    clearFilters: 'Clear filters',
+    emptyHelp: 'Objects of this type will show up here once they exist.',
+    viewExpired: 'Password expired',
+    moreActions: 'More actions',
+    members: 'Members',
   },
 }
 

@@ -222,7 +222,7 @@ export function BulkActionBar({
     <div
       role="region"
       aria-label={label ?? t('listing.bulkActions', { defaultValue: t('patterns.bulkActions') })}
-      className="sticky bottom-4 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-lg border bg-popover px-3 py-2 shadow-overlay"
+      className="sticky bottom-4 z-20 mx-auto mt-3 flex w-fit max-w-full flex-nowrap items-center gap-2 overflow-x-auto rounded-lg border bg-popover px-3 py-2 whitespace-nowrap shadow-overlay [&>*]:shrink-0"
     >
       <span className="flex items-center gap-1.5 pr-2 text-body font-medium">
         <Check className="size-4 text-primary" aria-hidden />

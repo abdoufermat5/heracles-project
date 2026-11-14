@@ -42,7 +42,7 @@ describe('references panel', () => {
   it('is not offered when creating an object', async () => {
     signIn()
     renderApp('/types/user/new')
-    await screen.findByRole('heading', { name: 'New person', level: 1 })
+    await screen.findByRole('heading', { name: 'New user', level: 1 })
     expect(screen.queryByRole('tab', { name: 'References' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Snapshots' })).not.toBeInTheDocument()
   })
@@ -156,7 +156,7 @@ describe('raw LDIF', () => {
     await waitFor(() => expect(dialog).toHaveTextContent('dn: uid=server,dc=example,dc=com'))
   })
 
-  it('falls back to the form values while the endpoint does not exist yet', async () => {
+  it('shows an error, not made-up content, when the endpoint does not exist', async () => {
     server.use(
       http.get('/api/v2/objects/:type/:dn/ldif', () =>
         HttpResponse.json({ error: { code: 'not_found', message: 'nope' } }, { status: 404 }),
@@ -166,6 +166,7 @@ describe('raw LDIF', () => {
     await userEvent.click(screen.getByRole('tab', { name: /Advanced/ }))
     await userEvent.click(await screen.findByRole('button', { name: /View LDIF/ }))
     const dialog = await screen.findByRole('dialog')
-    await waitFor(() => expect(dialog).toHaveTextContent(/objectClass: top/))
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
+    expect(dialog).not.toHaveTextContent(/objectClass: top/)
   })
 })

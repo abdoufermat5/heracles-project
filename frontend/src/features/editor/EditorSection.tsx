@@ -42,6 +42,7 @@ export function EditorSection({
               tab={tabName}
               attr={a}
               readOnly={ro}
+              lockedInEdit={!readOnlyMode && ro}
             />
           )
         })}

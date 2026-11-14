@@ -15,9 +15,10 @@ import {
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useTypes } from '@/api/hooks'
 import type { TypeDescriptor } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
-import { typeLabel } from '@/lib/labels'
+import { typeLabel, typeLabelPlural } from '@/lib/labels'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -43,7 +44,8 @@ interface Props {
   onCancel: () => void
   onSave: () => void
   onDelete: () => void
-  onViewLdif: () => void
+  /** Absent when the server cannot build the LDIF (its module is off). */
+  onViewLdif?: () => void
   /** Open the create form prefilled from this object (needs create rights on the type). */
   onCopy?: () => void
   onToggleAccountLock?: () => void
@@ -107,6 +109,7 @@ export function EditorHeader({
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const type = desc.name
+  const summary = useTypes().data?.find((x) => x.name === type)
   // type capability flags: Heracles-written types (audit events, ...) are view-only
   const canEdit = canEditRights && desc.editable !== false
   const canDelete = canDeleteRights && desc.deletable !== false
@@ -130,7 +133,7 @@ export function EditorHeader({
         className="inline-flex items-center gap-1 text-body text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="size-3.5" aria-hidden />
-        <span>{t('editor.backToList', { type: typeLabel(t, desc) })}</span>
+        <span>{t('editorUI.backToList', { plural: typeLabelPlural(t, summary ?? desc) })}</span>
       </Link>
 
       {/* Main header row */}
@@ -236,10 +239,12 @@ export function EditorHeader({
                     )}
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem onClick={onViewLdif}>
-                  <FileCode2 className="size-3.5 text-muted-foreground" />
-                  <span>{t('editor.rawLdif')}</span>
-                </DropdownMenuItem>
+                {onViewLdif && (
+                  <DropdownMenuItem onClick={onViewLdif}>
+                    <FileCode2 className="size-3.5 text-muted-foreground" />
+                    <span>{t('editor.rawLdif')}</span>
+                  </DropdownMenuItem>
+                )}
                 {onCopy && desc.creatable !== false && (
                   <DropdownMenuItem onClick={onCopy}>
                     <Copy className="size-3.5 text-muted-foreground" />

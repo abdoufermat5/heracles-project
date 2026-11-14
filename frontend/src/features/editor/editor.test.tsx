@@ -137,7 +137,7 @@ describe('object editor', () => {
     await userEvent.click(screen.getByRole('button', { name: /Edit/ }))
     await waitFor(() => expect(screen.getByLabelText(/^Last name/)).toBeEnabled())
     await userEvent.click(screen.getByRole('button', { name: /Add capability/ }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: /POSIX account/ }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: /Unix/ }))
     await userEvent.type(await screen.findByLabelText(/^User id/ ), '2000')
     await userEvent.type(screen.getByLabelText(/^Group id/ ), '2000')
     await userEvent.type(screen.getByLabelText(/^Home directory/ ), '/home/x')

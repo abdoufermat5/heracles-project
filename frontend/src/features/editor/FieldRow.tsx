@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useController, type Control } from 'react-hook-form'
 import type { AttributeDescriptor } from '@/api/types'
 import { FieldInput } from '@/components/fields/FieldInput'
@@ -5,16 +6,20 @@ import { isWide } from '@/components/fields/types'
 import { Label } from '@/components/ui/label'
 import type { FormValues } from '@/lib/objects'
 import { cn } from '@/lib/utils'
+import { CompositeTable, isCompositeList } from './CompositeTable'
 
 interface Props {
   control: Control<FormValues>
   tab: string
   attr: AttributeDescriptor
   readOnly: boolean
+  /** The form is being edited but this field cannot be: say so next to its label. */
+  lockedInEdit?: boolean
 }
 
 /** Label + description + control + error for one attribute, bound to the form. */
-export function FieldRow({ control, tab, attr, readOnly }: Props) {
+export function FieldRow({ control, tab, attr, readOnly, lockedInEdit = false }: Props) {
+  const { t } = useTranslation()
   const name = `${tab}.${attr.name}`
   const id = `f-${tab}-${attr.name}`
   const { field, fieldState } = useController({ control, name: name as never })
@@ -30,14 +35,14 @@ export function FieldRow({ control, tab, attr, readOnly }: Props) {
           className="flex items-center gap-1 text-xs font-medium text-muted-foreground"
         >
           <span>{attr.label}</span>
-          {attr.required && attr.kind !== 'password' && (
+          {attr.required && attr.kind !== 'password' && !readOnly && (
             <span aria-hidden className="font-medium text-destructive">
               *
             </span>
           )}
         </Label>
-        {attr.readonly && !readOnly && (
-          <span className="font-mono text-micro text-muted-foreground">readonly</span>
+        {lockedInEdit && (
+          <span className="text-micro text-muted-foreground">{t('editorUI.readonly')}</span>
         )}
       </div>
 
@@ -51,6 +56,15 @@ export function FieldRow({ control, tab, attr, readOnly }: Props) {
           value={field.value}
           onChange={field.onChange}
           error={message}
+        />
+      ) : isCompositeList(attr) ? (
+        <CompositeTable
+          descriptor={attr}
+          id={id}
+          value={field.value}
+          onChange={field.onChange}
+          readOnly={readOnly}
+          errorTree={error}
         />
       ) : (
         <FieldInput

@@ -42,7 +42,6 @@ import {
   deepEqual,
   listFieldDiffs,
   nameValue,
-  objectToLdif,
   prefillFromSource,
   splitFieldKey,
   valuesFromDetail,
@@ -51,7 +50,7 @@ import {
 import { typeLabel } from '@/lib/labels'
 import { useScope } from '@/lib/scope'
 import { makeResolver } from '@/lib/validation'
-import { useObjectLdif, useSecondFactors } from './api'
+import { useLdifAvailable, useSecondFactors } from './api'
 import { EditorHeader } from './EditorHeader'
 import { EditorSaveBar } from './EditorSaveBar'
 import { EditorSection } from './EditorSection'
@@ -250,7 +249,7 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
   const accountLockedQuery = useObjectAccountLocked(type, detail?.dn ?? null)
   const types = useTypes()
   const canCopy = types.data?.find((x) => x.name === type)?.can_create ?? false
-  const ldifQuery = useObjectLdif(type, detail?.dn ?? null, ldifOpen)
+  const ldifAvailable = useLdifAvailable()
   // Only users have second factors, and only those allowed to see them get the tab (a 403 hides it).
   const secondFactors = useSecondFactors(type === 'user' && detail ? detail.dn : null)
   const showSecondFactors = secondFactors.isSuccess
@@ -272,21 +271,23 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
     return null
   }, [current])
 
-  // The server builds the LDIF; the form values are only a fallback while the
-  // endpoint is unavailable.
-  const localLdif = useMemo(() => {
-    return objectToLdif(desc, detail?.dn ?? 'new', current, active)
-  }, [desc, detail, current, active])
-  const ldifText = ldifQuery.data ?? localLdif
-
-  const applyServerErrors = (fields: Record<string, string>) => {
+  /** Show the server's per-field messages on their fields; returns those with no field. */
+  const applyServerErrors = (fields: Record<string, string>): string[] => {
     let firstTab: string | null = null
+    const orphans: string[] = []
     for (const [key, message] of Object.entries(fields)) {
-      form.setError(key as never, { type: 'server', message })
       const parts = splitFieldKey(key)
-      if (parts && !firstTab) firstTab = parts.tab
+      const tabDesc = parts ? desc.tabs.find((tb) => tb.name === parts.tab) : undefined
+      if (!parts || !tabDesc || !allAttributes(tabDesc).some((a) => a.name === parts.attr)) {
+        orphans.push(message)
+        continue
+      }
+      form.setError(key as never, { type: 'server', message })
+      firstTab ??= parts.tab
     }
     if (firstTab) setTab(firstTab)
+    focusFirstInvalid()
+    return orphans
   }
 
   const startEdit = async () => {
@@ -295,6 +296,10 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
       await api.lockObject(type, detail.dn)
       locked.current = true
       setEditing(true)
+      // The panels (snapshots, references, history…) have nothing to edit.
+      if (tab.startsWith('@')) {
+        setTab((desc.tabs.find((tb) => active[tb.name]) ?? desc.tabs[0])?.name ?? 'main')
+      }
     } catch (e) {
       if (isApiError(e) && e.code === 'locked' && e.lock) setLockInfo(e.lock)
       else toast.error(isApiError(e) ? e.message : t('common.error'))
@@ -347,9 +352,19 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
     setEditing(false)
   }
 
+  /** Move the cursor to the first field the form marked invalid, once its tab is shown. */
+  const focusFirstInvalid = () => {
+    setTimeout(() => {
+      const field = document.querySelector<HTMLElement>('[data-field] [aria-invalid="true"]')
+      field?.focus()
+      field?.scrollIntoView?.({ block: 'center' })
+    }, 0)
+  }
+
   const focusFirstError = (errors: Record<string, unknown>) => {
     const first = desc.tabs.find((tb) => errors[tb.name])
     if (first) setTab(first.name)
+    focusFirstInvalid()
   }
 
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -411,8 +426,11 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
         setEditing(false)
       } catch (e) {
         if (isApiError(e) && e.code === 'validation') {
-          applyServerErrors(e.fields)
-          toast.error(t('editor.validationFailed'))
+          const orphans = applyServerErrors(e.fields)
+          toast.error(
+            t('editor.validationFailed'),
+            orphans.length > 0 ? { description: orphans.join(' ') } : undefined,
+          )
         } else if (isApiError(e) && e.code === 'locked' && e.lock) {
           setLockInfo(e.lock)
         } else {
@@ -519,7 +537,7 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
         onCancel={() => void cancel()}
         onSave={() => void save()}
         onDelete={() => setConfirmDelete(true)}
-        onViewLdif={() => setLdifOpen(true)}
+        onViewLdif={ldifAvailable ? () => setLdifOpen(true) : undefined}
         onCopy={
           canCopy && detail
             ? () => void navigate({ to: '/types/$type/new', params: { type }, search: { copy: detail.dn } })
@@ -633,14 +651,15 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
       />
       <LockedDialog lock={lockInfo} onClose={() => setLockInfo(null)} />
 
-      <LdifDialog
-        open={ldifOpen}
-        onOpenChange={setLdifOpen}
-        ldif={ldifText}
-        title={title}
-        dn={detail?.dn}
-        loading={ldifQuery.isPending && ldifOpen}
-      />
+      {detail && (
+        <LdifDialog
+          open={ldifOpen}
+          onOpenChange={setLdifOpen}
+          type={type}
+          dn={detail.dn}
+          title={title}
+        />
+      )}
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>

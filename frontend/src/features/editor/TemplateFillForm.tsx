@@ -6,7 +6,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
-import { useMe, useCreateObject } from '@/api/hooks'
+import { useMe, useCreateObject, useTypes } from '@/api/hooks'
 import type { TypeDescriptor } from '@/api/types'
 import { DepartmentPicker } from '@/components/fields/RefFields'
 import { Badge } from '@/components/ui/badge'
@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/ErrorState'
-import { typeLabel } from '@/lib/labels'
+import { typeLabel, typeLabelPlural } from '@/lib/labels'
 import { allAttributes, defaultValue, splitFieldKey, type FormValues } from '@/lib/objects'
 import { useScope } from '@/lib/scope'
 import { makeResolver } from '@/lib/validation'
@@ -94,6 +94,7 @@ function FillInner({
   const scope = useScope()
   const me = useMe()
   const type = desc.name
+  const summary = useTypes().data?.find((x) => x.name === type)
   const create = useCreateObject(type)
 
   const fd = useMemo(() => fieldsDescriptor(desc, fields), [desc, fields])
@@ -158,7 +159,7 @@ function FillInner({
           className="inline-flex items-center gap-1 text-body text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft className="size-3.5" aria-hidden />
-          <span>{t('editor.backToList', { type: typeLabel(t, desc) })}</span>
+          <span>{t('editorUI.backToList', { plural: typeLabelPlural(t, summary ?? desc) })}</span>
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">

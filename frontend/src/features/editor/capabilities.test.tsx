@@ -16,7 +16,7 @@ describe('editor capabilities', () => {
 
   it('lists only the main and active tabs, inactive ones go under Add capability', async () => {
     await openEditor()
-    expect(screen.queryByRole('tab', { name: /POSIX account/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /Unix/ })).not.toBeInTheDocument()
     expect(screen.queryByText('Inactive')).not.toBeInTheDocument()
     // read-only: the menu is offered but disabled
     expect(screen.getByRole('button', { name: /Add capability/ })).toBeDisabled()
@@ -28,18 +28,18 @@ describe('editor capabilities', () => {
     await waitFor(() => expect(screen.getByLabelText(/^Last name/)).toBeEnabled())
 
     await userEvent.click(screen.getByRole('button', { name: /Add capability/ }))
-    const item = await screen.findByRole('menuitem', { name: /POSIX account/ })
+    const item = await screen.findByRole('menuitem', { name: /Unix/ })
     expect(within(item).getByText('Unix account: UID, home directory, shell')).toBeInTheDocument()
     await userEvent.click(item)
 
-    const tab = await screen.findByRole('tab', { name: /POSIX account/ })
+    const tab = await screen.findByRole('tab', { name: /Unix/ })
     expect(tab).toHaveAttribute('aria-selected', 'true')
     expect(within(tab).getByText('new')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Remove POSIX account' }))
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove POSIX account' })).not.toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Unix' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove Unix' })).not.toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: /Add capability/ }))
-    expect(await screen.findByRole('menuitem', { name: /POSIX account/ })).toBeInTheDocument()
+    expect(await screen.findByRole('menuitem', { name: /Unix/ })).toBeInTheDocument()
   })
 })
 
@@ -53,7 +53,7 @@ describe('user profile advanced tab', () => {
     await screen.findByRole('heading', { level: 1 })
     await userEvent.click(screen.getByRole('tab', { name: 'Advanced' }))
     const available = await screen.findByRole('list', { name: 'Available capabilities' })
-    expect(within(available).getByText('POSIX account')).toBeInTheDocument()
+    expect(within(available).getByText('Unix')).toBeInTheDocument()
     expect(within(available).getByText('Unix account: UID, home directory, shell')).toBeInTheDocument()
     expect(within(available).getByRole('link', { name: 'Set up' })).toBeInTheDocument()
     expect(screen.getByText('Nothing is enabled yet.')).toBeInTheDocument()
