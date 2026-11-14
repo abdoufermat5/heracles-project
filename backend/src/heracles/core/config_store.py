@@ -16,7 +16,6 @@ through :func:`save_config`.
 from __future__ import annotations
 
 import contextlib
-import re
 import threading
 import time
 import weakref
@@ -24,7 +23,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal, cast
 
+from heracles.auth.passwords.registry import default_registry
 from heracles.core.containers import ensure_container
+from heracles.core.formats import check
 from heracles.ldap.client import (
     AlreadyExistsError,
     DirectoryClient,
@@ -42,12 +43,11 @@ FAILURE_TTL_SECONDS: Final = 2.0
 _TRUE: Final = "TRUE"
 _FALSE: Final = "FALSE"
 
-#: A dotted DNS name used as the default mail domain (labels of letters, digits and
-#: inner hyphens; at least one dot; 253 characters at most).
-_DOMAIN_RE: Final = re.compile(
-    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
-    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+"
-)
+#: Largest numeric identifier (``uidNumber`` and ``gidNumber`` are 32-bit).
+MAX_ID: Final = 2**32 - 1
+
+#: Hash schemes the password module can produce (the only ones a policy may name).
+PASSWORD_HASHES: Final = tuple(default_registry().hashable_ids())
 
 #: Sections of the configuration screen, in display order.
 SECTIONS: Final = (
@@ -82,7 +82,14 @@ DEFAULT_SHELL: Final = "/bin/bash"
 
 @dataclass(frozen=True, slots=True)
 class ConfigField:
-    """Metadata of one configuration knob."""
+    """Metadata of one configuration knob.
+
+    The constraints (``min``, ``max``, ``format``, ``item_format``, ``unique``, and the
+    ``options`` of a select or of a list) are checked on every write and exposed to the
+    browser, which refuses the same values before saving. Stored values are never
+    checked when read. An empty value is always allowed: it removes the attribute, which
+    restores the default.
+    """
 
     key: str
     section: str
@@ -93,10 +100,30 @@ class ConfigField:
     #: Value hidden from users who cannot write the configuration.
     secret: bool = False
     default: Any = None
+    #: Bounds of an ``int`` (inclusive).
+    min: int | None = None
+    max: int | None = None
+    #: Name of a :mod:`heracles.core.formats` check on a text value.
+    format: str | None = None
+    #: Same, for every entry of a ``list``.
+    item_format: str | None = None
+    #: A ``list`` without repeated entries.
+    unique: bool = False
 
     @property
     def attr(self) -> str:
         return schema.CONFIG_ATTRS[self.key]
+
+    def constraints(self) -> dict[str, Any]:
+        """The constraints that apply, by name (only those set)."""
+        found: dict[str, Any] = {
+            "min": self.min,
+            "max": self.max,
+            "format": self.format,
+            "item_format": self.item_format,
+            "unique": self.unique or None,
+        }
+        return {k: v for k, v in found.items() if v is not None}
 
 
 def _f(
@@ -108,26 +135,47 @@ def _f(
     options: Sequence[str] = (),
     secret: bool = False,
     default: Any = None,
+    min: int | None = None,
+    max: int | None = None,
+    format: str | None = None,
+    item_format: str | None = None,
+    unique: bool = False,
 ) -> ConfigField:
-    return ConfigField(key, section, kind, honoured, tuple(options), secret, default)
+    # a number is never negative unless a knob says otherwise
+    if kind == "int" and min is None:
+        min = 0
+    return ConfigField(
+        key,
+        section,
+        kind,
+        honoured,
+        tuple(options),
+        secret,
+        default,
+        min,
+        max,
+        format,
+        item_format,
+        unique,
+    )
 
 
 CONFIG_FIELDS: Final[tuple[ConfigField, ...]] = (
     # --- look and feel
     _f("language", "look_and_feel", "select", options=("en", "fr"), default="en"),
     _f("theme", "look_and_feel"),
-    _f("timezone", "look_and_feel", default="UTC"),
+    _f("timezone", "look_and_feel", default="UTC", format="timezone"),
     _f("list_summary", "look_and_feel", "bool"),
     _f("store_filter_settings", "look_and_feel", "bool"),
-    _f("max_avatar_size", "look_and_feel", "int", default=200),
+    _f("max_avatar_size", "look_and_feel", "int", default=200, min=1),
     # --- core
     _f("schema_check", "core", "bool"),
     _f("account_primary_attribute", "core", "select", options=("uid", "cn"), default="uid"),
-    _f("next_id_hook", "core", "path"),
+    _f("next_id_hook", "core", "path", format="abs_path"),
     _f("strict_naming_rules", "core", "bool"),
-    _f("min_id", "core", "int", honoured=True, default=1000),
-    _f("uid_number_base", "core", honoured=True, default="1100"),
-    _f("gid_number_base", "core", honoured=True, default="1100"),
+    _f("min_id", "core", "int", honoured=True, default=1000, max=MAX_ID),
+    _f("uid_number_base", "core", honoured=True, default="1100", format="id_range"),
+    _f("gid_number_base", "core", honoured=True, default="1100", format="id_range"),
     _f(
         "id_allocation_method",
         "core",
@@ -135,42 +183,65 @@ CONFIG_FIELDS: Final[tuple[ConfigField, ...]] = (
         options=("traditional", "pool"),
         default="traditional",
     ),
-    _f("uid_pool_min", "core", "int"),
-    _f("uid_pool_max", "core", "int"),
-    _f("gid_pool_min", "core", "int"),
-    _f("gid_pool_max", "core", "int"),
+    _f("uid_pool_min", "core", "int", max=MAX_ID),
+    _f("uid_pool_max", "core", "int", max=MAX_ID),
+    _f("gid_pool_min", "core", "int", max=MAX_ID),
+    _f("gid_pool_max", "core", "int", max=MAX_ID),
     _f("cn_pattern", "core"),
     _f("restrict_role_members", "core", "bool"),
     _f("given_name_required", "core", "bool"),
     _f("split_postal_address", "core", "bool"),
     _f("postal_address_pattern", "core"),
+    #: 0 lifts the limit (the directory client's convention).
     _f("ldap_size_limit", "core", "int", default=200),
     _f("wildcard_foreign_keys", "core", "bool"),
-    _f("modification_detection_attribute", "core"),
-    _f("shells", "core", "list", honoured=True, default=list(DEFAULT_SHELLS)),
-    _f("default_shell", "core", honoured=True, default=DEFAULT_SHELL),
-    _f("mail_domain", "core", honoured=True, default=""),
+    _f("modification_detection_attribute", "core", format="attribute"),
+    _f(
+        "shells",
+        "core",
+        "list",
+        honoured=True,
+        default=list(DEFAULT_SHELLS),
+        item_format="abs_path",
+        unique=True,
+    ),
+    _f("default_shell", "core", honoured=True, default=DEFAULT_SHELL, format="abs_path"),
+    _f("mail_domain", "core", honoured=True, default="", format="domain"),
     _f("acl_tab_on_objects", "core", "bool"),
     _f("department_categories", "core", "list"),
     _f("plugins_menu_blacklist", "core", "list"),
-    _f("acl_target_filter_limit", "core", "int", honoured=True, default=100),
+    _f("acl_target_filter_limit", "core", "int", honoured=True, default=100, min=1),
     _f("management_config", "core", "list"),
     _f("management_user_config", "core", "list"),
     _f("incremental_modifier_states", "core", "text"),
     _f("ogroup_default_user", "core", "bool"),
     _f("force_sasl_password_ask", "core", "bool"),
     # --- password
-    _f("password_default_hash", "password", honoured=True, default="ssha"),
-    _f("password_allowed_hashes", "password", "list", honoured=True),
+    _f(
+        "password_default_hash",
+        "password",
+        "select",
+        honoured=True,
+        options=PASSWORD_HASHES,
+        default="ssha",
+    ),
+    _f(
+        "password_allowed_hashes",
+        "password",
+        "list",
+        honoured=True,
+        options=PASSWORD_HASHES,
+        unique=True,
+    ),
     _f("force_password_default_hash", "password", "bool", honoured=True),
-    _f("password_min_length", "password", "int", honoured=True, default=8),
-    _f("password_min_differ", "password", "int", honoured=True, default=0),
+    _f("password_min_length", "password", "int", honoured=True, default=8, min=1, max=1024),
+    _f("password_min_differ", "password", "int", honoured=True, default=0, max=1024),
     _f("handle_expired_accounts", "password", "bool"),
     _f("sasl_realm", "password"),
     _f("sasl_exop", "password"),
     # --- login and session
-    _f("login_attribute", "login", honoured=True, default="uid"),
-    _f("session_lifetime", "login", "int", honoured=True, default=1800),
+    _f("login_attribute", "login", honoured=True, default="uid", format="attribute"),
+    _f("session_lifetime", "login", "int", honoured=True, default=1800, min=60, max=31_536_000),
     _f(
         "login_method",
         "login",
@@ -180,32 +251,32 @@ CONFIG_FIELDS: Final[tuple[ConfigField, ...]] = (
     ),
     _f("http_auth_enabled", "login", "bool"),
     _f("http_header_auth_enabled", "login", "bool"),
-    _f("http_header_name", "login", default="AUTH_USER"),
+    _f("http_header_name", "login", default="AUTH_USER", format="http_header"),
     _f("cas_enabled", "login", "bool"),
-    _f("cas_host", "login"),
-    _f("cas_port", "login", "int"),
+    _f("cas_host", "login", format="hostname"),
+    _f("cas_port", "login", "int", min=1, max=65535),
     _f("cas_context", "login"),
-    _f("cas_ca_cert_path", "login", "path"),
+    _f("cas_ca_cert_path", "login", "path", format="abs_path"),
     _f("cas_verbose", "login", "bool"),
     _f("cas_new_library", "login", "bool"),
     _f("cas_service_name", "login"),
     # --- ssl
     _f("force_ssl", "ssl", "bool"),
     _f("warn_ssl", "ssl", "bool"),
-    _f("ssl_ca_cert_path", "ssl", "path"),
-    _f("ssl_key_path", "ssl", "path"),
-    _f("ssl_cert_path", "ssl", "path"),
+    _f("ssl_ca_cert_path", "ssl", "path", format="abs_path"),
+    _f("ssl_key_path", "ssl", "path", format="abs_path"),
+    _f("ssl_cert_path", "ssl", "path", format="abs_path"),
     # --- storage (RDNs)
-    _f("user_rdn", "storage", honoured=True, default="ou=people"),
-    _f("group_rdn", "storage", honoured=True, default="ou=groups"),
-    _f("acl_role_rdn", "storage", honoured=True, default="ou=aclroles"),
-    _f("ogroup_rdn", "storage"),
-    _f("token_rdn", "storage"),
-    _f("orchestrator_token_rdn", "storage"),
-    _f("recovery_token_rdn", "storage"),
+    _f("user_rdn", "storage", honoured=True, default="ou=people", format="rdn"),
+    _f("group_rdn", "storage", honoured=True, default="ou=groups", format="rdn"),
+    _f("acl_role_rdn", "storage", honoured=True, default="ou=aclroles", format="rdn"),
+    _f("ogroup_rdn", "storage", format="rdn"),
+    _f("token_rdn", "storage", format="rdn"),
+    _f("orchestrator_token_rdn", "storage", format="rdn"),
+    _f("recovery_token_rdn", "storage", format="rdn"),
     # --- snapshots
     _f("snapshots_enabled", "snapshots", "bool", default=True),
-    _f("snapshot_base", "snapshots", honoured=True),
+    _f("snapshot_base", "snapshots", honoured=True, format="dn"),
     _f("automatic_snapshots", "snapshots", "bool"),
     _f("snapshot_min_retention", "snapshots", "int"),
     _f("snapshot_retention_days", "snapshots", "int"),
@@ -215,22 +286,22 @@ CONFIG_FIELDS: Final[tuple[ConfigField, ...]] = (
     _f("display_hook_output", "triggers", "bool", honoured=True),
     # --- password recovery
     _f("recovery_enabled", "recovery", "bool"),
-    _f("recovery_email", "recovery"),
+    _f("recovery_email", "recovery", format="email"),
     _f("recovery_mail_subject", "recovery"),
     _f("recovery_mail_body", "recovery", "text"),
     _f("recovery_mail2_subject", "recovery"),
     _f("recovery_mail2_body", "recovery", "text"),
-    _f("recovery_validity", "recovery", "int", default=10),
+    _f("recovery_validity", "recovery", "int", default=10, min=1),
     _f("recovery_salt", "recovery", secret=True),
     _f("recovery_use_alternate", "recovery", "bool"),
-    _f("recovery_login_attribute", "recovery", default="uid"),
+    _f("recovery_login_attribute", "recovery", default="uid", format="attribute"),
     # --- tasks
-    _f("tasks_rdn", "tasks"),
+    _f("tasks_rdn", "tasks", format="rdn"),
     _f("tasks_last_exec_time", "tasks"),
-    _f("tasks_max_emails", "tasks"),
-    _f("tasks_interval_emails", "tasks"),
+    _f("tasks_max_emails", "tasks", "int"),
+    _f("tasks_interval_emails", "tasks", "int"),
     # --- mail templates
-    _f("mail_template_rdn", "mail_templates"),
+    _f("mail_template_rdn", "mail_templates", format="rdn"),
     # --- debugging
     _f("display_errors", "debugging", "bool"),
     _f("ldap_max_query_time", "debugging", "int"),
@@ -337,23 +408,37 @@ def _validate(field_: ConfigField, value: Any) -> str | None:
     if field_.kind == "int":
         if isinstance(value, bool) or not isinstance(value, int):
             return "Expected a whole number."
-        if value < 0:
-            return "Must not be negative."
-    if field_.kind == "list" and (
-        not isinstance(value, list) or not all(isinstance(v, str) for v in value)  # pyright: ignore[reportUnknownVariableType]
-    ):
-        return "Expected a list of strings."
+        if field_.min is not None and value < field_.min:
+            return "Must not be negative." if field_.min == 0 else f"Must be at least {field_.min}."
+        if field_.max is not None and value > field_.max:
+            return f"Must be at most {field_.max}."
+    if field_.kind == "list":
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):  # pyright: ignore[reportUnknownVariableType]
+            return "Expected a list of strings."
+        return _validate_items(field_, cast("list[str]", value))
     if field_.kind in ("str", "text", "path", "select") and not isinstance(value, str):
         return "Expected a string."
     if field_.kind == "select" and value != "" and value not in field_.options:
         return "Unknown option."
-    if (
-        field_.key == "mail_domain"
-        and isinstance(value, str)
-        and value != ""
-        and (len(value) > 253 or _DOMAIN_RE.fullmatch(value) is None)
-    ):
-        return "Expected a domain name."
+    if field_.format is not None and isinstance(value, str):
+        return check(field_.format, value)
+    return None
+
+
+def _validate_items(field_: ConfigField, items: list[str]) -> str | None:
+    seen: set[str] = set()
+    for item in items:
+        if item == "":
+            continue
+        if field_.options and item not in field_.options:
+            return f"Unknown option: {item}."
+        if field_.item_format is not None:
+            message = check(field_.item_format, item)
+            if message is not None:
+                return f"{item}: {message}"
+        if field_.unique and item in seen:
+            return f"Duplicate entry: {item}."
+        seen.add(item)
     return None
 
 
@@ -600,8 +685,108 @@ def _plan(snapshot_entry: Entry | None, changes: Mapping[str, Any]) -> list[Modi
     return mods
 
 
-def validate_changes(changes: Mapping[str, Any]) -> dict[str, Any]:
-    """Check keys and types; returns the changes or raises :class:`ConfigError`."""
+def _effective_values(
+    snapshot: ConfigSnapshot | None, changes: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Values in force once ``changes`` are written (an emptied key falls back to its default)."""
+    values = dict(snapshot.values) if snapshot is not None else {}
+    for key, value in changes.items():
+        values.pop(key, None)
+        f = FIELDS_BY_KEY.get(key)
+        if f is not None and f.kind != "bool" and value in (None, "", []):
+            continue
+        if value is not None:
+            values[key] = value
+    return merge(ConfigSnapshot(True, values)).values
+
+
+def _int_of(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _id_range_end(value: Any) -> int | None:
+    """Upper bound of an ``a-b`` identifier range (``None`` for a plain base or garbage)."""
+    if not isinstance(value, str) or check("id_range", value) is not None:
+        return None
+    _low, sep, high = value.partition("-")
+    return int(high) if sep else None
+
+
+def _cross_errors(changes: Mapping[str, Any], effective: Mapping[str, Any]) -> dict[str, str]:
+    """Rules that tie several keys together, checked on the values in force after the write.
+
+    A rule runs only when one of its keys is being written, so a stored value that predates
+    the rule never blocks an unrelated save. The error goes to the key being written; when
+    both are, to the dependent one (the first of each pair below).
+    """
+    errors: dict[str, str] = {}
+
+    def report(dependent: str, other: str, on_dependent: str, on_other: str) -> None:
+        if dependent not in changes and other not in changes:
+            return
+        if dependent in changes or other not in changes:
+            errors.setdefault(dependent, on_dependent)
+        else:
+            errors.setdefault(other, on_other)
+
+    shells: list[str] = effective.get("shells") or []
+    default_shell = effective.get("default_shell")
+    if shells and default_shell and default_shell not in shells:
+        report(
+            "default_shell",
+            "shells",
+            "Must be one of the listed shells.",
+            f"Must include the default shell ({default_shell}).",
+        )
+    allowed: list[str] = effective.get("password_allowed_hashes") or []
+    default_hash = effective.get("password_default_hash")
+    if allowed and default_hash and default_hash not in allowed:
+        report(
+            "password_default_hash",
+            "password_allowed_hashes",
+            "Must be one of the allowed hashes.",
+            f"Must include the default hash ({default_hash}).",
+        )
+    length = _int_of(effective.get("password_min_length"))
+    differ = _int_of(effective.get("password_min_differ"))
+    if length is not None and differ is not None and differ > length:
+        report(
+            "password_min_differ",
+            "password_min_length",
+            f"Must not exceed the minimum length ({length}).",
+            f"Must be at least the number of differing characters ({differ}).",
+        )
+    for kind in ("uid", "gid"):
+        low = _int_of(effective.get(f"{kind}_pool_min"))
+        high = _int_of(effective.get(f"{kind}_pool_max"))
+        if low is not None and high is not None and low > high:
+            report(
+                f"{kind}_pool_max",
+                f"{kind}_pool_min",
+                f"Must not be below the minimum ({low}).",
+                f"Must not exceed the maximum ({high}).",
+            )
+    min_id = _int_of(effective.get("min_id"))
+    for kind in ("uid", "gid"):
+        end = _id_range_end(effective.get(f"{kind}_number_base"))
+        if end is not None and min_id is not None and end <= min_id:
+            report(
+                f"{kind}_number_base",
+                "min_id",
+                f"The range must end above the minimum identifier ({min_id}).",
+                f"Must be below the end of the {kind} identifier range ({end}).",
+            )
+    return errors
+
+
+def validate_changes(
+    changes: Mapping[str, Any], current: ConfigSnapshot | None = None
+) -> dict[str, Any]:
+    """Check keys, types and constraints; returns the changes or raises :class:`ConfigError`.
+
+    ``current`` is what the directory holds: the rules that tie several keys together are
+    checked on the values in force after the write (stored ones where unchanged).
+    """
     errors: dict[str, str] = {}
     for key, value in changes.items():
         f = FIELDS_BY_KEY.get(key)
@@ -611,6 +796,9 @@ def validate_changes(changes: Mapping[str, Any]) -> dict[str, Any]:
         message = _validate(f, value)
         if message is not None:
             errors[key] = message
+    if not errors:
+        for key, message in _cross_errors(changes, _effective_values(current, changes)).items():
+            errors.setdefault(key, message)
     if errors:
         raise ConfigError(errors)
     return dict(changes)
@@ -623,7 +811,7 @@ def save_config(directory: DirectoryClient, changes: Mapping[str, Any]) -> list[
     entry are never touched. The entry (and its auxiliary classes) is created
     when needed. Returns the keys that were actually written.
     """
-    validated = validate_changes(changes)
+    validated = validate_changes(changes, read_config(directory))
     dn = config_dn(directory)
     try:
         entry = directory.get(dn)
@@ -684,6 +872,7 @@ def describe_fields() -> list[dict[str, Any]]:
             "options": list(f.options),
             "secret": f.secret,
             "default": f.default,
+            "constraints": f.constraints(),
         }
         for f in CONFIG_FIELDS
     ]

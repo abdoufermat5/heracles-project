@@ -1,5 +1,7 @@
 /** Types of the administration API (`/api/v2/admin`, see docs/specs/08-admin.md). */
 
+import type { Format } from '@/lib/formats'
+
 export interface Capabilities {
   is_admin: boolean
   /** Administration console (otherwise the self-service portal). */
@@ -131,14 +133,29 @@ export type ConfigKind = 'str' | 'text' | 'int' | 'bool' | 'list' | 'select' | '
 
 export type ConfigValue = string | number | boolean | string[] | null
 
+/** Rules the server enforces on a setting (mirrored by the form; see `configModel.ts`). */
+export interface ConfigConstraints {
+  min?: number
+  max?: number
+  /** Named format of a text value (`lib/formats.ts`). */
+  format?: Format
+  /** Same, for every entry of a list. */
+  item_format?: Format
+  /** A list without repeated entries. */
+  unique?: boolean
+}
+
 export interface ConfigField {
   key: string
   section: string
   kind: ConfigKind
   honoured: boolean
+  /** Allowed values of a select, or of every entry of a list when not empty. */
   options: string[]
   secret: boolean
   default: ConfigValue
+  /** Absent on servers that predate the constraints. */
+  constraints?: ConfigConstraints
   value: ConfigValue
   source: 'directory' | 'default'
   hidden: boolean

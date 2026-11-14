@@ -12,14 +12,26 @@ import {
   X,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useId, useMemo, useState } from 'react'
+import { useBlocker } from '@tanstack/react-router'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
 import { qk } from '@/api/hooks'
 import { ErrorState } from '@/components/ErrorState'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -37,14 +49,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { useTechnicalDetails } from '@/lib/preferences'
 import { cn } from '@/lib/utils'
 import {
+  bySection,
   CONFIG_GROUPS,
   type ConfigGroupId,
   fromLines,
   groupFields,
+  groupOfField,
   nextDraft,
   normalise,
   searchFields,
   toLines,
+  validateDraft,
 } from './configModel'
 import { HooksSection } from './HooksSection'
 import { useConfig, useSaveConfig } from './hooks'
@@ -61,25 +76,39 @@ const GROUP_ICONS: Record<ConfigGroupId, typeof Settings2> = {
   advanced: Layers,
 }
 
+/** DOM id of a setting's control (the screen shows each key once). */
+const controlId = (key: string) => `config-${key}`
+
 function FieldControl({
   field,
   value,
   readOnly,
   error,
+  showStored,
   onChange,
+  onTouch,
 }: {
   field: ConfigField
   value: ConfigValue
   readOnly: boolean
   error?: string
+  /** Mark the setting as stored for compatibility (the Advanced list says it once instead). */
+  showStored: boolean
   onChange: (v: ConfigValue) => void
+  onTouch: () => void
 }) {
   const { t } = useTranslation()
   const technical = useTechnicalDetails()
-  const id = useId()
+  const id = controlId(field.key)
+  const errorId = `${id}-error`
   const label = t(`config.field.${field.key}`)
   const helpText = t(`settingsUI.config.help.${field.key}`)
   const disabled = readOnly || field.hidden
+  const invalid = !!error
+  const describedBy = [error ? errorId : null, field.kind === 'list' ? `${id}-hint` : null]
+    .filter(Boolean)
+    .join(' ')
+  const optionLabel = (o: string) => t(`config.option.${o}`, { defaultValue: o })
 
   let control: React.ReactNode
   switch (field.kind) {
@@ -90,7 +119,8 @@ function FieldControl({
           checked={value === true}
           disabled={disabled}
           onCheckedChange={onChange}
-          aria-invalid={!!error}
+          aria-invalid={invalid}
+          aria-describedby={describedBy || undefined}
         />
       )
       break
@@ -99,11 +129,14 @@ function FieldControl({
         <Input
           id={id}
           type="number"
-          min={0}
+          min={field.constraints?.min ?? 0}
+          max={field.constraints?.max}
+          step={1}
           className="max-w-40 tabular-nums"
           value={typeof value === 'number' ? String(value) : ''}
           disabled={disabled}
-          aria-invalid={!!error}
+          aria-invalid={invalid}
+          aria-describedby={describedBy || undefined}
           onChange={(e) => {
             const n = e.target.value === '' ? null : Number(e.target.value)
             onChange(n !== null && Number.isNaN(n) ? null : n)
@@ -111,28 +144,69 @@ function FieldControl({
         />
       )
       break
-    case 'select':
+    case 'select': {
+      const current = typeof value === 'string' ? value : ''
+      // a stored value the server no longer offers stays visible until the user picks another
+      const choices =
+        current !== '' && !field.options.includes(current)
+          ? [...field.options, current]
+          : field.options
       control = (
         <Select
-          value={typeof value === 'string' && value !== '' ? value : UNSET}
+          value={current !== '' ? current : UNSET}
           disabled={disabled}
           onValueChange={(v) => onChange(v === UNSET ? '' : v)}
         >
-          <SelectTrigger id={id} className="w-full max-w-64" aria-invalid={!!error}>
+          <SelectTrigger
+            id={id}
+            className="w-full max-w-64"
+            aria-invalid={invalid}
+            aria-describedby={describedBy || undefined}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={UNSET}>{t('config.unset')}</SelectItem>
-            {field.options.map((o) => (
+            {choices.map((o) => (
               <SelectItem key={o} value={o}>
-                {t(`config.option.${o}`)}
+                {optionLabel(o)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       )
       break
+    }
     case 'list':
+      if (field.options.length > 0) {
+        const selected = Array.isArray(value) ? value : []
+        const choices = [...field.options, ...selected.filter((v) => !field.options.includes(v))]
+        control = (
+          <div
+            id={id}
+            role="group"
+            tabIndex={-1}
+            aria-labelledby={`${id}-label`}
+            aria-invalid={invalid}
+            aria-describedby={describedBy || undefined}
+            className="flex flex-wrap gap-x-5 gap-y-2 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {choices.map((o) => (
+              <label key={o} className="flex items-center gap-2 text-body">
+                <Checkbox
+                  checked={selected.includes(o)}
+                  disabled={disabled}
+                  onCheckedChange={(on) =>
+                    onChange(choices.filter((c) => (c === o ? on === true : selected.includes(c))))
+                  }
+                />
+                <span className="font-mono text-xs">{optionLabel(o)}</span>
+              </label>
+            ))}
+          </div>
+        )
+        break
+      }
       control = (
         <Textarea
           id={id}
@@ -140,8 +214,8 @@ function FieldControl({
           className="font-mono text-xs"
           value={toLines(value)}
           disabled={disabled}
-          aria-invalid={!!error}
-          aria-describedby={`${id}-hint`}
+          aria-invalid={invalid}
+          aria-describedby={describedBy || undefined}
           onChange={(e) => onChange(fromLines(e.target.value))}
         />
       )
@@ -153,7 +227,8 @@ function FieldControl({
           rows={4}
           value={typeof value === 'string' ? value : ''}
           disabled={disabled}
-          aria-invalid={!!error}
+          aria-invalid={invalid}
+          aria-describedby={describedBy || undefined}
           onChange={(e) => onChange(e.target.value)}
         />
       )
@@ -169,7 +244,8 @@ function FieldControl({
           value={field.hidden ? '' : typeof value === 'string' ? value : ''}
           placeholder={field.hidden ? t('config.hidden') : undefined}
           disabled={disabled}
-          aria-invalid={!!error}
+          aria-invalid={invalid}
+          aria-describedby={describedBy || undefined}
           onChange={(e) => onChange(e.target.value)}
         />
       )
@@ -179,7 +255,7 @@ function FieldControl({
     <div className="grid gap-1.5 border-b border-border py-3 last:border-b-0 md:grid-cols-[minmax(0,18rem)_1fr] md:gap-6">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <Label htmlFor={id} className="leading-snug font-medium">
+          <Label htmlFor={id} id={`${id}-label`} className="leading-snug font-medium">
             {label}
           </Label>
           {technical && (
@@ -192,11 +268,9 @@ function FieldControl({
           )}
         </div>
         {helpText && (
-          <p className="text-caption text-muted-foreground leading-normal">
-            {helpText}
-          </p>
+          <p className="text-caption text-muted-foreground leading-normal">{helpText}</p>
         )}
-        {!field.honoured && (
+        {showStored && !field.honoured && (
           <div>
             <Badge variant="neutral" title={t('settingsUI.config.storedNotice')}>
               {t('settingsUI.config.storedBadge')}
@@ -204,15 +278,15 @@ function FieldControl({
           </div>
         )}
       </div>
-      <div className="min-w-0 space-y-1">
+      <div className="min-w-0 space-y-1" onBlur={onTouch}>
         {control}
-        {field.kind === 'list' && (
+        {field.kind === 'list' && field.options.length === 0 && (
           <p id={`${id}-hint`} className="text-caption text-muted-foreground">
             {t('config.listHint')}
           </p>
         )}
         {error && (
-          <p role="alert" className="text-xs text-destructive">
+          <p id={errorId} role="alert" className="text-xs text-destructive">
             {error}
           </p>
         )}
@@ -222,14 +296,18 @@ function FieldControl({
 }
 
 function ConfigEditor({ view }: { view: ConfigView }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const save = useSaveConfig()
   const qc = useQueryClient()
   const [activeGroup, setActiveGroup] = useState<ConfigGroupId>('general')
   const [search, setSearch] = useState('')
-  const [legacyFilter, setLegacyFilter] = useState('all')
   const [draft, setDraft] = useState<Record<string, ConfigValue>>({})
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  /** Messages of the last refused save, by key (a key is cleared when its value changes). */
+  const [serverErrors, setServerErrors] = useState<Record<string, string>>({})
+  /** Settings the user has left once: their client-side error is shown from then on. */
+  const [touched, setTouched] = useState<ReadonlySet<string>>(new Set())
+  const [attempted, setAttempted] = useState(false)
+  const pendingFocus = useRef<string | null>(null)
   const readOnly = !view.can_write
   const dirty = Object.keys(draft).length
 
@@ -244,45 +322,145 @@ function ConfigEditor({ view }: { view: ConfigView }) {
     [view.fields, activeGroup],
   )
 
-  // In Advanced group, user can filter by legacy section
-  const advancedSections = useMemo(() => {
-    const set = new Set<string>()
-    for (const f of view.fields) {
-      if (!f.honoured) set.add(f.section)
-    }
-    return Array.from(set)
-  }, [view.fields])
+  const displayedFields = isSearching ? searchResults : groupItems
 
-  const displayedFields = useMemo(() => {
-    if (isSearching) return searchResults
-    if (activeGroup === 'advanced' && legacyFilter !== 'all') {
-      return groupItems.filter((f) => f.section === legacyFilter)
-    }
-    return groupItems
-  }, [isSearching, searchResults, activeGroup, legacyFilter, groupItems])
+  const fieldByKey = useMemo(() => new Map(view.fields.map((f) => [f.key, f])), [view.fields])
 
-  const dirtyInGroup = (groupId: ConfigGroupId) => {
-    const fieldsInGroup = groupFields(view.fields, groupId)
-    return fieldsInGroup.filter((f) => f.key in draft).length
+  // what the server would refuse; recomputed when the language changes (the messages are translated)
+  const clientErrors = useMemo(
+    () => validateDraft(view.fields, draft),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [view.fields, draft, i18n.language],
+  )
+  const allErrors = useMemo(() => ({ ...serverErrors, ...clientErrors }), [serverErrors, clientErrors])
+  const clientErrorCount = Object.keys(clientErrors).length
+  const errorCount = Object.keys(allErrors).length
+
+  const errorsByGroup = useMemo(() => {
+    const counts: Partial<Record<ConfigGroupId, number>> = {}
+    for (const key of Object.keys(allErrors)) {
+      const f = fieldByKey.get(key)
+      if (!f) continue
+      const g = groupOfField(f)
+      counts[g] = (counts[g] ?? 0) + 1
+    }
+    return counts
+  }, [allErrors, fieldByKey])
+
+  const shownError = (key: string): string | undefined =>
+    key in serverErrors
+      ? serverErrors[key]
+      : touched.has(key) || attempted
+        ? clientErrors[key]
+        : undefined
+
+  const dirtyInGroup = (groupId: ConfigGroupId) =>
+    groupFields(view.fields, groupId).filter((f) => f.key in draft).length
+
+  // Leaving with unsaved changes asks first (also covers closing the tab).
+  const blocker = useBlocker({
+    shouldBlockFn: () => dirty > 0,
+    withResolver: true,
+    enableBeforeUnload: () => dirty > 0,
+  })
+
+  // Focus a setting once the group that holds it is on screen.
+  useEffect(() => {
+    const key = pendingFocus.current
+    if (!key) return
+    const el = document.getElementById(controlId(key))
+    if (el) {
+      pendingFocus.current = null
+      el.focus()
+    }
+  })
+
+  /** Switch to the group of a setting and put the focus on it. */
+  const goTo = (key: string) => {
+    const f = fieldByKey.get(key)
+    if (!f) return
+    setSearch('')
+    setActiveGroup(groupOfField(f))
+    pendingFocus.current = key
+    const el = document.getElementById(controlId(key))
+    if (el) {
+      pendingFocus.current = null
+      el.focus()
+    }
+  }
+
+  const touch = (key: string) => setTouched((s) => (s.has(key) ? s : new Set(s).add(key)))
+
+  const change = (f: ConfigField, v: ConfigValue) => {
+    setDraft((d) => nextDraft(d, f, v))
+    setServerErrors((s) => {
+      if (!(f.key in s)) return s
+      const next = { ...s }
+      delete next[f.key]
+      return next
+    })
+    // choices cannot be half-typed: their error shows at once
+    if (f.kind === 'bool' || f.kind === 'select' || f.options.length > 0) touch(f.key)
+  }
+
+  const reset = () => {
+    setDraft({})
+    setServerErrors({})
+    setTouched(new Set())
+    setAttempted(false)
+  }
+
+  const firstErrorKey = () => view.fields.find((f) => f.key in allErrors)?.key
+
+  const showErrors = () => {
+    setAttempted(true)
+    const key = firstErrorKey()
+    if (key) goTo(key)
   }
 
   const submit = async () => {
-    setErrors({})
+    if (clientErrorCount > 0) {
+      showErrors()
+      return
+    }
+    setServerErrors({})
     try {
       await save.mutateAsync(draft)
-      setDraft({})
+      reset()
       // mail_domain reaches the create-user wizard through /auth/me
       void qc.invalidateQueries({ queryKey: qk.me })
       toast.success(t('config.saved'))
     } catch (e) {
-      if (isApiError(e) && Object.keys(e.fields).length > 0) {
-        setErrors(e.fields)
+      const fields = isApiError(e) ? e.fields : {}
+      const keys = Object.keys(fields)
+      if (keys.length > 0) {
+        setServerErrors(fields)
+        setAttempted(true)
+        const first = keys.find((k) => fieldByKey.has(k))
+        if (first) goTo(first)
+        const orphans = keys.filter((k) => !fieldByKey.has(k)).map((k) => fields[k])
+        if (orphans.length > 0) toast.error(orphans.join(' '))
+      } else {
+        toast.error(isApiError(e) ? e.message : t('common.error'))
       }
-      toast.error(isApiError(e) ? e.message : t('common.error'))
     }
   }
 
   const currentGroupMeta = CONFIG_GROUPS.find((g) => g.id === activeGroup)
+  const inAdvanced = !isSearching && activeGroup === 'advanced'
+
+  const row = (f: ConfigField) => (
+    <FieldControl
+      key={f.key}
+      field={f}
+      value={f.key in draft ? (draft[f.key] ?? null) : normalise(f, f.value)}
+      readOnly={readOnly}
+      error={shownError(f.key)}
+      showStored={!inAdvanced}
+      onChange={(v) => change(f, v)}
+      onTouch={() => touch(f.key)}
+    />
+  )
 
   return (
     <div className="space-y-4">
@@ -319,6 +497,7 @@ function ConfigEditor({ view }: { view: ConfigView }) {
         >
           {CONFIG_GROUPS.map((grp) => {
             const count = dirtyInGroup(grp.id)
+            const invalidCount = errorsByGroup[grp.id] ?? 0
             const Icon = GROUP_ICONS[grp.id]
             const active = !isSearching && grp.id === activeGroup
             return (
@@ -339,14 +518,24 @@ function ConfigEditor({ view }: { view: ConfigView }) {
                   <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="truncate">{t(grp.labelKey)}</span>
                 </span>
-                {count > 0 && (
-                  <span
-                    className="flex size-5 items-center justify-center rounded-full bg-primary text-micro text-primary-foreground font-semibold"
-                    aria-label={t('config.modified')}
-                  >
-                    {count}
-                  </span>
-                )}
+                <span className="flex items-center gap-1">
+                  {invalidCount > 0 && (
+                    <span
+                      className="flex size-5 items-center justify-center rounded-full bg-destructive text-micro text-white font-semibold"
+                      aria-label={t('settingsUI.config.invalidInGroup', { count: invalidCount })}
+                    >
+                      {invalidCount}
+                    </span>
+                  )}
+                  {count > 0 && (
+                    <span
+                      className="flex size-5 items-center justify-center rounded-full bg-primary text-micro text-primary-foreground font-semibold"
+                      aria-label={t('config.modified')}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </span>
               </button>
             )
           })}
@@ -362,45 +551,16 @@ function ConfigEditor({ view }: { view: ConfigView }) {
             </h2>
             <p className="text-body text-muted-foreground">
               {isSearching
-                ? `${searchResults.length} settings match "${search}"`
+                ? t('config.searchHint', { query: search.trim() })
                 : t(currentGroupMeta?.helpKey ?? '')}
             </p>
           </div>
 
-          {/* Legacy section filter in Advanced group */}
-          {!isSearching && activeGroup === 'advanced' && (
-            <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 p-2.5">
-              <span className="text-caption font-medium text-muted-foreground">
-                {t('settingsUI.config.filterBySection')}:
-              </span>
-              <button
-                type="button"
-                onClick={() => setLegacyFilter('all')}
-                className={cn(
-                  'rounded px-2 py-1 text-caption font-medium transition-colors',
-                  legacyFilter === 'all'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-card text-muted-foreground hover:text-foreground border',
-                )}
-              >
-                {t('settingsUI.config.allGroups')}
-              </button>
-              {advancedSections.map((sec) => (
-                <button
-                  key={sec}
-                  type="button"
-                  onClick={() => setLegacyFilter(sec)}
-                  className={cn(
-                    'rounded px-2 py-1 text-caption font-medium transition-colors border',
-                    legacyFilter === sec
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-card text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {t(`config.section.${sec}`)}
-                </button>
-              ))}
-            </div>
+          {/* What "stored for compatibility" means, said once for the whole list */}
+          {inAdvanced && (
+            <p className="rounded-md border bg-muted/30 px-3 py-2 text-caption text-muted-foreground">
+              {t('config.storedGroupNotice')}
+            </p>
           )}
 
           {/* Triggers editor under Automation when not searching */}
@@ -408,18 +568,7 @@ function ConfigEditor({ view }: { view: ConfigView }) {
             <div className="space-y-6">
               <HooksSection />
               {groupItems.length > 0 && (
-                <div className="rounded-md border bg-card px-4">
-                  {groupItems.map((f) => (
-                    <FieldControl
-                      key={f.key}
-                      field={f}
-                      value={f.key in draft ? (draft[f.key] ?? null) : normalise(f, f.value)}
-                      readOnly={readOnly}
-                      error={errors[f.key]}
-                      onChange={(v) => setDraft((d) => nextDraft(d, f, v))}
-                    />
-                  ))}
-                </div>
+                <div className="rounded-md border bg-card px-4">{groupItems.map(row)}</div>
               )}
             </div>
           ) : displayedFields.length === 0 ? (
@@ -434,19 +583,19 @@ function ConfigEditor({ view }: { view: ConfigView }) {
                 ) : undefined
               }
             />
-          ) : (
-            <div className="rounded-md border bg-card px-4">
-              {displayedFields.map((f) => (
-                <FieldControl
-                  key={f.key}
-                  field={f}
-                  value={f.key in draft ? (draft[f.key] ?? null) : normalise(f, f.value)}
-                  readOnly={readOnly}
-                  error={errors[f.key]}
-                  onChange={(v) => setDraft((d) => nextDraft(d, f, v))}
-                />
+          ) : inAdvanced ? (
+            <div className="space-y-5">
+              {bySection(groupItems, view.sections).map((s) => (
+                <div key={s.section} className="space-y-2">
+                  <h3 className="text-small font-semibold text-foreground">
+                    {t(`config.section.${s.section}`)}
+                  </h3>
+                  <div className="rounded-md border bg-card px-4">{s.fields.map(row)}</div>
+                </div>
               ))}
             </div>
+          ) : (
+            <div className="rounded-md border bg-card px-4">{displayedFields.map(row)}</div>
           )}
 
           {/* Sticky save bar */}
@@ -456,6 +605,22 @@ function ConfigEditor({ view }: { view: ConfigView }) {
                 <p className="flex items-center gap-1.5 text-small text-muted-foreground">
                   <Lock className="size-4" aria-hidden />
                   {t('settingsUI.config.readOnlyNotice')}
+                </p>
+              ) : errorCount > 0 ? (
+                <p
+                  className="flex flex-wrap items-center gap-x-2 text-small font-medium text-destructive"
+                  aria-live="polite"
+                >
+                  {t('settingsUI.config.needFixing', { count: errorCount })}
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-small"
+                    onClick={showErrors}
+                  >
+                    {t('config.showFirstError')}
+                  </Button>
                 </p>
               ) : (
                 <p className="text-small font-medium text-foreground" aria-live="polite">
@@ -470,17 +635,14 @@ function ConfigEditor({ view }: { view: ConfigView }) {
                 variant="outline"
                 size="sm"
                 disabled={dirty === 0 || save.isPending}
-                onClick={() => {
-                  setDraft({})
-                  setErrors({})
-                }}
+                onClick={reset}
               >
                 <Undo2 className="size-4" />
                 {t('settingsUI.config.discard')}
               </Button>
               <Button
                 size="sm"
-                disabled={readOnly || dirty === 0 || save.isPending}
+                disabled={readOnly || dirty === 0 || save.isPending || clientErrorCount > 0}
                 onClick={() => void submit()}
               >
                 <Save className="size-4" />
@@ -490,6 +652,27 @@ function ConfigEditor({ view }: { view: ConfigView }) {
           </div>
         </section>
       </div>
+
+      <AlertDialog open={blocker.status === 'blocked'}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lead font-semibold">
+              {t('editor.leaveTitle')}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-body text-muted-foreground">
+              {t('editor.leaveBody')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => blocker.status === 'blocked' && blocker.reset()}>
+              {t('editor.stay')}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => blocker.status === 'blocked' && blocker.proceed()}>
+              {t('editor.leave')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

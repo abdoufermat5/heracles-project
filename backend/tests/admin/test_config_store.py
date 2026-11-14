@@ -58,7 +58,10 @@ def test_save_writes_only_changes_and_keeps_unknown_attributes(directory: Memory
 
 
 def test_empty_value_removes_attribute(directory: MemoryDirectory) -> None:
-    cs.save_config(directory, {"shells": ["/bin/sh", "/bin/zsh"], "cas_host": "cas.example"})
+    cs.save_config(
+        directory,
+        {"shells": ["/bin/sh", "/bin/zsh"], "default_shell": "/bin/sh", "cas_host": "cas.example"},
+    )
     cs.save_config(directory, {"shells": [], "cas_host": ""})
     entry = directory.get(cs.config_dn(directory))
     assert entry is not None
@@ -144,7 +147,7 @@ def test_mail_domain_default_empty_and_validated(directory: MemoryDirectory) -> 
 
     with pytest.raises(cs.ConfigError) as exc:
         cs.save_config(directory, {"mail_domain": "not a domain"})
-    assert exc.value.fields == {"mail_domain": "Expected a domain name."}
+    assert exc.value.fields == {"mail_domain": "Expected a domain name, such as example.com."}
     # an empty value removes the attribute and turns the suggestion off again
     assert cs.save_config(directory, {"mail_domain": ""}) == ["mail_domain"]
     assert cs.effective_settings(directory).mail_domain == ""

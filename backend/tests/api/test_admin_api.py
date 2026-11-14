@@ -377,6 +377,36 @@ def test_config_get_and_put(client: TestClient, admin: Api) -> None:
     assert reserved.status_code == 422
 
 
+def test_config_put_refuses_invalid_values_with_the_offending_keys(admin: Api) -> None:
+    bad = {
+        "user_rdn": "anything",
+        "password_default_hash": "foo",
+        "default_shell": "bash",
+        "timezone": "Mars",
+        "cas_port": 0,
+    }
+    refused = admin.put("/config", {"changes": bad})
+    assert refused.status_code == 422, refused.text
+    assert set(refused.json()["error"]["fields"]) == set(bad)
+    assert admin.get("/config").json()["exists"] is False  # nothing was written
+    good = {
+        "ogroup_rdn": "ou=og",
+        "password_default_hash": "ssha512",
+        "default_shell": "/bin/zsh",
+        "timezone": "Europe/Paris",
+        "cas_port": 8443,
+    }
+    saved = admin.put("/config", {"changes": good})
+    assert saved.status_code == 200, saved.text
+    fields = {f["key"]: f for f in saved.json()["fields"]}
+    assert fields["ogroup_rdn"]["constraints"] == {"format": "rdn"}
+    assert fields["cas_port"]["constraints"] == {"min": 1, "max": 65535}
+    assert "ssha512" in fields["password_default_hash"]["options"]
+    cross = admin.put("/config", {"changes": {"shells": ["/bin/sh"]}})
+    assert cross.status_code == 422
+    assert set(cross.json()["error"]["fields"]) == {"shells"}
+
+
 def test_hooks_endpoint(admin: Api) -> None:
     view = admin.get("/hooks").json()
     assert view["hooks"] == [] and "posixAccount" in view["tabs"] and "check" in view["modes"]
@@ -511,7 +541,7 @@ def test_tasks_dashboard(client: TestClient, admin: Api) -> None:
     assert listed["summary"]["total"] == 1
     row = listed["tasks"][0]
     assert row["kind"] == "audit_task" and row["status"] == "Activated" and row["can_run"] is True
-    assert admin.get("/tasks", kind="other").json()["tasks"] == []
+    assert admin.get("/tasks", kind="audit_task").json()["tasks"][0]["dn"] == task_dn
     assert admin.get("/tasks", status="Deactivated").json()["tasks"] == []
 
     queued = admin.post(f"/tasks/{dnp(task_dn)}/run")
