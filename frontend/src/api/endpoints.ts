@@ -1,6 +1,10 @@
 import { casLogoutUrl, hasSsoCookie, navigateExternal } from '@/features/auth/sso'
 import { dnPath, request, resetCsrf } from './client'
 import type {
+  ApiTokenCreated,
+  ApiTokenInfo,
+  ApiTokenLimits,
+  ApiTokenRequest,
   CreateObjectRequest,
   Dashboard,
   Directory,
@@ -82,9 +86,25 @@ export const api = {
     request<undefined>(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   revokeOtherSessions: () =>
     request<{ revoked: number }>('/auth/sessions/revoke-others', { method: 'POST' }),
+  /** API tokens of the signed-in person (never their secrets). */
+  listMyTokens: () => request<ApiTokenInfo[]>('/auth/tokens'),
+  tokenLimits: () => request<ApiTokenLimits>('/auth/tokens/limits'),
+  /** Needs a recent sign-in (403 `reauth_required` otherwise); the answer holds the secret once. */
+  createToken: (body: ApiTokenRequest) =>
+    request<ApiTokenCreated>('/auth/tokens', { method: 'POST', body }),
+  revokeMyToken: (id: string) =>
+    request<undefined>(`/auth/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  /** Someone's tokens (needs the right to lock their account). */
+  listUserTokens: (dn: string) =>
+    request<ApiTokenInfo[]>('/tokens', { query: { owner: dn } }),
+  /** Revoke someone's token (right to lock their account and a recent sign-in). */
+  revokeToken: (id: string) =>
+    request<undefined>(`/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   /** Administrator: sign a user out everywhere (needs the right to lock the account). */
   revokeUserSessions: (dn: string) =>
-    request<{ revoked: number }>(`/users/${dnPath(dn)}/sessions`, { method: 'DELETE' }),
+    request<{ revoked: number; tokens_revoked: number }>(`/users/${dnPath(dn)}/sessions`, {
+      method: 'DELETE',
+    }),
   logout: async () => {
     if (hasSsoCookie()) {
       // opened through CAS: the server ends our session and the CAS one, then returns to /login

@@ -62,6 +62,7 @@ import { FieldRow } from '@/features/editor/FieldRow'
 import { LdifDialog } from '@/features/editor/LdifDialog'
 import { SaveReviewDialog } from '@/features/editor/SaveReviewDialog'
 import { RevokeUserSessionsDialog } from '@/features/me/RevokeUserSessionsDialog'
+import { UserApiTokensPanel } from '@/features/me/UserApiTokensPanel'
 import { UNDO_WINDOW_MS, useUndoableSave } from '@/features/editor/undo'
 import { LockedDialog } from '@/features/editor/LockedDialog'
 import { ReferencesPanel } from '@/features/editor/ReferencesPanel'
@@ -950,6 +951,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
         {/* Tab 4: Security */}
         <TabsContent value="security" className="space-y-6">
           <SecondFactorsPanel dn={dn} />
+          <UserApiTokensPanel dn={dn} />
           <UserActivity dn={dn} />
         </TabsContent>
 

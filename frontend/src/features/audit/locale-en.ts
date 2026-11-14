@@ -46,6 +46,7 @@ export const auditEn = {
       lock: 'Locked',
       unlock: 'Unlocked',
       member_add: 'Member added',
+      api_token: 'API token',
       member_remove: 'Member removed',
     },
     results: {
@@ -61,6 +62,7 @@ export const auditEn = {
       details: 'Changes',
     },
     details: {
+      viaToken: 'Made with the API token',
       show: 'Show changes',
       hide: 'Hide changes',
       title: 'Changes',

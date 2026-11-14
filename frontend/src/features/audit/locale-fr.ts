@@ -48,6 +48,7 @@ export const auditFr: typeof auditEn = {
       lock: 'Verrouillage',
       unlock: 'Déverrouillage',
       member_add: 'Membre ajouté',
+      api_token: 'Jeton d’API',
       member_remove: 'Membre retiré',
     },
     results: {
@@ -63,6 +64,7 @@ export const auditFr: typeof auditEn = {
       details: 'Modifications',
     },
     details: {
+      viaToken: 'Fait avec le jeton d’API',
       show: 'Afficher les modifications',
       hide: 'Masquer les modifications',
       title: 'Modifications',

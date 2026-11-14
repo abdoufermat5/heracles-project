@@ -105,6 +105,13 @@ export function AttributeDiff({ lines }: { lines: string[] }) {
     <ul className="space-y-1 text-small" aria-label={t('audit.details.title')}>
       {lines.map((line, i) => {
         const c = parseAttribute(line)
+        if (c.kind === 'via') {
+          return (
+            <li key={i} className="text-caption text-muted-foreground">
+              {t('audit.details.viaToken')} <span className="font-mono">{c.token}</span>
+            </li>
+          )
+        }
         if (c.kind === 'text') {
           return (
             <li key={i} className="font-dn text-muted-foreground">

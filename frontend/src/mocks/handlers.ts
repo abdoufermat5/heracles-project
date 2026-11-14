@@ -1,5 +1,5 @@
 import { http, HttpResponse, delay, type HttpHandler } from 'msw'
-import type { ErrorCode, ObjectListItem, TabState } from '@/api/types'
+import type { ApiTokenInfo, ErrorCode, ObjectListItem, TabState } from '@/api/types'
 import { APP_VERSION } from '@/lib/appVersion'
 import { BASE_DN, db } from './db'
 import { adminHandlers } from './adminHandlers'
@@ -350,7 +350,93 @@ export const handlers: HttpHandler[] = [
 
   http.delete(
     `${B}/users/:dn/sessions`,
-    guarded(() => HttpResponse.json({ revoked: 1 }), { mutation: true }),
+    guarded(() => HttpResponse.json({ revoked: 1, tokens_revoked: 0 }), { mutation: true }),
+  ),
+
+  // --- API tokens (contract: backend heracles.api.v2.tokens) ---
+  http.get(
+    `${B}/auth/tokens/limits`,
+    guarded(() => HttpResponse.json({ enabled: true, max_lifetime_days: 365, scopes: ['read', 'write', 'admin'] })),
+  ),
+
+  http.get(
+    `${B}/auth/tokens`,
+    guarded(() => {
+      const me = (db.session.user ?? '').toLowerCase()
+      return HttpResponse.json(db.apiTokens.filter((t) => t.owner_dn.toLowerCase() === me))
+    }),
+  ),
+
+  http.post(
+    `${B}/auth/tokens`,
+    guarded(
+      async ({ request }) => {
+        const body = (await request.json()) as { name?: string; scope?: string; types?: string[]; expires_in_days?: number }
+        const fields: Record<string, string> = {}
+        const name = (body.name ?? '').trim()
+        if (!name) fields.name = 'Give the token a name'
+        if (!['read', 'write', 'admin'].includes(body.scope ?? '')) fields.scope = 'One of: read, write, admin'
+        const types = body.types ?? []
+        if (types.length > 0 && body.scope === 'admin') fields.types = 'An admin token cannot be limited to some types'
+        const days = body.expires_in_days ?? 0
+        if (days < 1 || days > 365) fields.expires_in_days = 'At most 365 days'
+        if (Object.keys(fields).length > 0) return err(422, 'validation', 'Invalid token', { fields })
+        if (!db.reauthFresh) return err(403, 'reauth_required', 'Confirm your password to continue')
+        const now = Math.floor(Date.now() / 1000)
+        const id = (db.nextId++).toString(16).padStart(16, '0')
+        const token: ApiTokenInfo = {
+          id,
+          name,
+          owner_dn: db.session.user ?? '',
+          scope: body.scope as ApiTokenInfo['scope'],
+          types: [...types].sort(),
+          created_at: now,
+          expires_at: now + days * 86400,
+          last_used_at: null,
+          last_used_ip: '',
+        }
+        db.apiTokens.push(token)
+        return HttpResponse.json({ ...token, secret: `hrc_${id}_${'m'.repeat(43)}` }, { status: 201 })
+      },
+      { mutation: true },
+    ),
+  ),
+
+  http.delete(
+    `${B}/auth/tokens/:id`,
+    guarded(
+      ({ params }) => {
+        const me = (db.session.user ?? '').toLowerCase()
+        const target = db.apiTokens.find((t) => t.id === String(params.id) && t.owner_dn.toLowerCase() === me)
+        if (!target) return err(404, 'not_found', 'Token not found')
+        db.apiTokens = db.apiTokens.filter((t) => t !== target)
+        return new HttpResponse(null, { status: 204 })
+      },
+      { mutation: true },
+    ),
+  ),
+
+  http.get(
+    `${B}/tokens`,
+    guarded(({ request }) => {
+      const owner = new URL(request.url).searchParams.get('owner')
+      const found = owner ? db.apiTokens.filter((t) => t.owner_dn.toLowerCase() === owner.toLowerCase()) : db.apiTokens
+      return HttpResponse.json(found)
+    }),
+  ),
+
+  http.delete(
+    `${B}/tokens/:id`,
+    guarded(
+      ({ params }) => {
+        const target = db.apiTokens.find((t) => t.id === String(params.id))
+        if (!target) return err(404, 'not_found', 'Token not found')
+        if (!db.reauthFresh) return err(403, 'reauth_required', 'Confirm your password to continue')
+        db.apiTokens = db.apiTokens.filter((t) => t !== target)
+        return new HttpResponse(null, { status: 204 })
+      },
+      { mutation: true },
+    ),
   ),
 
   http.post(

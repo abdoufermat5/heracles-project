@@ -26,12 +26,17 @@ export function formatAbsolute(iso: string): string {
 export type AttributeChange =
   | { kind: 'change'; op: 'add' | 'replace' | 'delete' | 'set'; name: string; value: string }
   | { kind: 'text'; text: string }
+  /** The author acted through an API token (first line of the event, ``via: api token <id>``). */
+  | { kind: 'via'; token: string }
 
+const VIA_RE = /^via:\s*api token\s+(\S+)$/
 const CHANGE_RE = /^(add|replace|delete)\s+([^\s:]+):\s*(.*)$/
 const SET_RE = /^([^\s:]+):\s*(.*)$/
 
 /** Parses the attribute lines written by the audit log (`replace mail: a@b`, `uid: jdoe`). */
 export function parseAttribute(line: string): AttributeChange {
+  const via = VIA_RE.exec(line)
+  if (via) return { kind: 'via', token: via[1] ?? '' }
   const change = CHANGE_RE.exec(line)
   if (change) {
     return {

@@ -13,6 +13,7 @@ export type AuditAction =
   | 'config'
   | 'import'
   | 'task'
+  | 'api_token'
   | 'lock'
   | 'unlock'
   | 'member_add'
@@ -31,6 +32,7 @@ export const AUDIT_ACTIONS: AuditAction[] = [
   'config',
   'import',
   'task',
+  'api_token',
   'lock',
   'unlock',
   'member_add',

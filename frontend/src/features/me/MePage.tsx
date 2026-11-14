@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { PageLayout } from '@/components/patterns'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCapabilities } from '@/features/admin/hooks'
+import { ApiTokensPanel } from '@/features/me/ApiTokensPanel'
 import { SessionsPanel } from '@/features/me/SessionsPanel'
 import { GroupsSection } from '@/features/portal/GroupsSection'
 import { PasswordSection } from '@/features/portal/PasswordSection'
@@ -84,6 +85,9 @@ export function MePage() {
 
       {/* Active sessions: devices signed in to this account */}
       <SessionsPanel />
+
+      {/* API tokens for scripts (console users only: the self-service portal has no API use) */}
+      {isConsoleUser && <ApiTokensPanel />}
 
       {/* My Groups (Read-only list) */}
       <GroupsSection />

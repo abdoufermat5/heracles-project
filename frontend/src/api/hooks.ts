@@ -33,6 +33,8 @@ export const qk = {
   dashboard: ['dashboard'] as const,
   securityKeys: ['security-keys'] as const,
   sessions: ['sessions'] as const,
+  apiTokens: ['api-tokens'] as const,
+  userApiTokens: (dn: string) => ['api-tokens', 'user', dn.toLowerCase()] as const,
   totp: ['totp'] as const,
   snapshots: (type: string, dn: string) => ['snapshots', type, dn] as const,
 }

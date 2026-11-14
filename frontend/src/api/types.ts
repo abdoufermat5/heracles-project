@@ -86,6 +86,41 @@ export interface WebAuthnCredentialInfo {
 }
 
 /** One active session of the signed-in person (`GET /auth/sessions`). */
+/** Scope level of an API token: each one includes the previous ones. */
+export type ApiTokenScope = 'read' | 'write' | 'admin'
+
+/** An API token as listed (never its secret). Times are Unix seconds. */
+export interface ApiTokenInfo {
+  id: string
+  name: string
+  owner_dn: string
+  scope: ApiTokenScope
+  /** Object types it is limited to; empty: every type. */
+  types: string[]
+  created_at: number
+  expires_at: number
+  last_used_at: number | null
+  last_used_ip: string
+}
+
+/** The answer of a creation: the only time the token itself is shown. */
+export interface ApiTokenCreated extends ApiTokenInfo {
+  secret: string
+}
+
+export interface ApiTokenRequest {
+  name: string
+  scope: ApiTokenScope
+  types: string[]
+  expires_in_days: number
+}
+
+export interface ApiTokenLimits {
+  enabled: boolean
+  max_lifetime_days: number
+  scopes: ApiTokenScope[]
+}
+
 export interface SessionInfo {
   /** Opaque reference (not the cookie value). */
   id: string
