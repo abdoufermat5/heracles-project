@@ -18,6 +18,8 @@ from heracles.api.middleware import install_body_limit, install_middleware
 from heracles.api.settings import ApiSettings
 from heracles.api.state import AdminResolver, AppState, LogoutHook
 from heracles.api.static import mount_spa
+from heracles.auth.api_tokens import ApiTokenStore, InMemoryApiTokenStore
+from heracles.auth.api_tokens_db import SqlApiTokenStore
 from heracles.auth.login import LoginConfig, parse_networks
 from heracles.auth.mail import Mailer, MemoryMailer
 from heracles.auth.passwords import PasswordPolicy
@@ -58,6 +60,7 @@ def create_app(
     sessions: SessionStore | None = None,
     second_factor_store: SecondFactorStore | None = None,
     token_store: TokenStore | None = None,
+    api_token_store: ApiTokenStore | None = None,
     mailer: Mailer | None = None,
     limiter: LoginLimiter | None = None,
     is_admin: AdminResolver | None = None,
@@ -115,6 +118,13 @@ def create_app(
         tokens = SqliteTokenStore(database, clock)
     else:
         tokens = InMemoryTokenStore()
+    api_tokens: ApiTokenStore
+    if api_token_store is not None:
+        api_tokens = api_token_store
+    elif database is not None:
+        api_tokens = SqlApiTokenStore(database, clock)
+    else:
+        api_tokens = InMemoryApiTokenStore(clock)
     login_limiter: LoginLimiter
     if limiter is not None:
         login_limiter = limiter
@@ -167,6 +177,7 @@ def create_app(
         logout_hooks=list(logout_hooks),
         clock=clock,
         database=database,
+        api_tokens=api_tokens,
     )
 
     install_error_handlers(app)

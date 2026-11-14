@@ -217,3 +217,42 @@ def test_copy_sqlite_into_postgres(tmp_path: Path, make_db: MakeDb) -> None:
     assert PluginOverrideStore(target).load() == {"sudo": False}
     TaskStore(target).record(RunRecord("d", "r2", "k", stamp, stamp, "ok"))  # serial moved on
     assert [r.id for r in TaskStore(target).recent()] == [2, 1]
+
+
+def test_api_tokens_are_shared_between_replicas(make_db: MakeDb) -> None:
+    from heracles.auth import api_tokens
+    from heracles.auth.api_tokens_db import SqlApiTokenStore
+
+    one, two = SqlApiTokenStore(make_db()), SqlApiTokenStore(make_db())
+    new = api_tokens.generate(
+        owner_dn=DN,
+        directory_id="main",
+        name="ci",
+        scope="write",
+        types=("user", "group"),
+        expires_at=5000.0,
+        created_by=DN,
+        now=1000.0,
+    )
+    old = api_tokens.generate(
+        owner_dn=DN.upper(),
+        directory_id="main",
+        name="old",
+        scope="read",
+        types=(),
+        expires_at=1500.0,
+        created_by=DN,
+        now=1000.0,
+    )
+    one.add(new.token)
+    one.add(old.token)
+    seen = two.get(new.token.id)
+    assert seen == new.token and seen is not None and seen.types == ("group", "user")
+    assert {t.id for t in two.list_for_owner(DN)} == {new.token.id, old.token.id}
+    two.touch(new.token.id, 1200.0, "192.0.2.9")
+    touched = one.get(new.token.id)
+    assert touched is not None and touched.last_used_at == 1200.0
+    assert two.purge_expired(2000.0) == 1
+    assert one.delete(new.token.id) and not two.delete(new.token.id)
+    one.add(old.token)
+    assert two.delete_for_owner(DN) == 1 and one.list_all() == []

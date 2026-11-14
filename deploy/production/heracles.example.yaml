@@ -39,6 +39,13 @@ api:
     # idle_timeout_seconds: 1800
     # absolute_timeout_seconds: 28800
 
+  # API tokens for scripts (Authorization: Bearer hrc_...), created by each person on their
+  # account page. Every token expires; it acts as its owner, limited by its scope.
+  # api_tokens:
+  #   enabled: true
+  #   max_lifetime_days: 365
+  #   max_per_owner: 20
+
   # Built console to serve. The container image finds /app/static by itself.
   # static_dir: /app/static
 

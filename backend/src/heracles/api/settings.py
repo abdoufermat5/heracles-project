@@ -122,6 +122,16 @@ class MetricsSettings(BaseModel):
     allowed_networks: list[str] = Field(default_factory=lambda: [])
 
 
+class ApiTokenSettings(BaseModel):
+    """API tokens (``Authorization: Bearer``) for scripts and automation."""
+
+    enabled: bool = True
+    #: Longest lifetime a token may be given, in days (every token expires).
+    max_lifetime_days: int = Field(default=365, ge=1)
+    #: Tokens one person may hold at once.
+    max_per_owner: int = Field(default=20, ge=1)
+
+
 class ApiSettings(BaseModel):
     """Everything ``create_app`` needs besides the directories."""
 
@@ -132,6 +142,7 @@ class ApiSettings(BaseModel):
     session: SessionSettings = Field(default_factory=SessionSettings)
     login: LoginSettings = Field(default_factory=LoginSettings)
     recovery: RecoverySettings = Field(default_factory=RecoverySettings)
+    api_tokens: ApiTokenSettings = Field(default_factory=ApiTokenSettings)
     password: PasswordSettings = Field(default_factory=PasswordSettings)
     webauthn: WebAuthnSettings = Field(default_factory=WebAuthnSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)

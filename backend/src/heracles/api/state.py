@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from heracles.api.settings import ApiSettings
+from heracles.auth.api_tokens import ApiTokenStore, InMemoryApiTokenStore
 from heracles.auth.login import IPNetwork, LoginConfig
 from heracles.auth.mail import Mailer
 from heracles.auth.passwords import PasswordPolicy
@@ -44,3 +45,5 @@ class AppState:
     database: Database | None = None
     #: Records audit events outside the object service (no-op without the audit plugin).
     audit: AuditSink = field(default_factory=AuditSink)
+    #: API tokens (``Authorization: Bearer``).
+    api_tokens: ApiTokenStore = field(default_factory=InMemoryApiTokenStore)
