@@ -98,6 +98,9 @@ export function ObjectCell({ event }: { event: AuditEvent }) {
 /** Attribute lines of an event as a small before/after list. */
 export function AttributeDiff({ lines }: { lines: string[] }) {
   const { t } = useTranslation()
+  if (lines.length === 0) {
+    return <p className="text-small text-muted-foreground">{t('audit.details.none')}</p>
+  }
   return (
     <ul className="space-y-1 text-small" aria-label={t('audit.details.title')}>
       {lines.map((line, i) => {

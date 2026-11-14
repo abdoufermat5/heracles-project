@@ -45,6 +45,10 @@ export const auditFr: typeof auditEn = {
       config: 'Configuration',
       import: 'Import',
       task: 'Tâche',
+      lock: 'Verrouillage',
+      unlock: 'Déverrouillage',
+      member_add: 'Membre ajouté',
+      member_remove: 'Membre retiré',
     },
     results: {
       success: 'Succès',
@@ -62,6 +66,7 @@ export const auditFr: typeof auditEn = {
       show: 'Afficher les modifications',
       hide: 'Masquer les modifications',
       title: 'Modifications',
+      none: 'Aucun détail n’a été enregistré pour cet événement.',
       add: 'ajouté',
       replace: 'modifié',
       delete: 'retiré',
@@ -74,7 +79,7 @@ export const auditFr: typeof auditEn = {
     loadMore: 'Charger plus',
     notEnabled: {
       title: 'Le journal d’audit n’est pas activé',
-      description: 'Activez le plugin d’audit pour enregistrer et consulter qui a modifié quoi.',
+      description: 'Activez le module d’audit pour enregistrer et consulter qui a modifié quoi.',
     },
     history: {
       tab: 'Historique',

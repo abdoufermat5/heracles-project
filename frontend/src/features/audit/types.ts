@@ -13,6 +13,10 @@ export type AuditAction =
   | 'config'
   | 'import'
   | 'task'
+  | 'lock'
+  | 'unlock'
+  | 'member_add'
+  | 'member_remove'
 
 export const AUDIT_ACTIONS: AuditAction[] = [
   'create',
@@ -27,6 +31,10 @@ export const AUDIT_ACTIONS: AuditAction[] = [
   'config',
   'import',
   'task',
+  'lock',
+  'unlock',
+  'member_add',
+  'member_remove',
 ]
 
 /** Actions about signing in, as opposed to changes made to the directory. */

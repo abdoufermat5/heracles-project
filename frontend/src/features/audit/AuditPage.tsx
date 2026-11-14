@@ -293,22 +293,19 @@ export function AuditPage({ object: initialObject = '', actor: initialActor = ''
             <TableBody>
               {rows.map((e) => {
                 const open = expanded.has(e.dn)
-                const hasDetails = e.attributes.length > 0
                 return (
                   <Fragment key={e.dn}>
                     <TableRow data-testid="audit-row">
                       <TableCell className="align-top">
-                        {hasDetails && (
-                          <button
-                            type="button"
-                            onClick={() => toggle(e.dn)}
-                            aria-expanded={open}
-                            aria-label={open ? t('audit.details.hide') : t('audit.details.show')}
-                            className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-                          >
-                            {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => toggle(e.dn)}
+                          aria-expanded={open}
+                          aria-label={open ? t('audit.details.hide') : t('audit.details.show')}
+                          className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+                        >
+                          {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                        </button>
                       </TableCell>
                       <TableCell className="align-top">
                         <WhenCell iso={e.time} />

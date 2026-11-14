@@ -28,6 +28,15 @@ from heracles_plugins._secrets import is_secret_name
 
 log = structlog.get_logger(__name__)
 
+#: Actions the object events record beyond the core vocabulary: an account locked or
+#: unlocked, and members added to or removed from a group-like object.
+LOCK_ACTIONS = ("lock", "unlock")
+MEMBERSHIP_ACTIONS = ("member_add", "member_remove")
+ALL_ACTIONS = (*ACTIONS, *LOCK_ACTIONS, *MEMBERSHIP_ACTIONS)
+
+#: Attributes that hold the members of a group, a POSIX group or an organizational role.
+MEMBERSHIP_ATTRIBUTES = ("member", "uniqueMember", "memberUid", "roleOccupant")
+
 #: Attribute values longer than this are cut in the log.
 MAX_VALUE_LENGTH = 256
 
@@ -39,7 +48,7 @@ class AuditSettings:
     #: Events older than this are purged by the audit task (a task may override it).
     retention_days: int = 365
     #: Audited actions.
-    actions: tuple[str, ...] = ACTIONS
+    actions: tuple[str, ...] = ALL_ACTIONS
     #: Attributes whose values are never written to the log (only their names).
     hidden_attributes: tuple[str, ...] = ("userPassword", "hrcMobilePUK")
     #: Object types that are not audited (the log itself and its helpers).
@@ -88,6 +97,36 @@ def _changed_attributes(changes: Sequence[Modification], hidden: Sequence[str]) 
     ]
 
 
+def _members(raw: dict[str, list[bytes]] | None, attr: str) -> dict[str, str]:
+    """Members held in ``attr`` by DN-normalised key (DNs compare case-insensitively)."""
+    if raw is None:
+        return {}
+    found: dict[str, str] = {}
+    for name, values in raw.items():
+        if name.lower() != attr.lower():
+            continue
+        for value in values:
+            text = _text(value)
+            found.setdefault(dnlib.normalize(text) if "=" in text else text, text)
+    return found
+
+
+def membership_changes(ctx: EventContext) -> tuple[list[str], list[str]]:
+    """Members added to and removed from the object, as ``attr: value`` lines."""
+    added: list[str] = []
+    removed: list[str] = []
+    for attr in MEMBERSHIP_ATTRIBUTES:
+        before = _members(ctx.before.raw if ctx.before else None, attr)
+        after = _members(ctx.after.raw if ctx.after else None, attr)
+        added.extend(_cut(f"{attr}: {v}") for k, v in after.items() if k not in before)
+        removed.extend(_cut(f"{attr}: {v}") for k, v in before.items() if k not in after)
+    return added, removed
+
+
+def _other_changes(changes: Sequence[Modification]) -> list[Modification]:
+    return [c for c in changes if c.attr.lower() not in {a.lower() for a in MEMBERSHIP_ATTRIBUTES}]
+
+
 @dataclass(slots=True)
 class AuditEvents(NullEvents):
     """``ObjectEvents`` implementation recording create, modify and delete operations.
@@ -126,20 +165,27 @@ class AuditEvents(NullEvents):
         self._record("create", ctx, _created_attributes(ctx, self.settings.hidden_attributes))
 
     def post_modify(self, ctx: EventContext) -> None:
-        self._record(
-            "modify", ctx, _changed_attributes(ctx.changes, self.settings.hidden_attributes)
-        )
+        hidden = self.settings.hidden_attributes
+        added, removed = membership_changes(ctx)
+        if (added or removed) and not _other_changes(ctx.changes):
+            # only the membership changed: say what happened instead of "modify"
+            if added:
+                self._record("member_add", ctx, added)
+            if removed:
+                self._record("member_remove", ctx, removed)
+            return
+        self._record("modify", ctx, _changed_attributes(ctx.changes, hidden))
 
     def post_delete(self, ctx: EventContext) -> None:
         self._record("delete", ctx, [])
 
     def post_lock(self, ctx: EventContext) -> None:
-        self._record(
-            "modify", ctx, _changed_attributes(ctx.changes, self.settings.hidden_attributes)
-        )
+        self._record("lock", ctx, _changed_attributes(ctx.changes, self.settings.hidden_attributes))
 
     def post_unlock(self, ctx: EventContext) -> None:
-        self.post_lock(ctx)
+        self._record(
+            "unlock", ctx, _changed_attributes(ctx.changes, self.settings.hidden_attributes)
+        )
 
     def post_second_factor_reset(self, ctx: EventContext) -> None:
         self._record(

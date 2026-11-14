@@ -55,12 +55,15 @@ export function actionTone(e: Pick<AuditEvent, 'action'>): Tone {
       return 'destructive'
     case 'create':
     case 'login':
+    case 'member_add':
       return 'success'
     case 'logout':
       return 'secondary'
     case 'password':
     case 'second_factor':
     case 'acl':
+    case 'lock':
+    case 'member_remove':
       return 'warning'
     default:
       return 'neutral'

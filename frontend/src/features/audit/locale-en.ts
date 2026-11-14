@@ -43,6 +43,10 @@ export const auditEn = {
       config: 'Configuration',
       import: 'Import',
       task: 'Task',
+      lock: 'Locked',
+      unlock: 'Unlocked',
+      member_add: 'Member added',
+      member_remove: 'Member removed',
     },
     results: {
       success: 'Success',
@@ -60,6 +64,7 @@ export const auditEn = {
       show: 'Show changes',
       hide: 'Hide changes',
       title: 'Changes',
+      none: 'No details were recorded for this event.',
       add: 'added',
       replace: 'changed',
       delete: 'removed',
