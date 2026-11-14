@@ -95,6 +95,11 @@ class RunRecord:
     id: int = 0
 
     @property
+    def idle(self) -> bool:
+        """The runner ran (or was skipped) and had nothing to report."""
+        return not self.errors and not any(self.counts.values())
+
+    @property
     def summary(self) -> str:
         parts = [f"{k} {v}" for k, v in self.counts.items() if v]
         if self.errors:
@@ -181,6 +186,26 @@ class TaskStore:
             conn.execute("DELETE FROM task_lease WHERE name = ? AND owner = ?", (name, owner))
 
     # -- reports -------------------------------------------------------------------------------
+    def worth_recording(self, run: RunRecord) -> bool:
+        """Whether a scheduled run deserves a row.
+
+        A pass runs every runner every minute and most find nothing due. Such an ``ok`` run is
+        stored only when it ends a skipped or failing streak (so the last report is not
+        stale), and a ``skipped`` run is stored once, not again while the runner keeps being
+        skipped for the same reason: neither buries the runs that did something.
+        """
+        if run.status == "error" or (run.status == "ok" and not run.idle):
+            return True
+        with self._db.connection() as conn:
+            last = conn.execute(
+                "SELECT status, reason_key FROM task_runs WHERE directory = ? AND runner = ?"
+                " ORDER BY id DESC LIMIT 1",
+                (run.directory, run.runner),
+            ).fetchone()
+        if run.status == "ok":
+            return last is not None and last["status"] != "ok"
+        return last is None or (last["status"], last["reason_key"]) != ("skipped", run.reason_key)
+
     def record(self, run: RunRecord) -> None:
         with self._db.transaction() as conn:
             conn.execute(
@@ -310,7 +335,10 @@ class Scheduler:
                         log.warning("tasks.pass_aborted", reason="lease lost")
                         return runs
                     run = self._run_one(registry, dir_id, directory, plugin_name, runner)
-                    self.store.record(run)
+                    # a requested run ("Run now") is always recorded; scheduled passes only
+                    # keep the runs that did, failed or newly skipped something
+                    if only is not None or self.store.worth_recording(run):
+                        self.store.record(run)
                     runs.append(run)
             return runs
         finally:

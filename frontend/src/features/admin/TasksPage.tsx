@@ -88,9 +88,28 @@ function useSkipText() {
   }
 }
 
+/**
+ * What a run did, in the interface language: built from its counters and error count (the
+ * server sentence is English and only kept for servers that send no counters).
+ */
+function useRunSummary() {
+  const { t } = useTranslation()
+  return (run: { summary: string; counts?: Record<string, number>; errors: string[] }): string => {
+    if (!run.counts) return run.summary
+    const parts = Object.entries(run.counts)
+      .filter(([, value]) => value > 0)
+      .map(([key, value]) =>
+        t('tasks.summaryPart', { label: t(`tasks.counts.${key}`, { defaultValue: key }), count: value }),
+      )
+    if (run.errors.length > 0) parts.push(t('tasks.errorCount', { count: run.errors.length }))
+    return parts.join(', ') || t('tasks.nothingToDo')
+  }
+}
+
 function LastReport({ report }: { report: TaskReport | null | undefined }) {
   const { t, i18n } = useTranslation()
   const skipText = useSkipText()
+  const runSummary = useRunSummary()
   if (!report) return <span className="text-muted-foreground">{t('tasks.noReport')}</span>
   return (
     <div className="space-y-0.5" title={report.errors.join('\n') || undefined}>
@@ -98,7 +117,7 @@ function LastReport({ report }: { report: TaskReport | null | undefined }) {
       <p className="text-caption text-muted-foreground">
         {report.status === 'skipped' && report.reason
           ? skipText(report.reason, report.reason_key)
-          : report.summary}{' '}
+          : runSummary(report)}{' '}
         ·{' '}
         {formatDateTime(report.time, i18n.language)}
       </p>
@@ -145,6 +164,7 @@ function NewTaskButton({ kinds }: { kinds: { name: string; label: string }[] }) 
 function RecentRuns({ history }: { history: boolean }) {
   const { t, i18n } = useTranslation()
   const skipText = useSkipText()
+  const runSummary = useRunSummary()
   const runs = useTaskRuns()
   const list: TaskRun[] = runs.data?.runs ?? []
   return (
@@ -193,11 +213,11 @@ function RecentRuns({ history }: { history: boolean }) {
                       // A skip is not a failure: show why the runner did nothing, never an
                       // error line (older rows may still carry one).
                       <span className="block text-caption">
-                        {skipText(r.reason, r.reason_key) || r.summary}
+                        {skipText(r.reason, r.reason_key) || runSummary(r)}
                       </span>
                     ) : (
                       <>
-                        {r.summary}
+                        {runSummary(r)}
                         {r.errors.length > 0 && (
                           <span className="block text-caption text-destructive">{r.errors[0]}</span>
                         )}
@@ -238,6 +258,7 @@ function Progression({ row }: { row: TaskRow }) {
 
 export function TasksPage() {
   const { t, i18n } = useTranslation()
+  const runSummary = useRunSummary()
   const [kind, setKind] = useState('')
   const [status, setStatus] = useState('')
   const [search, setSearch] = useState('')
@@ -275,7 +296,7 @@ export function TasksPage() {
         toast.success(
           out.queued || !mine
             ? t('tasks.queued', { name: row.name })
-            : t('tasks.ran', { name: row.name, summary: mine.summary }),
+            : t('tasks.ran', { name: row.name, summary: runSummary(mine) }),
         )
       } else {
         const out = await retry.mutateAsync(row.dn)

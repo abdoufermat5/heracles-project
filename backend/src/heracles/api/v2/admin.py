@@ -281,6 +281,8 @@ def build_catalog(registry: TypeRegistry) -> dict[str, Any]:
                     "key": key,
                     "label": tab.display_label(),
                     "type": info.type.name,
+                    "tab": tab.name,
+                    "main": tab is info.main_tab,
                     "attributes": [
                         {"name": a.name, "label": a.label}
                         for a in tab.attributes()
@@ -295,7 +297,14 @@ def build_catalog(registry: TypeRegistry) -> dict[str, Any]:
             "label": "Configuration",
             "wildcard": "config/0",
             "objects": [
-                {"key": CONFIG_KEY, "label": "Configuration", "type": "", "attributes": []}
+                {
+                    "key": CONFIG_KEY,
+                    "label": "Configuration",
+                    "type": "",
+                    "tab": "",
+                    "main": False,
+                    "attributes": [],
+                }
             ],
         },
     )
@@ -377,6 +386,7 @@ def _report_of(run: RunRecord | None) -> dict[str, Any] | None:
         "time": run.finished_at.isoformat(),
         "status": run.status,
         "summary": run.summary,
+        "counts": dict(run.counts),
         "errors": list(run.errors),
         "reason": run.reason,
         "reason_key": run.reason_key,
