@@ -10,16 +10,13 @@ import {
   type RouterHistory,
 } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
-import { Compass } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
 import { isApiError } from '@/api/client'
 import { api } from '@/api/endpoints'
 import { qk } from '@/api/hooks'
+import { NotFoundPage } from '@/components/NotFoundPage'
 import { WorkspaceShell } from '@/components/shell/WorkspaceShell'
 import { adminApi } from '@/features/admin/api'
 import { ak } from '@/features/admin/hooks'
-import { ErrorNavigation } from '@/components/ErrorState'
-import { EmptyState } from '@/components/ui/empty-state'
 import { RouteError } from '@/components/resilience'
 import { AdminGate, type AdminCapability } from '@/features/admin/AdminGate'
 import { parseListSearch, type ListSearch } from '@/features/listing/urlState'
@@ -70,28 +67,9 @@ export interface RouterContext {
   queryClient: QueryClient
 }
 
-function NotFound() {
-  const { t } = useTranslation()
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center p-6">
-      <EmptyState
-        icon={<Compass className="size-6 text-muted-foreground" aria-hidden />}
-        title={t('common.notFound')}
-        description={t('common.notFoundHelp')}
-        action={
-          <div className="flex flex-wrap justify-center gap-2">
-            <ErrorNavigation />
-          </div>
-        }
-        className="max-w-md w-full py-14"
-      />
-    </div>
-  )
-}
-
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: Outlet,
-  notFoundComponent: NotFound,
+  notFoundComponent: NotFoundPage,
 })
 
 // First-run setup: the server answers 503 `setup_required` everywhere else until it is done.
@@ -173,11 +151,15 @@ const meRoute = createRoute({ getParentRoute: () => appRoute, path: '/me', compo
 const styleguideRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/styleguide',
-  component: import.meta.env.DEV ? StyleguidePage : NotFound,
+  component: import.meta.env.DEV ? StyleguidePage : NotFoundPage,
 })
 
 // Any other address: the not-found page, inside the signed-in shell like a missing object.
-const notFoundRoute = createRoute({ getParentRoute: () => appRoute, path: '$', component: NotFound })
+const notFoundRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '$',
+  component: NotFoundPage,
+})
 
 const listRoute = createRoute({
   getParentRoute: () => appRoute,
