@@ -7,10 +7,18 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api } from './endpoints'
-import type { CreateObjectRequest, ListParams, ObjectList, PatchObjectRequest } from './types'
+import { localizeDescriptor } from '@/lib/labels'
+import type {
+  CreateObjectRequest,
+  ListParams,
+  ObjectList,
+  PatchObjectRequest,
+  TypeDescriptor,
+} from './types'
 
 export const qk = {
   me: ['me'] as const,
@@ -41,11 +49,15 @@ export function useTypes() {
   return useQuery({ queryKey: qk.types, queryFn: api.types, staleTime: 5 * 60_000 })
 }
 
+/** The descriptor of a type, its server texts translated into the active language. */
 export function useTypeDescriptor(name: string) {
+  const { t } = useTranslation()
+  const select = useCallback((d: TypeDescriptor) => localizeDescriptor(t, d), [t])
   return useQuery({
     queryKey: qk.type(name),
     queryFn: () => api.type(name),
     staleTime: 5 * 60_000,
+    select,
   })
 }
 
