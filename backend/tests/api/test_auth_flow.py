@@ -38,6 +38,7 @@ def test_full_login_me_logout(env: Env) -> None:
         "is_admin": True,
         "directory": "main",
         "base": "dc=example,dc=com",
+        "mail_domain": "",
     }
 
     out = env.post("/api/v2/auth/logout")

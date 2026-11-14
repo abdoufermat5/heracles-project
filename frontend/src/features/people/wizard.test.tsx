@@ -1,5 +1,6 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { adminApi } from '@/features/admin/api'
 import { db } from '@/mocks/db'
 import { renderApp, signIn } from '@/test/utils'
 
@@ -86,5 +87,43 @@ describe('wizard accessibility', () => {
     await user.type(password, '{Enter}')
 
     expect(await screen.findByText('Account summary')).toBeInTheDocument()
+  })
+})
+
+describe('wizard mail domain suggestion', () => {
+  beforeEach(() => {
+    db.reset()
+  })
+
+  it('suggests login@domain until the email is edited', async () => {
+    signIn()
+    // the same write the Configuration screen makes
+    await adminApi.putConfig({ mail_domain: 'heracles.test' })
+    renderApp('/types/user/new')
+
+    expect(await screen.findByRole('heading', { name: 'New user', level: 1 })).toBeInTheDocument()
+    expect(screen.getByText(/login and email address are suggested/)).toBeInTheDocument()
+
+    const firstName = screen.getByLabelText(/First name/)
+    const lastName = screen.getByLabelText(/Last name/)
+    const login = screen.getByLabelText(/Login \(username\)/)
+    const email = screen.getByLabelText(/Email address/)
+
+    await userEvent.type(firstName, 'Claire')
+    await userEvent.type(lastName, 'Danvers')
+    expect(login).toHaveValue('cdanvers')
+    expect(email).toHaveValue('cdanvers@heracles.test')
+
+    // editing the login keeps the email in step while it was never edited
+    await userEvent.clear(login)
+    await userEvent.type(login, 'c.danvers')
+    expect(email).toHaveValue('c.danvers@heracles.test')
+
+    // an email typed by the person is theirs: later login changes leave it alone
+    await userEvent.clear(email)
+    await userEvent.type(email, 'other@example.org')
+    await userEvent.clear(login)
+    await userEvent.type(login, 'cdanvers')
+    expect(email).toHaveValue('other@example.org')
   })
 })

@@ -17,7 +17,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api } from '@/api/endpoints'
-import { useObject, useObjectList, useTree, useTypeDescriptor } from '@/api/hooks'
+import { useMe, useObject, useObjectList, useTree, useTypeDescriptor } from '@/api/hooks'
 import type { ObjectListItem } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { FactList, OrgPath, SectionCard } from '@/components/patterns'
@@ -60,6 +60,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
   const tree = useTree()
   const desc = useTypeDescriptor('user')
   const sourceObj = useObject('user', copyFrom)
+  const me = useMe()
 
   const [step, setStep] = useState<WizardStep>(1)
   const [templateDn, setTemplateDn] = useState<string | null>(null)
@@ -69,6 +70,8 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
   const [sn, setSn] = useState('')
   const [uid, setUid] = useState('')
   const [mail, setMail] = useState('')
+  /** True once the person edited the email field: suggestions then never overwrite it. */
+  const [mailTouched, setMailTouched] = useState(false)
   const [employeeType, setEmployeeType] = useState('employee')
   // The person most likely speaks the language this console is shown in
   const [language, setLanguage] = useState(
@@ -90,6 +93,15 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
   // Submitting
   const [submitting, setSubmitting] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+
+  // The default mail domain of the configuration ("": no suggestion, as before)
+  const mailDomain = (me.data?.mail_domain ?? '').trim()
+  // Until the person edits the email field it follows the login: `<login>@<domain>`
+  const emailValue = mailTouched
+    ? mail
+    : mailDomain && uid
+      ? `${uid}@${mailDomain}`
+      : ''
 
   // Attributes the user type really has: send nothing else, offer nothing else
   const mainTab = desc.data?.tabs[0]
@@ -169,7 +181,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
         sn: sn.trim(),
         cn: fullName,
         uid: uid.trim(),
-        mail: mail.trim() || undefined,
+        mail: emailValue.trim() || undefined,
         employeeType,
         preferredLanguage: language,
         base: effectiveDept,
@@ -272,7 +284,12 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
               {t('peopleUI.wizard.title')}
             </h1>
             <p className="text-body text-muted-foreground">
-              {step === 1 && t('peopleUI.wizard.step1.description')}
+              {step === 1 &&
+                t(
+                  mailDomain
+                    ? 'peopleUI.wizard.step1.descriptionWithDomain'
+                    : 'peopleUI.wizard.step1.description',
+                )}
               {step === 2 && t('peopleUI.wizard.step2.description')}
               {step === 3 && t('peopleUI.wizard.step3.description')}
               {step === 4 && t('peopleUI.wizard.step4.description')}
@@ -363,7 +380,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                 <div>
                   <div className="font-medium text-foreground">{givenName} {sn}</div>
                   <div className="text-caption text-muted-foreground">
-                    {uid || t('peopleUI.wizard.step1.previewLogin')} · {mail || t('peopleUI.wizard.step1.previewMail')}
+                    {uid || t('peopleUI.wizard.step1.previewLogin')} · {emailValue || t('peopleUI.wizard.step1.previewMail')}
                   </div>
                 </div>
               </div>
@@ -390,11 +407,11 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                 <Input
                   id="wiz-mail"
                   type="email"
-                  value={mail}
+                  value={emailValue}
                   onChange={(e) => {
                     setMail(e.target.value)
+                    setMailTouched(true)
                   }}
-                  
                 />
               </div>
             </div>
@@ -682,7 +699,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
               items={[
                 { label: t('peopleUI.text.fullName'), value: `${givenName} ${sn}` },
                 { label: t('peopleUI.text.login'), value: <span className="font-mono font-medium">{uid}</span> },
-                { label: t('peopleUI.text.email'), value: mail || '—' },
+                { label: t('peopleUI.text.email'), value: emailValue || '—' },
                 { label: t('peopleUI.text.employeeType'), value: employeeTypeLabel(t, employeeType) },
                 { label: t('peopleUI.text.language'), value: language.toUpperCase() },
                 { label: t('peopleUI.text.department'), value: selectedDeptLabel },

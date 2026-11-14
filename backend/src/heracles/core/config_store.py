@@ -16,6 +16,7 @@ through :func:`save_config`.
 from __future__ import annotations
 
 import contextlib
+import re
 import threading
 import time
 import weakref
@@ -40,6 +41,13 @@ CACHE_TTL_SECONDS: Final = 30.0
 FAILURE_TTL_SECONDS: Final = 2.0
 _TRUE: Final = "TRUE"
 _FALSE: Final = "FALSE"
+
+#: A dotted DNS name used as the default mail domain (labels of letters, digits and
+#: inner hyphens; at least one dot; 253 characters at most).
+_DOMAIN_RE: Final = re.compile(
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+"
+)
 
 #: Sections of the configuration screen, in display order.
 SECTIONS: Final = (
@@ -141,6 +149,7 @@ CONFIG_FIELDS: Final[tuple[ConfigField, ...]] = (
     _f("modification_detection_attribute", "core"),
     _f("shells", "core", "list", honoured=True, default=list(DEFAULT_SHELLS)),
     _f("default_shell", "core", honoured=True, default=DEFAULT_SHELL),
+    _f("mail_domain", "core", honoured=True, default=""),
     _f("acl_tab_on_objects", "core", "bool"),
     _f("department_categories", "core", "list"),
     _f("plugins_menu_blacklist", "core", "list"),
@@ -338,6 +347,13 @@ def _validate(field_: ConfigField, value: Any) -> str | None:
         return "Expected a string."
     if field_.kind == "select" and value != "" and value not in field_.options:
         return "Unknown option."
+    if (
+        field_.key == "mail_domain"
+        and isinstance(value, str)
+        and value != ""
+        and (len(value) > 253 or _DOMAIN_RE.fullmatch(value) is None)
+    ):
+        return "Expected a domain name."
     return None
 
 
@@ -418,6 +434,7 @@ class RuntimeConfig:
     min_id: int = 1000
     shells: list[str] = field(default_factory=lambda: list(DEFAULT_SHELLS))
     default_shell: str = DEFAULT_SHELL
+    mail_domain: str = ""
     language: str = "en"
     timezone: str = "UTC"
     ldap_size_limit: int = 200
@@ -461,6 +478,7 @@ _SHORTCUTS: Final = (
     "min_id",
     "shells",
     "default_shell",
+    "mail_domain",
     "language",
     "timezone",
     "ldap_size_limit",

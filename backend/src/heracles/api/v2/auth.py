@@ -33,6 +33,7 @@ from heracles.auth.recovery import RecoveryError
 from heracles.auth.second_factor import WebAuthnCredential
 from heracles.auth.sessions import CLIENT_KEY, Session, client_info, session_ref
 from heracles.auth.webauthn import ASSERTION_KEY, REGISTRATION_KEY, WebAuthnError
+from heracles.core.config_store import effective_settings
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Scope
 from heracles.ldap.filter import escape_filter_value
@@ -89,6 +90,9 @@ class Me(BaseModel):
     is_admin: bool
     directory: str
     base: str
+    #: Default mail domain of the directory ("" when unset): the create-user wizard
+    #: suggests ``<login>@<mail_domain>`` with it, for users who cannot read the config.
+    mail_domain: str = ""
 
 
 class ReauthBody(BaseModel):
@@ -764,6 +768,7 @@ def me(user: CurrentUserDep, request: Request, state: StateDep) -> Me:
         is_admin=state.is_admin(user.directory, user.dn),
         directory=user.directory_id,
         base=user.directory.base_dn,
+        mail_domain=effective_settings(user.directory).mail_domain,
     )
 
 

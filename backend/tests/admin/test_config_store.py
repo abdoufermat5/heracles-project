@@ -132,3 +132,19 @@ def test_a_failed_read_is_retried_soon_and_does_not_stick_for_the_whole_ttl(
     monkeypatch.setattr(directory, "get", real_get)
     clock[0] += cs.FAILURE_TTL_SECONDS + 0.1  # far below the 30 s cache TTL
     assert cs.effective_settings(directory).password_min_length == 14
+
+
+def test_mail_domain_default_empty_and_validated(directory: MemoryDirectory) -> None:
+    assert cs.effective_settings(directory).mail_domain == ""
+    assert cs.save_config(directory, {"mail_domain": "heracles.test"}) == ["mail_domain"]
+    assert cs.effective_settings(directory).mail_domain == "heracles.test"
+    entry = directory.get(cs.config_dn(directory))
+    assert entry is not None
+    assert entry.texts("hrcMailDomain") == ["heracles.test"]
+
+    with pytest.raises(cs.ConfigError) as exc:
+        cs.save_config(directory, {"mail_domain": "not a domain"})
+    assert exc.value.fields == {"mail_domain": "Expected a domain name."}
+    # an empty value removes the attribute and turns the suggestion off again
+    assert cs.save_config(directory, {"mail_domain": ""}) == ["mail_domain"]
+    assert cs.effective_settings(directory).mail_domain == ""

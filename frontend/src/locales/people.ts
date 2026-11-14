@@ -213,6 +213,8 @@ export const peopleEn = {
       step1: {
         title: 'Identity & Profile',
         description: 'Basic information about the person. The login is suggested automatically.',
+        descriptionWithDomain:
+          'Basic information about the person. The login and email address are suggested automatically.',
         template: 'Template (optional)',
         templateNone: 'Blank user',
         givenName: 'First name',

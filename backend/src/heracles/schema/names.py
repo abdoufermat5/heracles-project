@@ -407,6 +407,7 @@ CONFIG_ATTRS: Final[dict[str, str]] = {
     "tasks_max_emails": "hrcTasksConfMaxEmails",
     "tasks_interval_emails": "hrcTasksConfIntervalEmails",
     # mail templates
+    "mail_domain": "hrcMailDomain",
     "mail_template_rdn": "hrcMailTemplateRDN",
     # dashboard
     "dashboard_prefix": "hrcDashboardPrefix",

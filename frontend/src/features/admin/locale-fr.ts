@@ -211,6 +211,7 @@ export const adminFr: typeof adminEn = {
       modification_detection_attribute: 'Attribut de détection des modifications',
       shells: 'Interpréteurs disponibles',
       default_shell: 'Interpréteur par défaut',
+      mail_domain: 'Domaine de messagerie par défaut',
       acl_tab_on_objects: 'Afficher l’onglet d’accès sur chaque objet',
       department_categories: 'Catégories de départements',
       plugins_menu_blacklist: 'Modules masqués (groupe ou rôle | module)',

@@ -92,6 +92,8 @@ class Db {
   /** False once the mock session needs a password confirmation for key changes. */
   reauthFresh = true
   csrf = 'mock-csrf-token'
+  /** Default mail domain of the directory, as the configuration screen stores it. */
+  mailDomain = ''
   nextId = 1000
   recoveryTokens = new Set<string>(['valid-token'])
 
@@ -111,6 +113,7 @@ class Db {
     this.reauthFresh = true
     this.sessions = []
     this.session = { user: null, pending: null }
+    this.mailDomain = ''
     this.seed()
   }
 
@@ -360,6 +363,7 @@ class Db {
         is_admin: false,
         directory: 'main',
         base: BASE_DN,
+        mail_domain: this.mailDomain,
       }
     }
     const isAdmin = u !== 'viewer'
@@ -371,6 +375,7 @@ class Db {
       is_admin: isAdmin,
       directory: 'main',
       base: BASE_DN,
+      mail_domain: this.mailDomain,
     }
   }
 

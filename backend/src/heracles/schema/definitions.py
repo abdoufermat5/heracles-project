@@ -345,6 +345,7 @@ ATTRIBUTE_TYPES: tuple[AttributeType, ...] = (
     AttributeType(330, "hrcZimbraServerPasswordSync", S.BOOLEAN, single=True),
     AttributeType(331, "hrcZimbraServerUri", S.STRING, single=True),
     AttributeType(332, "hrcZimbraServerUserAgent", S.STRING, single=True),
+    AttributeType(333, "hrcMailDomain", S.STRING, single=True),
 )
 
 OBJECT_CLASSES: tuple[ObjectClass, ...] = (
@@ -434,6 +435,7 @@ OBJECT_CLASSES: tuple[ObjectClass, ...] = (
             "hrcModificationDetectionAttribute",
             "hrcShells",
             "hrcDefaultShell",
+            "hrcMailDomain",
             "hrcAclTabOnObjects",
             "hrcDepartmentCategories",
             "hrcPluginsMenuBlacklist",

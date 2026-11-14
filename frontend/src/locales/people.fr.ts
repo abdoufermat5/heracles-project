@@ -211,6 +211,8 @@ export const peopleFr: typeof peopleEn = {
       step1: {
         title: 'Identité et profil',
         description: 'Informations de base sur la personne. L’identifiant est suggéré automatiquement.',
+        descriptionWithDomain:
+          'Informations de base sur la personne. L’identifiant et l’adresse email sont suggérés automatiquement.',
         template: 'Modèle (optionnel)',
         templateNone: 'Utilisateur vierge',
         givenName: 'Prénom',

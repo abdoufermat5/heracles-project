@@ -11,10 +11,12 @@ import {
   Undo2,
   X,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
+import { qk } from '@/api/hooks'
 import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -222,6 +224,7 @@ function FieldControl({
 function ConfigEditor({ view }: { view: ConfigView }) {
   const { t } = useTranslation()
   const save = useSaveConfig()
+  const qc = useQueryClient()
   const [activeGroup, setActiveGroup] = useState<ConfigGroupId>('general')
   const [search, setSearch] = useState('')
   const [legacyFilter, setLegacyFilter] = useState('all')
@@ -268,6 +271,8 @@ function ConfigEditor({ view }: { view: ConfigView }) {
     try {
       await save.mutateAsync(draft)
       setDraft({})
+      // mail_domain reaches the create-user wizard through /auth/me
+      void qc.invalidateQueries({ queryKey: qk.me })
       toast.success(t('config.saved'))
     } catch (e) {
       if (isApiError(e) && Object.keys(e.fields).length > 0) {

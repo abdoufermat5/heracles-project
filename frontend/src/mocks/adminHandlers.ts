@@ -164,6 +164,7 @@ const FIELD_SEEDS: FieldSeed[] = [
     value: ['/bin/bash', '/bin/sh', '/bin/zsh', '/usr/bin/fish', '/bin/false', '/usr/sbin/nologin'],
   },
   { key: 'default_shell', section: 'core', kind: 'str', honoured: true, value: '/bin/bash' },
+  { key: 'mail_domain', section: 'core', kind: 'str', honoured: true, value: '' },
   { key: 'strict_naming_rules', section: 'core', kind: 'bool', value: false },
   { key: 'password_min_length', section: 'password', kind: 'int', honoured: true, value: 8 },
   { key: 'password_default_hash', section: 'password', kind: 'str', honoured: true, value: 'ssha' },
@@ -852,9 +853,21 @@ export const adminHandlers: HttpHandler[] = [
         if (!seed) unknown[k] = 'Unknown setting.'
         else if (seed.kind === 'int' && v !== null && typeof v !== 'number')
           unknown[k] = 'Expected a whole number.'
+        else if (
+          k === 'mail_domain' &&
+          typeof v === 'string' &&
+          v !== '' &&
+          !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/.test(
+            v,
+          )
+        )
+          unknown[k] = 'Expected a domain name.'
       }
       if (Object.keys(unknown).length > 0) return err(422, 'validation', 'Invalid configuration', unknown)
-      for (const [k, v] of Object.entries(body.changes)) adminMock.values.set(k, v)
+      for (const [k, v] of Object.entries(body.changes)) {
+        adminMock.values.set(k, v)
+        if (k === 'mail_domain') db.mailDomain = typeof v === 'string' ? v : ''
+      }
       return HttpResponse.json(configView())
     }),
   ),

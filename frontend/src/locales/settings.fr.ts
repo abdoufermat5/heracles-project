@@ -61,6 +61,7 @@ export const settingsFr: typeof settingsEn = {
         modification_detection_attribute: 'Attribut de l\'annuaire surveillé pour détecter les modifications externes.',
         shells: 'Liste des chemins d\'interpréteur de commandes (shells) autorisés pour les comptes POSIX.',
         default_shell: 'Shell de connexion par défaut attribué aux nouveaux comptes POSIX.',
+        mail_domain: 'Domaine ajouté à l’identifiant d’un nouvel utilisateur pour suggérer son adresse email. Laisser vide pour ne suggérer aucune adresse.',
         acl_tab_on_objects: 'Afficher l\'onglet ACL directement sur les fiches des objets.',
         department_categories: 'Catégories activées pour les unités organisationnelles et départements.',
         plugins_menu_blacklist: 'Liste des identifiants de modules masqués des menus de navigation.',

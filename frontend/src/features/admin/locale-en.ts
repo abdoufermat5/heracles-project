@@ -202,6 +202,7 @@ export const adminEn = {
       modification_detection_attribute: 'Modification detection attribute',
       shells: 'Available shells',
       default_shell: 'Default shell',
+      mail_domain: 'Default mail domain',
       acl_tab_on_objects: 'Show the access tab on every object',
       department_categories: 'Department categories',
       plugins_menu_blacklist: 'Hidden plugins (group or role | plugin)',

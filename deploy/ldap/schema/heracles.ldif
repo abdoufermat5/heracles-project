@@ -1000,6 +1000,9 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.331 NAME
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.332 NAME
   'hrcZimbraServerUserAgent' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubst
  ringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.333 NAME
+  'hrcMailDomain' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch 
+ SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.1 NAME 'h
  rcAcl' SUP top AUXILIARY MAY hrcAclEntry )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.2 NAME 'h
@@ -1029,22 +1032,22 @@ olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.8 NAME 'h
  erPoolMax $ hrcCnPattern $ hrcRestrictRoleMembers $ hrcGivenNameRequired $ 
  hrcSplitPostalAddress $ hrcPostalAddressPattern $ hrcLdapSizeLimit $ hrcWil
  dcardForeignKeys $ hrcModificationDetectionAttribute $ hrcShells $ hrcDefau
- ltShell $ hrcAclTabOnObjects $ hrcDepartmentCategories $ hrcPluginsMenuBlac
- klist $ hrcAclTargetFilterLimit $ hrcManagementConfig $ hrcManagementUserCo
- nfig $ hrcIncrementalModifierStates $ hrcPasswordDefaultHash $ hrcPasswordA
- llowedHashes $ hrcForcePasswordDefaultHash $ hrcPasswordMinLength $ hrcPass
- wordMinDiffer $ hrcHandleExpiredAccounts $ hrcSaslRealm $ hrcSaslExop $ hrc
- LoginAttribute $ hrcSessionLifeTime $ hrcLoginMethod $ hrcHttpAuthActivated
-  $ hrcHttpHeaderAuthActivated $ hrcHttpHeaderAuthHeaderName $ hrcCasActivat
- ed $ hrcCasHost $ hrcCasPort $ hrcCasContext $ hrcCasServerCaCertPath $ hrc
- CasVerbose $ hrcCasLibraryBool $ hrcCasClientServiceName $ hrcForceSSL $ hr
- cWarnSSL $ hrcSslCaCertPath $ hrcSslKeyPath $ hrcSslCertPath $ hrcUserRDN $
-  hrcGroupRDN $ hrcAclRoleRDN $ hrcTokenRDN $ hrcOrchestratorTokenRDN $ hrcR
- ecoveryTokenRDN $ hrcEnableSnapshots $ hrcSnapshotBase $ hrcEnableAutomatic
- Snapshots $ hrcSnapshotMinRetention $ hrcSnapshotRetentionDays $ hrcSnapsho
- tSourceData $ hrcTabHook $ hrcDisplayHookOutput $ hrcDisplayErrors $ hrcLda
- pMaxQueryTime $ hrcLdapStats $ hrcDebugLevel $ hrcDebugLogging $ hrcLogging
-  $ hrcConfigMd5 $ description ) )
+ ltShell $ hrcMailDomain $ hrcAclTabOnObjects $ hrcDepartmentCategories $ hr
+ cPluginsMenuBlacklist $ hrcAclTargetFilterLimit $ hrcManagementConfig $ hrc
+ ManagementUserConfig $ hrcIncrementalModifierStates $ hrcPasswordDefaultHas
+ h $ hrcPasswordAllowedHashes $ hrcForcePasswordDefaultHash $ hrcPasswordMin
+ Length $ hrcPasswordMinDiffer $ hrcHandleExpiredAccounts $ hrcSaslRealm $ h
+ rcSaslExop $ hrcLoginAttribute $ hrcSessionLifeTime $ hrcLoginMethod $ hrcH
+ ttpAuthActivated $ hrcHttpHeaderAuthActivated $ hrcHttpHeaderAuthHeaderName
+  $ hrcCasActivated $ hrcCasHost $ hrcCasPort $ hrcCasContext $ hrcCasServer
+ CaCertPath $ hrcCasVerbose $ hrcCasLibraryBool $ hrcCasClientServiceName $ 
+ hrcForceSSL $ hrcWarnSSL $ hrcSslCaCertPath $ hrcSslKeyPath $ hrcSslCertPat
+ h $ hrcUserRDN $ hrcGroupRDN $ hrcAclRoleRDN $ hrcTokenRDN $ hrcOrchestrato
+ rTokenRDN $ hrcRecoveryTokenRDN $ hrcEnableSnapshots $ hrcSnapshotBase $ hr
+ cEnableAutomaticSnapshots $ hrcSnapshotMinRetention $ hrcSnapshotRetentionD
+ ays $ hrcSnapshotSourceData $ hrcTabHook $ hrcDisplayHookOutput $ hrcDispla
+ yErrors $ hrcLdapMaxQueryTime $ hrcLdapStats $ hrcDebugLevel $ hrcDebugLogg
+ ing $ hrcLogging $ hrcConfigMd5 $ description ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.9 NAME 'h
  rcCyrusServer' SUP top AUXILIARY MAY ( hrcCyrusConnectURL $ hrcCyrusConnect
  Port $ hrcCyrusConnectOptions1 $ hrcCyrusConnectOptions2 $ hrcCyrusAdmin $ 

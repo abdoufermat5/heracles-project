@@ -63,6 +63,7 @@ export const settingsEn = {
         modification_detection_attribute: 'Directory attribute monitored to detect external modifications.',
         shells: 'List of allowed login shell executable paths for POSIX accounts.',
         default_shell: 'Default login shell assigned to new POSIX accounts.',
+        mail_domain: 'Domain appended to a new user’s login to suggest their email address. Leave empty to suggest no email.',
         acl_tab_on_objects: 'Expose the ACL tab directly on object detail pages.',
         department_categories: 'Category tags enabled for organizational unit departments.',
         plugins_menu_blacklist: 'List of plugin identifiers hidden from the navigation menus.',
