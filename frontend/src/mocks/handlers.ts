@@ -40,6 +40,18 @@ function err(
 
 const unauth = () => err(401, 'unauthenticated', 'Authentication required')
 
+/**
+ * Length problem of a body string, worded like the server's model error
+ * (`heracles.api.errors` renders the 422 `fields` of the login, second-factor, step-up and
+ * recovery endpoints), or `null` when the server's cap accepts it.
+ */
+function lengthProblem(value: unknown, min: number, max: number): string | null {
+  if (typeof value !== 'string') return 'Field required'
+  if (value.length < min) return `String should have at least ${min} character${min === 1 ? '' : 's'}`
+  if (value.length > max) return `String should have at most ${max} character${max === 1 ? '' : 's'}`
+  return null
+}
+
 function csrfOk(request: Request): boolean {
   return request.headers.get('X-CSRF-Token') === db.csrf
 }
@@ -90,6 +102,13 @@ export const handlers: HttpHandler[] = [
     if (!csrfOk(request)) return err(403, 'forbidden', 'Invalid CSRF token')
     const body = (await request.json()) as { username: string; password: string }
     await delay(150)
+    // the server's LoginBody: username 1..256, password at most 1024
+    const fields: Record<string, string> = {}
+    const username = lengthProblem(body.username, 1, 256)
+    if (username) fields.username = username
+    if (typeof body.password !== 'string') fields.password = 'Field required'
+    else if (body.password.length > 1024) fields.password = 'String should have at most 1024 characters'
+    if (Object.keys(fields).length) return err(422, 'validation', 'Invalid request', { fields })
     if (!body.username || !body.password || body.password === 'wrong')
       return err(401, 'unauthenticated', 'Invalid credentials')
     if (body.username === 'mfakey') {
@@ -115,6 +134,14 @@ export const handlers: HttpHandler[] = [
       code?: string
       credential?: { id?: string }
     }
+    // SecondFactorBody: a known method, code at most 2048, a credential for WebAuthn
+    const fields: Record<string, string> = {}
+    if (body.method !== 'totp' && body.method !== 'webauthn' && body.method !== 'recovery')
+      fields.method = 'Input should be totp, webauthn or recovery'
+    const code = lengthProblem(body.code ?? '', 0, 2048)
+    if (code) fields.code = code
+    if (body.method === 'webauthn' && !body.credential) fields.credential = 'Field required'
+    if (Object.keys(fields).length) return err(422, 'validation', 'Invalid request', { fields })
     if (body.method === 'webauthn') {
       if (body.credential?.id !== 'mock-assertion') return err(401, 'unauthenticated', 'Invalid code')
     } else {
@@ -162,8 +189,14 @@ export const handlers: HttpHandler[] = [
     `${B}/auth/webauthn/credentials`,
     guarded(
       async ({ request }) => {
-        const body = (await request.json()) as { label: string }
-        const key = { id: `key-${db.securityKeys.length + 1}`, label: body.label, sign_count: 0 }
+        const body = (await request.json()) as { label?: string; credential?: unknown }
+        // WebAuthnRegisterBody: optional label of at most 64 characters, a credential
+        const fields: Record<string, string> = {}
+        const label = lengthProblem(body.label ?? '', 0, 64)
+        if (label) fields.label = label
+        if (!body.credential) fields.credential = 'Field required'
+        if (Object.keys(fields).length) return err(422, 'validation', 'Invalid request', { fields })
+        const key = { id: `key-${db.securityKeys.length + 1}`, label: body.label ?? '', sign_count: 0 }
         db.securityKeys.push(key)
         return HttpResponse.json(key, { status: 201 })
       },
@@ -223,7 +256,14 @@ export const handlers: HttpHandler[] = [
       async ({ request }) => {
         if (!db.reauthFresh) return err(403, 'reauth_required', 'Confirm your password to continue')
         const body = (await request.json()) as { code: string }
-        if (!db.totp.pending || body.code !== '123456')
+        // TotpConfirmBody: 1..16 characters
+        const problem = lengthProblem(body.code, 1, 16)
+        if (problem) return err(422, 'validation', 'Invalid request', { fields: { code: problem } })
+        if (!db.totp.pending)
+          return err(422, 'validation', 'Start the setup again', {
+            fields: { code: 'Setup expired, start again' },
+          })
+        if (body.code !== '123456')
           return err(422, 'validation', 'Wrong code', { fields: { code: 'Wrong code' } })
         db.totp.pending = false
         db.totp.enabled = true
@@ -318,6 +358,16 @@ export const handlers: HttpHandler[] = [
     guarded(
       async ({ request }) => {
         const body = (await request.json()) as { password?: string; method?: string; code?: string }
+        // ReauthBody: a password or a code (and its method) — empty is refused; the caps
+        // are 1024 characters for the password and 64 for the code
+        const fields: Record<string, string> = {}
+        const password = typeof body.password === 'string' ? body.password : ''
+        const code = typeof body.code === 'string' ? body.code : ''
+        if (password.length > 1024) fields.password = 'String should have at most 1024 characters'
+        if (code.length > 64) fields.code = 'String should have at most 64 characters'
+        if (Object.keys(fields).length) return err(422, 'validation', 'Invalid request', { fields })
+        if (password === '' && !(body.method && code))
+          return err(422, 'validation', 'Enter your password', { fields: { password: 'Required' } })
         if (body.password === 'wrong' || body.code === '000000')
           return err(422, 'validation', 'Wrong password', {
             fields: { [body.method ? 'code' : 'password']: 'Wrong value' },
@@ -359,14 +409,33 @@ export const handlers: HttpHandler[] = [
     return me ? HttpResponse.json(me) : unauth()
   }),
 
+  http.get(`${B}/auth/password-policy`, () => HttpResponse.json({ min_length: 8 })),
+
   http.post(`${B}/auth/recovery`, async ({ request }) => {
     if (!csrfOk(request)) return err(403, 'forbidden', 'Invalid CSRF token')
+    const body = (await request.json()) as { email?: string }
+    // RecoveryBody: at most 320 characters, then the address the endpoint accepts
+    const tooLong = lengthProblem(body.email ?? '', 0, 320)
+    if (tooLong) return err(422, 'validation', 'Invalid request', { fields: { email: tooLong } })
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((body.email ?? '').trim()))
+      return err(422, 'validation', 'Invalid address', { fields: { email: 'Enter a valid email address.' } })
     return new HttpResponse(null, { status: 202 })
   }),
 
   http.post(`${B}/auth/recovery/confirm`, async ({ request }) => {
     if (!csrfOk(request)) return err(403, 'forbidden', 'Invalid CSRF token')
     const body = (await request.json()) as { login: string; token: string; password: string }
+    // RecoveryConfirmBody: login 1..256, token 1..512, password at most 1024
+    const fields: Record<string, string> = {}
+    for (const [key, value, max] of [
+      ['login', body.login, 256],
+      ['token', body.token, 512],
+      ['password', body.password, 1024],
+    ] as const) {
+      const problem = lengthProblem(value, 1, max)
+      if (problem) fields[key] = problem
+    }
+    if (Object.keys(fields).length) return err(422, 'validation', 'Invalid request', { fields })
     if (!db.recoveryTokens.has(body.token)) return err(422, 'validation', 'Invalid or expired link')
     if (body.password.length < 8)
       return err(422, 'validation', 'Password too short', { fields: { password: 'At least 8 characters' } })
@@ -539,6 +608,16 @@ export const handlers: HttpHandler[] = [
         if (lock && lock.user !== db.session.user) return err(409, 'locked', 'Object is locked', { lock })
         const body = (await request.json()) as {
           tabs: Record<string, { active: boolean; values: Record<string, unknown> }>
+        }
+        // Changing your own password: the server asks for a recent confirmation first
+        // (`heracles.api.v2.objects.patch_object` -> `require_recent_auth`)
+        const me = db.me()
+        const ownPassword =
+          me !== null &&
+          rec.dn.toLowerCase() === me.dn.toLowerCase() &&
+          Object.values(body.tabs).some((tab) => 'userPassword' in (tab.values ?? {}))
+        if (ownPassword && !db.reauthFresh) {
+          return err(403, 'reauth_required', 'Confirm your password to continue')
         }
         // validate the result of the merge
         const merged: Record<string, TabState> = {}

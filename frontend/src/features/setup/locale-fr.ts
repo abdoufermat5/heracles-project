@@ -20,6 +20,14 @@ export const setupFr = {
     alreadyTitle: 'Heracles est déjà configuré',
     alreadyHelp: 'Il n’y a rien à configurer ici. Connectez-vous pour continuer.',
     signIn: 'Aller à la connexion',
+    errors: {
+      uri: 'Utilisez une adresse du type ldap://hôte:389 ou ldaps://hôte:636.',
+      uriHost: 'L’adresse du serveur ne contient pas de nom d’hôte valide.',
+      starttls: 'Utilisez soit une adresse ldaps://, soit StartTLS, pas les deux.',
+      bindPassword: 'Saisissez le mot de passe de ce compte.',
+      login: 'Utilisez au plus 64 lettres, chiffres, points, tirets et tirets bas.',
+      publicUrl: 'Utilisez une adresse complète, par exemple https://heracles.example.org.',
+    },
     welcome: {
       title: 'Bienvenue',
       help: 'Collez le jeton de configuration à usage unique pour prouver que vous avez accès au serveur.',

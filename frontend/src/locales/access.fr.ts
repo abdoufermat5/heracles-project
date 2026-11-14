@@ -69,6 +69,10 @@ export const accessFr: typeof accessEn = {
       name: 'Nom',
       where: 'Où le créer',
       description: 'Description',
+      errors: {
+        nameChars: 'N’utilisez pas les caractères , # ; : + = " < > \\ dans un nom de rôle.',
+        nameTaken: 'Un rôle portant ce nom existe déjà ici.',
+      },
       descriptionPlaceholder: 'À quoi sert ce rôle ?',
       priority: 'Priorité',
       template: 'Bloc de droits {{index}}',

@@ -26,6 +26,7 @@ import { Label } from '@/components/ui/label'
 import { APP_VERSION } from '@/lib/appVersion'
 import { cn } from '@/lib/utils'
 import { getAssertion, WebAuthnClientError, webauthnSupported } from '@/lib/webauthn'
+import { usePasswordPolicy } from './passwordPolicy'
 import { SsoEntry } from './SsoEntry'
 
 function BrandMark({ tone }: { tone: 'default' | 'onPrimary' }) {
@@ -135,6 +136,11 @@ function Field({
   )
 }
 
+/** `aria-*` of an input whose message is rendered by `Field` (`<id>-error`). */
+function invalidProps(id: string, message: string | undefined) {
+  return message ? { 'aria-invalid': true as const, 'aria-describedby': `${id}-error` } : {}
+}
+
 function FormError({ message }: { message: string | null }) {
   if (!message) return null
   return (
@@ -210,11 +216,14 @@ function OtpInput({
   onChange,
   id = 'code',
   autoFocus = true,
+  error,
 }: {
   value: string
   onChange: (val: string) => void
   id?: string
   autoFocus?: boolean
+  /** The message `Field` renders as `<id>-error`; boxes reference it when set. */
+  error?: string
 }) {
   const inputs = useRef<(HTMLInputElement | null)[]>([])
   const chars = Array.from({ length: 6 }, (_, i) => value[i] ?? '')
@@ -290,6 +299,8 @@ function OtpInput({
             handlePaste(e.clipboardData.getData('text'))
           }}
           aria-label={i === 0 ? undefined : `Digit ${i + 1}`}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error && i === 0 ? `${id}-error` : undefined}
           className="size-10 rounded-md border border-input bg-card text-center font-mono text-base font-semibold outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/25"
         />
       ))}
@@ -315,14 +326,23 @@ export function LoginPage() {
   const dirs = useDirectories()
   const [error, setError] = useState<string | null>(null)
 
+  // The server's `LoginBody`: a login of 1..256 characters, a password of at most 1024.
   const schema = z.object({
     directory: z.string(),
-    username: z.string().min(1, t('validation.required')),
-    password: z.string().min(1, t('validation.required')),
+    username: z
+      .string()
+      .trim()
+      .min(1, t('validation.required'))
+      .max(256, t('validation.maxLength', { count: 256 })),
+    password: z
+      .string()
+      .min(1, t('validation.required'))
+      .max(1024, t('validation.maxLength', { count: 1024 })),
   })
   type Values = z.infer<typeof schema>
   const form = useForm<Values>({
     resolver: zodResolver(schema),
+    mode: 'onTouched',
     defaultValues: { directory: '', username: '', password: '' },
   })
 
@@ -345,7 +365,12 @@ export function LoginPage() {
     setError(null)
     try {
       const selectedDir = v.directory || currentDir
-      const res = await api.login({ ...v, directory: selectedDir })
+      // the server's 256-character cap counts what is sent: send what was checked
+      const res = await api.login({
+        ...v,
+        username: v.username.trim(),
+        directory: selectedDir,
+      })
       if (res.status === 'second_factor') {
         await navigate({
           to: '/login/second-factor',
@@ -355,7 +380,17 @@ export function LoginPage() {
       }
       await signedIn()
     } catch (e) {
-      setError(isApiError(e) && e.status !== 401 ? e.message : t('auth.invalidCredentials'))
+      // a refused value goes under its field; a wrong login stays one generic message
+      const fields = isApiError(e) && e.status === 422 ? (e.fields ?? {}) : {}
+      let placed = false
+      for (const name of ['username', 'password'] as const) {
+        const message = fields[name]
+        if (message) {
+          form.setError(name, { type: 'server', message })
+          placed = true
+        }
+      }
+      if (!placed) setError(isApiError(e) && e.status !== 401 ? e.message : t('auth.invalidCredentials'))
     }
   })
 
@@ -378,13 +413,20 @@ export function LoginPage() {
           </select>
         </Field>
         <Field id="username" label={t('auth.username')} error={form.formState.errors.username?.message}>
-          <Input id="username" autoComplete="username" autoFocus {...form.register('username')} />
+          <Input
+            id="username"
+            autoComplete="username"
+            autoFocus
+            {...invalidProps('username', form.formState.errors.username?.message)}
+            {...form.register('username')}
+          />
         </Field>
         <Field id="password" label={t('auth.password')} error={form.formState.errors.password?.message}>
           <PasswordInput
             id="password"
             autoComplete="current-password"
             error={Boolean(form.formState.errors.password)}
+            {...invalidProps('password', form.formState.errors.password?.message)}
             {...form.register('password')}
           />
         </Field>
@@ -411,6 +453,7 @@ export function SecondFactorPage() {
   const [method, setMethod] = useState<SecondFactorMethod>(methods[0] ?? 'totp')
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [codeError, setCodeError] = useState<string | undefined>(undefined)
   const [pending, setPending] = useState(false)
 
   const finish = async () => {
@@ -426,17 +469,26 @@ export function SecondFactorPage() {
       await signInWithKey()
       return
     }
-    if (!code.trim()) {
-      setError(t('validation.required'))
-      return
-    }
+    const trimmed = code.trim()
+    // The server's `SecondFactorBody` (a code is required) and its TOTP verifier, which
+    // only compares a six-digit code; a recovery code is any non-empty code.
+    const problem =
+      trimmed === ''
+        ? t('validation.required')
+        : method === 'totp' && !/^\d{6}$/.test(trimmed)
+          ? t('reauth.codeInvalid')
+          : undefined
+    setCodeError(problem)
+    if (problem) return
     setPending(true)
     setError(null)
     try {
-      await api.secondFactor({ method, code: code.trim() })
+      await api.secondFactor({ method, code: trimmed })
       await finish()
     } catch (err) {
-      setError(isApiError(err) && err.status !== 401 ? err.message : t('auth.invalidCode'))
+      const refused = isApiError(err) && err.status === 422 ? err.fields?.code : undefined
+      if (refused) setCodeError(refused)
+      else setError(isApiError(err) && err.status !== 401 ? err.message : t('auth.invalidCode'))
     } finally {
       setPending(false)
     }
@@ -475,6 +527,7 @@ export function SecondFactorPage() {
                 onClick={() => {
                   setMethod(m)
                   setCode('')
+                  setCodeError(undefined)
                   setError(null)
                 }}
                 className={cn(
@@ -505,14 +558,26 @@ export function SecondFactorPage() {
             </Button>
           </>
         ) : (
-        <Field id="code" label={t(`auth.code_${method}`)}>
+        <Field id="code" label={t(`auth.code_${method}`)} error={codeError}>
           {method === 'totp' ? (
-            <OtpInput value={code} onChange={setCode} id="code" />
+            <OtpInput
+              value={code}
+              onChange={(next) => {
+                setCode(next)
+                setCodeError(undefined)
+              }}
+              id="code"
+              error={codeError}
+            />
           ) : (
             <Input
               id="code"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              {...invalidProps('code', codeError)}
+              onChange={(e) => {
+                setCode(e.target.value)
+                setCodeError(undefined)
+              }}
               autoComplete="one-time-code"
               autoFocus
               className="font-mono text-center text-sm"
@@ -538,16 +603,30 @@ export function RecoveryRequestPage() {
   const dirs = useDirectories()
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const schema = z.object({ email: z.string().email(t('validation.email')) })
-  const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { email: '' } })
+  // The server's `RecoveryBody`: an address of at most 320 characters, matched by its pattern.
+  const schema = z.object({
+    email: z
+      .string()
+      .trim()
+      .min(1, t('validation.required'))
+      .email(t('validation.email'))
+      .max(320, t('validation.maxLength', { count: 320 })),
+  })
+  const form = useForm<z.infer<typeof schema>>({
+    resolver: zodResolver(schema),
+    mode: 'onTouched',
+    defaultValues: { email: '' },
+  })
 
   const onSubmit = form.handleSubmit(async (v) => {
     setError(null)
     try {
-      await api.requestRecovery({ directory: dirs.data?.[0]?.id ?? 'main', email: v.email })
+      await api.requestRecovery({ directory: dirs.data?.[0]?.id ?? 'main', email: v.email.trim() })
       setDone(true)
     } catch (e) {
-      setError(isApiError(e) ? e.message : t('common.error'))
+      const refused = isApiError(e) && e.status === 422 ? e.fields?.email : undefined
+      if (refused) form.setError('email', { type: 'server', message: refused })
+      else setError(isApiError(e) ? e.message : t('common.error'))
     }
   })
 
@@ -570,7 +649,14 @@ export function RecoveryRequestPage() {
         <form onSubmit={(e) => void onSubmit(e)} className="space-y-4" noValidate>
           <FormError message={error} />
           <Field id="email" label={t('auth.emailLabel')} error={form.formState.errors.email?.message}>
-            <Input id="email" type="email" autoComplete="email" autoFocus {...form.register('email')} />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              autoFocus
+              {...invalidProps('email', form.formState.errors.email?.message)}
+              {...form.register('email')}
+            />
           </Field>
           <Submit pending={form.formState.isSubmitting}>{t('auth.sendLink')}</Submit>
           <p className="pt-1 text-center text-body text-muted-foreground">
@@ -589,24 +675,39 @@ export function RecoveryConfirmPage() {
   const navigate = useNavigate()
   const search = useSearch({ from: '/recovery/confirm' })
   const [error, setError] = useState<string | null>(null)
+  const policy = usePasswordPolicy()
+  // The server's `RecoveryConfirmBody` and the live password policy (its minimum length);
+  // the confirmation is the browser's own check.
   const schema = z
     .object({
-      password: z.string().min(8, t('validation.minLength', { count: 8 })),
+      password: z
+        .string()
+        .min(1, t('validation.required'))
+        .min(policy.min_length, t('validation.minLength', { count: policy.min_length }))
+        .max(1024, t('validation.maxLength', { count: 1024 })),
       confirm: z.string(),
     })
     .refine((v) => v.password === v.confirm, { path: ['confirm'], message: t('validation.passwordMismatch') })
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
+    mode: 'onTouched',
     defaultValues: { password: '', confirm: '' },
   })
 
   const onSubmit = form.handleSubmit(async (v) => {
     setError(null)
+    if (!search.login || !search.token) {
+      setError(t('formGuard.linkInvalid'))
+      return
+    }
     try {
-      await api.confirmRecovery({ login: search.login ?? '', token: search.token ?? '', password: v.password })
+      await api.confirmRecovery({ login: search.login, token: search.token, password: v.password })
       await navigate({ to: '/login' })
     } catch (e) {
-      setError(isApiError(e) ? e.message : t('common.error'))
+      // the policy verdict belongs under the password field
+      const fields = isApiError(e) && e.status === 422 ? (e.fields ?? {}) : {}
+      if (fields.password) form.setError('password', { type: 'server', message: fields.password })
+      else setError(isApiError(e) ? e.message : t('common.error'))
     }
   })
 
@@ -620,14 +721,19 @@ export function RecoveryConfirmPage() {
             autoComplete="new-password"
             autoFocus
             error={Boolean(form.formState.errors.password)}
+            {...invalidProps('password', form.formState.errors.password?.message)}
             {...form.register('password')}
           />
+          <p className="text-caption text-muted-foreground">
+            {t('passwordPolicy.hint', { count: policy.min_length })}
+          </p>
         </Field>
         <Field id="confirm" label={t('fields.passwordConfirm')} error={form.formState.errors.confirm?.message}>
           <PasswordInput
             id="confirm"
             autoComplete="new-password"
             error={Boolean(form.formState.errors.confirm)}
+            {...invalidProps('confirm', form.formState.errors.confirm?.message)}
             {...form.register('confirm')}
           />
         </Field>

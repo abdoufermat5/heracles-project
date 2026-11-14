@@ -71,6 +71,10 @@ export const accessEn = {
       name: 'Name',
       where: 'Where to create it',
       description: 'Description',
+      errors: {
+        nameChars: 'Do not use the characters , # ; : + = " < > \\ in a role name.',
+        nameTaken: 'A role with this name already exists here.',
+      },
       descriptionPlaceholder: 'What is this role for?',
       priority: 'Priority',
       template: 'Rights block {{index}}',

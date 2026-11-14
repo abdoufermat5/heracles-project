@@ -161,6 +161,13 @@ def build_setup_router(state: SetupState) -> APIRouter:
             starttls=body.starttls,
             ca_file=body.ca_file,
         )
+        problems = service.validate_directory(spec, base_required=False)
+        if problems:
+            # the same keys as the apply step, relative to the (flat) test body
+            raise validation(
+                "Some fields are not valid",
+                {key.removeprefix("directory."): text for key, text in problems.items()},
+            )
         return service.test_directory(spec, state.client_factory).to_json()
 
     @router.get("/schema", dependencies=[authed])

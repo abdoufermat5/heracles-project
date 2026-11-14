@@ -36,6 +36,7 @@ from heracles.acl.parser import (
 from heracles.acl.resolver import AclResolver, AssignmentEntry
 from heracles.acl.rights import Rights, RightsParseError
 from heracles.core.containers import ensure_container
+from heracles.core.formats import check as check_format
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import (
     AlreadyExistsError,
@@ -49,6 +50,11 @@ from heracles.schema import names as schema
 
 DEFAULT_ROLE_RDN = schema.RDN.ACL_ROLES
 _FORBIDDEN_IN_NAMES = set(",#;:\n")
+#: Longest role name and description (the directory allows more; screens stay readable).
+ROLE_NAME_MAX = 64
+ROLE_DESCRIPTION_MAX = 512
+#: Characters a role name never contains: the template separators and the RDN specials.
+_FORBIDDEN_IN_ROLE_NAMES = frozenset(',#;:+="<>\\')
 
 
 class AclAdminError(ValueError):
@@ -91,6 +97,22 @@ def _check_name(label: str, name: str, path: str) -> None:
         raise AclAdminError({path: f"Invalid {label}."})
 
 
+def check_role_name(name: str) -> str | None:
+    """Why ``name`` cannot name a role, else ``None`` (the browser mirrors this rule)."""
+    if not name:
+        return "A name is required."
+    if len(name) > ROLE_NAME_MAX:
+        return f"Use at most {ROLE_NAME_MAX} characters."
+    if any(ch in _FORBIDDEN_IN_ROLE_NAMES or ord(ch) < 32 or ord(ch) == 127 for ch in name):
+        return 'Do not use the characters , # ; : + = " < > \\ or control characters.'
+    return None
+
+
+def _check_description(text: str) -> None:
+    if len(text) > ROLE_DESCRIPTION_MAX:
+        raise AclAdminError({"description": f"Use at most {ROLE_DESCRIPTION_MAX} characters."})
+
+
 def _rights(text: str, path: str) -> Rights:
     try:
         return Rights.parse(text)
@@ -122,6 +144,9 @@ def template_from_json(item: Mapping[str, Any], path: str = "templates") -> str:
             attr = cast("dict[str, Any]", attr_any)
             name = str(attr.get("name", "")).strip()
             _check_name("attribute name", name, f"{apath}.name")
+            problem = check_format("attribute", name)
+            if problem is not None:
+                raise AclAdminError({f"{apath}.name": problem})
             attrs.append((name, _rights(str(attr.get("rights", "")), f"{apath}.rights")))
         blocks.append(
             AclBlock(obj, _rights(str(block.get("rights", "")), f"{bpath}.rights"), tuple(attrs))
@@ -201,7 +226,10 @@ def create_role(
     description: str,
     templates: Sequence[Mapping[str, Any]],
 ) -> str:
-    _check_name("name", cn.strip(), "cn")
+    problem = check_role_name(cn.strip())
+    if problem is not None:
+        raise AclAdminError({"cn": problem})
+    _check_description(description)
     values = _templates_from(templates)
     ensure_container(directory, container)
     dn = f"cn={dnlib.escape_rdn_value(cn.strip())},{container}"
@@ -230,6 +258,8 @@ def update_role(
     if current is None:
         raise NoSuchObjectError(dn)
     mods: list[Modification] = []
+    if description is not None:
+        _check_description(description)
     if templates is not None:
         values = _templates_from(templates)
         if values != list(current.templates):
@@ -358,6 +388,9 @@ def assignment_from_json(item: Mapping[str, Any], path: str) -> str:
     role = str(item.get("role", "")).strip()
     if not role:
         raise AclAdminError({f"{path}.role": "A role is required."})
+    problem = check_format("dn", role)
+    if problem is not None:
+        raise AclAdminError({f"{path}.role": problem})
     members_raw = item.get("members")
     members: list[str] = []
     if not isinstance(members_raw, list):
@@ -366,14 +399,21 @@ def assignment_from_json(item: Mapping[str, Any], path: str) -> str:
         text = m.get("dn") if isinstance(m, dict) else m  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
         if not isinstance(text, str) or not text.strip():
             raise AclAdminError({f"{path}.members": "Invalid member."})
-        members.append(text.strip())
+        text = text.strip()
+        problem = None if text == ALL_USERS else check_format("dn", text)
+        if problem is not None:
+            raise AclAdminError({f"{path}.members": f"{text}: {problem}"})
+        members.append(text)
     if not members:
         raise AclAdminError({f"{path}.members": "At least one member is required."})
     user_filter = str(item.get("user_filter") or "").strip() or None
     target_filter = str(item.get("target_filter") or "").strip() or None
     for key, text in (("user_filter", user_filter), ("target_filter", target_filter)):
-        if text is not None and not (text.startswith("(") and text.endswith(")")):
-            raise AclAdminError({f"{path}.{key}": "Expected an LDAP filter in parentheses."})
+        if text is None:
+            continue
+        problem = check_format("ldap_filter", text)
+        if problem is not None:
+            raise AclAdminError({f"{path}.{key}": problem})
     index_value = item.get("index", 0)
     index = index_value if isinstance(index_value, int) and index_value >= 0 else 0
     value = AclAssignment(index, scope, role, tuple(members), user_filter, target_filter)
@@ -385,6 +425,31 @@ def assignment_from_json(item: Mapping[str, Any], path: str) -> str:
     return text
 
 
+def _check_references(directory: DirectoryClient, value: str, path: str) -> None:
+    """The role and the members of a new or changed assignment must exist."""
+    parsed = parse_assignment(value)
+    if not isinstance(parsed, AclAssignment):
+        return
+    if get_role(directory, parsed.role_dn) is None:
+        raise AclAdminError({f"{path}.role": "This role does not exist."})
+    for member in parsed.members:
+        if member != ALL_USERS and directory.get(member, ["objectClass"]) is None:
+            raise AclAdminError({f"{path}.members": f"{member}: this entry does not exist."})
+
+
+def check_department(
+    directory: DirectoryClient, dn: str, path: str = "base", *, exists: bool = True
+) -> None:
+    """``dn`` must be a well-formed DN; with ``exists``, of an entry below the directory base."""
+    problem = check_format("dn", dn)
+    if problem is not None:
+        raise AclAdminError({path: problem})
+    if not exists:
+        return
+    if not dnlib.is_descendant(dn, directory.base_dn) or directory.get(dn, ["objectClass"]) is None:
+        raise AclAdminError({path: "This department does not exist."})
+
+
 def set_assignments(
     directory: DirectoryClient, dn: str, items: Sequence[Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -393,6 +458,10 @@ def set_assignments(
     if entry is None:
         raise NoSuchObjectError(dn)
     values = [assignment_from_json(item, f"assignments.{i}") for i, item in enumerate(items)]
+    stored = set(entry.texts(ATTR_ACL_ENTRY))
+    for i, value in enumerate(values):
+        if value not in stored:  # references kept as they were may be stale; new ones may not
+            _check_references(directory, value, f"assignments.{i}")
     mods: list[Modification] = []
     if values:
         if not entry.has_object_class(OC_ACL):
@@ -457,6 +526,19 @@ def check_rights(
     """Effective rights of ``user_dn`` on ``object_key`` of ``target_dn``."""
     from heracles.acl.directory import LdapAclDirectory
 
+    problems: dict[str, str] = {}
+    for key, value in (("user", user_dn), ("dn", target_dn)):
+        problem = "A value is required." if not value.strip() else check_format("dn", value)
+        if problem is not None:
+            problems[key] = problem
+    if not object_key.strip():
+        problems["object"] = "An object type is required."
+    for name in attributes:
+        problem = check_format("attribute", name)
+        if problem is not None:
+            problems["attributes"] = f"{name}: {problem}"
+    if problems:
+        raise AclAdminError(problems)
     entry = directory.get(user_dn)
     if entry is None:
         raise NoSuchObjectError(user_dn)
@@ -618,7 +700,9 @@ __all__ = [
     "assignment_identity",
     "assignment_to_json",
     "assignments_using_role",
+    "check_department",
     "check_rights",
+    "check_role_name",
     "create_role",
     "delete_role",
     "encode_member",

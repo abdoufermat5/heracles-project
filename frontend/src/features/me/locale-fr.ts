@@ -1,6 +1,15 @@
 /** Textes du panneau des sessions actives et de la reconfirmation par code. Miroir de locale-en.ts. */
 export const meFr = {
+  formGuard: {
+    blocked_one: 'Corrigez {{count}} champ invalide pour continuer.',
+    blocked_other: 'Corrigez {{count}} champs invalides pour continuer.',
+    linkInvalid: 'Ce lien de réinitialisation est incomplet. Demandez-en un nouveau.',
+  },
+  passwordPolicy: {
+    hint: 'Utilisez au moins {{count}} caractères.',
+  },
   reauth: {
+    codeInvalid: 'Saisissez le code à 6 chiffres de votre application d’authentification.',
     useCode: 'Utiliser plutôt un code de mon application d’authentification',
     usePassword: 'Utiliser plutôt mon mot de passe',
     code: 'Code de l’application ou code de secours',

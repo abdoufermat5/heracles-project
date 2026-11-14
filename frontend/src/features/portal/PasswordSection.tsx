@@ -8,7 +8,9 @@ import { SectionCard } from '@/components/patterns/SectionCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { newPasswordError, usePasswordPolicy } from '@/features/auth/passwordPolicy'
 import { ReauthDialog } from '@/features/me/ReauthDialog'
+import { FieldError, useLiveForm, type FieldErrors } from '@/lib/liveForm'
 import { generatePassword, passwordStrength } from '@/lib/password'
 import { cn } from '@/lib/utils'
 
@@ -37,6 +39,22 @@ export function PasswordSection({
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** What the server refused, under the same field as the browser's own messages. */
+  const [refused, setRefused] = useState<FieldErrors | undefined>(undefined)
+  const policy = usePasswordPolicy()
+  const form = useLiveForm(
+    'pw',
+    { password: newPassword, confirm: confirmPassword },
+    (v) => {
+      const out: FieldErrors = {}
+      const problem = newPasswordError(v.password, policy)
+      if (problem) out.password = problem
+      else if (v.confirm !== v.password)
+        out.confirm = t('settingsUI.portal.passwordsDoNotMatch')
+      return out
+    },
+    refused,
+  )
   /** Set when the server asks to confirm the password first; retried once confirmed. */
   const [needsReauth, setNeedsReauth] = useState(false)
 
@@ -44,7 +62,8 @@ export function PasswordSection({
   const isMatching = newPassword !== '' && confirmPassword !== '' && newPassword === confirmPassword
   const isMismatch = confirmPassword !== '' && newPassword !== confirmPassword
 
-  const canSubmit = newPassword !== '' && isMatching && !patch.isPending
+  const canSubmit =
+    newPassword !== '' && isMatching && !patch.isPending && Object.keys(form.errors).length === 0
 
   const onGenerate = () => {
     const pw = generatePassword(16)
@@ -60,6 +79,7 @@ export function PasswordSection({
 
   const submit = async () => {
     setError(null)
+    setRefused(undefined)
     try {
       await patch.mutateAsync({
         tabs: {
@@ -76,6 +96,13 @@ export function PasswordSection({
     } catch (err) {
       if (isApiError(err) && err.code === 'reauth_required') {
         setNeedsReauth(true)
+        return
+      }
+      const fields = isApiError(err) ? (err.fields ?? {}) : {}
+      const refusedPassword = Object.entries(fields).find(([key]) => /(^|\.)userPassword$/.test(key))
+      if (refusedPassword) {
+        // a policy verdict belongs under the field, not in a toast
+        setRefused({ password: refusedPassword[1] })
         return
       }
       setError(isApiError(err) ? err.message : t('common.error'))
@@ -95,10 +122,7 @@ export function PasswordSection({
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          if (!isMatching) {
-            setError(t('settingsUI.portal.passwordsDoNotMatch'))
-            return
-          }
+          if (!form.attempt() || !isMatching) return
           void submit()
         }}
         className="max-w-lg space-y-4"
@@ -138,6 +162,7 @@ export function PasswordSection({
                 setNewPassword(e.target.value)
                 setError(null)
               }}
+              {...form.field('password')}
               className="pr-10 font-mono text-small"
               autoComplete="new-password"
             />
@@ -150,6 +175,10 @@ export function PasswordSection({
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
+          <p className="text-caption text-muted-foreground">
+            {t('passwordPolicy.hint', { count: policy.min_length })}
+          </p>
+          <FieldError formId="pw" name="password" form={form} />
         </div>
 
         {/* Strength meter */}
@@ -181,11 +210,14 @@ export function PasswordSection({
             value={confirmPassword}
             onChange={(e) => {
               setConfirmPassword(e.target.value)
+              form.touch('confirm')
               setError(null)
             }}
+            {...form.field('confirm')}
             className={cn('font-mono text-small', isMismatch && 'border-destructive')}
             autoComplete="new-password"
           />
+          <FieldError formId="pw" name="confirm" form={form} />
         </div>
 
         {/* Live policy check: passwords match */}
@@ -199,9 +231,7 @@ export function PasswordSection({
               <span className="size-3.5 rounded-full border border-muted-foreground/40" />
             )}
             <span className={cn(isMatching && 'text-foreground font-medium', isMismatch && 'text-destructive')}>
-              {isMismatch
-                ? t('settingsUI.portal.passwordsDoNotMatch')
-                : t('settingsUI.portal.passwordsMustMatch')}
+              {t('settingsUI.portal.passwordsMustMatch')}
             </span>
           </div>
         </div>

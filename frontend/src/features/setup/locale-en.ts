@@ -20,6 +20,14 @@ export const setupEn = {
     alreadyTitle: 'Heracles is already set up',
     alreadyHelp: 'There is nothing to configure here. Sign in to continue.',
     signIn: 'Go to sign in',
+    errors: {
+      uri: 'Use an address such as ldap://host:389 or ldaps://host:636.',
+      uriHost: 'The server address has no valid host name.',
+      starttls: 'Use either an ldaps:// address or StartTLS, not both.',
+      bindPassword: 'Enter the password of this account.',
+      login: 'Use up to 64 letters, digits, dots, dashes and underscores.',
+      publicUrl: 'Use a full address such as https://heracles.example.org.',
+    },
     welcome: {
       title: 'Welcome',
       help: 'Paste the one-time setup token to prove you have access to the server.',

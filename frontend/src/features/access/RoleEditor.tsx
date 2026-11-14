@@ -3,6 +3,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
+import { useMe } from '@/api/hooks'
 import { DepartmentPicker } from '@/components/fields/RefFields'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -26,9 +27,11 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { useCatalog, useRoleMutations } from '@/features/admin/hooks'
+import { useCatalog, useRoleMutations, useRoles } from '@/features/admin/hooks'
 import { hasRight, nextIndex } from '@/features/admin/rights'
 import type { AclRole, Catalog } from '@/features/admin/types'
+import { BlockedHint, blockedProps, FieldError, useLiveForm } from '@/lib/liveForm'
+import { parentDn } from '@/lib/objects'
 import { useTechnicalDetails } from '@/lib/preferences'
 import { cn } from '@/lib/utils'
 import {
@@ -56,6 +59,7 @@ import {
   type MatrixRow,
   type MatrixTemplate,
 } from './rightsModel'
+import { roleErrors } from './validation'
 
 function labelFor(row: MatrixRow, t: (key: string, options?: Record<string, unknown>) => string) {
   if (row.group === 'all') return t('accessUI.summary.everything')
@@ -609,6 +613,23 @@ function RoleEditorBody({
   )
   const [errors, setErrors] = useState<Record<string, string>>({})
   const busy = create.isPending || update.isPending
+  const { data: roles } = useRoles()
+  const { data: me } = useMe()
+  // names already used in the container the role goes to (`<container>` is one level below the department)
+  const taken = useMemo(() => {
+    const department = (base ?? me?.base ?? '').toLowerCase()
+    return new Set(
+      (roles ?? [])
+        .filter((item) => parentDn(parentDn(item.dn)).toLowerCase() === department)
+        .map((item) => item.cn.toLowerCase()),
+    )
+  }, [roles, base, me?.base])
+  const form = useLiveForm(
+    'role',
+    { cn, description, base },
+    (v) => roleErrors(v, { creating: role === null, taken }),
+    errors,
+  )
 
   const updateTemplate = (position: number, template: MatrixTemplate) =>
     setMatrix((current) => ({
@@ -617,6 +638,7 @@ function RoleEditorBody({
     }))
 
   const submit = async () => {
+    if (!form.attempt()) return
     setErrors({})
     const sources = role?.templates ?? initial?.templates ?? []
     const templates = matrixToTemplates(matrix, sources)
@@ -650,16 +672,21 @@ function RoleEditorBody({
                 id="role-name"
                 value={cn}
                 disabled={role !== null}
-                aria-invalid={!!errors.cn}
+                {...form.field('cn')}
                 onChange={(e) => setCn(e.target.value)}
               />
-              {errors.cn && <p className="text-caption text-destructive">{errors.cn}</p>}
+              <FieldError formId="role" name="cn" form={form} />
             </div>
             {!role && (
               <div className="space-y-1">
                 <Label htmlFor="role-base">{t('accessUI.editor.where')}</Label>
-                <DepartmentPicker id="role-base" value={base} onChange={setBase} />
-                {errors.base && <p className="text-caption text-destructive">{errors.base}</p>}
+                <DepartmentPicker
+                  id="role-base"
+                  value={base}
+                  onChange={setBase}
+                  invalid={!!form.message('base')}
+                />
+                <FieldError formId="role" name="base" form={form} />
               </div>
             )}
             <div className="space-y-1 sm:col-span-2">
@@ -669,12 +696,10 @@ function RoleEditorBody({
                 rows={2}
                 value={description}
                 placeholder={t('accessUI.editor.descriptionPlaceholder')}
-                aria-invalid={!!errors.description}
+                {...form.field('description')}
                 onChange={(e) => setDescription(e.target.value)}
               />
-              {errors.description && (
-                <p className="text-caption text-destructive">{errors.description}</p>
-              )}
+              <FieldError formId="role" name="description" form={form} />
             </div>
           </div>
 
@@ -731,9 +756,11 @@ function RoleEditorBody({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
+          <BlockedHint form={form} className="mr-auto self-center" />
           <Button
             type="button"
-            disabled={busy || (!role && cn.trim() === '')}
+            disabled={busy}
+            {...blockedProps(form)}
             onClick={() => void submit()}
           >
             {role ? t('common.save') : t('common.create')}

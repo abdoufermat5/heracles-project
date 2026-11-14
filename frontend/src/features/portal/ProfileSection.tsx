@@ -9,6 +9,8 @@ import { FactList, SectionCard } from '@/components/patterns/SectionCard'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { attributeLabel } from '@/lib/labels'
+import { BlockedHint, FieldError, useLiveForm, type FieldErrors } from '@/lib/liveForm'
+import { validateAttribute } from '@/lib/validation'
 
 /**
  * Personal details an employee looks at or keeps up to date, in this order. Only
@@ -44,6 +46,8 @@ export function ProfileSection({
   const patch = usePatchObject('user', me.dn)
   const [editing, setEditing] = useState(false)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  /** What the server refused, keyed by attribute name. */
+  const [refused, setRefused] = useState<FieldErrors | undefined>(undefined)
 
   const mainTab = descriptor?.tabs[0]
   const tabName = mainTab?.name ?? 'main'
@@ -59,12 +63,29 @@ export function ProfileSection({
   )
   const editable = fields.filter((a) => (rights[a.name] ?? '').includes('w'))
 
+  // the directory's own rules for each attribute that changed (kind, length, pattern, required)
+  const form = useLiveForm('profile', drafts, (d) => {
+    const out: FieldErrors = {}
+    for (const attr of editable) {
+      const text = (d[attr.name] ?? '').trim()
+      if (text === firstText(values[attr.name])) continue // kept as it was: not this form's concern
+      const found = validateAttribute(attr, attr.multivalued ? (text ? [text] : []) : text)
+      const message = found[''] ?? Object.values(found)[0]
+      if (message) out[attr.name] = message
+    }
+    return out
+  }, refused)
+
   const startEdit = () => {
     setDrafts(Object.fromEntries(editable.map((a) => [a.name, firstText(values[a.name])])))
+    setRefused(undefined)
+    form.reset()
     setEditing(true)
   }
 
   const save = async () => {
+    if (!form.attempt()) return
+    setRefused(undefined)
     const changed: Record<string, unknown> = {}
     for (const attr of editable) {
       const next = (drafts[attr.name] ?? '').trim()
@@ -80,7 +101,16 @@ export function ProfileSection({
       toast.success(t('settingsUI.portal.saveSuccess'))
       setEditing(false)
     } catch (e) {
-      toast.error(isApiError(e) ? e.message : t('common.error'))
+      // a refused value goes under its field; only what no field explains is a toast
+      const mapped: FieldErrors = {}
+      if (isApiError(e) && e.fields)
+        for (const [key, message] of Object.entries(e.fields)) {
+          const [tab, attribute] = key.split('.')
+          if (tab === tabName && attribute && editable.some((a) => a.name === attribute))
+            mapped[attribute] ??= message
+        }
+      setRefused(mapped)
+      if (Object.keys(mapped).length === 0) toast.error(isApiError(e) ? e.message : t('common.error'))
     }
   }
 
@@ -92,6 +122,7 @@ export function ProfileSection({
       editable={editable.length > 0}
       editing={editing}
       saving={patch.isPending}
+      canSave={!form.blocked}
       onEdit={startEdit}
       onSave={() => void save()}
       onCancel={() => setEditing(false)}
@@ -120,9 +151,12 @@ export function ProfileSection({
                 type={attr.name === 'mail' ? 'email' : attr.name.toLowerCase().includes('phone') || attr.name === 'mobile' ? 'tel' : 'text'}
                 value={drafts[attr.name] ?? ''}
                 onChange={(e) => setDrafts((d) => ({ ...d, [attr.name]: e.target.value }))}
+                {...form.field(attr.name)}
               />
+              <FieldError formId="profile" name={attr.name} form={form} />
             </div>
           ))}
+          <BlockedHint form={form} className="sm:col-span-2" />
         </form>
       ) : (
         <FactList

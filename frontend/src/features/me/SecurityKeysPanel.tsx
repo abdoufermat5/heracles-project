@@ -19,7 +19,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { createCredential, WebAuthnClientError, webauthnSupported } from '@/lib/webauthn'
+import { blockedProps, FieldError, useLiveForm, type FieldErrors } from '@/lib/liveForm'
 import { ReauthDialog } from './ReauthDialog'
+import { securityKeyLabelError } from './validation'
 
 const PANEL_HEADER = 'flex h-10 flex-row items-center justify-between border-b px-4 py-0'
 
@@ -30,6 +32,17 @@ export function SecurityKeysPanel() {
   const supported = webauthnSupported()
   const [label, setLabel] = useState('')
   const [error, setError] = useState<string | null>(null)
+  /** What the server refused for the name, under the same field as the browser's message. */
+  const [refused, setRefused] = useState<FieldErrors | undefined>(undefined)
+  const form = useLiveForm(
+    'security-key',
+    { label },
+    (v): FieldErrors => {
+      const problem = securityKeyLabelError(v.label)
+      return problem ? { label: problem } : {}
+    },
+    refused,
+  )
   /** Action to retry once the password is confirmed (the server asked for step-up). */
   const [retry, setRetry] = useState<(() => void) | null>(null)
   /** Key whose removal would turn the second factor off, awaiting confirmation. */
@@ -48,6 +61,8 @@ export function SecurityKeysPanel() {
     onSuccess: async () => {
       setLabel('')
       setError(null)
+      setRefused(undefined)
+      form.reset()
       await qc.invalidateQueries({ queryKey: qk.securityKeys })
       await qc.invalidateQueries({ queryKey: qk.totp })
     },
@@ -60,6 +75,9 @@ export function SecurityKeysPanel() {
         if (e.reason === 'cancelled') setError(t('security.cancelled'))
         else if (e.reason === 'unsupported') setError(t('security.unsupported'))
         else setError(t('security.failed'))
+      } else if (isApiError(e) && e.fields?.label) {
+        // the name is the only field of this form: its verdict goes under it
+        setRefused({ label: e.fields.label })
       } else {
         setError(isApiError(e) ? e.message : t('security.failed'))
       }
@@ -126,29 +144,34 @@ export function SecurityKeysPanel() {
         <div className="border-t p-4">
           {supported ? (
             <form
-              className="flex items-center gap-2"
+              className="grid gap-1.5"
               onSubmit={(e) => {
                 e.preventDefault()
+                if (!form.attempt()) return
                 setError(null)
+                setRefused(undefined)
                 add.mutate(label.trim())
               }}
             >
-              <Input
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                maxLength={64}
-                placeholder={t('security.labelPlaceholder')}
-                aria-label={t('security.label')}
-                className="h-8 max-w-64 text-body"
-              />
-              <Button type="submit" size="sm" disabled={add.isPending}>
-                {add.isPending ? (
-                  <Loader2 className="animate-spin" aria-hidden="true" />
-                ) : (
-                  <KeyRound aria-hidden="true" />
-                )}
-                {t('security.add')}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  placeholder={t('security.labelPlaceholder')}
+                  aria-label={t('security.label')}
+                  {...form.field('label')}
+                  className="h-8 max-w-64 text-body"
+                />
+                <Button type="submit" size="sm" disabled={add.isPending} {...blockedProps(form)}>
+                  {add.isPending ? (
+                    <Loader2 className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <KeyRound aria-hidden="true" />
+                  )}
+                  {t('security.add')}
+                </Button>
+              </div>
+              <FieldError formId="security-key" name="label" form={form} />
             </form>
           ) : (
             <p className="text-body text-muted-foreground">{t('security.unsupported')}</p>

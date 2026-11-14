@@ -1,6 +1,15 @@
 /** Strings of the active-sessions panel and the code-based re-authentication. French: locale-fr.ts. */
 export const meEn = {
+  formGuard: {
+    blocked_one: 'Fix {{count}} invalid field to continue.',
+    blocked_other: 'Fix {{count}} invalid fields to continue.',
+    linkInvalid: 'This reset link is incomplete. Request a new one.',
+  },
+  passwordPolicy: {
+    hint: 'Use at least {{count}} characters.',
+  },
   reauth: {
+    codeInvalid: 'Enter the 6-digit code from your authenticator app.',
     useCode: 'Use a code from my authenticator app instead',
     usePassword: 'Use my password instead',
     code: 'Authenticator or recovery code',

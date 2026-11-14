@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import secrets
 import tempfile
 from collections.abc import Callable, Mapping
@@ -19,6 +20,7 @@ from pydantic import SecretStr, ValidationError
 from heracles.auth.passwords import PasswordPolicy
 from heracles.core import setup_checks
 from heracles.core.containers import ensure_container
+from heracles.core.formats import check as check_format
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import (
     DirectoryClient,
@@ -391,22 +393,80 @@ class ApplyResult:
     admin_created: bool
 
 
+#: Letters, digits, dot, dash and underscore: the administrator's login (a safe RDN value).
+_LOGIN_RE = re.compile(r"[A-Za-z0-9._-]{1,64}")
+_EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+#: ``ldap://host[:port]``, ``ldaps://host[:port]`` or ``ldapi://<escaped socket path>``.
+_URI_RE = re.compile(
+    r"(?P<scheme>ldaps?)://(?P<host>\[[0-9A-Fa-f:.]+\]|[^/:\s]+)(?::(?P<port>\d+))?|ldapi://\S+"
+)
+LABEL_MAX = 80
+NAME_MAX = 128
+
+
+def check_uri(text: str) -> str | None:
+    """Why ``text`` is not one or several space-separated directory URIs, else ``None``."""
+    uris = text.split()
+    if not uris:
+        return "The server address is required."
+    for uri in uris:
+        found = _URI_RE.fullmatch(uri)
+        if found is None:
+            return "Use an address such as ldap://host:389 or ldaps://host:636."
+        host, port = found.group("host"), found.group("port")
+        if host is not None and not host.startswith("[") and check_format("hostname", host):
+            return "The server address has no valid host name."
+        if port is not None and check_format("port", port):
+            return "The port must be between 1 and 65535."
+    return None
+
+
+def validate_directory(spec: DirectorySpec, *, base_required: bool = True) -> dict[str, str]:
+    """Field problems of a directory section (keys ``directory.<field>``); empty when valid."""
+    fields: dict[str, str] = {}
+
+    def put(key: str, problem: str | None) -> None:
+        if problem is not None:
+            fields[f"directory.{key}"] = problem
+
+    put("uri", check_uri(spec.uri))
+    if spec.base_dn.strip() == "":
+        if base_required:
+            put("base_dn", "The base DN is required.")
+    else:
+        put("base_dn", check_format("dn", spec.base_dn))
+    put("bind_dn", check_format("dn", spec.bind_dn))
+    if spec.bind_dn and not spec.bind_password:
+        put("bind_password", "The password of the service account is required.")
+    if spec.ca_file:
+        put("ca_file", check_format("abs_path", spec.ca_file))
+    if spec.starttls and spec.uri.lower().startswith("ldaps://"):
+        put("starttls", "Use either an ldaps:// address or StartTLS, not both.")
+    if spec.id and re.fullmatch(r"[A-Za-z0-9._-]+", spec.id) is None:
+        put("id", "Use letters, digits, dots, dashes and underscores.")
+    if len(spec.label) > LABEL_MAX:
+        put("label", f"Use at most {LABEL_MAX} characters.")
+    return fields
+
+
 def _validate(
     directory: DirectorySpec, admin: AdminSpec, plugins: list[str], public_url: str | None
 ) -> None:
-    fields: dict[str, str] = {}
-    if not directory.uri.lower().startswith(("ldap://", "ldaps://", "ldapi://")):
-        fields["directory.uri"] = "Use an ldap:// or ldaps:// address."
-    try:
-        if not dnlib.split(directory.base_dn):
-            fields["directory.base_dn"] = "The base DN is required."
-    except Exception:
-        fields["directory.base_dn"] = "This is not a valid DN."
+    fields = validate_directory(directory)
     if not admin.uid.strip():
         fields["admin.uid"] = "The login is required."
-    elif any(c in admin.uid for c in ',=+"\\<>;# /'):
-        fields["admin.uid"] = "Use letters, digits, dots, dashes and underscores."
-    if admin.mail and ("@" not in admin.mail or " " in admin.mail):
+    elif _LOGIN_RE.fullmatch(admin.uid) is None:
+        fields["admin.uid"] = "Use up to 64 letters, digits, dots, dashes and underscores."
+    for key, value, label in (
+        ("given_name", admin.given_name, "first name"),
+        ("surname", admin.surname, "last name"),
+    ):
+        text = value.strip()
+        if not text:
+            fields[f"admin.{key}"] = f"The {label} is required."
+        elif len(text) > NAME_MAX or any(ord(ch) < 32 for ch in text):
+            fields[f"admin.{key}"] = f"Use at most {NAME_MAX} characters, no control characters."
+    if admin.mail and _EMAIL_RE.fullmatch(admin.mail) is None:
         fields["admin.mail"] = "This is not a valid address."
     problems = PasswordPolicy().problems(admin.password)
     if problems:

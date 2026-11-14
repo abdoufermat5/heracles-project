@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Copy, Download, Loader2, ShieldCheck, Smartphone } from 'lucide-react'
 import QRCode from 'qrcode'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { isApiError } from '@/api/client'
 import { api } from '@/api/endpoints'
@@ -20,7 +20,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { FieldError, useLiveForm, type FieldErrors } from '@/lib/liveForm'
 import { ReauthDialog } from './ReauthDialog'
+import { authenticatorCodeError } from './validation'
 
 const PANEL_HEADER = 'flex h-10 flex-row items-center justify-between border-b px-4 py-0'
 
@@ -39,6 +41,20 @@ export function TwoFactorPanel() {
   const [codes, setCodes] = useState<string[] | null>(null)
   const [copied, setCopied] = useState(false)
   const [confirmLast, setConfirmLast] = useState(false)
+
+  const refusedCode = useMemo<FieldErrors | undefined>(
+    () => (codeError ? { code: codeError } : undefined),
+    [codeError],
+  )
+  const codeForm = useLiveForm(
+    'totp',
+    { code },
+    (v): FieldErrors => {
+      const problem = authenticatorCodeError(v.code)
+      return problem ? { code: problem } : {}
+    },
+    refusedCode,
+  )
 
   const needsReauth = (e: unknown) => isApiError(e) && e.code === 'reauth_required'
   const status = useQuery({ queryKey: qk.totp, queryFn: api.totpStatus })
@@ -164,6 +180,8 @@ export function TwoFactorPanel() {
                   className="mt-4 grid gap-3"
                   onSubmit={(e) => {
                     e.preventDefault()
+                    // Enter in the field must not send a code the server would refuse
+                    if (!codeForm.attempt()) return
                     setCodeError(null)
                     confirm.mutate(code.trim())
                   }}
@@ -184,7 +202,7 @@ export function TwoFactorPanel() {
                       autoComplete="one-time-code"
                       maxLength={6}
                       aria-label={t('twofactor.code')}
-                      aria-invalid={codeError !== null}
+                      {...codeForm.field('code')}
                       className="h-8 w-32 text-center font-mono text-body tracking-widest"
                     />
                     <Button type="submit" size="sm" disabled={code.length !== 6 || confirm.isPending}>
@@ -203,11 +221,7 @@ export function TwoFactorPanel() {
                       {t('twofactor.cancel')}
                     </Button>
                   </div>
-                  {codeError && (
-                    <p role="alert" className="text-body text-destructive">
-                      {codeError}
-                    </p>
-                  )}
+                  <FieldError formId="totp" name="code" form={codeForm} className="text-body" />
                 </form>
               )}
             </section>

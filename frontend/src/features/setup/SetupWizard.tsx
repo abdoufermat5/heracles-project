@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, Check, CheckCircle2, Copy, Download, Loader2, XCircle } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { isApiError } from '@/api/client'
 import type { AttributeDescriptor } from '@/api/types'
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { AuthLayout } from '@/features/auth/AuthPages'
+import { BlockedHint, blockedProps, errorId, FieldError, useLiveForm, type FieldErrors, type LiveForm } from '@/lib/liveForm'
 import { cn } from '@/lib/utils'
 import {
   loadToken,
@@ -22,6 +23,7 @@ import {
   type DirectoryTestResult,
   type SetupPlugins,
 } from './api'
+import { adminErrors, directoryErrors, publicUrlError } from './validation'
 
 const STEPS = ['welcome', 'directory', 'schema', 'admin', 'plugins', 'review', 'done'] as const
 type Step = (typeof STEPS)[number]
@@ -68,15 +70,36 @@ function Alert({ children }: { children: React.ReactNode }) {
   )
 }
 
+/** Input props of `name`: invalid state, blur tracking and the ids of its message and help. */
+function inputProps(form: LiveForm, formId: string, name: string, help?: string) {
+  const own = form.field(name)
+  return {
+    ...own,
+    'aria-describedby':
+      [form.message(name) ? errorId(formId, name) : null, help].filter(Boolean).join(' ') || undefined,
+  }
+}
+
+/** The server's field messages of one section, keys relative to the section (`directory.uri` → `uri`). */
+function section(errors: FieldErrors, prefix: string): FieldErrors {
+  const out: FieldErrors = {}
+  for (const [key, value] of Object.entries(errors))
+    if (key.startsWith(prefix)) out[key.slice(prefix.length) || key] = value
+  return out
+}
+
 function StepNav({
   onBack,
   next,
   nextDisabled,
+  blocked,
   busy,
 }: {
   onBack?: () => void
   next: string
   nextDisabled?: boolean
+  /** The form has visible problems: the button says so but still reveals the rest when pressed. */
+  blocked?: LiveForm
   busy?: boolean
 }) {
   const { t } = useTranslation()
@@ -89,7 +112,7 @@ function StepNav({
       ) : (
         <span />
       )}
-      <Button type="submit" disabled={nextDisabled || busy}>
+      <Button type="submit" disabled={nextDisabled || busy} {...(blocked ? blockedProps(blocked) : {})}>
         {busy && <Loader2 className="animate-spin" aria-hidden />}
         {next}
       </Button>
@@ -274,6 +297,7 @@ function DirectoryStep({
   onChange,
   result,
   setResult,
+  serverErrors,
   onBack,
   onNext,
 }: {
@@ -282,12 +306,16 @@ function DirectoryStep({
   onChange: (d: DirectoryInput) => void
   result: DirectoryTestResult | null
   setResult: (r: DirectoryTestResult | null) => void
+  /** Field messages the server sent back when applying (keys relative to the directory section). */
+  serverErrors: FieldErrors
   onBack: () => void
   onNext: () => void
 }) {
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
+  const [remote, setRemote] = useState<FieldErrors | undefined>(undefined)
+  const form = useLiveForm('dir', { ...value }, (v) => directoryErrors(v, false), remote ?? serverErrors)
 
   const set = (patch: Partial<DirectoryInput>) => {
     onChange({ ...value, ...patch })
@@ -299,6 +327,7 @@ function DirectoryStep({
   const runTest = async (d: DirectoryInput, retry = true) => {
     setBusy(true)
     setFailure(null)
+    setRemote(undefined)
     try {
       const r = await setupApi.testDirectory(token, {
         uri: d.uri.trim(),
@@ -318,7 +347,9 @@ function DirectoryStep({
       }
       setResult(r)
     } catch (err) {
-      setFailure(isApiError(err) ? err.message : t('wizard.statusError'))
+      // a refused value is shown under its field; anything else is a failure of the service
+      if (isApiError(err) && err.fields && Object.keys(err.fields).length > 0) setRemote(err.fields)
+      else setFailure(isApiError(err) ? err.message : t('wizard.statusError'))
     } finally {
       setBusy(false)
     }
@@ -326,6 +357,7 @@ function DirectoryStep({
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.attempt()) return
     if (passed) onNext()
     else if (canTest && !busy) void runTest(value)
   }
@@ -334,7 +366,13 @@ function DirectoryStep({
     <form onSubmit={submit} className="space-y-4" noValidate>
       <Heading title={t('wizard.directory.title')} help={t('wizard.directory.help')} />
       <Field id="dir-label" label={t('wizard.directory.label')}>
-        <Input id="dir-label" value={value.label} onChange={(e) => set({ label: e.target.value })} />
+        <Input
+          id="dir-label"
+          value={value.label}
+          onChange={(e) => set({ label: e.target.value })}
+          {...inputProps(form, 'dir', 'label')}
+        />
+        <FieldError formId="dir" name="label" form={form} />
       </Field>
       <Field id="dir-uri" label={t('wizard.directory.uri')} help={t('wizard.directory.uriHelp')}>
         <Input
@@ -344,9 +382,10 @@ function DirectoryStep({
           spellCheck={false}
           value={value.uri}
           onChange={(e) => set({ uri: e.target.value })}
-          aria-describedby="dir-uri-help"
+          {...inputProps(form, 'dir', 'uri', 'dir-uri-help')}
           className="font-mono"
         />
+        <FieldError formId="dir" name="uri" form={form} />
       </Field>
       <div className="flex items-center gap-2">
         <Switch
@@ -359,15 +398,17 @@ function DirectoryStep({
           {t('wizard.directory.starttls')}
         </Label>
       </div>
+      <FieldError formId="dir" name="starttls" form={form} />
       <Field id="dir-ca" label={t('wizard.directory.caFile')} help={t('wizard.directory.caFileHelp')}>
         <Input
           id="dir-ca"
           autoComplete="off"
           value={value.ca_file ?? ''}
           onChange={(e) => set({ ca_file: e.target.value })}
-          aria-describedby="dir-ca-help"
+          {...inputProps(form, 'dir', 'ca_file', 'dir-ca-help')}
           className="font-mono"
         />
+        <FieldError formId="dir" name="ca_file" form={form} />
       </Field>
       <Field id="dir-binddn" label={t('wizard.directory.bindDn')}>
         <Input
@@ -376,8 +417,10 @@ function DirectoryStep({
           spellCheck={false}
           value={value.bind_dn}
           onChange={(e) => set({ bind_dn: e.target.value })}
+          {...inputProps(form, 'dir', 'bind_dn')}
           className="font-mono"
         />
+        <FieldError formId="dir" name="bind_dn" form={form} />
       </Field>
       <Field id="dir-bindpw" label={t('wizard.directory.bindPassword')}>
         <Input
@@ -386,7 +429,9 @@ function DirectoryStep({
           autoComplete="off"
           value={value.bind_password}
           onChange={(e) => set({ bind_password: e.target.value })}
+          {...inputProps(form, 'dir', 'bind_password')}
         />
+        <FieldError formId="dir" name="bind_password" form={form} />
       </Field>
       <Field id="dir-base" label={t('wizard.directory.baseDn')}>
         <Input
@@ -395,8 +440,10 @@ function DirectoryStep({
           spellCheck={false}
           value={value.base_dn}
           onChange={(e) => set({ base_dn: e.target.value })}
+          {...inputProps(form, 'dir', 'base_dn')}
           className="font-mono"
         />
+        <FieldError formId="dir" name="base_dn" form={form} />
         {result && result.naming_contexts.length > 0 && !result.naming_contexts.includes(value.base_dn) && (
           <div className="flex flex-wrap gap-2 pt-1">
             {result.naming_contexts.map((dn) => (
@@ -410,7 +457,13 @@ function DirectoryStep({
 
       {failure && <Alert>{failure}</Alert>}
       <div>
-        <Button type="button" variant="outline" disabled={!canTest || busy} onClick={() => void runTest(value)}>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!canTest || busy}
+          {...blockedProps(form)}
+          onClick={() => form.attempt() && void runTest(value)}
+        >
           {busy && <Loader2 className="animate-spin" aria-hidden />}
           {busy ? t('wizard.directory.testing') : t('wizard.directory.test')}
         </Button>
@@ -418,7 +471,8 @@ function DirectoryStep({
       </div>
       <div aria-live="polite">{result && <TestResult result={result} />}</div>
       {!result && canTest && <p className="text-small text-muted-foreground">{t('wizard.directory.untested')}</p>}
-      <StepNav onBack={onBack} next={t('wizard.continue')} nextDisabled={!passed} />
+      <BlockedHint form={form} />
+      <StepNav onBack={onBack} next={t('wizard.continue')} nextDisabled={!passed} blocked={form} />
     </form>
   )
 }
@@ -532,6 +586,7 @@ function AdminStep({
   onChange,
   confirm,
   setConfirm,
+  serverErrors,
   onBack,
   onNext,
 }: {
@@ -539,26 +594,20 @@ function AdminStep({
   onChange: (a: AdminInput) => void
   confirm: string
   setConfirm: (c: string) => void
+  /** Field messages the server sent back when applying (keys relative to the admin section). */
+  serverErrors: FieldErrors
   onBack: () => void
   onNext: () => void
 }) {
   const { t } = useTranslation()
   const set = (patch: Partial<AdminInput>) => onChange({ ...value, ...patch })
-  const complete =
-    value.uid.trim() !== '' &&
-    value.given_name.trim() !== '' &&
-    value.surname.trim() !== '' &&
-    value.mail.trim() !== '' &&
-    value.password !== ''
-  const short = value.password !== '' && value.password.length < 8
-  const mismatch = value.password !== confirm
-  const ok = complete && !short && !mismatch
+  const form = useLiveForm('adm', { ...value, confirm }, adminErrors, serverErrors)
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault()
-        if (ok) onNext()
+        if (form.attempt()) onNext()
       }}
       className="space-y-4"
       noValidate
@@ -571,8 +620,10 @@ function AdminStep({
           spellCheck={false}
           value={value.uid}
           onChange={(e) => set({ uid: e.target.value })}
+          {...inputProps(form, 'adm', 'uid')}
           className="font-mono"
         />
+        <FieldError formId="adm" name="uid" form={form} />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field id="adm-given" label={t('wizard.admin.givenName')}>
@@ -581,7 +632,9 @@ function AdminStep({
             autoComplete="given-name"
             value={value.given_name}
             onChange={(e) => set({ given_name: e.target.value })}
+            {...inputProps(form, 'adm', 'given_name')}
           />
+          <FieldError formId="adm" name="given_name" form={form} />
         </Field>
         <Field id="adm-sn" label={t('wizard.admin.surname')}>
           <Input
@@ -589,7 +642,9 @@ function AdminStep({
             autoComplete="family-name"
             value={value.surname}
             onChange={(e) => set({ surname: e.target.value })}
+            {...inputProps(form, 'adm', 'surname')}
           />
+          <FieldError formId="adm" name="surname" form={form} />
         </Field>
       </div>
       <Field id="adm-mail" label={t('wizard.admin.mail')}>
@@ -599,7 +654,9 @@ function AdminStep({
           autoComplete="email"
           value={value.mail}
           onChange={(e) => set({ mail: e.target.value })}
+          {...inputProps(form, 'adm', 'mail')}
         />
+        <FieldError formId="adm" name="mail" form={form} />
       </Field>
       <Field id="adm-password" label={t('wizard.admin.password')}>
         <PasswordField
@@ -607,19 +664,26 @@ function AdminStep({
             descriptor: PASSWORD_DESCRIPTOR,
             id: 'adm-password',
             value: value.password === '' ? null : value.password,
-            onChange: (v) => set({ password: typeof v === 'string' ? v : '' }),
+            onChange: (v) => {
+              form.touch('password')
+              set({ password: typeof v === 'string' ? v : '' })
+            },
             confirm,
-            onConfirmChange: setConfirm,
+            onConfirmChange: (c) => {
+              form.touch('confirm')
+              setConfirm(c)
+            },
             placeholder: '',
+            invalid: !!form.message('password'),
+            error: form.message('password'),
           }}
         />
-        {short && (
-          <p role="alert" className="text-small text-destructive">
-            {t('wizard.admin.tooShort')}
-          </p>
-        )}
+        <FieldError formId="adm" name="password" form={form} />
+        {/* the field itself explains a confirmation that differs; this covers an empty one */}
+        {confirm === '' && <FieldError formId="adm" name="confirm" form={form} />}
       </Field>
-      <StepNav onBack={onBack} next={t('wizard.continue')} nextDisabled={!ok} />
+      <BlockedHint form={form} />
+      <StepNav onBack={onBack} next={t('wizard.continue')} blocked={form} />
     </form>
   )
 }
@@ -753,6 +817,7 @@ function ReviewStep({
   plugins,
   publicUrl,
   setPublicUrl,
+  serverErrors,
   busy,
   failure,
   onBack,
@@ -763,17 +828,27 @@ function ReviewStep({
   plugins: string[]
   publicUrl: string
   setPublicUrl: (u: string) => void
+  serverErrors: FieldErrors
   busy: boolean
   failure: string[] | null
   onBack: () => void
   onApply: () => void
 }) {
   const { t } = useTranslation()
+  const form = useLiveForm(
+    'review',
+    { public_url: publicUrl },
+    (v): FieldErrors => {
+      const problem = publicUrlError(v.public_url)
+      return problem ? { public_url: problem } : {}
+    },
+    serverErrors,
+  )
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault()
-        if (!busy) onApply()
+        if (!busy && form.attempt()) onApply()
       }}
       className="space-y-4"
       noValidate
@@ -812,9 +887,10 @@ function ReviewStep({
           value={publicUrl}
           onChange={(e) => setPublicUrl(e.target.value)}
           placeholder="https://heracles.example.org"
-          aria-describedby="public-url-help"
+          {...inputProps(form, 'review', 'public_url', 'public-url-help')}
           className="font-mono"
         />
+        <FieldError formId="review" name="public_url" form={form} />
       </Field>
       {failure && (
         <Alert>
@@ -826,7 +902,13 @@ function ReviewStep({
           ))}
         </Alert>
       )}
-      <StepNav onBack={onBack} next={busy ? t('wizard.review.applying') : t('wizard.review.apply')} busy={busy} />
+      <BlockedHint form={form} />
+      <StepNav
+        onBack={onBack}
+        next={busy ? t('wizard.review.applying') : t('wizard.review.apply')}
+        busy={busy}
+        blocked={form}
+      />
     </form>
   )
 }
@@ -883,6 +965,10 @@ export function SetupPage() {
   const [publicUrl, setPublicUrl] = useState('')
   const [applying, setApplying] = useState(false)
   const [applyFailure, setApplyFailure] = useState<string[] | null>(null)
+  const [applyFields, setApplyFields] = useState<FieldErrors>({})
+  const directoryFields = useMemo(() => section(applyFields, 'directory.'), [applyFields])
+  const adminFields = useMemo(() => section(applyFields, 'admin.'), [applyFields])
+  const reviewFields = useMemo(() => section(applyFields, 'public_url'), [applyFields])
   const [applied, setApplied] = useState<ApplyResult | null>(null)
 
   const setToken = (v: string) => {
@@ -905,6 +991,7 @@ export function SetupPage() {
   const apply = async () => {
     setApplying(true)
     setApplyFailure(null)
+    setApplyFields({})
     try {
       const result = await setupApi.apply(token, {
         directory: {
@@ -921,8 +1008,17 @@ export function SetupPage() {
       setStep('done')
     } catch (err) {
       if (isApiError(err)) {
-        const fields = Object.entries(err.fields).map(([k, v]) => `${k}: ${v}`)
-        setApplyFailure(fields.length > 0 ? fields : [err.message])
+        const fields = err.fields ?? {}
+        setApplyFields(fields)
+        // each refused value is shown under its field, on the step that owns it
+        const keys = Object.keys(fields)
+        const covered = (k: string) => k.startsWith('directory.') || k.startsWith('admin.') || k === 'public_url'
+        const rest = keys.filter((k) => !covered(k))
+        setApplyFailure(
+          keys.length === 0 ? [err.message] : rest.length > 0 ? rest.map((k) => `${k}: ${fields[k]}`) : null,
+        )
+        if (keys.some((k) => k.startsWith('directory.'))) setStep('directory')
+        else if (keys.some((k) => k.startsWith('admin.'))) setStep('admin')
       } else setApplyFailure([t('wizard.statusError')])
     } finally {
       setApplying(false)
@@ -978,6 +1074,7 @@ export function SetupPage() {
             onChange={setDirectory}
             result={test}
             setResult={setTest}
+            serverErrors={directoryFields}
             onBack={go('welcome')}
             onNext={go('schema')}
           />
@@ -997,6 +1094,7 @@ export function SetupPage() {
             onChange={setAdmin}
             confirm={confirm}
             setConfirm={setConfirm}
+            serverErrors={adminFields}
             onBack={go('schema')}
             onNext={go('plugins')}
           />
@@ -1017,6 +1115,7 @@ export function SetupPage() {
             plugins={plugins ?? []}
             publicUrl={publicUrl}
             setPublicUrl={setPublicUrl}
+            serverErrors={reviewFields}
             busy={applying}
             failure={applyFailure}
             onBack={go('plugins')}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from typing import Annotated, Any, Literal
 
 import structlog
@@ -149,6 +150,15 @@ class TotpConfirmBody(BaseModel):
 
 class RecoveryCodes(BaseModel):
     codes: list[str]
+
+
+class PasswordPolicyOut(BaseModel):
+    """The rules a new password must meet right now (follows the runtime configuration)."""
+
+    min_length: int
+
+
+_EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
 
 class RecoveryBody(BaseModel):
@@ -772,6 +782,12 @@ def me(user: CurrentUserDep, request: Request, state: StateDep) -> Me:
     )
 
 
+@router.get("/password-policy")
+def password_policy(state: StateDep) -> PasswordPolicyOut:
+    """Public: the reset page needs it before anyone is signed in; it names no account."""
+    return PasswordPolicyOut(min_length=state.policy.min_length)
+
+
 # -- password recovery ---------------------------------------------------------------------------
 def _recover(state: AppState, directory: DirectoryClient, email: str, ip: str) -> None:
     """Send the recovery link and record it (runs after the response)."""
@@ -791,7 +807,9 @@ def _recover(state: AppState, directory: DirectoryClient, email: str, ip: str) -
 def recovery_request(
     body: RecoveryBody, request: Request, tasks: BackgroundTasks, state: StateDep
 ) -> StatusResponse:
-    """Always 202, whatever happens: the work is done after the response is sent."""
+    """202 for any well-formed address, whatever happens: the work is done after the response."""
+    if _EMAIL_RE.fullmatch(body.email.strip()) is None:  # says nothing about any account
+        raise validation("Invalid address", {"email": "Enter a valid email address."})
     if state.settings.recovery.enabled:
         directory = state.directories.get(body.directory or next(iter(state.directories), ""))
         key = state.limiter.key(client_ip(request, state), "recovery:" + body.email)

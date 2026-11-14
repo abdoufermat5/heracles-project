@@ -139,13 +139,13 @@ export function WhoHasAccessPanel() {
       toast.success(t('accessUI.people.added'))
       setAdding(false)
     } catch (e) {
-      if (isApiError(e) && e.fields) {
-        const mapped: Record<string, string> = {}
+      const mapped: Record<string, string> = {}
+      if (isApiError(e) && e.fields)
         for (const [key, value] of Object.entries(e.fields))
           mapped[key.split('.').pop() ?? key] = value
-        setErrors(mapped)
-      }
-      toast.error(isApiError(e) ? e.message : t('common.error'))
+      setErrors(mapped)
+      // a field problem is shown under its field; the toast is for what no field explains
+      if (Object.keys(mapped).length === 0) toast.error(isApiError(e) ? e.message : t('common.error'))
     }
   }
 
