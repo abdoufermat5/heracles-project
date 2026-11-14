@@ -13,7 +13,13 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': { target: process.env.HERACLES_API_URL ?? 'http://localhost:8420', changeOrigin: true },
+      // `xfwd` adds X-Forwarded-For / -Proto, so the API (which trusts the proxies listed in
+      // api.login.trusted_proxies) records the browser's address, not the proxy's.
+      '/api': {
+        target: process.env.HERACLES_API_URL ?? 'http://localhost:8420',
+        changeOrigin: true,
+        xfwd: true,
+      },
     },
   },
   build: {

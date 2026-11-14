@@ -13,6 +13,12 @@ api:
   enable_docs: true
   session:
     cookie_secure: false
+  # The browser reaches the container through the Docker network gateway (the Vite dev server
+  # proxy, a published port): believe X-Forwarded-For from that gateway (Docker bridge networks
+  # live in 172.16.0.0/12) so the audit log and the sessions list show the real client address
+  # instead of the gateway's. Do not list the clients' own ranges here.
+  login:
+    trusted_proxies: ["172.16.0.0/12"]
   # Application database (second-factor registrations, ...); default
   # $HERACLES_DATA_DIR/heracles.db, i.e. /var/lib/heracles/heracles.db in the image.
   # database:

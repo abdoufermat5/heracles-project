@@ -14,6 +14,9 @@ api:
   enable_docs: true
   session:
     cookie_secure: false
+  # The load balancer sets X-Forwarded-For; it is believed from the Docker networks only.
+  login:
+    trusted_proxies: ["172.16.0.0/12"]
   # Sessions, rate limits, second factors, plugin switches, the task lease and the listing
   # change counters live here, so any replica can serve any request. $HERACLES_DATABASE_URL
   # overrides it (keep the password out of the file in production).
