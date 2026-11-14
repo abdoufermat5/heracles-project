@@ -24,9 +24,8 @@ def _stored_password(env: Env) -> str | None:
 def test_request_always_202(env: Env) -> None:
     known = env.post("/api/v2/auth/recovery", {"email": "jdoe@example.com"})
     unknown = env.post("/api/v2/auth/recovery", {"email": "nobody@example.com"})
-    empty = env.post("/api/v2/auth/recovery", {"email": ""})
     bad_dir = env.post("/api/v2/auth/recovery", {"email": "jdoe@example.com", "directory": "zzz"})
-    assert known.status_code == unknown.status_code == empty.status_code == 202
+    assert known.status_code == unknown.status_code == 202
     assert bad_dir.status_code == 202
     assert known.json() == unknown.json()
     # only the known address received mail
@@ -141,3 +140,35 @@ def test_recovery_signs_the_account_out_everywhere(env: Env) -> None:
     )
     assert r.status_code == 200
     assert env.client.get("/api/v2/auth/me").status_code == 401
+
+
+def test_request_refuses_a_malformed_address(env: Env) -> None:
+    for email in ("", "not-an-address", "a@b", "a b@example.com"):
+        r = env.post("/api/v2/auth/recovery", {"email": email})
+        assert r.status_code == 422, email
+        assert "email" in r.json()["error"]["fields"]
+    assert env.mailer.outbox == []
+
+
+def test_password_policy_is_public_and_follows_the_runtime_configuration(env: Env) -> None:
+    from typing import cast
+
+    from fastapi import FastAPI
+
+    from heracles.api.state import AppState
+
+    first = env.client.get("/api/v2/auth/password-policy")
+    assert first.status_code == 200
+    assert first.json() == {"min_length": 8}
+    state = cast("AppState", cast("FastAPI", env.client.app).state.heracles)
+    state.policy.min_length = 12
+    assert env.client.get("/api/v2/auth/password-policy").json() == {"min_length": 12}
+    # the same rule refuses the reset
+    env.post("/api/v2/auth/recovery", {"email": "jdoe@example.com"})
+    login, token = _token_from_mail(env)
+    short = env.post(
+        "/api/v2/auth/recovery/confirm",
+        {"login": login, "token": token, "password": "elevenchars"},
+    )
+    assert short.status_code == 422
+    assert "12 characters" in short.json()["error"]["fields"]["password"]
