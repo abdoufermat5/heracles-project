@@ -471,6 +471,11 @@ export interface GrantExplanation {
   originDn: string
   scope: AssignmentScope
   grants: boolean
+  /**
+   * The assignment matches the object and action but only for the person's own entry, so it
+   * grants nothing on the department that was asked about.
+   */
+  selfOnly: boolean
 }
 
 function dnKey(dn: string): string {
@@ -497,12 +502,39 @@ function blockApplies(blockKey: string, objectKey: string): boolean {
   return false
 }
 
-/** Whether one template carries the right asked for. */
+/** Whether a rule of the report has a block for the object, own-entry-only or not. */
+function ruleGrants(
+  rule: { blocks: string[]; self_only?: string[] },
+  objectKey: string,
+  self: boolean,
+): boolean {
+  const selfKeys = new Set((rule.self_only ?? []).map((key) => key.toLowerCase()))
+  return rule.blocks.some(
+    (key) => blockApplies(key, objectKey) && selfKeys.has(key.toLowerCase()) === self,
+  )
+}
+
+/**
+ * Whether one template carries the right asked for on other entries. Blocks flagged `s`
+ * (own entry only) do not count: they never apply to a department.
+ */
 export function templateGrants(template: RoleTemplate, objectKey: string, action: Action): boolean {
+  return templateMatches(template, objectKey, action, false)
+}
+
+function templateMatches(
+  template: RoleTemplate,
+  objectKey: string,
+  action: Action,
+  self: boolean,
+): boolean {
   if (template.ignored) return false
   const letter = ACTION_LETTER[action]
   return template.blocks.some(
-    (block) => blockApplies(block.object, objectKey) && hasRight(block.rights, letter),
+    (block) =>
+      blockApplies(block.object, objectKey) &&
+      hasRight(block.rights, letter) &&
+      hasRight(block.rights, 's') === self,
   )
 }
 
@@ -540,7 +572,12 @@ export function explainReport(
       const grants =
         structurally.length > 0
           ? structurally.some((t) => templateGrants(t, objectKey, action))
-          : rule.blocks.some((key) => blockApplies(key, objectKey))
+          : ruleGrants(rule, objectKey, false)
+      const selfOnly =
+        !grants &&
+        (structurally.length > 0
+          ? structurally.some((t) => templateMatches(t, objectKey, action, true))
+          : ruleGrants(rule, objectKey, true))
       const key = `${dnKey(roleDn)}|${dnKey(rule.origin)}|${scope}`
       if (seen.has(key)) continue
       seen.add(key)
@@ -550,6 +587,7 @@ export function explainReport(
         originDn: rule.origin,
         scope,
         grants,
+        selfOnly,
       })
       matched = true
     }
@@ -562,7 +600,8 @@ export function explainReport(
         roleDn: '',
         originDn: rule.origin,
         scope: rule.scope,
-        grants: rule.blocks.some((key) => blockApplies(key, objectKey)),
+        grants: ruleGrants(rule, objectKey, false),
+        selfOnly: !ruleGrants(rule, objectKey, false) && ruleGrants(rule, objectKey, true),
       })
     }
   }

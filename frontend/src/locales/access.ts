@@ -8,7 +8,7 @@ export const accessEn = {
     description:
       'Decide who can see and change what. Roles are reusable sets of rights; assignments give them to people on a department.',
     tabs: {
-      roles: 'Roles',
+      roles: 'Access roles',
       people: 'Who has access',
       check: 'Check rights',
     },
@@ -57,7 +57,8 @@ export const accessEn = {
       deleteConfirm: 'Delete role',
       saved: 'Role saved.',
       deleted: 'Role deleted.',
-      more: 'and {{count}} more',
+      more_one: 'and {{count}} other',
+      more_other: 'and {{count}} others',
       inUse: 'In use',
       unused: 'Not assigned',
       summaryEmpty: 'No rights yet',
@@ -181,6 +182,10 @@ export const accessEn = {
       becausePrefix: 'Because {{role}} is assigned on',
       becauseUnknownPrefix: 'An assignment applies on',
       noGrant: 'No assignment grants this right there.',
+      considered: 'Assignments considered',
+      consideredPrefix: '{{role}} is assigned on',
+      selfOnlyReason: '— only grants this on the person’s own entry, not on a department',
+      notGranted: '— does not grant this right here',
       explanationUnknown:
         'The assignment that grants it could not be resolved; the applied rules are below.',
       noRules: 'No assignment applies on this department or above it.',

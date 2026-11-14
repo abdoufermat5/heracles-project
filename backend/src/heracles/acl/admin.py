@@ -480,6 +480,9 @@ def check_rights(
                 "origin": rule.origin,
                 "scope": rule.scope.value,
                 "blocks": sorted(rule.blocks),
+                # blocks that only apply to the user's own entry (`s`): they never grant
+                # anything on another entry such as a department
+                "self_only": sorted(key for key, block in rule.blocks.items() if block.is_self),
             }
             for rule in view
         ]

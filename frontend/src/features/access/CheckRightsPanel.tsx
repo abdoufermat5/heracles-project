@@ -89,6 +89,7 @@ export function CheckRightsPanel() {
     [report, roles, allAssignments, objectKey, action],
   )
   const granting = explanations.filter((grant) => grant.grants)
+  const considered = explanations.filter((grant) => !grant.grants)
   const attributeLabels = new Map(
     (object?.attributes ?? []).map((attribute) => [attribute.name, attribute.label] as const),
   )
@@ -222,25 +223,45 @@ export function CheckRightsPanel() {
               )}
 
               {!report.bootstrap_admin &&
-                (granting.length > 0 ? (
-                  <ul className="space-y-1.5">
-                    {granting.map((grant) => (
-                      <GrantLine
-                        key={`${grant.roleDn}|${grant.originDn}|${grant.scope}`}
-                        grant={grant}
-                        baseDn={me?.base}
-                      />
-                    ))}
-                  </ul>
-                ) : allowed ? (
-                  <p className="text-small text-foreground">
-                    {t('accessUI.check.explanationUnknown')}
-                  </p>
+                (allowed ? (
+                  granting.length > 0 ? (
+                    <ul className="space-y-1.5">
+                      {granting.map((grant) => (
+                        <GrantLine
+                          key={`${grant.roleDn}|${grant.originDn}|${grant.scope}`}
+                          grant={grant}
+                          baseDn={me?.base}
+                        />
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-small text-foreground">
+                      {t('accessUI.check.explanationUnknown')}
+                    </p>
+                  )
                 ) : (
-                  <p className="text-small text-foreground">
-                    {t('accessUI.check.noGrant')}
-                    {report.rules.length === 0 && ` ${t('accessUI.check.noRules')}`}
-                  </p>
+                  <div className="space-y-1.5">
+                    <p className="text-small text-foreground">
+                      {t('accessUI.check.noGrant')}
+                      {report.rules.length === 0 && ` ${t('accessUI.check.noRules')}`}
+                    </p>
+                    {considered.length > 0 && (
+                      <>
+                        <p className="text-small font-medium text-foreground">
+                          {t('accessUI.check.considered')}
+                        </p>
+                        <ul className="space-y-1.5">
+                          {considered.map((grant) => (
+                            <GrantLine
+                              key={`${grant.roleDn}|${grant.originDn}|${grant.scope}`}
+                              grant={grant}
+                              baseDn={me?.base}
+                            />
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </div>
                 ))}
             </div>
           </div>
@@ -361,16 +382,27 @@ function GrantLine({ grant, baseDn }: { grant: GrantExplanation; baseDn?: string
   const { t } = useTranslation()
   return (
     <li className="flex flex-wrap items-center gap-1.5 text-small text-foreground">
-      <Check className="size-3.5 text-success" aria-hidden />
+      {grant.grants ? (
+        <Check className="size-3.5 text-success" aria-hidden />
+      ) : (
+        <Minus className="size-3.5 text-muted-foreground" aria-hidden />
+      )}
       <span>
         {grant.roleName
-          ? t('accessUI.check.becausePrefix', { role: grant.roleName })
+          ? grant.grants
+            ? t('accessUI.check.becausePrefix', { role: grant.roleName })
+            : t('accessUI.check.consideredPrefix', { role: grant.roleName })
           : t('accessUI.check.becauseUnknownPrefix')}
       </span>
       <OrgPath dn={grant.originDn} baseDn={baseDn} />
       <span className="text-muted-foreground">
         ({grant.scope === 'base' ? t('accessUI.check.scopeBase') : t('accessUI.check.scopeSubtree')})
       </span>
+      {!grant.grants && (
+        <span className="text-muted-foreground">
+          {grant.selfOnly ? t('accessUI.check.selfOnlyReason') : t('accessUI.check.notGranted')}
+        </span>
+      )}
     </li>
   )
 }

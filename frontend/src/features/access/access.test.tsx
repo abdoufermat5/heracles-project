@@ -49,7 +49,10 @@ describe('access locales', () => {
     const missing = [...used]
       .filter((key) => key.startsWith('accessUI.'))
       .filter(
-        (key) => typeof lookup(en, key) !== 'string' || typeof lookup(fr, key) !== 'string',
+        (key) =>
+          // a counted string is stored as `<key>_one` / `<key>_other`
+          typeof (lookup(en, key) ?? lookup(en, `${key}_other`)) !== 'string' ||
+          typeof (lookup(fr, key) ?? lookup(fr, `${key}_other`)) !== 'string',
       )
     expect(missing).toEqual([])
   })
