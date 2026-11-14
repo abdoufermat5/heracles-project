@@ -290,7 +290,12 @@ export function AppShell() {
               </SheetTitle>
               <SheetDescription className="sr-only">{t('nav.main')}</SheetDescription>
             </SheetHeader>
-            <div className="overflow-y-auto" onClick={() => setMobileNav(false)}>
+            <div
+              className="overflow-y-auto"
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('a')) setMobileNav(false)
+              }}
+            >
               <SidebarNav />
             </div>
           </SheetContent>
