@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from heracles.api.errors import ApiError
 from heracles.api.state import AppState
+from heracles.auth.api_tokens import SESSION_KEY as TOKEN_KEY
 from heracles.auth.sessions import Session
 
 #: How long a login or a confirmation allows sensitive account changes.
@@ -17,7 +18,12 @@ REAUTH_KEY = "reauth_at"
 
 
 def require_recent_auth(state: AppState, session: Session) -> None:
-    """Refuse (403 ``reauth_required``) unless the user proved who they are recently."""
+    """Refuse (403 ``reauth_required``) unless the user proved who they are recently.
+
+    An API token never counts as a recent proof: such changes need an interactive sign-in.
+    """
+    if TOKEN_KEY in session.cache:
+        raise ApiError(403, "token_scope", "This change needs an interactive sign-in")
     last = float(session.cache.get(REAUTH_KEY, session.created_at))
     if state.clock() - last > REAUTH_WINDOW_SECONDS:
         raise ApiError(403, "reauth_required", "Confirm your password to continue")

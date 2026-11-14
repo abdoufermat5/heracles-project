@@ -104,7 +104,7 @@ def test_admin_revokes_all_sessions_of_a_user(app: FastAPI, state: AppState) -> 
     victim = Api(app).login("asmith")
     helpdesk = Api(app).login("helpdesk")
     r = helpdesk.delete(f"/users/{quote(ASMITH, safe='')}/sessions")
-    assert r.status_code == 200 and r.json() == {"revoked": 1}
+    assert r.status_code == 200 and r.json() == {"revoked": 1, "tokens_revoked": 0}
     assert victim.get("/auth/me").status_code == 401
     assert _actions(state).count("logout") == 1
     # a normal user may not

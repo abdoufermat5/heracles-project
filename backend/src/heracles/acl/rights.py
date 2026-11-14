@@ -92,6 +92,18 @@ class Rights:
             self.read or self.write or self.create or self.delete or self.move or self.template
         )
 
+    def intersection(self, other: Rights) -> Rights:
+        """Only the rights present in both (the ``self_only`` flag of ``self`` is kept)."""
+        return Rights(
+            read=self.read and other.read,
+            write=self.write and other.write,
+            create=self.create and other.create,
+            delete=self.delete and other.delete,
+            move=self.move and other.move,
+            template=self.template and other.template,
+            self_only=self.self_only,
+        )
+
     def read_only(self) -> Rights:
         """Strip write, create, delete and move."""
         return Rights(read=self.read, template=self.template, self_only=self.self_only)

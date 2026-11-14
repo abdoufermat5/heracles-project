@@ -266,7 +266,7 @@ def reset_second_factors(dn: str, user: CurrentUserDep, domain: DomainDep, state
 def revoke_user_sessions(
     dn: str, user: CurrentUserDep, domain: DomainDep, state: StateDep
 ) -> dict[str, JSON]:
-    """Sign a user out everywhere (lost device, suspected compromise).
+    """Sign a user out everywhere (lost device, suspected compromise), API tokens included.
 
     Needs the right to lock the account (``userLock`` write) and a recent confirmation.
     """
@@ -278,15 +278,16 @@ def revoke_user_sessions(
     if entry is None or not entry.has_object_class("inetOrgPerson"):
         raise not_found("User not found")
     count = state.sessions.delete_for_user(entry.dn)
-    log.warning("sessions_revoked", actor=user.dn, target=entry.dn, count=count)
+    tokens = state.api_tokens.delete_for_owner(entry.dn)
+    log.warning("sessions_revoked", actor=user.dn, target=entry.dn, count=count, tokens=tokens)
     state.audit.record_by(
         user,
         "logout",
         object_type="user",
         object_dn=entry.dn,
-        attributes=[f"all sessions revoked: {count}"],
+        attributes=[f"all sessions revoked: {count}", f"api tokens revoked: {tokens}"],
     )
-    return {"revoked": count}
+    return {"revoked": count, "tokens_revoked": tokens}
 
 
 # -------------------------------------------------------------- dashboard

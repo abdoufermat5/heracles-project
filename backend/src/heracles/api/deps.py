@@ -15,7 +15,7 @@ from typing import Annotated, Any
 from fastapi import Depends, Request
 
 from heracles.api.errors import ApiError, forbidden, unauthenticated
-from heracles.api.middleware import SESSIONS_SCOPE_KEY
+from heracles.api.middleware import SESSIONS_SCOPE_KEY, bearer_value
 from heracles.api.state import AppState
 from heracles.auth import csrf
 from heracles.auth.login import is_trusted_proxy
@@ -45,7 +45,13 @@ def client_ip(request: Request, state: AppState) -> str:
 
 
 def csrf_protect(request: Request) -> None:
-    """Double-submit check for mutating requests (exempts safe methods and API v1)."""
+    """Double-submit check for mutating requests (exempts safe methods and API v1).
+
+    A request carrying an API token (``Authorization: Bearer``) is exempt too: it is
+    authenticated by that header alone, never by the cookie (see :mod:`heracles.api.tokens`).
+    """
+    if bearer_value(request) is not None:
+        return
     try:
         csrf.check(
             request.method,
@@ -80,7 +86,10 @@ def session_from_cookie(request: Request, state: AppState) -> Session | None:
 
     Persistent stores hand out a fresh object per ``get``; sharing it keeps handlers and
     dependencies looking at the same state and makes the final ``save`` see every change.
+    A request carrying an API token has no cookie session, whatever cookie it sends.
     """
+    if bearer_value(request) is not None:
+        return None
     sid = request.cookies.get(state.settings.session.cookie_name)
     if not sid:
         return None
@@ -95,7 +104,7 @@ def session_from_cookie(request: Request, state: AppState) -> Session | None:
 
 
 def current_session(request: Request, state: StateDep) -> Session:
-    """A live session, including one still waiting for its second factor."""
+    """A live session, including one still waiting for its second factor (never a token)."""
     session = session_from_cookie(request, state)
     if session is None:
         raise unauthenticated()
@@ -103,7 +112,11 @@ def current_session(request: Request, state: StateDep) -> Session:
 
 
 def current_user(request: Request, state: StateDep) -> CurrentUser:
-    """Require a fully authenticated session (second factor done)."""
+    """Require a fully authenticated session (second factor done) or a valid API token."""
+    if bearer_value(request) is not None:
+        from heracles.api import tokens  # tokens builds on this module
+
+        return tokens.authenticate(request, state)
     session = session_from_cookie(request, state)
     if session is None:
         raise unauthenticated()

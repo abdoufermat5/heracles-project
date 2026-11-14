@@ -74,6 +74,22 @@ def rights_of(user: CurrentUser, domain: Domain, key: str, dn: str | None = None
     return domain.evaluator(user).permissions(dn or user.directory.base_dn, key)
 
 
+def is_console_user(user: CurrentUser, domain: Domain) -> bool:
+    """Whether the person gets the administration console (else the self-service portal).
+
+    Administrators, whoever may read the configuration or the ACL roles and assignments, and
+    whoever may change entries other than their own.
+    """
+    if domain.is_admin(user.dn):
+        return True
+    evaluator = domain.evaluator(user)
+    base = user.directory.base_dn
+    return (
+        any(evaluator.permissions(base, key).read for key in (CONFIG_KEY, ROLE_KEY, ASSIGNMENT_KEY))
+        or evaluator.manages_others()
+    )
+
+
 def _require(
     user: CurrentUser, domain: Domain, key: str, letter: str, dn: str | None = None
 ) -> None:
@@ -578,7 +594,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         return {
             "is_admin": domain.is_admin(user.dn),
             # administration console (else the self-service portal)
-            "console": evaluator is None or acl or config or evaluator.manages_others(),
+            "console": is_console_user(user, domain),
             "acl": acl,
             "config": config,
             "config_write": rights_of(user, domain, CONFIG_KEY).write,

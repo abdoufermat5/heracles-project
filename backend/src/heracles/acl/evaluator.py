@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from heracles.acl.model import ALL_OBJECTS, AclBlock, AclScope, Rule
 from heracles.acl.resolver import ResolvedAcl
@@ -37,8 +37,11 @@ class AclEvaluator:
         *,
         category_tabs: Mapping[str, Sequence[str]] | None = None,
         ignore_acl: bool = False,
+        cap: Callable[[str], Rights] | None = None,
     ) -> None:
         self._resolved = resolved
+        #: Upper bound of the rights per object key (an API token's scope), applied last.
+        self._cap = cap
         self._user = dnlib.normalize(resolved.user_dn)
         self._tabs = {k: tuple(v) for k, v in (category_tabs or {}).items()}
         self._ignore = ignore_acl
@@ -61,14 +64,18 @@ class AclEvaluator:
     ) -> Rights:
         """Rights of the user on ``obj`` (optionally one attribute) of entry ``dn``."""
         if self._ignore:
-            return FULL_RIGHTS.read_only() if skip_write else FULL_RIGHTS
-        ndn = dnlib.normalize(dn)
-        key = (ndn, obj, attribute.lower())
-        cached = self._cache.get(key)
-        if cached is None:
-            cached = self._compute(ndn, obj, attribute)
-            self._cache[key] = cached
-        return cached.read_only() if skip_write else cached
+            granted = FULL_RIGHTS
+        else:
+            ndn = dnlib.normalize(dn)
+            key = (ndn, obj, attribute.lower())
+            cached = self._cache.get(key)
+            if cached is None:
+                cached = self._compute(ndn, obj, attribute)
+                self._cache[key] = cached
+            granted = cached
+        if self._cap is not None:
+            granted = granted.intersection(self._cap(obj))
+        return granted.read_only() if skip_write else granted
 
     def _compute(self, ndn: str, obj: str, attribute: str) -> Rights:
         nearest = self._resolved.nearest_view(ndn)

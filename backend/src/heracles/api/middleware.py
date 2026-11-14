@@ -19,8 +19,11 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from heracles.api.errors import error_body
 from heracles.api.settings import ApiSettings
 from heracles.api.state import AppState
+from heracles.auth.api_tokens import PREFIX as TOKEN_PREFIX
+from heracles.auth.api_tokens import token_id_of, token_session_id
 from heracles.auth.login import IPNetwork, is_trusted_proxy
 from heracles.auth.sessions import Session
+from heracles.core.audit import AUDIT_VIA
 
 if TYPE_CHECKING:
     from heracles.api.domain import Domain
@@ -36,6 +39,27 @@ SESSIONS_SCOPE_KEY = "heracles.sessions"
 #: Session token headers of API v1 (the cookie of API v2 is named by the settings).
 SESSION_HEADER = "Session-Token"
 LEGACY_SESSION_HEADER = "X-Session-Token"
+
+
+def bearer_value(request: Request) -> str | None:
+    """The Heracles API token of an ``Authorization: Bearer hrc_…`` header, else ``None``.
+
+    Only Bearer values with the token prefix switch a request to token mode: HTTP Basic is a
+    sign-in method of its own, and a Bearer credential of something else (a proxy in front
+    of the trusted-header login) leaves the request as it was.
+    """
+    scheme, _, value = request.headers.get("authorization", "").partition(" ")
+    value = value.strip()
+    if scheme.lower() != "bearer" or not value.startswith(TOKEN_PREFIX):
+        return None
+    return value
+
+
+def bearer_token_id(request: Request) -> str | None:
+    """The public id of the request's API token (no lookup; ``None`` without a token)."""
+    value = bearer_value(request)
+    return token_id_of(value) if value else None
+
 
 _READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
@@ -174,6 +198,11 @@ def _invalidate_listings(request: Request) -> None:
     state: AppState | None = getattr(request.app.state, "heracles", None)
     if domain is None or state is None:
         return
+    if bearer_value(request) is not None:
+        token_id = bearer_token_id(request)
+        if token_id:
+            domain.invalidate_listings(token_session_id(token_id))
+        return
     sid = (
         request.cookies.get(state.settings.session.cookie_name)
         or request.headers.get(SESSION_HEADER)
@@ -196,6 +225,10 @@ def install_middleware(app: FastAPI) -> None:
         request_id = incoming if _REQUEST_ID_RE.match(incoming) else uuid.uuid4().hex
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(request_id=request_id)
+        token_id = bearer_token_id(request)
+        if token_id:
+            structlog.contextvars.bind_contextvars(api_token=token_id)
+        via = AUDIT_VIA.set([""])
         started = time.perf_counter()
         try:
             response = await call_next(request)
@@ -203,6 +236,7 @@ def install_middleware(app: FastAPI) -> None:
             log.exception("request_failed", method=request.method, path=request.url.path)
             raise
         finally:
+            AUDIT_VIA.reset(via)
             _invalidate_listings(request)
             await _save_sessions(request)
         response.headers[REQUEST_ID_HEADER] = request_id

@@ -4,8 +4,9 @@ Sessions are identified by the ``Session-Token`` header (the older
 ``X-Session-Token`` spelling is also accepted) instead of a cookie, so v1 is
 exempt from CSRF protection. Tabs and attributes are addressed by their legacy
 names, see :mod:`heracles.api.v1.names`. Accounts with a second factor cannot
-use API v1: the login is refused with a 401 explaining it. The contract is
-published at ``/api/v1/openapi.json``.
+sign in to API v1 (the login is refused with a 401 explaining it); they use an
+API token instead (``Authorization: Bearer``, see :mod:`heracles.api.tokens`).
+The contract is published at ``/api/v1/openapi.json``.
 """
 
 from __future__ import annotations
@@ -13,14 +14,15 @@ from __future__ import annotations
 import copy
 from typing import cast
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
+from heracles.api.tokens import token_guard
 from heracles.api.v1 import misc, objects, session
 from heracles.api.v1.common import V1Route
 
 PREFIX = "/api/v1"
 
-router = APIRouter(prefix=PREFIX)
+router = APIRouter(prefix=PREFIX, dependencies=[Depends(token_guard)])
 router.include_router(session.router)
 router.include_router(objects.router)
 router.include_router(misc.router)
@@ -64,12 +66,13 @@ def build_openapi(request: Request) -> dict[str, object]:
             "description": "Compatibility REST API.",
         },
         "servers": [{"url": PREFIX}],
-        "security": [{"session": []}],
+        "security": [{"session": []}, {"token": []}],
         "paths": paths,
         "components": {
             "schemas": {k: v for k, v in all_schemas.items() if k in used},
             "securitySchemes": {
-                "session": {"type": "apiKey", "name": "Session-Token", "in": "header"}
+                "session": {"type": "apiKey", "name": "Session-Token", "in": "header"},
+                "token": {"type": "http", "scheme": "bearer"},
             },
         },
     }

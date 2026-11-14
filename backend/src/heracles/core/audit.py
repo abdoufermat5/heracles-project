@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import secrets
 from collections.abc import Callable, Sequence
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -33,6 +34,12 @@ AUDIT_RDN = "ou=audit"
 EVENT_TYPE = "audit_event"
 PLUGIN_NAME = "audit"
 
+#: How the author acted, when not through their own sign-in (``"api token <id>"``), written
+#: first in the event's attributes. The HTTP middleware puts a fresh one-item holder in it
+#: per request (handlers run in copies of the context, which share the holder); the token
+#: authentication fills it once the token is verified.
+AUDIT_VIA: ContextVar[list[str] | None] = ContextVar("heracles_audit_via", default=None)
+
 #: Actions recorded by the object service.
 OBJECT_ACTIONS = ("create", "modify", "delete")
 #: Actions recorded for events outside the object service.
@@ -46,6 +53,7 @@ EXTRA_ACTIONS = (
     "config",
     "import",
     "task",
+    "api_token",
 )
 ACTIONS = (*OBJECT_ACTIONS, *EXTRA_ACTIONS)
 #: Attribute values longer than this are cut in the log.
@@ -101,8 +109,11 @@ def write_event(
         attrs["hrcAuditAuthorDN"] = [author_dn.encode()]
     if author_ip:
         attrs["hrcAuditAuthorIP"] = [author_ip.encode()]
-    if attributes:
-        attrs["hrcAuditAttributes"] = [a.encode() for a in attributes[:MAX_ATTRIBUTES]]
+    holder = AUDIT_VIA.get()
+    via = holder[0] if holder else ""
+    lines = [f"via: {via}", *attributes] if via else list(attributes)
+    if lines:
+        attrs["hrcAuditAttributes"] = [a.encode() for a in lines[:MAX_ATTRIBUTES]]
     dn = f"cn={cn},{container}"
     directory.add(dn, attrs)
     return dn
@@ -212,6 +223,7 @@ class AuditSink:
 __all__ = [
     "ACTIONS",
     "AUDIT_RDN",
+    "AUDIT_VIA",
     "EVENT_CLASS",
     "EXTRA_ACTIONS",
     "AuditSink",

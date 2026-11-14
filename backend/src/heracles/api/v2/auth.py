@@ -854,8 +854,9 @@ def recovery_confirm(
         ) from None
     state.limiter.record_success(key)
     # A reset is what people do when the account may be compromised: whoever holds a session
-    # of it must not keep it.
+    # of it (or an API token of it) must not keep it.
     state.sessions.delete_for_user(user_dn)
+    state.api_tokens.delete_for_owner(user_dn)
     state.audit.record(
         directory,
         "password",

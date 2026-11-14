@@ -196,8 +196,13 @@ class Domain:
             )
             resolved = resolver.resolve(user.dn, uid=uid, user_attrs=attrs)
             user.session.cache[_ACL_CACHE_KEY] = resolved
+        from heracles.api.tokens import rights_cap  # tokens builds on deps, like this module
+
         evaluator = AclEvaluator(
-            resolved, category_tabs=self.category_tabs(), ignore_acl=self.is_admin(user.dn)
+            resolved,
+            category_tabs=self.category_tabs(),
+            ignore_acl=self.is_admin(user.dn),
+            cap=rights_cap(user.session, self.registry),
         )
         # ``CurrentUser`` is frozen: the memo lives in a field only this method writes.
         object.__setattr__(user, "acl", (resolved, evaluator))

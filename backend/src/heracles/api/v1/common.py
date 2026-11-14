@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from heracles.api.deps import CurrentUser, StateDep, client_ip
 from heracles.api.errors import ApiError, unauthenticated
-from heracles.api.middleware import LEGACY_SESSION_HEADER, SESSION_HEADER
+from heracles.api.middleware import LEGACY_SESSION_HEADER, SESSION_HEADER, bearer_value
 from heracles.ldap.client import DirectoryError
 
 
@@ -59,7 +59,11 @@ def session_token(request: Request) -> str | None:
 
 
 def v1_user(request: Request, state: StateDep) -> CurrentUser:
-    """The user owning the session token of the request."""
+    """The user owning the session token (or the API token) of the request."""
+    if bearer_value(request) is not None:
+        from heracles.api import tokens
+
+        return tokens.authenticate(request, state)
     token = session_token(request)
     session = state.sessions.get(token) if token else None
     if session is None:
