@@ -12,7 +12,7 @@ describe('Create user wizard', () => {
     signIn()
     renderApp('/types/user/new')
 
-    expect(await screen.findByRole('heading', { name: 'New person', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'New user', level: 1 })).toBeInTheDocument()
 
     // Step 1: Identity
     const firstName = screen.getByLabelText(/First name/)
@@ -66,7 +66,7 @@ describe('wizard accessibility', () => {
     signIn()
     const user = userEvent.setup()
     renderApp('/types/user/new')
-    await screen.findByRole('heading', { name: 'New person', level: 1 })
+    await screen.findByRole('heading', { name: 'New user', level: 1 })
 
     await user.type(screen.getByLabelText(/First name/), 'Claire')
     await user.type(screen.getByLabelText(/Last name/), 'Danvers')

@@ -8,6 +8,7 @@ import type { AttributeDescriptor, Me, ObjectDetail, TypeDescriptor } from '@/ap
 import { FactList, SectionCard } from '@/components/patterns/SectionCard'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { attributeLabel } from '@/lib/labels'
 
 /**
  * Personal details an employee looks at or keeps up to date, in this order. Only
@@ -113,7 +114,7 @@ export function ProfileSection({
         >
           {editable.map((attr) => (
             <div key={attr.name} className="space-y-1.5">
-              <Label htmlFor={`profile-${attr.name}`}>{attr.label}</Label>
+              <Label htmlFor={`profile-${attr.name}`}>{attributeLabel(t, attr.name, attr.label)}</Label>
               <Input
                 id={`profile-${attr.name}`}
                 type={attr.name === 'mail' ? 'email' : attr.name.toLowerCase().includes('phone') || attr.name === 'mobile' ? 'tel' : 'text'}
@@ -127,7 +128,7 @@ export function ProfileSection({
         <FactList
           items={[
             { label: t('settingsUI.portal.login'), value: <span className="font-mono">{me.uid}</span> },
-            ...fields.map((attr) => ({ label: attr.label, value: firstText(values[attr.name]) || null })),
+            ...fields.map((attr) => ({ label: attributeLabel(t, attr.name, attr.label), value: firstText(values[attr.name]) || null })),
           ]}
         />
       )}

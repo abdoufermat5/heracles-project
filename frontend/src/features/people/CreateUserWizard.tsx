@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api } from '@/api/endpoints'
 import { useObject, useObjectList, useTree, useTypeDescriptor } from '@/api/hooks'
-import type { ObjectListItem, TreeNode } from '@/api/types'
+import type { ObjectListItem } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { FactList, OrgPath, SectionCard } from '@/components/patterns'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -36,22 +36,16 @@ import {
 import { TemplateFillForm } from '@/features/editor/TemplateFillForm'
 import { TemplatePicker } from '@/features/editor/TemplatePicker'
 import { showTriggerOutput } from '@/features/editor/triggerOutput'
-import { generatePassword, passwordStrength } from '@/lib/password'
+import { generatePassword, MIN_PASSWORD_LENGTH, passwordStrength } from '@/lib/password'
 import { typeLabelPlural } from '@/lib/labels'
 import { useScope } from '@/lib/scope'
 import { nameValue } from '@/lib/objects'
 import { isApiError } from '@/api/client'
 import { cn, initials } from '@/lib/utils'
-import { suggestLogin } from './utils'
+import { employeeTypeLabel, flattenDepartments, suggestLogin } from './utils'
 
-function flattenDepts(nodes: TreeNode[]): Array<{ dn: string; label: string }> {
-  const out: Array<{ dn: string; label: string }> = []
-  for (const n of nodes) {
-    out.push({ dn: n.dn, label: n.label })
-    out.push(...flattenDepts(n.children))
-  }
-  return out
-}
+/** Languages offered for a new person (their own names, as in a language picker). */
+const LANGUAGES = ['en', 'fr', 'de', 'es']
 
 interface CreateUserWizardProps {
   copyFrom?: string | null
@@ -60,7 +54,7 @@ interface CreateUserWizardProps {
 type WizardStep = 1 | 2 | 3 | 4
 
 export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const scope = useScope()
   const tree = useTree()
@@ -76,7 +70,10 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
   const [uid, setUid] = useState('')
   const [mail, setMail] = useState('')
   const [employeeType, setEmployeeType] = useState('employee')
-  const [language, setLanguage] = useState('en')
+  // The person most likely speaks the language this console is shown in
+  const [language, setLanguage] = useState(
+    () => LANGUAGES.find((l) => (i18n.resolvedLanguage ?? i18n.language ?? '').startsWith(l)) ?? 'en',
+  )
   const [uidTouched, setUidTouched] = useState(false)
 
   // Step 2: Department & Groups
@@ -158,7 +155,8 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
   // Validations per step
   const canProceedStep1 = givenName.trim().length > 0 && sn.trim().length > 0 && uid.trim().length >= 2
   const canProceedStep2 = Boolean(effectiveDept)
-  const canProceedStep3 = password.length === 0 || password.length >= 8
+  const passwordTooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH
+  const canProceedStep3 = !passwordTooShort
 
   // Submit and create user
   const handleCreate = async () => {
@@ -247,15 +245,18 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
     )
   }
 
-  const deptList = tree.data ? flattenDepts(tree.data) : []
+  const deptList = tree.data ? flattenDepartments(tree.data, t('patterns.topLevel')) : []
   const selectedDeptLabel = deptList.find((d) => d.dn === effectiveDept)?.label ?? effectiveDept
+  const selectedGroupNames = availableGroups
+    .filter((g) => selectedGroups.includes(g.dn))
+    .map((g) => String(g.values.cn ?? g.dn))
   const pwStrength = passwordStrength(password)
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 pb-24">
+    <div className="mx-auto w-full max-w-3xl space-y-8 pb-24">
       {/* Header and Breadcrumb */}
       <div>
-        <nav aria-label="Breadcrumbs" className="flex items-center gap-1.5 text-caption text-muted-foreground pb-2">
+        <nav aria-label={t('peopleUI.breadcrumbs')} className="flex items-center gap-1.5 text-caption text-muted-foreground pb-2">
           <Link to="/types/$type" params={{ type: 'user' }} className="hover:text-foreground">
             {typeLabelPlural(t, { name: 'user', label: 'User', label_plural: 'Users' })}
           </Link>
@@ -301,9 +302,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                   : 'border-border text-muted-foreground/60',
             )}
           >
-            <span className="text-caption">
-              Step {s.num}
-            </span>
+            <span className="text-caption">{t('peopleUI.wizard.stepLabel', { num: s.num })}</span>
             <span className="text-small truncate">{s.label}</span>
           </div>
         ))}
@@ -335,7 +334,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                   id="wiz-first-name"
                   value={givenName}
                   onChange={(e) => handleGivenNameChange(e.target.value)}
-                  placeholder="e.g. Alice"
+                  placeholder={t('peopleUI.wizard.step1.givenNamePlaceholder')}
                   autoFocus
                 />
               </div>
@@ -348,7 +347,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                   id="wiz-last-name"
                   value={sn}
                   onChange={(e) => handleSnChange(e.target.value)}
-                  placeholder="e.g. Martin"
+                  placeholder={t('peopleUI.wizard.step1.snPlaceholder')}
                 />
               </div>
             </div>
@@ -363,7 +362,9 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                 </Avatar>
                 <div>
                   <div className="font-medium text-foreground">{givenName} {sn}</div>
-                  <div className="text-caption text-muted-foreground">{uid || 'username'} · {mail || 'email'}</div>
+                  <div className="text-caption text-muted-foreground">
+                    {uid || t('peopleUI.wizard.step1.previewLogin')} · {mail || t('peopleUI.wizard.step1.previewMail')}
+                  </div>
                 </div>
               </div>
             )}
@@ -377,7 +378,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                   id="wiz-uid"
                   value={uid}
                   onChange={(e) => handleUidChange(e.target.value)}
-                  placeholder="e.g. amartin"
+                  placeholder={t('peopleUI.wizard.step1.uidPlaceholder')}
                   className="font-mono"
                 />
               </div>
@@ -461,8 +462,8 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                 </SelectContent>
               </Select>
               {effectiveDept && (
-                <p className="text-caption text-muted-foreground font-dn">
-                  Location: <OrgPath dn={effectiveDept} />
+                <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
+                  {t('peopleUI.wizard.step2.location')} <OrgPath dn={effectiveDept} />
                 </p>
               )}
             </div>
@@ -571,6 +572,8 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                   placeholder={t('peopleUI.text.passwordPlaceholder')}
                   className="font-mono pr-20 text-small"
                   autoComplete="new-password"
+                  aria-invalid={passwordTooShort || undefined}
+                  aria-describedby={passwordTooShort ? 'wiz-pw-hint' : undefined}
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
                   {password && (
@@ -584,6 +587,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                       }}
                       className="p-1 text-muted-foreground hover:text-foreground"
                       title={t('peopleUI.wizard.step3.copy')}
+                      aria-label={t('peopleUI.wizard.step3.copy')}
                     >
                       {passwordCopied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
                     </button>
@@ -592,6 +596,8 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                     type="button"
                     onClick={() => setShowPassword((p) => !p)}
                     className="p-1 text-muted-foreground hover:text-foreground"
+                    aria-label={showPassword ? t('fields.hidePassword') : t('fields.showPassword')}
+                    title={showPassword ? t('fields.hidePassword') : t('fields.showPassword')}
                   >
                     {showPassword ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                   </button>
@@ -608,18 +614,23 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
                         className={cn(
                           'h-full flex-1 rounded-full transition-colors',
                           level <= pwStrength
-                            ? pwStrength <= 2
-                              ? 'bg-warning'
-                              : 'bg-success'
+                            ? pwStrength <= 1
+                              ? 'bg-destructive'
+                              : pwStrength === 2
+                                ? 'bg-warning'
+                                : 'bg-success'
                             : 'bg-muted',
                         )}
                       />
                     ))}
                   </div>
-                  <span>
-                    {pwStrength <= 2 ? t('peopleUI.wizard.step4.strengthModerate') : t('peopleUI.wizard.step4.strengthStrong')}
-                  </span>
+                  <span>{t(`fields.strength.${pwStrength}`)}</span>
                 </div>
+              )}
+              {passwordTooShort && (
+                <p id="wiz-pw-hint" role="alert" className="text-caption text-destructive">
+                  {t('peopleUI.wizard.step3.tooShort', { min: MIN_PASSWORD_LENGTH })}
+                </p>
               )}
             </div>
 
@@ -671,13 +682,13 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
               items={[
                 { label: t('peopleUI.text.fullName'), value: `${givenName} ${sn}` },
                 { label: t('peopleUI.text.login'), value: <span className="font-mono font-medium">{uid}</span> },
-                { label: t('peopleUI.text.email'), value: mail || null },
-                { label: t('peopleUI.text.employeeType'), value: t(`peopleUI.text.${employeeType}`) },
+                { label: t('peopleUI.text.email'), value: mail || '—' },
+                { label: t('peopleUI.text.employeeType'), value: employeeTypeLabel(t, employeeType) },
                 { label: t('peopleUI.text.language'), value: language.toUpperCase() },
                 { label: t('peopleUI.text.department'), value: selectedDeptLabel },
                 {
                   label: t('peopleUI.text.assignedGroups'),
-                  value: selectedGroups.length > 0 ? t('peopleUI.text.groupsSelected', { count: selectedGroups.length }) : null,
+                  value: selectedGroupNames.length > 0 ? selectedGroupNames.join(', ') : '—',
                 },
                 {
                   label: t('peopleUI.text.passwordSecurity'),

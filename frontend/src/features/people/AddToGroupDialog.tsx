@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useReferences } from '@/features/editor/api'
 
 interface AddToGroupDialogProps {
   open: boolean
@@ -45,7 +46,14 @@ export function AddToGroupDialog({
 
   // Load available groups
   const groupsQuery = useObjectList('group', { scope: 'sub', limit: 100 })
-  const groups: ObjectListItem[] = groupsQuery.data?.pages.flatMap((p) => p.items) ?? []
+  const allGroups: ObjectListItem[] = groupsQuery.data?.pages.flatMap((p) => p.items) ?? []
+  // A single person: offer only the groups they are not in yet.
+  const single = userDns.length === 1 ? (userDns[0] ?? '') : ''
+  const referencesQuery = useReferences('user', single, open && single !== '')
+  const memberOf = new Set(
+    (referencesQuery.data ?? []).filter((r) => r.type === 'group').map((r) => r.dn.toLowerCase()),
+  )
+  const groups = allGroups.filter((g) => !memberOf.has(g.dn.toLowerCase()))
 
   const isBulk = userDns.length > 1
   const title = isBulk

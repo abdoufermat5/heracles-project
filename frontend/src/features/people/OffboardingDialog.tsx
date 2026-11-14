@@ -14,7 +14,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api } from '@/api/endpoints'
 import { useTree } from '@/api/hooks'
-import type { TreeNode } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -35,15 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { orgPath } from '@/lib/dn'
-
-function flattenDepts(nodes: TreeNode[]): Array<{ dn: string; label: string }> {
-  const out: Array<{ dn: string; label: string }> = []
-  for (const n of nodes) {
-    out.push({ dn: n.dn, label: n.label })
-    out.push(...flattenDepts(n.children))
-  }
-  return out
-}
+import { flattenDepartments } from './utils'
 
 interface OffboardingDialogProps {
   open: boolean
@@ -94,7 +85,8 @@ export function OffboardingDialog({
     movedTo: null,
   })
 
-  const deptList = tree.data ? flattenDepts(tree.data) : []
+  const topLevel = t('patterns.topLevel')
+  const deptList = tree.data ? flattenDepartments(tree.data, topLevel) : []
   const userCurrentDept = user.base ? orgPath(user.base).join(' › ') : orgPath(user.dn).join(' › ')
 
   const handleToggleGroup = (dn: string) => {
@@ -386,7 +378,7 @@ export function OffboardingDialog({
                     <p className="text-caption text-muted-foreground">
                       {moveAccount
                         ? t('peopleUI.offboarding.stepMoveDesc')
-                        : t('peopleUI.offboarding.keepInPlace', { dept: userCurrentDept || 'Top level' })}
+                        : t('peopleUI.offboarding.keepInPlace', { dept: userCurrentDept || topLevel })}
                     </p>
                   </div>
                 </div>

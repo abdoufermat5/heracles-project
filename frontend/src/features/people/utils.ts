@@ -1,13 +1,19 @@
+import type { TFunction } from 'i18next'
+import type { TreeNode } from '@/api/types'
 import type { AccountStatus } from '@/components/patterns/StatusBadge'
 
 /**
  * Derives a plain-language account status from directory attributes and lock flag.
+ * `password_set` comes with the user listing: an account without any password cannot
+ * sign in yet, so it is "pending" rather than "active".
  */
 export function getUserStatus(item: {
   locked: boolean
+  password_set?: boolean
   values: Record<string, unknown>
 }): AccountStatus {
   if (item.locked) return 'locked'
+  if (item.password_set === false) return 'pending'
 
   // Explicit forcePasswordChange requirement
   if (item.values.forcePasswordChange === true) return 'expired'
@@ -52,10 +58,38 @@ export function suggestLogin(givenName: string, sn: string): string {
 }
 
 /**
- * Generates an email suggestion from login and directory domain.
+ * Departments of the tree as a flat list. The tree root is the directory base: it is
+ * named by its technical RDN ("heracles"), so it gets the same top-level name as
+ * everywhere else ("Racine") instead.
  */
-export function suggestEmail(login: string, domain = 'example.com'): string {
-  const cleanLogin = normalizeAscii(login.trim())
-  if (!cleanLogin) return ''
-  return `${cleanLogin}@${domain}`
+export function flattenDepartments(
+  nodes: TreeNode[],
+  rootLabel: string,
+  isRoot = true,
+): Array<{ dn: string; label: string }> {
+  const out: Array<{ dn: string; label: string }> = []
+  for (const n of nodes) {
+    out.push({ dn: n.dn, label: isRoot ? rootLabel : n.label })
+    out.push(...flattenDepartments(n.children, rootLabel, false))
+  }
+  return out
+}
+
+/**
+ * Saved versions are described by the server in English (the undo point taken before an
+ * edit, the safety copy before a restore): known descriptions are shown translated.
+ */
+export function snapshotDescription(t: TFunction, description: string | null | undefined): string {
+  const text = (description ?? '').trim()
+  if (text === 'Before edit (undo point)') return t('peopleUI.snapshots.beforeEdit')
+  if (text === 'Before restore') return t('peopleUI.snapshots.beforeRestore')
+  return text || t('peopleUI.snapshots.untitled')
+}
+
+const EMPLOYEE_TYPES = ['employee', 'contractor', 'intern']
+
+/** The wizard's contract types shown by their translated name; other values stay as typed. */
+export function employeeTypeLabel(t: TFunction, value: string): string {
+  const key = value.trim().toLowerCase()
+  return EMPLOYEE_TYPES.includes(key) ? t(`peopleUI.text.${key}`) : value
 }

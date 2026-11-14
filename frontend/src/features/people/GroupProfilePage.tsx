@@ -17,6 +17,7 @@ import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { isApiError } from '@/api/client'
 import {
   useDeleteObjects,
   useObject,
@@ -55,14 +56,17 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FieldRow } from '@/features/editor/FieldRow'
-import { useObjectLdif } from '@/features/editor/api'
+import { useLdifAvailable } from '@/features/editor/api'
 import { LdifDialog } from '@/features/editor/LdifDialog'
 import { SaveReviewDialog } from '@/features/editor/SaveReviewDialog'
 import { useUndoableSave } from '@/features/editor/undo'
 import { SnapshotsPanel } from '@/features/editor/SnapshotsPanel'
 import {
+  allAttributes,
+  attrRight,
   computeChanges,
   listFieldDiffs,
+  splitFieldKey,
   valuesFromDetail,
   type FieldDiff,
   type FormValues,
@@ -103,7 +107,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
   const [ldifOpen, setLdifOpen] = useState(false)
   const [reviewDiffs, setReviewDiffs] = useState<FieldDiff[] | null>(null)
   const { takeUndoPoint, toastSaved } = useUndoableSave('group')
-  const ldifQuery = useObjectLdif('group', dn, ldifOpen)
+  const ldifAvailable = useLdifAvailable()
   const [copiedDn, setCopiedDn] = useState(false)
 
   // Add members dialog state
@@ -239,6 +243,12 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
   const handleSaveProperties = async (confirmed = false) => {
     if (!descriptor || !detail) return
     if (!confirmed) {
+      // Required fields and formats are checked before the review, not after the server refused
+      const section = descriptor.tabs[0]?.sections.find(
+        (s) => s.name === 'general' || s.name === 'properties',
+      )
+      const paths = (section?.attributes ?? []).map((a) => `main.${a.name}`)
+      if (!(await form.trigger(paths as never))) return
       const diffs = listFieldDiffs(
         descriptor,
         valuesFromDetail(descriptor, detail),
@@ -273,7 +283,21 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
       setEditingProps(false)
       void obj.refetch()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('peopleUI.errors.save'))
+      if (isApiError(err) && err.fields && Object.keys(err.fields).length > 0) {
+        const known = descriptor.tabs[0] ? allAttributes(descriptor.tabs[0]) : []
+        const orphans: string[] = []
+        for (const [key, message] of Object.entries(err.fields)) {
+          const parts = splitFieldKey(key)
+          if (!parts || parts.tab !== 'main' || !known.some((a) => a.name === parts.attr)) {
+            orphans.push(message)
+            continue
+          }
+          form.setError(key as never, { type: 'server', message })
+        }
+        if (orphans.length > 0) toast.error(orphans.join(' — '))
+      } else {
+        toast.error(err instanceof Error ? err.message : t('peopleUI.errors.save'))
+      }
     } finally {
       setSavingProps(false)
     }
@@ -320,11 +344,11 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
         meta={[
           {
             icon: <Building2 className="size-3.5" />,
-            content: <OrgPath dn={detail.dn} />,
+            content: <OrgPath dn={detail.dn} showIcon={false} />,
           },
         ]}
         breadcrumbs={
-          <nav aria-label="Breadcrumbs" className="flex items-center gap-1.5 text-caption text-muted-foreground">
+          <nav aria-label={t('peopleUI.breadcrumbs')} className="flex items-center gap-1.5 text-caption text-muted-foreground">
             <Link to="/types/$type" params={{ type: 'group' }} className="hover:text-foreground">
               {typeLabelPlural(t, { name: 'group', label: 'Group', label_plural: 'Groups' })}
             </Link>
@@ -334,26 +358,17 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
         }
         actions={
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={() => setAddMembersOpen(true)}
-            >
-              <UserPlus className="size-4" />
-              {t('peopleUI.groupProfile.members.addMembers')}
-            </Button>
-
+            {/* Adding members lives in the members tab toolbar, next to the list it changes */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon-sm" aria-label="More actions">
+                <Button variant="outline" size="icon-sm" aria-label={t('peopleUI.userProfile.actions.more')}>
                   <MoreHorizontal className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-auto min-w-48 [&_[role=menuitem]]:whitespace-nowrap">
                 <DropdownMenuItem onClick={() => setActiveTab('advanced')}>
                   <History className="size-4" />
-                  Saved versions
+                  {t('peopleUI.userProfile.actions.snapshots')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -361,7 +376,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="size-4" />
-                  Delete group
+                  {t('peopleUI.groupProfile.deleteDialog.confirmLabel')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -419,7 +434,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
 
             <Button
               type="button"
-              variant="outline"
+              variant="default"
               size="sm"
               onClick={() => setAddMembersOpen(true)}
             >
@@ -508,7 +523,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
         {/* Tab 2: Properties */}
         <TabsContent value="properties" className="space-y-6">
           <SectionCard
-            title={propsSection?.label ?? 'Properties'}
+            title={t('peopleUI.groupProfile.tabs.properties')}
             editable
             editing={editingProps}
             saving={savingProps}
@@ -521,22 +536,28 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
           >
             {editingProps ? (
               <div className="grid gap-4 sm:grid-cols-2">
-                {propsSection?.attributes.map((attr) => (
-                  <FieldRow
-                    key={attr.name}
-                    control={control}
-                    tab="main"
-                    attr={attr}
-                    readOnly={false}
-                  />
-                ))}
+                {propsSection?.attributes
+                  .filter((a) => a.kind !== 'hidden' && attrRight(detail.acl, 'main', a) !== 'hidden')
+                  .map((attr) => {
+                    const ro = attrRight(detail.acl, 'main', attr) !== 'rw' || attr.readonly === true
+                    return (
+                      <FieldRow
+                        key={attr.name}
+                        control={control}
+                        tab="main"
+                        attr={attr}
+                        readOnly={ro}
+                        lockedInEdit={ro}
+                      />
+                    )
+                  })}
               </div>
             ) : (
               <FactList
                 columns={2}
                 items={[
                   { label: t('peopleUI.text.name'), value: groupName },
-                  { label: t('peopleUI.text.description'), value: groupDesc ?? null },
+                  { label: t('peopleUI.text.description'), value: groupDesc ?? '—' },
                   { label: t('peopleUI.text.department'), value: <OrgPath dn={detail.dn} /> },
                   { label: t('peopleUI.text.memberCount'), value: t('peopleUI.text.members', { count: memberDns.length }) },
                 ]}
@@ -551,17 +572,19 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
             <SnapshotsPanel type="group" dn={dn} onRestored={() => void obj.refetch()} />
           </SectionCard>
 
-          <SectionCard
-            title={t('peopleUI.userProfile.advanced.ldif')}
-            description={t('peopleUI.userProfile.advanced.ldifDescription')}
-            actions={
-              <Button variant="outline" size="sm" onClick={() => setLdifOpen(true)}>
-                View LDIF
-              </Button>
-            }
-          >
-            <p className="text-small text-muted-foreground font-mono truncate">{dn}</p>
-          </SectionCard>
+          {ldifAvailable && (
+            <SectionCard
+              title={t('peopleUI.userProfile.advanced.ldif')}
+              description={t('peopleUI.userProfile.advanced.ldifDescription')}
+              actions={
+                <Button variant="outline" size="sm" onClick={() => setLdifOpen(true)}>
+                  {t('peopleUI.userProfile.advanced.viewLdif')}
+                </Button>
+              }
+            >
+              <p className="text-small text-muted-foreground font-mono truncate">{dn}</p>
+            </SectionCard>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -590,9 +613,15 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
             </div>
 
             <div className="max-h-64 overflow-y-auto space-y-1 rounded-lg border bg-card p-2">
-              {availableToAdd.length === 0 ? (
+              {usersQuery.isPending ? (
+                <p className="p-4 text-center text-small text-muted-foreground">{t('common.loading')}</p>
+              ) : availableToAdd.length === 0 ? (
                 <p className="p-4 text-center text-small text-muted-foreground italic">
-                  {t('peopleUI.groupProfile.addDialog.noResults', { query: searchUserQuery })}
+                  {searchUserQuery.trim()
+                    ? t('peopleUI.groupProfile.addDialog.noResults', { query: searchUserQuery.trim() })
+                    : allUsers.length === 0
+                      ? t('peopleUI.groupProfile.addDialog.noPeople')
+                      : t('peopleUI.groupProfile.addDialog.allMembers')}
                 </p>
               ) : (
                 availableToAdd.map((u) => {
@@ -711,10 +740,9 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
       <LdifDialog
         open={ldifOpen}
         onOpenChange={setLdifOpen}
-        ldif={ldifQuery.data ?? `dn: ${dn}\n`}
-        title={groupName}
+        type="group"
         dn={dn}
-        loading={ldifQuery.isPending && ldifOpen}
+        title={groupName}
       />
     </div>
   )

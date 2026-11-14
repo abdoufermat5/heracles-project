@@ -21,6 +21,7 @@ import {
   UserMinus,
   Users,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -31,7 +32,7 @@ import {
   useAccountLock,
   useDeleteObjects,
   useObject,
-  useObjectAccountLocked,
+  qk,
   usePatchObject,
   useTypeDescriptor,
   useTypes,
@@ -56,12 +57,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useObjectLdif, useReferences, useSecondFactors, useSnapshots } from '@/features/editor/api'
+import { useLdifAvailable, useReferences, useSecondFactors, useSnapshots } from '@/features/editor/api'
 import { FieldRow } from '@/features/editor/FieldRow'
 import { LdifDialog } from '@/features/editor/LdifDialog'
 import { SaveReviewDialog } from '@/features/editor/SaveReviewDialog'
 import { RevokeUserSessionsDialog } from '@/features/me/RevokeUserSessionsDialog'
-import { useUndoableSave } from '@/features/editor/undo'
+import { UNDO_WINDOW_MS, useUndoableSave } from '@/features/editor/undo'
 import { LockedDialog } from '@/features/editor/LockedDialog'
 import { ReferencesPanel } from '@/features/editor/ReferencesPanel'
 import { SecondFactorsPanel } from '@/features/editor/SecondFactorsPanel'
@@ -70,9 +71,12 @@ import { SnapshotsPanel } from '@/features/editor/SnapshotsPanel'
 import { showTriggerOutput } from '@/features/editor/triggerOutput'
 import { CopyMoveDialog } from '@/features/listing/CopyMoveDialog'
 import {
+  allAttributes,
   computeChanges,
   listFieldDiffs,
-  objectToLdif,
+  formatDateTime,
+  splitFieldKey,
+  attrRight,
   rdnValue,
   valuesFromDetail,
   type FieldDiff,
@@ -84,24 +88,28 @@ import { makeResolver } from '@/lib/validation'
 import { AddToGroupDialog } from './AddToGroupDialog'
 import { OffboardingDialog } from './OffboardingDialog'
 import { ResetPasswordDialog } from './ResetPasswordDialog'
-import { getUserStatus } from './utils'
+import { useAccountState } from './accountState'
+import { employeeTypeLabel, getUserStatus, snapshotDescription } from './utils'
 
 interface UserProfilePageProps {
   dn: string
 }
 
 export function UserProfilePage({ dn }: UserProfilePageProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const qc = useQueryClient()
   const navigate = useNavigate()
   const technical = useTechnicalDetails()
 
   const types = useTypes()
   const desc = useTypeDescriptor('user')
-  const obj = useObject('user', dn)
+  // Once the user is deleted the detail query is switched off: refetching it would only 404
+  const [deleted, setDeleted] = useState(false)
+  const obj = useObject('user', deleted ? null : dn)
   const patch = usePatchObject('user', dn)
   const del = useDeleteObjects('user')
   const accountLock = useAccountLock('user')
-  const isLockedQuery = useObjectAccountLocked('user', dn)
+  const accountState = useAccountState(dn)
   // The side panels only exist once the object itself was read: a missing object must not
   // also fire the reference, snapshot and second-factor queries (four 404s for one page).
   const objectLoaded = obj.data !== undefined
@@ -134,12 +142,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   const detail: ObjectDetail | null = obj.data ?? null
   const descriptor = desc.data
 
-  const ldifQuery = useObjectLdif('user', dn, ldifOpen)
-  const localLdif = useMemo(() => {
-    if (!descriptor || !detail) return ''
-    return objectToLdif(descriptor, dn, valuesFromDetail(descriptor, detail), { main: true })
-  }, [descriptor, detail, dn])
-  const ldifText = ldifQuery.data ?? localLdif
+  const ldifAvailable = useLdifAvailable()
 
   // Inline editing state for Details tab sections
   const [editingSection, setEditingSection] = useState<string | null>(null)
@@ -193,8 +196,13 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   const employeeTypeVal = mainValues.employeeType ? String(mainValues.employeeType) : null
   const photoVal = typeof mainValues.jpegPhoto === 'string' && mainValues.jpegPhoto ? mainValues.jpegPhoto : null
 
-  const isLocked = Boolean(isLockedQuery.data)
-  const userStatus = getUserStatus({ locked: isLocked, values: mainValues })
+  const isLocked = accountState.data?.locked ?? false
+  const userStatus = getUserStatus({
+    locked: isLocked,
+    password_set: accountState.data?.passwordSet,
+    values: mainValues,
+  })
+  const hasPassword = accountState.data?.passwordSet !== false
 
   // Groups and roles from references
   const references = useMemo(() => referencesQuery.data ?? [], [referencesQuery.data])
@@ -217,15 +225,31 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
     })
   }, [dn])
 
-  // Lock toggle handler
+  // The "Recent changes" card and the saved-versions panel read the snapshots: refresh them
+  const refreshHistory = () => void qc.invalidateQueries({ queryKey: qk.snapshots('user', dn) })
+
+  // Lock toggle handler: instant, with an Undo that flips it back
   const handleToggleLock = async () => {
     const doLock = !isLocked
     try {
       await accountLock.mutateAsync({ dns: [dn], lock: doLock })
-      toast.success(
-        t(doLock ? 'listing.lockedCount' : 'listing.unlockedCount', { count: 1 }),
-      )
+      toast.success(t(doLock ? 'listing.lockedCount' : 'listing.unlockedCount', { count: 1 }), {
+        duration: UNDO_WINDOW_MS,
+        action: {
+          label: t('safety.undo'),
+          onClick: () =>
+            void accountLock
+              .mutateAsync({ dns: [dn], lock: !doLock })
+              .then(() => {
+                toast.success(t('safety.undone'))
+                void obj.refetch()
+                refreshHistory()
+              })
+              .catch(() => toast.error(t('safety.undoFailed'))),
+        },
+      })
       void obj.refetch()
+      refreshHistory()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('peopleUI.errors.lockToggle'))
     }
@@ -235,11 +259,30 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   const handleDeleteUser = async () => {
     try {
       await del.mutateAsync([dn])
+      // The page is about to leave: stop the detail refetch the deletion triggered
+      setDeleted(true)
+      void qc.cancelQueries({ queryKey: qk.object('user', dn) })
+      qc.removeQueries({ queryKey: qk.object('user', dn) })
       toast.success(t('listing.deleted', { count: 1 }))
       void navigate({ to: '/types/$type', params: { type: 'user' } })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('peopleUI.errors.delete'))
     }
+  }
+
+  /** Show the server's per-field messages on their fields; returns those with no field. */
+  const applyServerErrors = (fields: Record<string, string>): string[] => {
+    const orphans: string[] = []
+    const known = descriptor?.tabs[0] ? allAttributes(descriptor.tabs[0]) : []
+    for (const [key, message] of Object.entries(fields)) {
+      const parts = splitFieldKey(key)
+      if (!parts || parts.tab !== 'main' || !known.some((a) => a.name === parts.attr)) {
+        orphans.push(message)
+        continue
+      }
+      form.setError(key as never, { type: 'server', message })
+    }
+    return orphans
   }
 
   // Section inline editing handlers
@@ -271,6 +314,10 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   const handleSaveSection = async (sectionName: string, confirmed = false) => {
     if (!descriptor || !detail) return
     if (!confirmed) {
+      // Required fields and formats are checked before the review, not after the server refused
+      const section = descriptor.tabs[0]?.sections.find((s) => s.name === sectionName)
+      const paths = (section?.attributes ?? []).map((a) => `main.${a.name}`)
+      if (!(await form.trigger(paths as never))) return
       const diffs = listFieldDiffs(
         descriptor,
         valuesFromDetail(descriptor, detail),
@@ -308,7 +355,11 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
       const undoId = await takeUndoPoint(detail.dn)
       const res = await patch.mutateAsync({ tabs: changes })
       showTriggerOutput(res)
-      toastSaved(t('common.saved'), undoId, () => void obj.refetch())
+      toastSaved(t('common.saved'), undoId, () => {
+        void obj.refetch()
+        refreshHistory()
+      })
+      refreshHistory()
       if (isAcquiredLock.current) {
         void api.unlockObject('user', detail.dn).catch(() => undefined)
         isAcquiredLock.current = false
@@ -318,6 +369,9 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
     } catch (err) {
       if (isApiError(err) && err.code === 'locked' && err.lock) {
         setLockInfo(err.lock as LockInfo)
+      } else if (isApiError(err) && err.fields && Object.keys(err.fields).length > 0) {
+        const orphans = applyServerErrors(err.fields)
+        if (orphans.length > 0) toast.error(orphans.join(' — '))
       } else {
         toast.error(err instanceof Error ? err.message : t('peopleUI.errors.save'))
       }
@@ -326,28 +380,43 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
     }
   }
 
-  // Remove member from group directly
+  // Add or remove this user in a group's member list
+  const setMembership = async (groupDn: string, member: boolean) => {
+    const groupObj = await api.getObject('group', groupDn)
+    const currentMembersRaw = groupObj.tabs.main?.values.member
+    const currentMembers: string[] = Array.isArray(currentMembersRaw)
+      ? (currentMembersRaw as string[])
+      : typeof currentMembersRaw === 'string' && currentMembersRaw
+        ? [currentMembersRaw]
+        : []
+    const others = currentMembers.filter((m) => m.toLowerCase() !== dn.toLowerCase())
+    await api.patchObject('group', groupDn, {
+      tabs: {
+        main: {
+          active: true,
+          values: { member: member ? [...others, dn] : others },
+        },
+      },
+    })
+    void referencesQuery.refetch()
+    void qc.invalidateQueries({ queryKey: ['objects', 'group'] })
+    refreshHistory()
+  }
+
+  // Remove member from group directly; the toast offers Undo
   const handleRemoveFromGroup = async (groupDn: string, groupName: string) => {
     try {
-      const groupObj = await api.getObject('group', groupDn)
-      const currentMembersRaw = groupObj.tabs.main?.values.member
-      const currentMembers: string[] = Array.isArray(currentMembersRaw)
-        ? (currentMembersRaw as string[])
-        : typeof currentMembersRaw === 'string' && currentMembersRaw
-          ? [currentMembersRaw]
-          : []
-
-      const remaining = currentMembers.filter((m) => m.toLowerCase() !== dn.toLowerCase())
-      await api.patchObject('group', groupDn, {
-        tabs: {
-          main: {
-            active: true,
-            values: { member: remaining },
-          },
+      await setMembership(groupDn, false)
+      toast.success(t('peopleUI.userProfile.groups.removed', { group: groupName }), {
+        duration: UNDO_WINDOW_MS,
+        action: {
+          label: t('safety.undo'),
+          onClick: () =>
+            void setMembership(groupDn, true)
+              .then(() => toast.success(t('safety.undone')))
+              .catch(() => toast.error(t('safety.undoFailed'))),
         },
       })
-      toast.success(`Removed from ${groupName}`)
-      void referencesQuery.refetch()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('peopleUI.errors.removeFromGroup'))
     }
@@ -356,6 +425,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   // Helper for rendering fact values
   const renderFactValue = (attr: AttributeDescriptor, val: unknown) => {
     if (val === null || val === undefined || val === '') return '—'
+    if (attr.name === 'employeeType') return employeeTypeLabel(t, String(val))
     if (attr.kind === 'department') return <OrgPath dn={String(val)} includeSelf />
     if (attr.kind === 'image') return typeof val === 'string' ? <img src={val} alt="" className="size-10 rounded-md object-cover" /> : '—'
     if (typeof val === 'boolean') return val ? t('common.yes') : t('common.no')
@@ -390,10 +460,10 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
     { label: t('peopleUI.userProfile.facts.login'), value: <span className="font-mono">{uidVal}</span> },
     { label: t('peopleUI.userProfile.facts.email'), value: mailVal ?? '—' },
     { label: t('peopleUI.userProfile.facts.department'), value: typeof mainValues.base === 'string' ? <OrgPath dn={mainValues.base} includeSelf /> : <OrgPath dn={detail.dn} /> },
-    { label: t('peopleUI.userProfile.facts.employeeType'), value: employeeTypeVal ?? '—' },
+    { label: t('peopleUI.userProfile.facts.employeeType'), value: employeeTypeVal ? employeeTypeLabel(t, employeeTypeVal) : '—' },
     { label: t('peopleUI.userProfile.facts.language'), value: mainValues.preferredLanguage ? String(mainValues.preferredLanguage).toUpperCase() : '—' },
     { label: t('peopleUI.userProfile.facts.phone'), value: phoneVal ?? '—' },
-    { label: t('peopleUI.userProfile.facts.manager'), value: mainValues.manager ? rdnValue(String(mainValues.manager)) : null },
+    { label: t('peopleUI.userProfile.facts.manager'), value: mainValues.manager ? rdnValue(String(mainValues.manager)) : '—' },
     { label: t('peopleUI.userProfile.facts.internalId'), value: mainValues.internalId ? String(mainValues.internalId) : '—' },
   ]
 
@@ -413,15 +483,13 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
       <EntityHeader
         name={cnVal}
         subtitle={
-          employeeTypeVal ? (
-            <span className="capitalize">{employeeTypeVal}</span>
-          ) : undefined
+          employeeTypeVal ? <span>{employeeTypeLabel(t, employeeTypeVal)}</span> : undefined
         }
         avatarUrl={photoVal}
         badges={<StatusBadge status={userStatus} />}
         meta={headerMeta}
         breadcrumbs={
-          <nav aria-label="Breadcrumbs" className="flex items-center gap-1.5 text-caption text-muted-foreground">
+          <nav aria-label={t('peopleUI.breadcrumbs')} className="flex items-center gap-1.5 text-caption text-muted-foreground">
             <Link to="/types/$type" params={{ type: 'user' }} className="hover:text-foreground">
               {typeLabelPlural(t, { name: 'user', label: 'User', label_plural: 'Users' })}
             </Link>
@@ -488,7 +556,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
                   <MoreHorizontal className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-auto min-w-56 [&_[role=menuitem]]:whitespace-nowrap">
                 {canCopy && (
                   <DropdownMenuItem
                     onClick={() =>
@@ -612,7 +680,12 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
                   },
                   {
                     label: t('peopleUI.userProfile.securitySummary.passwordStatus'),
-                    value: mainValues.forcePasswordChange ? (
+                    value: !hasPassword ? (
+                      <span className="flex items-center gap-1.5 text-warning font-medium">
+                        <ShieldAlert className="size-4" />
+                        {t('peopleUI.userProfile.securitySummary.passwordNone')}
+                      </span>
+                    ) : mainValues.forcePasswordChange ? (
                       <span className="flex items-center gap-1.5 text-warning font-medium">
                         <ShieldAlert className="size-4" />
                         {t('peopleUI.userProfile.securitySummary.passwordMustChange')}
@@ -672,7 +745,8 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
                         size="icon-xs"
                         className="text-muted-foreground hover:text-destructive shrink-0"
                         onClick={() => void handleRemoveFromGroup(g.dn, g.name)}
-                        title={t('peopleUI.userProfile.groups.remove')}
+                        title={t('peopleUI.userProfile.groups.removeAria', { group: g.name })}
+                        aria-label={t('peopleUI.userProfile.groups.removeAria', { group: g.name })}
                       >
                         <Trash2 className="size-3.5" />
                       </Button>
@@ -738,9 +812,11 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
                     className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-small"
                   >
                     <div>
-                      <p className="font-medium text-foreground">{snap.description || 'Snapshot'}</p>
+                      <p className="font-medium text-foreground">
+                        {snapshotDescription(t, snap.description)}
+                      </p>
                       <p className="text-caption text-muted-foreground">
-                        {snap.created_at ? new Date(snap.created_at).toLocaleString() : '—'}
+                        {formatDateTime(snap.created_at, i18n.language)}
                       </p>
                     </div>
                   </div>
@@ -774,15 +850,22 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
               >
                 {isEditingThis ? (
                   <div className="grid gap-4 sm:grid-cols-2">
-                    {section.attributes.map((attr) => (
-                      <FieldRow
-                        key={attr.name}
-                        control={control}
-                        tab="main"
-                        attr={attr}
-                        readOnly={false}
-                      />
-                    ))}
+                    {section.attributes
+                      .filter((a) => a.kind !== 'hidden' && attrRight(detail.acl, 'main', a) !== 'hidden')
+                      .map((attr) => {
+                        const ro =
+                          attrRight(detail.acl, 'main', attr) !== 'rw' || attr.readonly === true
+                        return (
+                          <FieldRow
+                            key={attr.name}
+                            control={control}
+                            tab="main"
+                            attr={attr}
+                            readOnly={ro}
+                            lockedInEdit={ro}
+                          />
+                        )
+                      })}
                   </div>
                 ) : (
                   <FactList
@@ -819,14 +902,45 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
               items={[
                 {
                   label: t('peopleUI.userProfile.access.roles'),
-                  value: userRoles.length > 0 ? userRoles.map((r) => r.name).join(', ') : null,
+                  value:
+                    userRoles.length > 0 ? (
+                      <ul className="flex flex-wrap gap-x-3 gap-y-1">
+                        {userRoles.map((r) => (
+                          <li key={r.dn}>
+                            <Link
+                              to="/types/$type/$dn"
+                              params={{ type: 'role', dn: r.dn }}
+                              className="font-medium text-foreground hover:text-signal"
+                            >
+                              {r.name}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      '—'
+                    ),
                 },
                 {
                   label: t('peopleUI.userProfile.access.groups'),
                   value:
-                    userGroups.length > 0
-                      ? t('peopleUI.userProfile.access.groupCount', { count: userGroups.length })
-                      : null,
+                    userGroups.length > 0 ? (
+                      <ul className="flex flex-wrap gap-x-3 gap-y-1">
+                        {userGroups.map((g) => (
+                          <li key={g.dn}>
+                            <Link
+                              to="/types/$type/$dn"
+                              params={{ type: 'group', dn: g.dn }}
+                              className="font-medium text-foreground hover:text-signal"
+                            >
+                              {g.name}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      '—'
+                    ),
                 },
               ]}
             />
@@ -900,18 +1014,20 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
             <SnapshotsPanel type="user" dn={dn} onRestored={() => void obj.refetch()} />
           </SectionCard>
 
-          {/* Raw LDIF */}
-          <SectionCard
-            title={t('peopleUI.userProfile.advanced.ldif')}
-            description={t('peopleUI.userProfile.advanced.ldifDescription')}
-            actions={
-              <Button variant="outline" size="sm" onClick={() => setLdifOpen(true)}>
-                {t('peopleUI.userProfile.advanced.viewLdif')}
-              </Button>
-            }
-          >
-            <p className="text-small text-muted-foreground font-mono truncate">{dn}</p>
-          </SectionCard>
+          {/* Raw LDIF (needs the directory-management module on the server) */}
+          {ldifAvailable && (
+            <SectionCard
+              title={t('peopleUI.userProfile.advanced.ldif')}
+              description={t('peopleUI.userProfile.advanced.ldifDescription')}
+              actions={
+                <Button variant="outline" size="sm" onClick={() => setLdifOpen(true)}>
+                  {t('peopleUI.userProfile.advanced.viewLdif')}
+                </Button>
+              }
+            >
+              <p className="text-small text-muted-foreground font-mono truncate">{dn}</p>
+            </SectionCard>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -929,7 +1045,10 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
         onOpenChange={setAddToGroupOpen}
         userDns={[dn]}
         userName={cnVal}
-        onSuccess={() => void referencesQuery.refetch()}
+        onSuccess={() => {
+          void referencesQuery.refetch()
+          refreshHistory()
+        }}
       />
 
       <OffboardingDialog
@@ -944,8 +1063,9 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
         groups={userGroups}
         onSuccess={() => {
           void obj.refetch()
-          void isLockedQuery.refetch()
+          void accountState.refetch()
           void referencesQuery.refetch()
+          refreshHistory()
         }}
       />
 
@@ -992,10 +1112,9 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
       <LdifDialog
         open={ldifOpen}
         onOpenChange={setLdifOpen}
-        ldif={ldifText}
-        title={cnVal}
+        type="user"
         dn={detail?.dn ?? dn}
-        loading={ldifQuery.isPending && ldifOpen}
+        title={cnVal}
       />
       <LockedDialog
         lock={lockInfo}

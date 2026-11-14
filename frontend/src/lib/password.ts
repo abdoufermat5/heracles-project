@@ -1,6 +1,10 @@
-/** 0 (empty) .. 4 (strong) */
+/** Shortest password the wizards accept (an empty one means "set it later"). */
+export const MIN_PASSWORD_LENGTH = 8
+
+/** 0 (empty) .. 4 (strong). Anything shorter than the minimum length stays "weak". */
 export function passwordStrength(pw: string): number {
   if (!pw) return 0
+  if (pw.length < MIN_PASSWORD_LENGTH) return 1
   let score = 0
   if (pw.length >= 8) score++
   if (pw.length >= 12) score++

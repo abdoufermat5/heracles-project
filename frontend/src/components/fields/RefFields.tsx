@@ -277,7 +277,10 @@ function TreeItem({
   selected?: string | null
   level: number
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(level < 1)
+  // The tree root is the directory base, named by its technical RDN: show the usual name
+  const label = level === 0 ? t('patterns.topLevel') : node.label
   const has = node.children.length > 0
   const isSel = selected?.toLowerCase() === node.dn.toLowerCase()
   return (
@@ -294,7 +297,7 @@ function TreeItem({
           className="text-muted-foreground hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded-sm"
           onClick={() => setOpen((o) => !o)}
           tabIndex={has ? 0 : -1}
-          aria-label={has ? node.label : undefined}
+          aria-label={has ? label : undefined}
           aria-hidden={!has}
         >
           {has ? open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" /> : null}
@@ -307,7 +310,7 @@ function TreeItem({
         >
           <span className="flex items-center gap-1.5">
             <Building2 className="size-3 text-muted-foreground shrink-0" />
-            <span className="truncate">{node.label}</span>
+            <span className="truncate">{label}</span>
           </span>
         </button>
       </div>
@@ -335,13 +338,15 @@ export function DepartmentPicker({
   const [search, setSearch] = useState('')
   const { data: tree } = useTree()
   const current = value && tree ? findNode(tree, value) : null
+  const currentLabel =
+    current && tree?.[0]?.dn === current.dn ? t('patterns.topLevel') : current?.label
   const filteredNodes = tree ? filterTree(tree, search) : []
 
   if (disabled) {
     return (
       <div id={id} className="flex h-8 items-center gap-1.5 text-body font-medium">
         <Building2 className="size-3.5 text-muted-foreground" />
-        <span className="truncate">{current?.label ?? (value ? rdnValue(value) : '—')}</span>
+        <span className="truncate">{currentLabel ?? (value ? rdnValue(value) : '—')}</span>
       </div>
     )
   }
@@ -359,7 +364,7 @@ export function DepartmentPicker({
         >
           <span className={cn('flex items-center gap-1.5 truncate', !value && 'text-muted-foreground')}>
             <Building2 className="size-3.5 text-muted-foreground shrink-0" />
-            <span className="truncate">{current?.label ?? (value ? rdnValue(value) : t('fields.selectDepartment'))}</span>
+            <span className="truncate">{currentLabel ?? (value ? rdnValue(value) : t('fields.selectDepartment'))}</span>
           </span>
           <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
         </Button>

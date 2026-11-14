@@ -139,7 +139,6 @@ export function PasswordSection({
                 setError(null)
               }}
               className="pr-10 font-mono text-small"
-              placeholder="••••••••••••"
               autoComplete="new-password"
             />
             <button
@@ -185,7 +184,6 @@ export function PasswordSection({
               setError(null)
             }}
             className={cn('font-mono text-small', isMismatch && 'border-destructive')}
-            placeholder="••••••••••••"
             autoComplete="new-password"
           />
         </div>

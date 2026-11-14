@@ -4,6 +4,7 @@
  */
 export const peopleEn = {
   peopleUI: {
+    breadcrumbs: 'Breadcrumb',
     text: {
       person: 'Person',
       login: 'Login',
@@ -81,8 +82,6 @@ export const peopleEn = {
         checkRights: 'Check rights',
         roles: 'Organizational roles',
         groups: 'Group memberships',
-        groupCount_one: '{{count}} group',
-        groupCount_other: '{{count}} groups',
       },
       advanced: {
         tabsTitle: 'Additional settings',
@@ -144,6 +143,8 @@ export const peopleEn = {
         add: 'Add to a group',
         remove: 'Remove from group',
         removeConfirm: 'Remove {{name}} from {{group}}?',
+        removeAria: 'Remove from group {{group}}',
+        removed: 'Removed from {{group}}',
       },
       roles: {
         title: 'Roles',
@@ -162,6 +163,7 @@ export const peopleEn = {
         passwordStatus: 'Password status',
         passwordMustChange: 'Must change password at next sign-in',
         passwordNormal: 'Password active',
+        passwordNone: 'No password set',
         manageSecurity: 'Manage authentication & credentials',
       },
       recentChanges: {
@@ -177,6 +179,7 @@ export const peopleEn = {
         passwordPlaceholder: 'Enter a strong password',
         generate: 'Generate password',
         copied: 'Password copied to clipboard',
+        copy: 'Copy password',
         requireChange: 'Require password change at next sign-in',
         submit: 'Save password',
         success: 'Password reset successfully',
@@ -186,7 +189,7 @@ export const peopleEn = {
         description: 'Select a group to grant new memberships.',
         groupLabel: 'Group',
         selectPlaceholder: 'Choose a group…',
-        noGroups: 'No groups available',
+        noGroups: 'No other group available',
         submit: 'Add to group',
         success: 'Added to {{group}}',
         alreadyMember: 'Already a member of this group',
@@ -198,8 +201,9 @@ export const peopleEn = {
       },
     },
     wizard: {
-      title: 'New person',
+      title: 'New user',
       breadcrumb: 'New user',
+      stepLabel: 'Step {{num}}',
       steps: {
         identity: 'Identity',
         department: 'Department & Groups',
@@ -208,7 +212,7 @@ export const peopleEn = {
       },
       step1: {
         title: 'Identity & Profile',
-        description: 'Basic information about the person. Login and email will be suggested automatically.',
+        description: 'Basic information about the person. The login is suggested automatically.',
         template: 'Template (optional)',
         templateNone: 'Blank user',
         givenName: 'First name',
@@ -217,6 +221,11 @@ export const peopleEn = {
         mail: 'Email address',
         employeeType: 'Employee type',
         language: 'Preferred language',
+        givenNamePlaceholder: 'e.g. Alice',
+        snPlaceholder: 'e.g. Martin',
+        uidPlaceholder: 'e.g. amartin',
+        previewLogin: 'login',
+        previewMail: 'email',
       },
       step2: {
         title: 'Department & Groups',
@@ -225,6 +234,7 @@ export const peopleEn = {
         groups: 'Assign to groups',
         groupsHelp: 'Select any groups this person should join immediately.',
         noGroups: 'No groups found in this directory.',
+        location: 'Location:',
       },
       step3: {
         title: 'Password & Security',
@@ -236,6 +246,7 @@ export const peopleEn = {
         requireChange: 'Require password change at next sign-in',
         requireChangeHelp: 'The person chooses their own password the first time they sign in.',
         passwordExpiry: 'Password expiration (optional)',
+        tooShort: 'Use at least {{min}} characters, or leave the password empty to set it later.',
       },
       step4: {
         title: 'Review & Create',
@@ -245,8 +256,6 @@ export const peopleEn = {
         failed: 'The account could not be created.',
         groupsFailed_one: 'The account was created but could not be added to {{count}} group.',
         groupsFailed_other: 'The account was created but could not be added to {{count}} groups.',
-        strengthModerate: 'Moderate',
-        strengthStrong: 'Strong',
         creating: 'Creating account…',
         success: 'User {{name}} created successfully',
       },
@@ -308,6 +317,8 @@ export const peopleEn = {
         description: 'Search and select people to add to this group.',
         searchPlaceholder: 'Search people by name or login…',
         noResults: 'No people found matching "{{query}}".',
+        noPeople: 'There is nobody to add yet.',
+        allMembers: 'Everyone is already a member of this group.',
         selectedCount_one: '{{count}} person selected',
         selectedCount_other: '{{count}} people selected',
         submit: 'Add to group',
@@ -319,6 +330,11 @@ export const peopleEn = {
         description: 'This will permanently remove the group. Member accounts will not be deleted, but they will lose access granted by this group.',
         confirmLabel: 'Delete group',
       },
+    },
+    snapshots: {
+      beforeEdit: 'Before edit (undo point)',
+      beforeRestore: 'Before restore',
+      untitled: 'Saved version',
     },
     bulk: {
       addToGroup: 'Add to group',

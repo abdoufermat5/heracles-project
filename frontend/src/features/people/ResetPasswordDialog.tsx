@@ -102,31 +102,32 @@ export function ResetPasswordDialog({
             <Label htmlFor="new-pw">
               {t('peopleUI.userProfile.resetPasswordDialog.passwordLabel')}
             </Label>
-            <div className="flex gap-2">
-              <Input
-                id="new-pw"
-                type="text"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={t('peopleUI.userProfile.resetPasswordDialog.passwordPlaceholder')}
-                className="font-mono text-small flex-1"
-                autoComplete="off"
-              />
+            <Input
+              id="new-pw"
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t('peopleUI.userProfile.resetPasswordDialog.passwordPlaceholder')}
+              className="w-full font-mono text-small"
+              autoComplete="off"
+            />
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button type="button" variant="outline" size="sm" onClick={handleGenerate}>
+                <Sparkles className="size-3.5" />
+                {t('peopleUI.userProfile.resetPasswordDialog.generate')}
+              </Button>
               {password && (
                 <Button
                   type="button"
                   variant="outline"
                   size="icon-sm"
                   onClick={handleCopy}
-                  title={t('peopleUI.userProfile.resetPasswordDialog.copied')}
+                  aria-label={t('peopleUI.userProfile.resetPasswordDialog.copy')}
+                  title={t('peopleUI.userProfile.resetPasswordDialog.copy')}
                 >
                   {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
                 </Button>
               )}
-              <Button type="button" variant="outline" size="sm" onClick={handleGenerate}>
-                <Sparkles className="size-3.5" />
-                {t('peopleUI.userProfile.resetPasswordDialog.generate')}
-              </Button>
             </div>
           </div>
 

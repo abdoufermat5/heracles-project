@@ -2,10 +2,11 @@ import type { peopleEn } from './people'
 
 export const peopleFr: typeof peopleEn = {
   peopleUI: {
+    breadcrumbs: 'Fil d’Ariane',
     text: {
       person: 'Personne',
       login: 'Identifiant',
-      department: 'Service',
+      department: 'Département',
       actions: 'Actions',
       name: 'Nom',
       description: 'Description',
@@ -18,7 +19,7 @@ export const peopleFr: typeof peopleEn = {
       employee: 'Salarié',
       contractor: 'Prestataire',
       intern: 'Stagiaire',
-      chooseDepartment: 'Choisir un service…',
+      chooseDepartment: 'Choisir un département…',
       passwordPlaceholder: 'Saisir ou générer un mot de passe initial',
       fullName: 'Nom complet',
       email: 'E-mail',
@@ -79,8 +80,6 @@ export const peopleFr: typeof peopleEn = {
         checkRights: 'Vérifier les droits',
         roles: 'Rôles organisationnels',
         groups: 'Appartenance aux groupes',
-        groupCount_one: '{{count}} groupe',
-        groupCount_other: '{{count}} groupes',
       },
       advanced: {
         tabsTitle: 'Paramètres supplémentaires',
@@ -112,7 +111,7 @@ export const peopleFr: typeof peopleEn = {
         advanced: 'Avancé',
       },
       actions: {
-        resetPassword: 'Changer le mot de passe',
+        resetPassword: 'Réinitialiser le mot de passe',
         lock: 'Verrouiller le compte',
         unlock: 'Déverrouiller le compte',
         addToGroup: 'Ajouter à un groupe',
@@ -142,6 +141,8 @@ export const peopleFr: typeof peopleEn = {
         add: 'Ajouter à un groupe',
         remove: 'Retirer du groupe',
         removeConfirm: 'Retirer {{name}} du groupe {{group}} ?',
+        removeAria: 'Retirer du groupe {{group}}',
+        removed: 'Retiré du groupe {{group}}',
       },
       roles: {
         title: 'Rôles',
@@ -160,6 +161,7 @@ export const peopleFr: typeof peopleEn = {
         passwordStatus: 'État du mot de passe',
         passwordMustChange: 'Changement de mot de passe requis à la prochaine connexion',
         passwordNormal: 'Mot de passe valide',
+        passwordNone: 'Aucun mot de passe',
         manageSecurity: 'Gérer l’authentification et les accès',
       },
       recentChanges: {
@@ -175,6 +177,7 @@ export const peopleFr: typeof peopleEn = {
         passwordPlaceholder: 'Saisissez un mot de passe robuste',
         generate: 'Générer un mot de passe',
         copied: 'Mot de passe copié dans le presse-papiers',
+        copy: 'Copier le mot de passe',
         requireChange: 'Exiger la modification à la prochaine connexion',
         submit: 'Enregistrer le mot de passe',
         success: 'Mot de passe mis à jour avec succès',
@@ -184,7 +187,7 @@ export const peopleFr: typeof peopleEn = {
         description: 'Sélectionnez un groupe pour lui attribuer de nouveaux droits.',
         groupLabel: 'Groupe',
         selectPlaceholder: 'Choisir un groupe…',
-        noGroups: 'Aucun groupe disponible',
+        noGroups: 'Aucun autre groupe disponible',
         submit: 'Ajouter au groupe',
         success: 'Ajouté au groupe {{group}}',
         alreadyMember: 'Déjà membre de ce groupe',
@@ -196,8 +199,9 @@ export const peopleFr: typeof peopleEn = {
       },
     },
     wizard: {
-      title: 'Nouvelle personne',
+      title: 'Nouvel utilisateur',
       breadcrumb: 'Nouvel utilisateur',
+      stepLabel: 'Étape {{num}}',
       steps: {
         identity: 'Identité',
         department: 'Département et groupes',
@@ -206,7 +210,7 @@ export const peopleFr: typeof peopleEn = {
       },
       step1: {
         title: 'Identité et profil',
-        description: 'Informations de base sur la personne. L’identifiant et l’adresse email sont suggérés automatiquement.',
+        description: 'Informations de base sur la personne. L’identifiant est suggéré automatiquement.',
         template: 'Modèle (optionnel)',
         templateNone: 'Utilisateur vierge',
         givenName: 'Prénom',
@@ -215,6 +219,11 @@ export const peopleFr: typeof peopleEn = {
         mail: 'Adresse email',
         employeeType: 'Type de contrat',
         language: 'Langue préférée',
+        givenNamePlaceholder: 'ex. Alice',
+        snPlaceholder: 'ex. Martin',
+        uidPlaceholder: 'ex. amartin',
+        previewLogin: 'identifiant',
+        previewMail: 'e-mail',
       },
       step2: {
         title: 'Département et groupes',
@@ -223,6 +232,7 @@ export const peopleFr: typeof peopleEn = {
         groups: 'Affecter aux groupes',
         groupsHelp: 'Sélectionnez les groupes auxquels rattacher immédiatement cette personne.',
         noGroups: 'Aucun groupe trouvé dans cet annuaire.',
+        location: 'Emplacement :',
       },
       step3: {
         title: 'Mot de passe et sécurité',
@@ -234,6 +244,7 @@ export const peopleFr: typeof peopleEn = {
         requireChange: 'Exiger la modification à la prochaine connexion',
         requireChangeHelp: 'La personne choisit son propre mot de passe à sa première connexion.',
         passwordExpiry: 'Expiration du mot de passe (optionnel)',
+        tooShort: 'Utilisez au moins {{min}} caractères, ou laissez le champ vide pour définir le mot de passe plus tard.',
       },
       step4: {
         title: 'Vérification et création',
@@ -243,8 +254,6 @@ export const peopleFr: typeof peopleEn = {
         failed: 'Le compte n’a pas pu être créé.',
         groupsFailed_one: 'Le compte a été créé mais n’a pas pu être ajouté à {{count}} groupe.',
         groupsFailed_other: 'Le compte a été créé mais n’a pas pu être ajouté à {{count}} groupes.',
-        strengthModerate: 'Moyen',
-        strengthStrong: 'Fort',
         creating: 'Création en cours…',
         success: 'L’utilisateur {{name}} a été créé avec succès',
       },
@@ -306,6 +315,8 @@ export const peopleFr: typeof peopleEn = {
         description: 'Recherchez et sélectionnez des personnes à intégrer au groupe.',
         searchPlaceholder: 'Rechercher par nom ou identifiant…',
         noResults: 'Aucune personne trouvée pour « {{query}} ».',
+        noPeople: 'Il n’y a encore personne à ajouter.',
+        allMembers: 'Toutes les personnes sont déjà membres de ce groupe.',
         selectedCount_one: '{{count}} personne sélectionnée',
         selectedCount_other: '{{count}} personnes sélectionnées',
         submit: 'Ajouter au groupe',
@@ -317,6 +328,11 @@ export const peopleFr: typeof peopleEn = {
         description: 'Cette opération supprime définitivement le groupe. Les comptes de ses membres ne seront pas supprimés, mais perdront les accès liés.',
         confirmLabel: 'Supprimer le groupe',
       },
+    },
+    snapshots: {
+      beforeEdit: 'Avant modification (point d’annulation)',
+      beforeRestore: 'Avant restauration',
+      untitled: 'Version enregistrée',
     },
     bulk: {
       addToGroup: 'Ajouter au groupe',
