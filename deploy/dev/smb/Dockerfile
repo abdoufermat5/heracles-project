@@ -1,7 +1,7 @@
 # Dev SMB server whose accounts come from the dev directory (LDAP passdb).
 #
 # The account data is the standard SMB schema loaded by the test directory
-# (deploy/ldap/schema/12-samba.ldif): the server authenticates with
+# (deploy/ldap/schema/12-smb.ldif): the server authenticates with
 # sambaNTPassword and reads sambaSID/sambaAcctFlags/sambaPrimaryGroupSID.
 FROM debian:trixie-slim
 

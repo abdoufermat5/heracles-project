@@ -7,8 +7,8 @@
   `2.25.147659383274657253636041013514546701909` (`.1.*` attribute types,
   `.2.*` objectClasses).
 * Standard schemas of the servers some plugins drive are bundled because the dev
-  stack runs those servers against this directory: `12-samba.ldif` (SMB accounts),
-  `13-pureftpd.ldif` (FTP accounts) and `14-dhcp.ldif` (DHCP configuration); the
+  stack runs those servers against this directory: `12-smb.ldif` (SMB accounts),
+  `13-ftp.ldif` (FTP accounts) and `14-dhcp.ldif` (DHCP configuration); the
   plugins write exactly those attributes. They are copies of the schemas published by
   those servers and are not edited here.
 * Other third-party schemas needed by some plugins (`sudo`, `openssh-lpk`, `dnszone`,

@@ -31,8 +31,8 @@ ALLOWED = (
     "deploy/dev/",
     "deploy/docker-compose.yml",
     "deploy/ldap/seed.ldif",
-    "deploy/ldap/schema/12-samba.ldif",
-    "deploy/ldap/schema/13-pureftpd.ldif",
+    "deploy/ldap/schema/12-smb.ldif",
+    "deploy/ldap/schema/13-ftp.ldif",
     "deploy/ldap/schema/14-dhcp.ldif",
 )
 """Allowed path prefixes."""

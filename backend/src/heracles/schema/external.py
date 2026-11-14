@@ -4,11 +4,11 @@ Heracles keeps its own ``hrc*`` schema (:mod:`heracles.schema.definitions`). Two
 plugins, however, must write the standard attributes that the installed servers
 read from the directory unchanged:
 
-* ``smb_accounts`` — the SMB domain schema (``deploy/ldap/schema/12-samba.ldif``):
+* ``smb_accounts`` — the SMB domain schema (``deploy/ldap/schema/12-smb.ldif``):
   ``sambaSamAccount``, ``sambaGroupMapping``, ``sambaDomain``, ``sambaIdmapEntry``,
   ``sambaUnixIdPool`` and their ``samba*`` attributes;
 * ``ftp_accounts`` — the FTP server's account schema
-  (``deploy/ldap/schema/13-pureftpd.ldif``): ``PureFTPdUser`` and its ``FTP*``
+  (``deploy/ldap/schema/13-ftp.ldif``): ``PureFTPdUser`` and its ``FTP*``
   attributes.
 
 Those servers ignore ``hrc*`` names, so the plugins keep the external ones. This

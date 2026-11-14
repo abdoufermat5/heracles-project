@@ -275,10 +275,10 @@ class Printer(ObjectType):
             ),
         )
         windows = Section(
-            _("Windows driver"),
-            StringAttr("hrcPrinterWindowsInfFile", _("Windows INF file")),
-            StringAttr("hrcPrinterWindowsDriverDir", _("Windows driver directory")),
-            StringAttr("hrcPrinterWindowsDriverName", _("Windows driver name")),
+            _("Print driver"),
+            StringAttr("hrcPrinterWindowsInfFile", _("Print driver INF file")),
+            StringAttr("hrcPrinterWindowsDriverDir", _("Print driver directory")),
+            StringAttr("hrcPrinterWindowsDriverName", _("Print driver name")),
         )
         net = _network()
 

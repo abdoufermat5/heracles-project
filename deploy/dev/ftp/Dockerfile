@@ -1,7 +1,7 @@
 # Dev FTP server whose accounts come from the dev directory.
 #
 # Accounts are the standard FTP LDAP schema loaded by the test directory
-# (deploy/ldap/schema/13-pureftpd.ldif): the server looks up posixAccount
+# (deploy/ldap/schema/13-ftp.ldif): the server looks up posixAccount
 # entries with FTPStatus enabled and binds with their password.
 FROM debian:trixie-slim
 

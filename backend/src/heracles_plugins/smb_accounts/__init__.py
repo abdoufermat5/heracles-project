@@ -1,4 +1,4 @@
-"""SMB plugin: Windows domain data for users, POSIX groups and workstations.
+"""SMB plugin: SMB domain data for users, POSIX groups and workstations.
 
 * ``smb`` tab on users (``sambaSamAccount``): SID, NT/LM password hashes,
   account flags, logon hours, home drive...
@@ -232,7 +232,7 @@ class SMBUserTab(Tab):
     name = "smb"
     acl_key = "smbAccount"
     label = _("SMB")
-    description = _("Windows network account: SID, home share, logon script")
+    description = _("SMB network account: SID, home share, logon script")
     optional = True
     object_classes = (SMB_ACCOUNT_CLASS,)
 
