@@ -260,8 +260,22 @@ class _Migrator:
             path, bar, flags = text.partition("|")
             tab, dot, attr = path.rpartition(".")
             return f"{tab}{dot}{_field_name(attr, report, where)}{bar}{flags}"
+        if key == schema.CONFIG_ATTRS["plugins_menu_blacklist"].lower():
+            return self._plugin_name(text)
         if key in _FILTER_VALUES:
             return _rename_words(text, report)
+        return text
+
+    def _plugin_name(self, text: str) -> str:
+        """Rename a plugin id stored in a ``<group>|<plugin>`` config value."""
+        group, bar, plugin = text.rpartition("|")
+        for old, new in legacy_map.PLUGIN_NAMES.items():
+            if plugin.strip().lower() == old:
+                self.report.renamed[f"{plugin.strip()} -> {new}"] += 1
+                return f"{group}{bar}{new}"
+            if not bar and text.strip().lower() == old:
+                self.report.renamed[f"{text.strip()} -> {new}"] += 1
+                return new
         return text
 
     def _snapshot(self, raw: bytes, where: str) -> bytes:

@@ -27,6 +27,14 @@ LEGACY = re.compile(
     r"|\b[Ff]usion(?!n)|FUSION"  # product name (not the French "fusionner")
     r"|\bFD\b"
 )
+PRODUCTS = re.compile(
+    r"\b(?:"
+    r"cyrus|dovecot|ejbca|freeradius|nextcloud|postfix|pure-?ftpd|samba|sogo"
+    r"|spamassassin|zimbra|mailinblack|gpg|gnupg"
+    r")\b",
+    re.IGNORECASE,
+)
+"""Third-party product names of the plugins, replaced by generic ids and labels."""
 
 
 def _tracked_files() -> list[str]:
@@ -57,6 +65,6 @@ def test_no_legacy_names_outside_the_migration_table() -> None:
         except UnicodeDecodeError:
             continue
         for number, line in enumerate(text.splitlines(), 1):
-            if LEGACY.search(line):
+            if LEGACY.search(line) or PRODUCTS.search(line):
                 hits.append(f"{rel}:{number}: {line.strip()[:120]}")
     assert hits == [], "legacy names found:\n" + "\n".join(hits)

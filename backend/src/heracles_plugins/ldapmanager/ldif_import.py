@@ -76,8 +76,8 @@ PRIVILEGED_ATTRIBUTES = frozenset(
     for name in (
         schema.STD_ATTR.USER_PASSWORD,
         "authPassword",
-        "sambaNTPassword",
-        "sambaLMPassword",
+        "hrcSmbNTPassword",
+        "hrcSmbLMPassword",
         "krbPrincipalKey",
         schema.ATTR.ACL_ENTRY,
         schema.ATTR.ACL_TEMPLATE,

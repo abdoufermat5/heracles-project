@@ -20,6 +20,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 
 import structlog
 
+from heracles.migrate import legacy_map
 from heracles.objects.registry import Plugin, TypeRegistry
 from heracles.storage import Database
 
@@ -46,6 +47,7 @@ WILDCARD = "*"
 
 COMPONENT = "plugins"
 
+
 #: Append only; never edit a released migration.
 MIGRATIONS: tuple[str, ...] = (
     """
@@ -56,6 +58,9 @@ MIGRATIONS: tuple[str, ...] = (
         updated_by TEXT NOT NULL DEFAULT ''
     );
     """,
+    # 2026-11-14: plugin ids named after third-party products became generic.
+    # A stored override on the new id wins over the old one.
+    legacy_map.PLUGIN_SWITCH_MIGRATION,
 )
 
 

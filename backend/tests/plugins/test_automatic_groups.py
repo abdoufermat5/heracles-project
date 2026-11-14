@@ -236,7 +236,7 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
 
 def test_a_rule_cannot_test_secret_attributes(directory: MemoryDirectory) -> None:
     # The membership it produces would be an oracle on password hashes.
-    for rule in ("userPassword:^\\{SSHA\\}ab", "sambaNTPassword:^A"):
+    for rule in ("userPassword:^\\{SSHA\\}ab", "hrcSmbNTPassword:^A"):
         with pytest.raises(ForbiddenAttributeError):
             ag.parse_rule(rule, "uid")
     a = add_user(directory, "a", userPassword="{SSHA}abc")

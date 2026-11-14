@@ -135,8 +135,8 @@ def test_privileged_attributes_are_recognised_with_attribute_options() -> None:
 def test_export_hides_secrets_that_no_tab_describes() -> None:
     from heracles_plugins.ldapmanager.access import Access
 
-    # e.g. the Samba hashes of an entry whose plugin is switched off: no tab knows them
-    assert not Access._attribute_visible("dn", "sambaNTPassword", [])  # pyright: ignore[reportPrivateUsage]
+    # e.g. the SMB hashes of an entry whose plugin is switched off: no tab knows them
+    assert not Access._attribute_visible("dn", "hrcSmbNTPassword", [])  # pyright: ignore[reportPrivateUsage]
     assert not Access._attribute_visible("dn", "krbPrincipalKey", [])  # pyright: ignore[reportPrivateUsage]
     assert Access._attribute_visible("dn", "objectClass", [])  # pyright: ignore[reportPrivateUsage]
 

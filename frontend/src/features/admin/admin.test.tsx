@@ -326,22 +326,22 @@ describe('plugins page', () => {
     expect(within(posix).getByText('Enabled')).toBeInTheDocument()
     expect(within(posix).getByText('POSIX group')).toBeInTheDocument()
     expect(within(posix).getByText('0.1.0')).toBeInTheDocument()
-    const samba = (await screen.findByText('samba')).closest('[data-plugin]') as HTMLElement
-    expect(within(samba).getByText('Unavailable')).toBeInTheDocument()
-    expect(within(samba).getByText('sambaSamAccount')).toBeInTheDocument()
+    const smb = (await screen.findByText('smb_accounts')).closest('[data-plugin]') as HTMLElement
+    expect(within(smb).getByText('Unavailable')).toBeInTheDocument()
+    expect(within(smb).getByText('hrcSmbAccount')).toBeInTheDocument()
   })
 
   it('groups the cards as enabled, available and unavailable', async () => {
     signIn()
     renderApp('/admin/plugins')
-    await screen.findByText('samba')
+    await screen.findByText('smb_accounts')
     const inGroup = (id: string) =>
       [...document.querySelectorAll(`[data-group="${id}"] [data-plugin]`)].map((n) =>
         n.getAttribute('data-plugin'),
       )
     expect(inGroup('enabled')).toEqual(['posix', 'acl_admin'])
     expect(inGroup('available')).toEqual(['dns'])
-    expect(inGroup('unavailable')).toEqual(['samba'])
+    expect(inGroup('unavailable')).toEqual(['smb_accounts'])
   })
 
   it('switches a plugin on', async () => {
@@ -370,8 +370,8 @@ describe('plugins page', () => {
   it('disables the switch of an unavailable plugin and of the console plugin', async () => {
     signIn()
     renderApp('/admin/plugins')
-    const samba = (await screen.findByText('samba')).closest('[data-plugin]') as HTMLElement
-    expect(within(samba).getByRole('switch')).toBeDisabled()
+    const smb = (await screen.findByText('smb_accounts')).closest('[data-plugin]') as HTMLElement
+    expect(within(smb).getByRole('switch')).toBeDisabled()
     const own = (await screen.findByText('acl_admin')).closest('[data-plugin]') as HTMLElement
     expect(within(own).getByRole('switch')).toBeDisabled()
   })

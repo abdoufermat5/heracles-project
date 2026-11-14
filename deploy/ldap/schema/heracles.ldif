@@ -127,29 +127,29 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.41 NAME
  'hrcContractStartDate' EQUALITY generalizedTimeMatch ORDERING generalizedTi
  meOrderingMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.24 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.42 NAME 
- 'hrcCyrusAdmin' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch S
- YNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcMailStoreAdmin' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.43 NAME 
- 'hrcCyrusAutocreateFolders' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubst
- ringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcMailStoreAutocreateFolders' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreS
+ ubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.44 NAME 
- 'hrcCyrusConnectOptions1' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstri
- ngsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcMailStoreConnectOptions1' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSub
+ stringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.45 NAME 
- 'hrcCyrusConnectOptions2' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstri
- ngsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcMailStoreConnectOptions2' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSub
+ stringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.46 NAME 
- 'hrcCyrusConnectPort' EQUALITY integerMatch ORDERING integerOrderingMatch S
- YNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+ 'hrcMailStoreConnectPort' EQUALITY integerMatch ORDERING integerOrderingMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.47 NAME 
- 'hrcCyrusConnectURL' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMa
- tch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcMailStoreConnectURL' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrin
+ gsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.48 NAME 
- 'hrcCyrusPassword' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatc
- h SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcMailStorePassword' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrings
+ Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.49 NAME 
- 'hrcCyrusUseSlashes' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466.115.121.
- 1.7 SINGLE-VALUE )
+ 'hrcMailStoreUseSlashes' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466.115.
+ 121.1.7 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.50 NAME 
  'hrcDashboardExpiredAccountsDays' EQUALITY integerMatch ORDERING integerOrd
  eringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
@@ -196,26 +196,26 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.64 NAME
  'hrcDNSZoneDn' EQUALITY distinguishedNameMatch SYNTAX 1.3.6.1.4.1.1466.115.
  121.1.12 )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.65 NAME 
- 'hrcDovecotAdmin' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch
-  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcImapAdmin' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch SY
+ NTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.66 NAME 
- 'hrcDovecotConnectOptions1' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubst
- ringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcImapConnectOptions1' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrin
+ gsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.67 NAME 
- 'hrcDovecotConnectOptions2' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubst
- ringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcImapConnectOptions2' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrin
+ gsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.68 NAME 
- 'hrcDovecotConnectPort' EQUALITY integerMatch ORDERING integerOrderingMatch
-  SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+ 'hrcImapConnectPort' EQUALITY integerMatch ORDERING integerOrderingMatch SY
+ NTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.69 NAME 
- 'hrcDovecotConnectURL' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrings
- Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcImapConnectURL' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.70 NAME 
- 'hrcDovecotPassword' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMa
- tch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcImapPassword' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.71 NAME 
- 'hrcEjbcaCertDN' EQUALITY distinguishedNameMatch SYNTAX 1.3.6.1.4.1.1466.11
- 5.121.1.12 )
+ 'hrcPkiCertDN' EQUALITY distinguishedNameMatch SYNTAX 1.3.6.1.4.1.1466.115.
+ 121.1.12 )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.72 NAME 
  'hrcEnableAutomaticSnapshots' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466
  .115.121.1.7 SINGLE-VALUE )
@@ -379,8 +379,8 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.125 NAME
   'hrcMailForwardingAddress' EQUALITY caseIgnoreIA5Match SUBSTR caseIgnoreIA
  5SubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.26 )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.126 NAME
-  'hrcMailInBlackProtect' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466.115.
- 121.1.7 SINGLE-VALUE )
+  'hrcMailProtectionProtect' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466.1
+ 15.121.1.7 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.127 NAME
   'hrcMailQuota' EQUALITY integerMatch ORDERING integerOrderingMatch SYNTAX 
  1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
@@ -439,11 +439,11 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.145 NAME
   'hrcNetworkInterfaceVlanTagged' EQUALITY caseIgnoreMatch SUBSTR caseIgnore
  SubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.146 NAME
-  'hrcNextCloudHomeFolder' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstri
- ngsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcFileSharingHomeFolder' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubst
+ ringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.147 NAME
-  'hrcNextCloudQuota' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMa
- tch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcFileSharingQuota' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrings
+ Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.148 NAME
   'hrcNextIdHook' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch 
  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
@@ -526,32 +526,32 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.174 NAME
   'hrcPostalAddressPattern' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstr
  ingsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.175 NAME
-  'hrcPostfixCatchallTable' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstr
- ingsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+  'hrcMtaCatchallTable' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrings
+ Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.176 NAME
-  'hrcPostfixDomainAliasTable' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSub
- stringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+  'hrcMtaDomainAliasTable' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstri
+ ngsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.177 NAME
-  'hrcPostfixHeaderSizeLimit' EQUALITY integerMatch ORDERING integerOrdering
- Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+  'hrcMtaHeaderSizeLimit' EQUALITY integerMatch ORDERING integerOrderingMatc
+ h SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.178 NAME
-  'hrcPostfixMailboxSizeLimit' EQUALITY integerMatch ORDERING integerOrderin
- gMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+  'hrcMtaMailboxSizeLimit' EQUALITY integerMatch ORDERING integerOrderingMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.179 NAME
-  'hrcPostfixMessageSizeLimit' EQUALITY integerMatch ORDERING integerOrderin
- gMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+  'hrcMtaMessageSizeLimit' EQUALITY integerMatch ORDERING integerOrderingMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.180 NAME
-  'hrcPostfixMyDestinations' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubst
- ringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
-olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.181 NAME
-  'hrcPostfixMyDomain' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsM
- atch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
-olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.182 NAME
-  'hrcPostfixMyHostname' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstring
+  'hrcMtaMyDestinations' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstring
  sMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.181 NAME
+  'hrcMtaMyDomain' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.182 NAME
+  'hrcMtaMyHostname' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.183 NAME
-  'hrcPostfixTransportTable' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubst
- ringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+  'hrcMtaTransportTable' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstring
+ sMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.184 NAME
   'hrcPrinterAdminUsers' EQUALITY distinguishedNameMatch SYNTAX 1.3.6.1.4.1.
  1466.115.121.1.12 )
@@ -733,41 +733,41 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.243 NAME
   'hrcSocialAccount' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
  ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.244 NAME
-  'hrcSpamAssassinBayesAutolearn' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1
- 466.115.121.1.7 SINGLE-VALUE )
+  'hrcSpamFilterBayesAutolearn' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.146
+ 6.115.121.1.7 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.245 NAME
-  'hrcSpamAssassinEnableBayes' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466
- .115.121.1.7 SINGLE-VALUE )
-olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.246 NAME
-  'hrcSpamAssassinEnableDcc' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466.1
+  'hrcSpamFilterEnableBayes' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466.1
  15.121.1.7 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.246 NAME
+  'hrcSpamFilterEnableChecksumCheck' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.
+ 1.1466.115.121.1.7 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.247 NAME
-  'hrcSpamAssassinEnablePyzor' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466
- .115.121.1.7 SINGLE-VALUE )
+  'hrcSpamFilterEnableCollaborativeCheck' EQUALITY booleanMatch SYNTAX 1.3.6
+ .1.4.1.1466.115.121.1.7 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.248 NAME
-  'hrcSpamAssassinEnableRazor' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466
- .115.121.1.7 SINGLE-VALUE )
+  'hrcSpamFilterEnableDistributedCheck' EQUALITY booleanMatch SYNTAX 1.3.6.1
+ .4.1.1466.115.121.1.7 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.249 NAME
-  'hrcSpamAssassinEnableRblCheck' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1
- 466.115.121.1.7 SINGLE-VALUE )
+  'hrcSpamFilterEnableRblCheck' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.146
+ 6.115.121.1.7 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.250 NAME
-  'hrcSpamAssassinRequiredScore' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreS
- ubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcSpamFilterRequiredScore' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSub
+ stringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.251 NAME
-  'hrcSpamAssassinRewriteHeader' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreS
- ubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcSpamFilterRewriteHeader' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSub
+ stringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.252 NAME
-  'hrcSpamAssassinRuleDesc' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstr
- ingsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcSpamFilterRuleDesc' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrin
+ gsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.253 NAME
-  'hrcSpamAssassinRuleName' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstr
- ingsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcSpamFilterRuleName' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrin
+ gsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.254 NAME
-  'hrcSpamAssassinRules' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstring
- sMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+  'hrcSpamFilterRules' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsM
+ atch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.255 NAME
-  'hrcSpamAssassinTrustedNetworks' EQUALITY caseIgnoreMatch SUBSTR caseIgnor
- eSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcSpamFilterTrustedNetworks' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreS
+ ubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.256 NAME
   'hrcSplitPostalAddress' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466.115.
  121.1.7 SINGLE-VALUE )
@@ -968,41 +968,158 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.321 NAME
   'hrcWildcardForeignKeys' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466.115
  .121.1.7 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.322 NAME
-  'hrcZimbraDomain' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatc
- h SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcGroupwareDomain' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsM
+ atch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.323 NAME
-  'hrcZimbraDomainCOS' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsM
- atch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcGroupwareDomainServiceClass' EQUALITY caseIgnoreMatch SUBSTR caseIgnor
+ eSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.324 NAME
-  'hrcZimbraServerCreationType' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSu
- bstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcGroupwareServerCreationType' EQUALITY caseIgnoreMatch SUBSTR caseIgnor
+ eSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.325 NAME
-  'hrcZimbraServerDeletionType' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSu
- bstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcGroupwareServerDeletionType' EQUALITY caseIgnoreMatch SUBSTR caseIgnor
+ eSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.326 NAME
-  'hrcZimbraServerIdAttribute' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSub
- stringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcGroupwareServerIdAttribute' EQUALITY caseIgnoreMatch SUBSTR caseIgnore
+ SubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.327 NAME
-  'hrcZimbraServerKeepUnknownAliases' EQUALITY booleanMatch SYNTAX 1.3.6.1.4
- .1.1466.115.121.1.7 SINGLE-VALUE )
+  'hrcGroupwareServerKeepUnknownAliases' EQUALITY booleanMatch SYNTAX 1.3.6.
+ 1.4.1.1466.115.121.1.7 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.328 NAME
-  'hrcZimbraServerLogin' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstring
- sMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcGroupwareServerLogin' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstr
+ ingsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.329 NAME
-  'hrcZimbraServerPassword' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.146
- 6.115.121.1.40 SINGLE-VALUE )
+  'hrcGroupwareServerPassword' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.
+ 1466.115.121.1.40 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.330 NAME
-  'hrcZimbraServerPasswordSync' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.146
- 6.115.121.1.7 SINGLE-VALUE )
+  'hrcGroupwareServerPasswordSync' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.
+ 1466.115.121.1.7 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.331 NAME
-  'hrcZimbraServerUri' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsM
- atch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcGroupwareServerUri' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrin
+ gsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.332 NAME
-  'hrcZimbraServerUserAgent' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubst
- ringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcGroupwareServerUserAgent' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSu
+ bstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.333 NAME
   'hrcMailDomain' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch 
  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.334 NAME
+  'hrcSmbAcctFlags' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatc
+ h SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.335 NAME
+  'hrcSmbAlgorithmicRidBase' EQUALITY integerMatch ORDERING integerOrderingM
+ atch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.336 NAME
+  'hrcSmbDomainName' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.337 NAME
+  'hrcSmbForceLogoff' EQUALITY integerMatch ORDERING integerOrderingMatch SY
+ NTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.338 NAME
+  'hrcSmbGroupType' EQUALITY integerMatch ORDERING integerOrderingMatch SYNT
+ AX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.339 NAME
+  'hrcSmbHomeDrive' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatc
+ h SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.340 NAME
+  'hrcSmbHomePath' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.341 NAME
+  'hrcSmbKickoffTime' EQUALITY integerMatch ORDERING integerOrderingMatch SY
+ NTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.342 NAME
+  'hrcSmbLMPassword' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.343 NAME
+  'hrcSmbLockoutDuration' EQUALITY integerMatch ORDERING integerOrderingMatc
+ h SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.344 NAME
+  'hrcSmbLockoutObservationWindow' EQUALITY integerMatch ORDERING integerOrd
+ eringMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.345 NAME
+  'hrcSmbLockoutThreshold' EQUALITY integerMatch ORDERING integerOrderingMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.346 NAME
+  'hrcSmbLogonHours' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.347 NAME
+  'hrcSmbLogonScript' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMa
+ tch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.348 NAME
+  'hrcSmbLogonToChgPwd' EQUALITY integerMatch ORDERING integerOrderingMatch 
+ SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.349 NAME
+  'hrcSmbMaxPwdAge' EQUALITY integerMatch ORDERING integerOrderingMatch SYNT
+ AX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.350 NAME
+  'hrcSmbMinPwdAge' EQUALITY integerMatch ORDERING integerOrderingMatch SYNT
+ AX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.351 NAME
+  'hrcSmbMinPwdLength' EQUALITY integerMatch ORDERING integerOrderingMatch S
+ YNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.352 NAME
+  'hrcSmbMungedDial' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.353 NAME
+  'hrcSmbNTPassword' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.354 NAME
+  'hrcSmbNextGroupRid' EQUALITY integerMatch ORDERING integerOrderingMatch S
+ YNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.355 NAME
+  'hrcSmbNextRid' EQUALITY integerMatch ORDERING integerOrderingMatch SYNTAX
+  1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.356 NAME
+  'hrcSmbNextUserRid' EQUALITY integerMatch ORDERING integerOrderingMatch SY
+ NTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.357 NAME
+  'hrcSmbPasswordHistory' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrin
+ gsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.358 NAME
+  'hrcSmbPrimaryGroupSID' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrin
+ gsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.359 NAME
+  'hrcSmbProfilePath' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMa
+ tch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.360 NAME
+  'hrcSmbPwdHistoryLength' EQUALITY integerMatch ORDERING integerOrderingMat
+ ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.361 NAME
+  'hrcSmbPwdLastSet' EQUALITY integerMatch ORDERING integerOrderingMatch SYN
+ TAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.362 NAME
+  'hrcSmbRefuseMachinePwdChange' EQUALITY integerMatch ORDERING integerOrder
+ ingMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.363 NAME
+  'hrcSmbSID' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch SYNT
+ AX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.364 NAME
+  'hrcSmbSIDList' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch 
+ SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.365 NAME
+  'hrcSmbUserWorkstations' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstri
+ ngsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.366 NAME
+  'hrcFtpStatus' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.7 S
+ INGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.367 NAME
+  'hrcFtpUploadRatio' EQUALITY integerMatch ORDERING integerOrderingMatch SY
+ NTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.368 NAME
+  'hrcFtpDownloadRatio' EQUALITY integerMatch ORDERING integerOrderingMatch 
+ SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.369 NAME
+  'hrcFtpQuotaFiles' EQUALITY integerMatch ORDERING integerOrderingMatch SYN
+ TAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.370 NAME
+  'hrcFtpQuotaMBytes' EQUALITY integerMatch ORDERING integerOrderingMatch SY
+ NTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.371 NAME
+  'hrcFtpUploadBandwidth' EQUALITY integerMatch ORDERING integerOrderingMatc
+ h SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
+olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.372 NAME
+  'hrcFtpDownloadBandwidth' EQUALITY integerMatch ORDERING integerOrderingMa
+ tch SYNTAX 1.3.6.1.4.1.1466.115.121.1.27 SINGLE-VALUE )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.1 NAME 'h
  rcAcl' SUP top AUXILIARY MAY hrcAclEntry )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.2 NAME 'h
@@ -1049,9 +1166,10 @@ olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.8 NAME 'h
  yErrors $ hrcLdapMaxQueryTime $ hrcLdapStats $ hrcDebugLevel $ hrcDebugLogg
  ing $ hrcLogging $ hrcConfigMd5 $ description ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.9 NAME 'h
- rcCyrusServer' SUP top AUXILIARY MAY ( hrcCyrusConnectURL $ hrcCyrusConnect
- Port $ hrcCyrusConnectOptions1 $ hrcCyrusConnectOptions2 $ hrcCyrusAdmin $ 
- hrcCyrusPassword $ hrcCyrusUseSlashes $ hrcCyrusAutocreateFolders ) )
+ rcMailStoreServer' SUP top AUXILIARY MAY ( hrcMailStoreConnectURL $ hrcMail
+ StoreConnectPort $ hrcMailStoreConnectOptions1 $ hrcMailStoreConnectOptions
+ 2 $ hrcMailStoreAdmin $ hrcMailStorePassword $ hrcMailStoreUseSlashes $ hrc
+ MailStoreAutocreateFolders ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.10 NAME '
  hrcDashboardPluginConf' SUP top AUXILIARY MAY ( hrcDashboardPrefix $ hrcDas
  hboardNumberOfDigit $ hrcDashboardExpiredAccountsDays ) )
@@ -1069,17 +1187,17 @@ olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.14 NAME '
   hrcDNSViewMatchClientsAcl $ hrcDNSViewMatchDestinationsAcl $ hrcDNSZoneDn 
  ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.15 NAME '
- hrcDovecotServer' SUP top AUXILIARY MAY ( hrcDovecotConnectURL $ hrcDovecot
- ConnectPort $ hrcDovecotConnectOptions1 $ hrcDovecotConnectOptions2 $ hrcDo
- vecotAdmin $ hrcDovecotPassword ) )
+ hrcImapServer' SUP top AUXILIARY MAY ( hrcImapConnectURL $ hrcImapConnectPo
+ rt $ hrcImapConnectOptions1 $ hrcImapConnectOptions2 $ hrcImapAdmin $ hrcIm
+ apPassword ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.16 NAME '
- hrcEjbcaCertificates' SUP top AUXILIARY MAY hrcEjbcaCertDN )
+ hrcPkiCertificates' SUP top AUXILIARY MAY hrcPkiCertDN )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.17 NAME '
  hrcExtractorTasks' SUP top AUXILIARY MAY ( hrcExtractorTaskAttributes $ hrc
  ExtractorTaskFormat $ hrcExtractorTaskMembers $ hrcExtractorRecipientsMembe
  rs $ hrcExtractorEmailSender ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.18 NAME '
- hrcGpgAccount' SUP top AUXILIARY MAY hrcUserKeyDN )
+ hrcPgpAccount' SUP top AUXILIARY MAY hrcUserKeyDN )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.19 NAME '
  hrcGroupMail' SUP top AUXILIARY MAY ( mail $ hrcMailServer $ hrcMailAlterna
  teAddress $ hrcMailForwardingAddress $ hrcGroupMailLocalOnly ) )
@@ -1113,7 +1231,7 @@ olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.28 NAME '
  hrcMailAliasRedirection' SUP top STRUCTURAL MUST cn MAY ( description $ mai
  l $ hrcMailForwardingAddress $ hrcMailAliasExpirationDate ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.29 NAME '
- hrcMailInBlackUser' SUP top AUXILIARY MAY hrcMailInBlackProtect )
+ hrcMailProtectionUser' SUP top AUXILIARY MAY hrcMailProtectionProtect )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.30 NAME '
  hrcMailTemplate' SUP top STRUCTURAL MUST cn MAY ( hrcMailTemplateSubject $ 
  hrcMailTemplateBody $ hrcMailTemplateSignature $ hrcMailTemplateReadReceipt
@@ -1128,8 +1246,8 @@ olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.33 NAME '
  mber $ description $ hrcNetworkInterfaceSubnetDN $ hrcNetworkInterfaceVlanD
  N $ hrcNetworkInterfaceVlanTagged ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.34 NAME '
- hrcNextCloudAccount' SUP top AUXILIARY MAY ( hrcNextCloudQuota $ hrcNextClo
- udHomeFolder ) )
+ hrcFileSharingAccount' SUP top AUXILIARY MAY ( hrcFileSharingQuota $ hrcFil
+ eSharingHomeFolder ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.35 NAME '
  hrcPasswordRecoveryConf' SUP top AUXILIARY MAY ( hrcPasswordRecoveryActivat
  ed $ hrcPasswordRecoveryEmail $ hrcPasswordRecoveryMailSubject $ hrcPasswor
@@ -1156,10 +1274,10 @@ olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.41 NAME '
  hrcPluginsConf' SUP top AUXILIARY MAY ( hrcOGroupDefaultUser $ hrcForceSasl
  PasswordAsk $ hrcOGroupRDN ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.42 NAME '
- hrcPostfixServer' SUP top AUXILIARY MAY ( hrcPostfixMyHostname $ hrcPostfix
- MyDomain $ hrcPostfixMyDestinations $ hrcPostfixHeaderSizeLimit $ hrcPostfi
- xMailboxSizeLimit $ hrcPostfixMessageSizeLimit $ hrcPostfixTransportTable $
-  hrcPostfixCatchallTable $ hrcPostfixDomainAliasTable ) )
+ hrcMtaServer' SUP top AUXILIARY MAY ( hrcMtaMyHostname $ hrcMtaMyDomain $ h
+ rcMtaMyDestinations $ hrcMtaHeaderSizeLimit $ hrcMtaMailboxSizeLimit $ hrcM
+ taMessageSizeLimit $ hrcMtaTransportTable $ hrcMtaCatchallTable $ hrcMtaDom
+ ainAliasTable ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.43 NAME '
  hrcPrinter' SUP top STRUCTURAL MUST cn MAY ( description $ l $ labeledURI $
   hrcPrinterUsers $ hrcPrinterAdminUsers $ hrcPrinterWindowsInfFile $ hrcPri
@@ -1192,13 +1310,14 @@ olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.50 NAME '
  apshotDN $ hrcSnapshotData $ hrcSnapshotDataSource $ hrcSnapshotObjectType 
  $ hrcSnapshotHash $ description ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.51 NAME '
- hrcSpamAssassinServer' SUP top AUXILIARY MAY ( hrcSpamAssassinRewriteHeader
-  $ hrcSpamAssassinRequiredScore $ hrcSpamAssassinTrustedNetworks $ hrcSpamA
- ssassinEnableBayes $ hrcSpamAssassinBayesAutolearn $ hrcSpamAssassinEnableR
- blCheck $ hrcSpamAssassinEnableRazor $ hrcSpamAssassinEnableDcc $ hrcSpamAs
- sassinEnablePyzor $ hrcSpamAssassinRuleName $ hrcSpamAssassinRuleDesc ) )
+ hrcSpamFilterServer' SUP top AUXILIARY MAY ( hrcSpamFilterRewriteHeader $ h
+ rcSpamFilterRequiredScore $ hrcSpamFilterTrustedNetworks $ hrcSpamFilterEna
+ bleBayes $ hrcSpamFilterBayesAutolearn $ hrcSpamFilterEnableRblCheck $ hrcS
+ pamFilterEnableDistributedCheck $ hrcSpamFilterEnableChecksumCheck $ hrcSpa
+ mFilterEnableCollaborativeCheck $ hrcSpamFilterRuleName $ hrcSpamFilterRule
+ Desc ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.52 NAME '
- hrcSpamAssassinUser' SUP top AUXILIARY MAY hrcSpamAssassinRules )
+ hrcSpamFilterUser' SUP top AUXILIARY MAY hrcSpamFilterRules )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.53 NAME '
  hrcTasks' SUP top STRUCTURAL MUST cn MAY ( description $ hrcTasksStatus $ h
  rcTasksCreationDate $ hrcTasksScheduleDate $ hrcTasksLastExec $ hrcTasksNex
@@ -1251,8 +1370,34 @@ olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.67 NAME '
  hrcWorkstation' SUP top STRUCTURAL MUST cn MAY ( description $ l $ hrcMode 
  ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.68 NAME '
- hrcZimbraServer' SUP top AUXILIARY MAY ( hrcZimbraServerUri $ hrcZimbraServ
- erLogin $ hrcZimbraServerPassword $ hrcZimbraServerUserAgent $ hrcZimbraSer
- verCreationType $ hrcZimbraServerDeletionType $ hrcZimbraServerPasswordSync
-  $ hrcZimbraServerKeepUnknownAliases $ hrcZimbraServerIdAttribute $ hrcZimb
- raDomain $ hrcZimbraDomainCOS ) )
+ hrcGroupwareServer' SUP top AUXILIARY MAY ( hrcGroupwareServerUri $ hrcGrou
+ pwareServerLogin $ hrcGroupwareServerPassword $ hrcGroupwareServerUserAgent
+  $ hrcGroupwareServerCreationType $ hrcGroupwareServerDeletionType $ hrcGro
+ upwareServerPasswordSync $ hrcGroupwareServerKeepUnknownAliases $ hrcGroupw
+ areServerIdAttribute $ hrcGroupwareDomain $ hrcGroupwareDomainServiceClass 
+ ) )
+olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.69 NAME '
+ hrcSmbAccount' SUP top AUXILIARY MUST hrcSmbSID MAY ( hrcSmbAcctFlags $ hrc
+ SmbDomainName $ hrcSmbHomeDrive $ hrcSmbHomePath $ hrcSmbKickoffTime $ hrcS
+ mbLMPassword $ hrcSmbLogonHours $ hrcSmbLogonScript $ hrcSmbMungedDial $ hr
+ cSmbNTPassword $ hrcSmbPasswordHistory $ hrcSmbPrimaryGroupSID $ hrcSmbProf
+ ilePath $ hrcSmbPwdLastSet $ hrcSmbUserWorkstations ) )
+olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.70 NAME '
+ hrcSmbGroupMapping' SUP top AUXILIARY MUST ( hrcSmbSID $ hrcSmbGroupType ) 
+ MAY ( hrcSmbDomainName $ hrcSmbSIDList ) )
+olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.71 NAME '
+ hrcSmbDomain' SUP top STRUCTURAL MUST ( hrcSmbDomainName $ hrcSmbSID ) MAY 
+ ( hrcSmbAlgorithmicRidBase $ hrcSmbForceLogoff $ hrcSmbLockoutDuration $ hr
+ cSmbLockoutObservationWindow $ hrcSmbLockoutThreshold $ hrcSmbLogonToChgPwd
+  $ hrcSmbMaxPwdAge $ hrcSmbMinPwdAge $ hrcSmbMinPwdLength $ hrcSmbNextGroup
+ Rid $ hrcSmbNextRid $ hrcSmbNextUserRid $ hrcSmbPwdHistoryLength $ hrcSmbRe
+ fuseMachinePwdChange ) )
+olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.72 NAME '
+ hrcSmbIdmapEntry' SUP top AUXILIARY MUST hrcSmbSID MAY ( uidNumber $ gidNum
+ ber ) )
+olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.73 NAME '
+ hrcSmbUnixIdPool' SUP top AUXILIARY MUST ( uidNumber $ gidNumber ) )
+olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.74 NAME '
+ hrcFtpAccount' SUP top AUXILIARY MAY ( hrcFtpStatus $ hrcFtpUploadRatio $ h
+ rcFtpDownloadRatio $ hrcFtpQuotaFiles $ hrcFtpQuotaMBytes $ hrcFtpUploadBan
+ dwidth $ hrcFtpDownloadBandwidth ) )

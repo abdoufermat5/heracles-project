@@ -131,9 +131,9 @@ def test_secret_looking_attributes_are_never_logged_whatever_the_settings() -> N
     from heracles_plugins.audit.events import describe_values
 
     for name in (
-        "sambaNTPassword",
+        "hrcSmbNTPassword",
         "hrcIpmiPassword",
-        "hrcZimbraServerPassword",
+        "hrcGroupwareServerPassword",
         "krbPrincipalKey",
     ):
         line = describe_values(name, [b"31D6CFE0D16AE931B73C59D7E0C089C0"], ())

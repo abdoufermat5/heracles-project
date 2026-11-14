@@ -243,3 +243,27 @@ def test_cli_writes_the_result_privately_and_never_over_the_source(tmp_path: Pat
     before = source.read_text(encoding="utf-8")
     assert main(["migrate-directory", str(source), str(source)]) == 2
     assert source.read_text(encoding="utf-8") == before
+
+
+def test_product_named_heracles_names_and_plugin_ids_are_renamed() -> None:
+    """Names from before the generic rename, and plugin ids stored in the config."""
+    server = _entry(
+        f"cn=mail,{BASE}",
+        objectClass=["hrcCyrusServer", "sambaSamAccount"],
+        cn=["mail"],
+        hrcCyrusAdmin=["admin"],
+        sambaSID=["S-1-5-21-1"],
+    )
+    config = _entry(
+        f"cn=config,ou=heracles,{BASE}",
+        objectClass=["hrcConf"],
+        cn=["config"],
+        hrcPluginsMenuBlacklist=["admins|samba", "dns"],
+    )
+    out, report = migrate_entries([server, config])
+    assert report.errors == []
+    entries = _by_dn(out)
+    assert _classes(entries[server.dn]) == {"hrcMailStoreServer", "hrcSmbAccount"}
+    assert entries[server.dn].text("hrcMailStoreAdmin") == "admin"
+    assert entries[server.dn].text("hrcSmbSID") == "S-1-5-21-1"
+    assert entries[config.dn].texts("hrcPluginsMenuBlacklist") == ["admins|smb_accounts", "dns"]

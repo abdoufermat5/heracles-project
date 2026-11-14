@@ -7,7 +7,7 @@
   `2.25.147659383274657253636041013514546701909` (`.1.*` attribute types,
   `.2.*` objectClasses).
 * Third-party schemas needed by some plugins (`sudo`, `openssh-lpk`, `dnszone`,
-  `samba`, `kerberos`, `dhcp`, ...) come from those projects and are not
+  `kerberos`, `dhcp`, ...) come from those projects and are not
   distributed here (git-ignored). Copy their `cn=config` LDIF files into this
   directory, or convert `.schema` files with
   `make third-party-schema SCHEMAS="/path/sudo.schema ..."`. Prefix them with a number
@@ -30,5 +30,5 @@ them offline:
 4. Scripts using API v1 must switch to the new attribute names: `renames.csv` lists
    every old → new pair found in the directory.
 
-SOGo resources: point SOGo's `KindFieldName` to `hrcResourceKind` and
-`MultipleBookingsFieldName` to `hrcResourceMultipleBookings`.
+Calendar resources: point the groupware server's `KindFieldName` to
+`hrcResourceKind` and `MultipleBookingsFieldName` to `hrcResourceMultipleBookings`.

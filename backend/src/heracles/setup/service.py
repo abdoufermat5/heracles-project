@@ -56,7 +56,7 @@ PLUGIN_INFO: dict[str, tuple[str, str]] = {
     "dns": ("DNS zones", "Zones and records served from the directory"),
     "dhcp": ("DHCP", "Services, subnets and fixed addresses"),
     "systems": ("Systems", "Servers, workstations, printers and other devices"),
-    "samba": ("Windows file sharing", "Samba accounts and domains"),
+    "smb_accounts": ("Windows file sharing", "SMB accounts and domains"),
     "archive": ("Archive", "Keep a copy of deleted entries"),
     "lifecycle": ("Account lifecycle", "Arrival and departure dates, automatic deactivation"),
     "notifications": ("Notifications", "Mail on directory changes"),

@@ -15,7 +15,7 @@ from heracles_plugins._tasks import TaskReport, expand_members, run_tasks, task_
 
 TASK_CLASS = "hrcExtractorTasks"
 TASK_FILTER = task_filter(TASK_CLASS)
-FORBIDDEN_ATTRIBUTES = frozenset({"userpassword", "sambantpassword", "sambalmpassword"})
+FORBIDDEN_ATTRIBUTES = frozenset({"userpassword", "hrcsmbntpassword", "hrcsmblmpassword"})
 FORMATS = {"csv": ",", "tsv": "\t"}
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 _FORMULA_START = ("=", "+", "-", "@", "\t", "\r")

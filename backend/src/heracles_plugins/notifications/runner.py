@@ -37,7 +37,7 @@ TASK_CLASS = "hrcTasksNotifications"
 TASK_FILTER = task_filter(TASK_CLASS)
 SNAPSHOT_PREFIX = "snapshot-"
 #: Never monitored: their values are secrets.
-FORBIDDEN_ATTRIBUTES = frozenset({"userpassword", "sambantpassword", "sambalmpassword"})
+FORBIDDEN_ATTRIBUTES = frozenset({"userpassword", "hrcsmbntpassword", "hrcsmblmpassword"})
 TEMPLATE_FIELDS = ("uid", "cn", "mail", "changes", "attributes")
 
 type Values = dict[str, list[str]]

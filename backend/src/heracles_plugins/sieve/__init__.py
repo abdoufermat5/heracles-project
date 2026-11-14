@@ -22,12 +22,12 @@ CONNECT_OPTIONS: tuple[tuple[str, str], ...] = (
 )
 
 MAIL_SERVICE_CLASSES: tuple[str, ...] = (
-    "hrcDovecotServer",
-    "hrcCyrusServer",
-    "hrcPostfixServer",
+    "hrcImapServer",
+    "hrcMailStoreServer",
+    "hrcMtaServer",
     "hrcSieveServer",
-    "hrcSpamAssassinServer",
-    "hrcZimbraServer",
+    "hrcSpamFilterServer",
+    "hrcGroupwareServer",
 )
 
 

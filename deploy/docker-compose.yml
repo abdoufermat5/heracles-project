@@ -10,7 +10,7 @@
 #   uv run --extra ldap pytest -m integration
 #
 # Schemas: deploy/ldap/schema/ holds the Heracles schema (heracles.ldif) and the
-# third-party schemas some plugins need (sudo, openssh-lpk, dnszone, samba...;
+# third-party schemas some plugins need (sudo, openssh-lpk, dnszone, kerberos, dhcp...;
 # see its README). They are loaded at the first start of the data volume.
 
 services:
