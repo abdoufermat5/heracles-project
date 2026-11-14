@@ -47,7 +47,7 @@ the application database. `heracles --help` lists the commands: `serve`, `init`,
 
 ```bash
 make install   # backend (uv) + frontend (pnpm) dependencies
-make dev       # whole stack: OpenLDAP + API + DNS containers, UI on http://localhost:5173
+make dev       # whole stack: OpenLDAP + API + DNS + SMB/FTP/DHCP containers, UI on http://localhost:5173
 ```
 
 Log in with `alice` / `alice-secret` (real OpenLDAP container, seed in
@@ -56,12 +56,43 @@ The API runs in a container, so backend edits need `make dev` again; the UI hot-
 No Docker? `make dev-demo` runs the in-memory demo directory instead (no LDAP;
 `admin` / `heracles`).
 
+The dev directory also feeds three real servers (build files in `deploy/dev/`), so the
+plugins of the console drive something observable. They read exactly the standard LDAP
+schema the console writes (`deploy/ldap/schema/`), with the well-known dev credentials
+(`ldap` / `admin` / `admin`):
+
+| Service | Host port | What it serves |
+|---|---|---|
+| `smb` | 127.0.0.1:445 | SMB shares for the accounts of `ou=people` (LDAP passdb, domain `HERACLES`) |
+| `ftp` | 127.0.0.1:2121, passive 30000-30009 | FTP accounts with `FTPStatus` enabled, home `homeDirectory` |
+| `dhcp` | — (isolated compose network 192.168.220.0/24) | The `dhcpService`/`dhcpSubnet`/`dhcpHost` entries under `ou=dhcp` |
+
+Enable SMB or FTP for a user in the console (user → SMB / FTP tab, with a password),
+then try it from the host or in a container:
+
+```bash
+smbclient -L //127.0.0.1 -U alice%alice-secret        # or: docker compose -f deploy/docker-compose.yml exec smb smbclient -L //localhost -U alice%alice-secret
+smbclient //127.0.0.1/shared -U alice%alice-secret -c ls
+lftp -u alice,alice-secret 127.0.0.1:2121 -e "ls; bye"   # or: docker compose ... exec ftp lftp -u alice,alice-secret 127.0.0.1 -e "ls; bye"
+make dhcp-test                                          # one-shot client on the isolated network
+```
+
+`make dhcp-test` asks the `dhcp` container for a lease from a throwaway container with a
+fixed MAC address; the directory reserves its address (`cn=dhcp-client`, `192.168.220.50`).
+Nothing is published on the host for DHCP, so it cannot hand out leases on your LAN.
+The servers read the directory when they start (the DHCP server renders `dhcpd.conf` from
+the directory when it starts, the FTP server creates the home on first login): recreate
+the stack after changing schema LDIFs, and `docker compose -f deploy/docker-compose.yml
+--profile dev restart dhcp` after editing the DHCP configuration in the console.
+
+
 Other useful targets (`make help` lists them all):
 
 | Target | What it does |
 |---|---|
 | `make dev-demo` | in-memory demo directory (no LDAP) + UI |
 | `make dev-down` | stop the dev containers, keep the LDAP data volume |
+| `make dhcp-test` | ask the dev DHCP server for a lease (isolated compose network) |
 | `make demo` | build the UI and serve everything from the demo backend |
 | `make dns-demo` | serve the demo directory's DNS zones on port 5353 |
 | `make dev-mock` | UI only, with the in-browser mock API |

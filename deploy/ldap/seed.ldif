@@ -75,6 +75,21 @@ member: uid=alice,ou=people,dc=heracles,dc=test
 member: uid=bob,ou=people,dc=heracles,dc=test
 member: uid=carol,ou=people,dc=heracles,dc=test
 
+# POSIX group with the SMB mapping of the domain users group (SID + 513, seeded
+# below). The dev SMB server uses it for the share's "valid users = @smbusers";
+# enable a user's POSIX tab with gidNumber 2000 to make them a member.
+dn: cn=smbusers,ou=groups,dc=heracles,dc=test
+objectClass: posixGroup
+objectClass: sambaGroupMapping
+cn: smbusers
+description: Members of the SMB share of the dev stack
+gidNumber: 2000
+sambaSID: S-1-5-21-2738473741-1357294590-3500904181-513
+sambaGroupType: 2
+memberUid: alice
+memberUid: bob
+memberUid: carol
+
 # ACL roles, assigned on the base entry above. Self-service lets every user
 # read their own entry and change a few personal fields.
 
@@ -155,3 +170,62 @@ objectClass: dNSZone
 zoneName: 2.0.192.in-addr.arpa
 relativeDomainName: 10
 pTRRecord: www.heracles.test.
+
+# SMB plugin: the domain entry the SMB server and the plugin read (its SID,
+# policy and RID counters). The dev SMB container also creates this entry when
+# it is missing (deploy/dev/smb/entrypoint.sh) with the same SID.
+# The staff group maps to the domain users group so the share's "valid users = @staff"
+# resolves through the directory; users get the same gidNumber as their primary group.
+
+dn: sambaDomainName=HERACLES,dc=heracles,dc=test
+objectClass: top
+objectClass: sambaDomain
+sambaDomainName: HERACLES
+sambaSID: S-1-5-21-2738473741-1357294590-3500904181
+sambaAlgorithmicRidBase: 1000
+sambaNextRid: 1000
+sambaNextUserRid: 1000
+sambaNextGroupRid: 1001
+sambaMinPwdLength: 5
+sambaPwdHistoryLength: 0
+sambaLogonToChgPwd: 0
+sambaMaxPwdAge: -1
+sambaMinPwdAge: 0
+sambaLockoutDuration: 30
+sambaLockoutObservationWindow: 30
+sambaLockoutThreshold: 0
+sambaForceLogoff: -1
+sambaRefuseMachinePwdChange: 0
+
+# DHCP plugin: the service entry the DHCP container renders into dhcpd.conf, on
+# the isolated compose network 192.168.220.0/24 (deploy/docker-compose.yml).
+# The test client (same MAC) gets the fixed address from the host entry below.
+
+dn: ou=dhcp,dc=heracles,dc=test
+objectClass: organizationalUnit
+ou: dhcp
+
+dn: cn=dev-dhcp,ou=dhcp,dc=heracles,dc=test
+objectClass: top
+objectClass: dhcpService
+cn: dev-dhcp
+dhcpStatements: authoritative
+dhcpStatements: default-lease-time 600
+dhcpStatements: max-lease-time 7200
+dhcpOption: domain-name "heracles.test"
+
+dn: cn=192.168.220.0,cn=dev-dhcp,ou=dhcp,dc=heracles,dc=test
+objectClass: top
+objectClass: dhcpSubnet
+cn: 192.168.220.0
+dhcpNetMask: 24
+dhcpRange: 192.168.220.100 192.168.220.199
+dhcpOption: routers 192.168.220.1
+dhcpOption: domain-name-servers 192.168.220.1
+
+dn: cn=dhcp-client,cn=192.168.220.0,cn=dev-dhcp,ou=dhcp,dc=heracles,dc=test
+objectClass: top
+objectClass: dhcpHost
+cn: dhcp-client
+dhcpHWAddress: ethernet 52:54:00:fe:dc:01
+dhcpStatements: fixed-address 192.168.220.50

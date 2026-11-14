@@ -19,7 +19,7 @@ BUILD_ID ?=
 VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(BACKEND)/pyproject.toml)
 
 .PHONY: bundle-check help install install-backend install-frontend \
-        dev dev-demo dev-down dev-mock backend frontend demo build docker-build serve dns-demo \
+        dev dev-demo dev-down dev-mock dhcp-test backend frontend demo build docker-build serve dns-demo \
         test test-backend test-frontend lint lint-backend lint-frontend \
         format typecheck check bench ldap-up ldap-down ldap-logs test-integration e2e e2e-replicas e2e-ui e2e-down schema third-party-schema clean
 
@@ -42,9 +42,10 @@ install-frontend: ## Install frontend dependencies (pnpm)
 
 # ------------------------------------------------------------------- run
 
-dev: ## Whole stack: OpenLDAP + API + DNS containers, Vite dev server on the host
+dev: ## Whole stack: OpenLDAP + API + DNS + SMB/FTP/DHCP containers, Vite dev server on the host
 	@echo "→ API http://$(HOST):$(PORT) (container, real LDAP) · DNS 127.0.0.1:$(DNS_PORT) · UI http://localhost:$(UI_PORT) · login alice / alice-secret"
 	@echo "  DNS zones of the directory: dig @127.0.0.1 -p $(DNS_PORT) www.heracles.test"
+	@echo "  SMB 127.0.0.1:445 · FTP 127.0.0.1:2121 (passive 30000-30009) · DHCP on the isolated compose network (no host port)"
 	@echo "  the containers stay up after this exits; stop them with \`make dev-down\`"
 	$(COMPOSE) --profile dev up -d --build --wait
 	@trap 'kill 0' INT TERM EXIT; \
@@ -63,6 +64,9 @@ dev-demo: ## Demo backend (in-memory directory, auto-reload) + Vite dev server
 
 dev-down: ## Stop the dev containers (the LDAP data volume is kept)
 	$(COMPOSE) --profile dev down
+
+dhcp-test: ## Ask the dev DHCP server for a lease (throwaway client on the isolated network)
+	$(COMPOSE) --profile dhcp-test run --rm dhcp-client
 
 dev-mock: ## Frontend only, with the in-browser mock API (no backend)
 	cd $(FRONTEND) && VITE_API_MOCK=true pnpm exec vite --port $(UI_PORT)

@@ -19,6 +19,11 @@ htmlcov/
 deploy/ldap/compat-schema/
 deploy/ldap/schema/*.ldif
 !deploy/ldap/schema/heracles.ldif
+# Standard schemas of the servers the dev stack runs (deploy/dev/): the plugins
+# write exactly these attributes, and a fresh clone must be able to start the stack.
+!deploy/ldap/schema/12-samba.ldif
+!deploy/ldap/schema/13-pureftpd.ldif
+!deploy/ldap/schema/14-dhcp.ldif
 .claude/settings.local.json
 frontend/*.tsbuildinfo
 .hypothesis/

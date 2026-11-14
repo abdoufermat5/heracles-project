@@ -90,6 +90,82 @@ services:
       timeout: 3s
       retries: 12
 
+  # ---- dev services: real servers that read the accounts/config Heracles writes -----------------
+  # Every service below reads the dev directory directly (see deploy/dev/). Ports are
+  # loopback-only; the credentials are the well-known dev ones (ldap / admin / admin).
+  smb:
+    profiles: [dev]
+    build:
+      context: ./dev/smb
+    ports:
+      - "127.0.0.1:445:445"
+    volumes:
+      - smb-data:/srv/smb/shared
+    depends_on:
+      ldap:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/445'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  ftp:
+    profiles: [dev]
+    build:
+      context: ./dev/ftp
+    ports:
+      # Control port and the passive range the server announces.
+      - "127.0.0.1:2121:21"
+      - "127.0.0.1:30000-30009:30000-30009"
+    volumes:
+      - ftp-data:/srv/ftp
+    # The server switches its own capabilities at start (Debian builds it with libcap).
+    cap_add: [SYS_NICE, DAC_READ_SEARCH]
+    depends_on:
+      ldap:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/21; head -c 3 <&3 | grep -q 220'"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # Serves the isolated `dhcp-lab` network only; nothing is published on the host, so it
+  # cannot hand out leases on the host LAN.
+  dhcp:
+    profiles: [dev]
+    build:
+      context: ./dev/dhcp
+    networks:
+      default: {}
+      dhcp-lab:
+        ipv4_address: 192.168.220.2
+    depends_on:
+      ldap:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x dhcpd >/dev/null && ss -lunH | grep -q ':67'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # One-shot client on the isolated network (fixed MAC -> fixed address from the
+  # directory): docker compose ... --profile dhcp-test run --rm dhcp-client
+  dhcp-client:
+    profiles: [dhcp-test]
+    image: alpine:3.22
+    mac_address: "52:54:00:fe:dc:01"
+    networks:
+      dhcp-lab: {}
+    cap_add: [NET_ADMIN]
+    command:
+      - sh
+      - -c
+      - "ip link set eth0 up; ip addr flush dev eth0; udhcpc -f -q -n -i eth0 -t 5 -T 3"
+
   # ---- replicas profile: two Heracles servers behind a load balancer ---------------------------
   # Several replicas on different hosts share their state through PostgreSQL. This profile runs
   # the same topology on one machine; point the e2e suite at the balancer (port 8430):
@@ -166,8 +242,19 @@ services:
       heracles-2:
         condition: service_healthy
 
+networks:
+  # Isolated network served by the `dhcp` service: no host publishing, and the dynamic
+  # allocation starts at .128 so the fixed address of the test client (.50) stays free.
+  dhcp-lab:
+    ipam:
+      config:
+        - subnet: 192.168.220.0/24
+          ip_range: 192.168.220.128/25
+
 volumes:
   ldap-data:
   heracles-data:
   postgres-data:
   ldap-replicas-data:
+  smb-data:
+  ftp-data:

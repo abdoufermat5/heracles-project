@@ -117,13 +117,14 @@ def test_login_rejects_bad_password() -> None:
 
 def test_types_follow_the_loaded_schema(admin: Client) -> None:
     names = {t["name"] for t in ok(admin.get("/types"))}
-    # schemas loaded in the test server: core, nis, sudo, ssh, dns, systems, smb, mail
+    # schemas loaded in the test server: core, nis, sudo, ssh, dns, dhcp, systems, smb,
+    # mail, ftp
     assert {"user", "group", "department", "posix_group", "sudo", "dns_zone", "server"} <= names
-    # not loaded (no ISC dhcp / ipam schema in the test server)
-    assert "dhcp_configuration" not in names
+    assert "dhcp_configuration" in names
+    # not loaded (no ipam schema in the test server)
     assert "ipam_subnet" not in names
     user_tabs = {t["name"] for t in ok(admin.get("/types/user"))["tabs"]}
-    assert {"main", "posix", "ssh", "smb", "mail"} <= user_tabs
+    assert {"main", "posix", "ssh", "smb", "ftp_accounts", "mail"} <= user_tabs
 
 
 # ---------------------------------------------------------------- users end to end
