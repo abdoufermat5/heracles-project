@@ -43,6 +43,7 @@ class IpmiClientTab(Tab):
         StringAttr(
             "hrcIpmiIP",
             _("IP address"),
+            format="host_or_ip",
             description=_("IP address or host name of the BMC"),
         ),
         StringAttr(

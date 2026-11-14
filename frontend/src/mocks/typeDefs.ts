@@ -201,7 +201,7 @@ const rawTypeDescriptors: TypeDescriptor[] = [
               { name: 'gidNumber', label: 'Group id', kind: 'int', required: true, constraints: { min: 1000, max: 65000 } },
               str('homeDirectory', 'Home directory', {
                 required: true,
-                constraints: { pattern: '^/.*$' },
+                constraints: { format: 'abs_path' },
               }),
               {
                 name: 'loginShell',
@@ -425,7 +425,21 @@ const rawTypeDescriptors: TypeDescriptor[] = [
                       })),
                     },
                     { name: 'ttl', label: 'TTL', kind: 'int', default: 3600 },
-                    str('value', 'Value', { required: true }),
+                    str('value', 'Value', {
+                      required: true,
+                      constraints: {
+                        format_by: {
+                          field: 'type',
+                          formats: {
+                            A: 'ipv4',
+                            AAAA: 'ipv6',
+                            CNAME: 'dns_host',
+                            NS: 'dns_host',
+                            MX: 'dns_pref_host',
+                          },
+                        },
+                      },
+                    }),
                   ],
                 },
               },

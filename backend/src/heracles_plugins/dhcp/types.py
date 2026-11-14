@@ -415,7 +415,7 @@ class DhcpHost(ObjectType):
             _("Host"),
             StringAttr("cn", _("Hostname"), required=True),
             HwAddressAttr("dhcpHWAddress", _("Hardware address")),
-            virtual(StringAttr("fixed_address", _("Fixed IP address"))),
+            virtual(StringAttr("fixed_address", _("Fixed IP address"), format="ipv4")),
         )
         configuration = Section(
             _("Parameters"),

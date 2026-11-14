@@ -304,6 +304,17 @@ def _delete_personal_group(directory: DirectoryClient, uid: str, gid: int | None
                 continue
 
 
+def _check_min_id(ctx: TabContext, settings: PosixSettings, *names: str) -> None:
+    """Refuse an id typed below the configured minimum (stored legacy ids stay editable)."""
+    for name in names:
+        found = ctx.values.get(name)
+        if isinstance(found, int) and found < settings.min_id and ctx.was_touched(name):
+            ctx.error(
+                name,
+                _("Must be at least {n}, the configured minimum id.").format(n=settings.min_id),
+            )
+
+
 # --------------------------------------------------------------------- tabs
 
 PENDING_GROUP = "_pending_primary_group"
@@ -325,7 +336,7 @@ class PosixAccountTab(Tab):
             "homeDirectory",
             _("Home directory"),
             description=_("Path to the home directory (default /home/<login>)"),
-            pattern=r"/.*",
+            format="abs_path",
         ),
         ShellAttr(
             "loginShell",
@@ -414,6 +425,7 @@ class PosixAccountTab(Tab):
             ctx.error("uidNumber", str(exc))
             return
         cls._check_membership_rights(ctx, uid)
+        _check_min_id(ctx, settings, "uidNumber", "gidNumber")
 
         # shadowLastChange
         today = today_epoch_days()
@@ -631,7 +643,11 @@ class PosixGroup(ObjectType):
         )
         members = Section(
             _("Members"),
-            ListAttr("memberUid", _("Members (logins)"), StringAttr("uid", _("Login"))),
+            ListAttr(
+                "memberUid",
+                _("Members (logins)"),
+                StringAttr("uid", _("Login"), pattern=r"[A-Za-z0-9_][A-Za-z0-9._@-]*\$?"),
+            ),
         )
 
         @classmethod
@@ -645,6 +661,8 @@ class PosixGroup(ObjectType):
             if force:
                 if not isinstance(ctx.values.get("gidNumber"), int):
                     ctx.error("gidNumber", _("Required when the group id is forced."))
+                else:
+                    _check_min_id(ctx, settings, "gidNumber")
                 return
             if ctx.creating or not isinstance(ctx.values.get("gidNumber"), int):
                 try:

@@ -340,10 +340,11 @@ def test_posix_group_type(service: ObjectService, directory: MemoryDirectory) ->
     assert entry is not None and entry.text("gidNumber") == "1101"
     assert entry.texts("memberUid") == ["a", "b"]
     forced = service.create(
-        "posix_group", BASE, {"main": {"values": {"cn": "f", "force_gid": True, "gidNumber": 9}}}
+        "posix_group", BASE, {"main": {"values": {"cn": "f", "force_gid": True, "gidNumber": 2000}}}
     )
     forced_entry = directory.get(forced)
-    assert forced_entry is not None and forced_entry.text("gidNumber") == "9"
+    assert forced_entry is not None
+    assert forced_entry.text("gidNumber") == "2000"
     page = service.list("posix_group", BASE)
     assert {r.dn for r in page.items} == {dn, forced}
 

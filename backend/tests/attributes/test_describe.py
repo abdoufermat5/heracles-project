@@ -57,7 +57,7 @@ def test_list_and_ref_descriptor_snapshot() -> None:
         "multivalued": False,
         "readonly": False,
         "default": None,
-        "constraints": {},
+        "constraints": {"format": "dn"},
         "ref_type": "user",
     }
 

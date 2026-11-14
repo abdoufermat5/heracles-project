@@ -49,10 +49,10 @@ import {
 } from '@/lib/objects'
 import { typeLabel } from '@/lib/labels'
 import { useScope } from '@/lib/scope'
-import { makeResolver } from '@/lib/validation'
+import { makeResolver, validateForm } from '@/lib/validation'
 import { useLdifAvailable, useSecondFactors } from './api'
 import { EditorHeader } from './EditorHeader'
-import { EditorSaveBar } from './EditorSaveBar'
+import { EditorSaveBar, type InvalidTab } from './EditorSaveBar'
 import { EditorSection } from './EditorSection'
 import { EditorTabNav } from './EditorTabNav'
 import { LdifDialog } from './LdifDialog'
@@ -216,17 +216,48 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
     return set
   }, [diffs])
 
-  // Count errors by tab
+  // What the client validation refuses right now, whether or not the field was visited yet.
+  const liveErrors = useMemo(() => validateForm(desc, current, active), [desc, current, active])
+  const liveAttrsByTab = useMemo(() => {
+    const byTab = new Map<string, Set<string>>()
+    for (const key of Object.keys(liveErrors)) {
+      const parts = splitFieldKey(key)
+      if (!parts) continue
+      const attrs = byTab.get(parts.tab) ?? new Set<string>()
+      attrs.add(parts.attr)
+      byTab.set(parts.tab, attrs)
+    }
+    return byTab
+  }, [liveErrors])
+  const invalidTabs = useMemo<InvalidTab[]>(
+    () =>
+      desc.tabs
+        .filter((tb) => liveAttrsByTab.has(tb.name))
+        .map((tb) => ({ name: tb.name, label: tb.label, count: liveAttrsByTab.get(tb.name)?.size ?? 0 })),
+    [desc.tabs, liveAttrsByTab],
+  )
+  const invalidCount = invalidTabs.reduce((n, tb) => n + tb.count, 0)
+
+  // Errors per tab: the ones shown on fields (client and server), plus every live one once a
+  // save was attempted.
   const errorsByTab = useMemo(() => {
-    const counts: Record<string, number> = {}
+    const shown = new Map<string, Set<string>>()
+    const add = (tab: string, attr: string) => {
+      const attrs = shown.get(tab) ?? new Set<string>()
+      attrs.add(attr)
+      shown.set(tab, attrs)
+    }
     const errs = formState.errors as Record<string, Record<string, unknown>>
     for (const [tbName, tbErrors] of Object.entries(errs)) {
-      if (tbErrors && typeof tbErrors === 'object') {
-        counts[tbName] = Object.keys(tbErrors).length
-      }
+      if (tbErrors && typeof tbErrors === 'object') for (const attr of Object.keys(tbErrors)) add(tbName, attr)
     }
+    if (formState.submitCount > 0) {
+      for (const [tbName, attrs] of liveAttrsByTab) for (const attr of attrs) add(tbName, attr)
+    }
+    const counts: Record<string, number> = {}
+    for (const [tbName, attrs] of shown) counts[tbName] = attrs.size
     return counts
-  }, [formState.errors])
+  }, [formState.errors, formState.submitCount, liveAttrsByTab])
 
   // Unsaved-changes blocker
   const blocker = useBlocker({
@@ -365,6 +396,14 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
     const first = desc.tabs.find((tb) => errors[tb.name])
     if (first) setTab(first.name)
     focusFirstInvalid()
+  }
+
+  /** Show every client error inline, open `tabName` and move to its first invalid field. */
+  const showInvalid = (tabName: string) => {
+    void form.trigger().then(() => {
+      setTab(tabName)
+      focusFirstInvalid()
+    })
   }
 
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -631,6 +670,9 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
           isCreate={isCreate}
           changesCount={Object.keys(changes).length}
           diffs={diffs}
+          invalidCount={invalidCount}
+          invalidTabs={invalidTabs}
+          onShowErrors={showInvalid}
           onDiscard={() => void cancel()}
           onSave={() => void save()}
         />

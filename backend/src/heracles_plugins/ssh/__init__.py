@@ -24,7 +24,7 @@ _KEY_RE = re.compile(
     r"(?P<disabled>disabled-)?"
     r"(?P<type>ssh-(?:dss|rsa|ed25519)|ecdsa-sha2-nistp\d{3}|ecdsa-sk|ed25519-sk|"
     r"sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com)"
-    r"\s+(?P<blob>[A-Za-z0-9+/]+=*)"
+    r"\s+(?P<blob>[A-Za-z0-9+/]+={0,2})"
     r"(?:\s+(?P<comment>\S.*?))?"
 )
 
@@ -99,7 +99,11 @@ def enable_key(line: str) -> str:
 
 
 class SshPublicKeyAttr(StringAttr):
-    """One OpenSSH public key line."""
+    """One OpenSSH public key line (``ssh_key`` format in the descriptor)."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("format", "ssh_key")
+        super().__init__(*args, **kwargs)
 
     def _validate(self, value: str) -> list[str]:
         if parse_key(value) is None:

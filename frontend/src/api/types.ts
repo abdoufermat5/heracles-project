@@ -240,6 +240,10 @@ export interface SelectOption {
 
 export interface AttributeConstraints {
   pattern?: string
+  /** Named value format (`lib/formats.ts`, `lib/objectFormats.ts`); same names as the server. */
+  format?: string
+  /** The format depends on the value of a sibling sub-field (a DNS record value follows its type). */
+  format_by?: { field: string; formats: Record<string, string> }
   min?: number
   max?: number
   min_length?: number

@@ -144,7 +144,12 @@ class CompositeAttr(Attribute[dict[str, Any]]):
         errors: list[str] = []
         for field in self.fields:
             sub = value.get(field.name)
-            errors.extend(f"{field.label}: {m}" for m in field.validate(sub))
+            found = [f"{field.label}: {m}" for m in field.validate(sub)]
+            if not found and isinstance(sub, str) and sub:
+                by_sibling = field.check_sibling_format(sub, value)
+                if by_sibling is not None:
+                    found.append(f"{field.label}: {by_sibling}")
+            errors.extend(found)
             if self.separator in self._pack_field(field, sub):
                 errors.append(
                     _("{label}: must not contain '{sep}'.").format(

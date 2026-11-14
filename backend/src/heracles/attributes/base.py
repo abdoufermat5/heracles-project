@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
 from heracles.attributes.keys import help_key
+from heracles.core import formats
+from heracles.core import object_formats as object_formats
 from heracles.i18n import _
 
 type JSON = bool | int | float | str | list[JSON] | dict[str, JSON] | None
@@ -67,6 +69,8 @@ class Attribute[T](ABC):
         readonly: bool = False,
         default: T | None = None,
         pattern: Pattern | None = None,
+        format: str | None = None,
+        format_by: tuple[str, Mapping[str, str]] | None = None,
         min: float | None = None,
         max: float | None = None,
         min_length: int | None = None,
@@ -81,6 +85,11 @@ class Attribute[T](ABC):
         self.pattern: re.Pattern[str] | None = (
             re.compile(pattern) if isinstance(pattern, str) else pattern
         )
+        #: Name of a value format (``heracles.core.formats``) the text must match.
+        self.format = format
+        #: ``(sibling, {sibling value: format})``: the format depends on another sub-field
+        #: of the same composite (a DNS record value follows its record type).
+        self.format_by = format_by
         self.min = min
         self.max = max
         self.min_length = min_length
@@ -117,7 +126,7 @@ class Attribute[T](ABC):
         return []
 
     def _check_text(self, text: str) -> list[str]:
-        """Apply pattern and length constraints to ``text``."""
+        """Apply pattern, format and length constraints to ``text``."""
         errors: list[str] = []
         if self.min_length is not None and len(text) < self.min_length:
             errors.append(_("Must be at least {n} characters long.").format(n=self.min_length))
@@ -125,7 +134,19 @@ class Attribute[T](ABC):
             errors.append(_("Must be at most {n} characters long.").format(n=self.max_length))
         if self.pattern is not None and self.pattern.fullmatch(text) is None:
             errors.append(_("Invalid format."))
+        if self.format is not None:
+            problem = formats.check(self.format, text)
+            if problem is not None:
+                errors.append(problem)
         return errors
+
+    def check_sibling_format(self, text: str, siblings: Mapping[str, Any]) -> str | None:
+        """Problem with ``text`` under the format selected by a sibling sub-field, if any."""
+        if self.format_by is None:
+            return None
+        field, by_value = self.format_by
+        selected = by_value.get(str(siblings.get(field) or ""))
+        return formats.check(selected, text.strip()) if selected else None
 
     def _check_range(self, number: float) -> list[str]:
         errors: list[str] = []
@@ -142,6 +163,11 @@ class Attribute[T](ABC):
         out: dict[str, JSON] = {}
         if self.pattern is not None:
             out["pattern"] = self.pattern.pattern
+        if self.format is not None:
+            out["format"] = self.format
+        if self.format_by is not None:
+            field, by_value = self.format_by
+            out["format_by"] = {"field": field, "formats": dict(by_value)}
         if self.min is not None:
             out["min"] = self.min
         if self.max is not None:

@@ -66,6 +66,10 @@ class HostnameAttr(StringAttr):
 class MacAttr(StringAttr):
     """MAC address, normalised to lower-case ``aa:bb:cc:dd:ee:ff``."""
 
+    def __init__(self, name: str, label: str, **kwargs: Any) -> None:
+        kwargs.setdefault("format", "mac")
+        super().__init__(name, label, **kwargs)
+
     def from_ldap(self, values: list[bytes]) -> str | None:
         text = super().from_ldap(values)
         if text is None:
@@ -89,6 +93,10 @@ class MacAttr(StringAttr):
 
 class IpAttr(StringAttr):
     """IPv4 or IPv6 address, stored in canonical text form."""
+
+    def __init__(self, name: str, label: str, **kwargs: Any) -> None:
+        kwargs.setdefault("format", "ip")
+        super().__init__(name, label, **kwargs)
 
     def from_json(self, data: object) -> str | None:
         text = super().from_json(data)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, date, datetime
+from typing import Any
 
 from heracles.attributes import DateAttr, StringAttr
 from heracles.i18n import _
@@ -131,6 +132,10 @@ class WorkstationsAttr(StringAttr):
 
 class SidAttr(StringAttr):
     """A Windows security identifier (``S-1-5-21-...``)."""
+
+    def __init__(self, name: str, label: str, **kwargs: Any) -> None:
+        kwargs.setdefault("format", "sid")
+        super().__init__(name, label, **kwargs)
 
     def _validate(self, value: str) -> list[str]:
         if not _SID_RE.fullmatch(value.strip()):

@@ -7,7 +7,10 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
+from typing import Final
 
+from heracles.core.formats import check as check_format
+from heracles.core.formats import register
 from heracles.i18n import _
 
 #: Record type -> LDAP attribute of the ``dNSZone`` object class.
@@ -129,16 +132,6 @@ def _host_ok(text: str) -> bool:
     return text == "." or HOST_RE.fullmatch(text) is not None
 
 
-def _check_ip(version: int) -> Callable[[str], bool]:
-    def check(value: str) -> bool:
-        try:
-            return ipaddress.ip_address(value).version == version
-        except ValueError:
-            return False
-
-    return check
-
-
 def _pref_host(value: str) -> bool:
     parts = value.split()
     return len(parts) == 2 and _uint(parts[0], 65535) and _host_ok(parts[1])
@@ -151,51 +144,65 @@ def _srv(value: str) -> bool:
 
 def _regex(pattern: str) -> Callable[[str], bool]:
     compiled = re.compile(pattern)
-    return lambda value: compiled.fullmatch(value.strip()) is not None
+    return lambda value: compiled.fullmatch(value) is not None
 
 
-def _nonempty(value: str) -> bool:
-    return bool(value.strip())
+def _mailbox(value: str) -> bool:
+    return valid_mailbox(normalize_mail(value))
 
 
-_CHECKS: Mapping[str, tuple[Callable[[str], bool], str]] = {
-    "A": (_check_ip(4), _("Expected an IPv4 address.")),
-    "AAAA": (_check_ip(6), _("Expected an IPv6 address.")),
-    "CNAME": (_host_ok, _("Expected a host name.")),
-    "NS": (_host_ok, _("Expected a host name.")),
-    "PTR": (_host_ok, _("Expected a host name.")),
-    "MX": (_pref_host, _("Expected '<preference> <host>'.")),
-    "KX": (_pref_host, _("Expected '<preference> <host>'.")),
-    "AFSDB": (_pref_host, _("Expected '<subtype> <host>'.")),
-    "SRV": (_srv, _("Expected '<priority> <weight> <port> <target>'.")),
-    "TXT": (_nonempty, _("A text value is required.")),
-    "CAA": (
+#: Format name -> (check, message). The browser mirrors each one in ``lib/objectFormats.ts``.
+_FORMATS: Mapping[str, tuple[Callable[[str], bool], str]] = {
+    "dns_host": (_host_ok, _("Expected a host name.")),
+    "dns_mailbox": (_mailbox, _("Expected a mailbox like hostmaster.example.com.")),
+    "dns_pref_host": (_pref_host, _("Expected '<preference> <host>'.")),
+    "dns_afsdb": (_pref_host, _("Expected '<subtype> <host>'.")),
+    "dns_srv": (_srv, _("Expected '<priority> <weight> <port> <target>'.")),
+    "dns_caa": (
         _regex(rf"\d{{1,3}} [A-Za-z0-9]+ {_WORD}"),
         _("Expected '<flags> <tag> \"<value>\"'."),
     ),
-    "SSHFP": (
+    "dns_sshfp": (
         _regex(r"\d{1,3} \d{1,3} [0-9A-Fa-f]+"),
         _("Expected '<algorithm> <type> <fingerprint>'."),
     ),
-    "NAPTR": (
+    "dns_naptr": (
         _regex(rf'{_INT} {_INT} "[^"]*" "[^"]*" "[^"]*" \S+'),
         _('Expected \'<order> <preference> "<flags>" "<service>" "<regexp>" <replacement>\'.'),
     ),
-    "DS": (
+    "dns_ds": (
         _regex(r"\d{1,5} \d{1,3} \d{1,3} [0-9A-Fa-f]+"),
         _("Expected '<key tag> <algorithm> <digest type> <digest>'."),
     ),
-    "CERT": (
+    "dns_cert": (
         _regex(r"\S+ \d{1,5} \S+ \S+"),
         _("Expected '<type> <key tag> <algorithm> <certificate>'."),
     ),
-    "HINFO": (_regex(rf"{_WORD} {_WORD}"), _("Expected '<cpu> <os>'.")),
-    "LOC": (_nonempty, _("A value is required.")),
-    "KEY": (_nonempty, _("A value is required.")),
-    "SIG": (_nonempty, _("A value is required.")),
-    "RRSIG": (_nonempty, _("A value is required.")),
-    "NSEC": (_nonempty, _("A value is required.")),
+    "dns_hinfo": (_regex(rf"{_WORD} {_WORD}"), _("Expected '<cpu> <os>'.")),
 }
+for _name, (_check, _message) in _FORMATS.items():
+    register(_name, _check, _message)
+
+#: Record type -> format of its value (types missing here only need a non-empty value).
+VALUE_FORMATS: Final[Mapping[str, str]] = {
+    "A": "ipv4",
+    "AAAA": "ipv6",
+    "CNAME": "dns_host",
+    "NS": "dns_host",
+    "PTR": "dns_host",
+    "MX": "dns_pref_host",
+    "KX": "dns_pref_host",
+    "AFSDB": "dns_afsdb",
+    "SRV": "dns_srv",
+    "CAA": "dns_caa",
+    "SSHFP": "dns_sshfp",
+    "NAPTR": "dns_naptr",
+    "DS": "dns_ds",
+    "CERT": "dns_cert",
+    "HINFO": "dns_hinfo",
+}
+#: Types accepting any non-empty value.
+_FREE_VALUE_TYPES: Final = ("TXT", "LOC", "KEY", "SIG", "RRSIG", "NSEC")
 
 
 def validate_record(name: str, rtype: str, value: str) -> str | None:
@@ -209,11 +216,13 @@ def validate_record(name: str, rtype: str, value: str) -> str | None:
         if rtype == "DMARC" and lowered != "_dmarc":
             return _("The name of a DMARC record must be '_dmarc'.")
         return None
-    check = _CHECKS.get(rtype)
-    if check is None:
-        return _("Unknown record type.")
-    ok, message = check
-    return None if ok(value.strip()) else message
+    text = value.strip()
+    fmt = VALUE_FORMATS.get(rtype)
+    if fmt is not None:
+        return check_format(fmt, text) if text else _("A value is required.")
+    if rtype in _FREE_VALUE_TYPES:
+        return None if text else _("A value is required.")
+    return _("Unknown record type.")
 
 
 @dataclass(frozen=True, slots=True)

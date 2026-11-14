@@ -41,6 +41,7 @@ from heracles_plugins.dns.records import (
     NAME_RE,
     RECORD_TYPES,
     REVERSE_RE,
+    VALUE_FORMATS,
     ZONE_RE,
     Record,
     Soa,
@@ -115,7 +116,12 @@ class RecordAttr(CompositeAttr):
                 SelectAttr(
                     "type", _("Type"), required=True, options=[(t, t) for t in RECORD_TYPES]
                 ),
-                StringAttr("value", _("Value"), required=True),
+                StringAttr(
+                    "value",
+                    _("Value"),
+                    required=True,
+                    format_by=("type", VALUE_FORMATS),
+                ),
             ],
             separator=_UNIT_SEPARATOR,
         )
@@ -223,6 +229,7 @@ class DnsZone(ObjectType):
                     "soaPrimary",
                     _("Primary name server"),
                     required=True,
+                    format="dns_host",
                     description=_("Host name of the primary name server"),
                 )
             ),
@@ -231,6 +238,7 @@ class DnsZone(ObjectType):
                     "soaMail",
                     _("Administrator mailbox"),
                     required=True,
+                    format="dns_mailbox",
                     description=_("hostmaster.example.com. form; an email address is converted"),
                 )
             ),

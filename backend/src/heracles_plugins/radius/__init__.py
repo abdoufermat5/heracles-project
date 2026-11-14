@@ -27,8 +27,8 @@ class RadiusAccountTab(Tab):
     network = Section(
         _("Network and protocol"),
         StringAttr("radiusFramedProtocol", _("Framed protocol")),
-        StringAttr("radiusFramedIPAddress", _("Framed IP address")),
-        StringAttr("radiusFramedIPNetmask", _("Framed IP netmask")),
+        StringAttr("radiusFramedIPAddress", _("Framed IP address"), format="ipv4"),
+        StringAttr("radiusFramedIPNetmask", _("Framed IP netmask"), format="ipv4"),
         IntAttr("radiusFramedMTU", _("Framed MTU"), min=0),
         StringAttr("radiusFramedCompression", _("Framed compression")),
         StringAttr("radiusServiceType", _("Service type")),

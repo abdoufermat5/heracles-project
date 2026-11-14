@@ -19,6 +19,8 @@ from heracles.objects import Plugin, Section, Tab, TabAttachment
 from heracles.objects.hooks import TabContext
 
 PLUGIN_NAME = "kerberos"
+#: ``name[/instance]@REALM``
+PRINCIPAL_RE: Final = r"[^@\s/]+(?:/[^@\s/]+)*@[^@\s]+"
 
 TICKET_FLAGS: Final[tuple[tuple[str, int, str], ...]] = (
     ("DISALLOW_POSTDATED", 0x00000001, _("Disallow postdated tickets")),
@@ -90,8 +92,14 @@ class KerberosAccountTab(Tab):
 
     identity = Section(
         _("Principal identity"),
-        StringAttr("krbPrincipalName", _("Principal name"), required=True),
-        StringAttr("krbCanonicalName", _("Canonical name")),
+        StringAttr(
+            "krbPrincipalName",
+            _("Principal name"),
+            required=True,
+            pattern=PRINCIPAL_RE,
+            description=_("name[/instance]@REALM"),
+        ),
+        StringAttr("krbCanonicalName", _("Canonical name"), pattern=PRINCIPAL_RE),
         ListAttr(
             "krbPrincipalAliases",
             _("Principal aliases"),

@@ -204,3 +204,7 @@ class ObjectType:
             raise TypeError(f"object type {cls.name!r} declares no tab")
         if cls.name and cls.tabs[0].optional:
             raise TypeError(f"the main tab of {cls.name!r} cannot be optional")
+        main = cls.tabs[0].attribute(cls.main_attr) if cls.name and cls.main_attr else None
+        if main is not None and main.kind == "string" and main.pattern is None and not main.format:
+            # the value becomes the RDN of the entry: no padding, no control characters
+            main.format = "rdn_value"

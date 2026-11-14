@@ -2,12 +2,15 @@ import i18n from 'i18next'
 import type { FieldErrors, Resolver } from 'react-hook-form'
 import { z } from 'zod'
 import type { AttributeDescriptor, TypeDescriptor, Values } from '@/api/types'
+import { checkFormat } from './formats'
 import { allAttributes, isEmpty, type FormValues } from './objects'
+import './objectFormats'
 
 const t = (key: string, opts?: Record<string, unknown>): string => i18n.t(key, opts)
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
-const PHONE_RE = /^\+?[0-9 ().-]{3,}$/
+/** Same rule as the server's `EmailAttr`: one `@` between two non-empty parts. */
+const EMAIL_RE = /^[^@\s]+@[^@\s]+$/
+const PHONE_RE = /^\+?[0-9(][0-9 ().\-/]{2,}$/
 
 function scalarSchema(a: AttributeDescriptor): z.ZodType {
   const c = a.constraints ?? {}
@@ -23,7 +26,7 @@ function scalarSchema(a: AttributeDescriptor): z.ZodType {
       return z.boolean()
     case 'select':
       return z.string().refine(
-        (v) => !a.options || a.options.some((o) => o.value === v),
+        (v) => !a.options?.length || a.options.some((o) => o.value === v),
         t('validation.invalid'),
       )
     default: {
@@ -32,15 +35,17 @@ function scalarSchema(a: AttributeDescriptor): z.ZodType {
       if (c.max_length) s = s.max(c.max_length, t('validation.maxLength', { count: c.max_length }))
       if (c.pattern) {
         try {
-          s = s.regex(new RegExp(c.pattern), t('validation.pattern'))
+          // the server matches the whole value
+          s = s.regex(new RegExp(`^(?:${c.pattern})$`), t('validation.pattern'))
         } catch {
           /* ignore invalid pattern from the server */
         }
       }
       if (a.kind === 'email') s = s.regex(EMAIL_RE, t('validation.email'))
       if (a.kind === 'phone') s = s.regex(PHONE_RE, t('validation.phone'))
+      let out: z.ZodType = s
       if (a.kind === 'url')
-        return s.refine((v) => {
+        out = s.refine((v) => {
           try {
             new URL(v)
             return true
@@ -48,7 +53,13 @@ function scalarSchema(a: AttributeDescriptor): z.ZodType {
             return false
           }
         }, t('validation.url'))
-      return s
+      const format = c.format
+      if (format)
+        out = out.superRefine((v, ctx) => {
+          const message = typeof v === 'string' ? checkFormat(format, v) : null
+          if (message) ctx.addIssue({ code: 'custom', message })
+        })
+      return out
     }
   }
 }
@@ -59,6 +70,8 @@ export function validateAttribute(
   v: unknown,
   path = '',
   out: Record<string, string> = {},
+  /** Values of the composite this attribute is a sub-field of (for `format_by`). */
+  siblings?: Values,
 ): Record<string, string> {
   if (a.kind === 'hidden' || a.kind === 'display') return out
   const join = (k: string | number) => (path ? `${path}.${k}` : String(k))
@@ -69,7 +82,7 @@ export function validateAttribute(
   }
   if (a.kind === 'composite') {
     const obj = (v ?? {}) as Values
-    for (const f of a.fields ?? []) validateAttribute(f, obj[f.name], join(f.name), out)
+    for (const f of a.fields ?? []) validateAttribute(f, obj[f.name], join(f.name), out, obj)
     return out
   }
   if (a.kind === 'list' && a.item) {
@@ -98,7 +111,19 @@ export function validateAttribute(
   }
   const r = scalarSchema(a).safeParse(v)
   if (!r.success) out[path] = r.error.issues[0]?.message ?? t('validation.invalid')
+  else {
+    const bySibling = formatBySibling(a, v, siblings)
+    if (bySibling) out[path] = bySibling
+  }
   return out
+}
+
+/** Error under the format a sibling sub-field selects (`format_by`), or `null`. */
+function formatBySibling(a: AttributeDescriptor, v: unknown, siblings?: Values): string | null {
+  const by = a.constraints?.format_by
+  if (!by || !siblings || typeof v !== 'string') return null
+  const format = by.formats[String(siblings[by.field] ?? '')]
+  return format ? checkFormat(format, v.trim()) : null
 }
 
 function setIn(obj: Record<string, unknown>, path: string, leaf: unknown): void {

@@ -6,6 +6,7 @@ import ipaddress
 import re
 from typing import Final
 
+from heracles.core.formats import register
 from heracles.i18n import _
 
 _NAME = r"[A-Za-z0-9_][A-Za-z0-9_.@-]*\$?"
@@ -25,10 +26,20 @@ def _strip_negation(value: str) -> str:
     return value[1:].lstrip() if value.startswith("!") else value
 
 
+_USER_MESSAGE: Final = _(
+    "Expected a login, %group, %#gid, #uid, +netgroup or ALL (optionally with '!')."
+)
+_RUNAS_GROUP_MESSAGE: Final = _("Expected a group name, #gid or ALL (optionally with '!').")
+_HOST_MESSAGE: Final = _("Expected a host name, IP address, network (CIDR), +netgroup or ALL.")
+_COMMAND_MESSAGE: Final = _(
+    "Expected ALL, an absolute command path with optional arguments, or sudoedit."
+)
+
+
 def user_error(value: str) -> str | None:
     """Problem with a ``sudoUser`` value, or ``None``."""
     if _USER_RE.fullmatch(_strip_negation(value)) is None:
-        return _("Expected a login, %group, %#gid, #uid, +netgroup or ALL (optionally with '!').")
+        return _USER_MESSAGE
     return None
 
 
@@ -40,7 +51,7 @@ def runas_user_error(value: str) -> str | None:
 def runas_group_error(value: str) -> str | None:
     """Problem with a ``sudoRunAsGroup`` value, or ``None``."""
     if _RUNAS_GROUP_RE.fullmatch(_strip_negation(value)) is None:
-        return _("Expected a group name, #gid or ALL (optionally with '!').")
+        return _RUNAS_GROUP_MESSAGE
     return None
 
 
@@ -56,7 +67,7 @@ def host_error(value: str) -> str | None:
     try:
         ipaddress.ip_network(host, strict=False)
     except ValueError:
-        return _("Expected a host name, IP address, network (CIDR), +netgroup or ALL.")
+        return _HOST_MESSAGE
     return None
 
 
@@ -75,7 +86,13 @@ def command_error(value: str) -> str | None:
     head = command.split(None, 1)[0]
     if _ALIAS_RE.fullmatch(command) or head in ("sudoedit",) or head.startswith("/"):
         return None
-    return _("Expected ALL, an absolute command path with optional arguments, or sudoedit.")
+    return _COMMAND_MESSAGE
+
+
+register("sudo_user", lambda t: user_error(t) is None, _USER_MESSAGE)
+register("sudo_runas_group", lambda t: runas_group_error(t) is None, _RUNAS_GROUP_MESSAGE)
+register("sudo_host", lambda t: host_error(t) is None, _HOST_MESSAGE)
+register("sudo_command", lambda t: command_error(t) is None, _COMMAND_MESSAGE)
 
 
 __all__ = [

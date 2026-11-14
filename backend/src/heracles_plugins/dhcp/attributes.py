@@ -23,6 +23,10 @@ class MacAddressAttr(StringAttr):
 
     kind = "string"
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("format", "mac")
+        super().__init__(*args, **kwargs)
+
     def _validate(self, value: str) -> list[str]:
         errors = self._check_text(value)
         err = validate_mac(value)

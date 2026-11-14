@@ -17,14 +17,8 @@ from heracles.attributes import (
 from heracles.i18n import _
 from heracles.objects import ObjectType, Plugin, Section, Tab
 from heracles.objects.hooks import TabContext
+from heracles_plugins.sudo import syntax as syntax
 from heracles_plugins.sudo.options import OPTIONS, OptionSpec, option_error, parse_option
-from heracles_plugins.sudo.syntax import (
-    command_error,
-    host_error,
-    runas_group_error,
-    runas_user_error,
-    user_error,
-)
 
 PLUGIN_NAME = "sudo"
 DEFAULTS_CN = "defaults"
@@ -104,13 +98,13 @@ class SudoRole(ObjectType):
             ListAttr(
                 "sudoUser",
                 _("Users"),
-                CheckedStringAttr("sudoUser", _("User"), user_error),
+                StringAttr("sudoUser", _("User"), format="sudo_user"),
                 description=_("Login, %group, %#gid, #uid, +netgroup or ALL; '!' negates"),
             ),
             ListAttr(
                 "sudoHost",
                 _("Hosts"),
-                CheckedStringAttr("sudoHost", _("Host"), host_error),
+                StringAttr("sudoHost", _("Host"), format="sudo_host"),
                 description=_("Host name, IP, network (CIDR) or ALL; '!' negates"),
                 default=["ALL"],
             ),
@@ -120,18 +114,18 @@ class SudoRole(ObjectType):
             ListAttr(
                 "sudoCommand",
                 _("Commands"),
-                CheckedStringAttr("sudoCommand", _("Command"), command_error),
+                StringAttr("sudoCommand", _("Command"), format="sudo_command"),
                 description=_("Command with optional arguments, or ALL; '!' negates"),
             ),
             ListAttr(
                 "sudoRunAsUser",
                 _("Run as users"),
-                CheckedStringAttr("sudoRunAsUser", _("User"), runas_user_error),
+                StringAttr("sudoRunAsUser", _("User"), format="sudo_user"),
             ),
             ListAttr(
                 "sudoRunAsGroup",
                 _("Run as groups"),
-                CheckedStringAttr("sudoRunAsGroup", _("Group"), runas_group_error),
+                StringAttr("sudoRunAsGroup", _("Group"), format="sudo_runas_group"),
             ),
         )
 

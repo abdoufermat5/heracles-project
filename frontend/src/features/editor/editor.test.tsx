@@ -230,4 +230,37 @@ describe('object editor', () => {
     const body = patch.mock.calls[0]?.[2]
     expect(body).toEqual({ tabs: { main: { active: true, values: { sn: 'ShortcutSaved' } } } })
   })
+
+  it('refuses a value of the wrong format inline, blocks saving and names the tab', async () => {
+    const patch = vi.spyOn(api, 'patchObject')
+    await openEditor(userPath(1 + 3))
+    await userEvent.click(screen.getByRole('button', { name: /Edit/ }))
+    await waitFor(() => expect(screen.getByLabelText(/^Last name/)).toBeEnabled())
+    await userEvent.click(screen.getByRole('button', { name: /Add capability/ }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: /Unix/ }))
+    await userEvent.type(await screen.findByLabelText(/^User id/), '2000')
+    await userEvent.type(screen.getByLabelText(/^Group id/), '2000')
+    const home = screen.getByLabelText(/^Home directory/)
+    await userEvent.type(home, 'home/x')
+    await userEvent.tab()
+
+    // the message sits under the field, announced and tied to it
+    expect(await screen.findByText('Enter an absolute path, such as /bin/bash')).toHaveAttribute('role', 'alert')
+    expect(home).toHaveAttribute('aria-invalid', 'true')
+    // the save bar says how many fields are wrong and in which tab
+    const summary = screen.getByTestId('invalid-summary')
+    expect(summary).toHaveTextContent('1 field needs attention')
+    expect(within(summary).getByRole('button')).toHaveTextContent('(1)')
+
+    await userEvent.click(screen.getByRole('button', { name: /Save/ }))
+    expect(patch).not.toHaveBeenCalled()
+
+    // fixing the value lifts the block
+    await userEvent.clear(home)
+    await userEvent.type(home, '/home/x')
+    await waitFor(() => expect(screen.queryByTestId('invalid-summary')).not.toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /Save/ }))
+    await confirmReview()
+    await waitFor(() => expect(patch).toHaveBeenCalledTimes(1))
+  })
 })

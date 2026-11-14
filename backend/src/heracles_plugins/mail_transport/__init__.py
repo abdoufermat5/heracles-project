@@ -50,6 +50,7 @@ class MailTransportServiceTab(Tab):
         StringAttr(
             "hrcMtaMyHostname",
             _("Host name"),
+            format="hostname",
             description=_(
                 "The myhostname parameter specifies the internet host name of this mail system"
             ),
@@ -57,6 +58,7 @@ class MailTransportServiceTab(Tab):
         StringAttr(
             "hrcMtaMyDomain",
             _("Domain"),
+            format="hostname",
             description=_("The mydomain parameter specifies the local internet domain name"),
         ),
         StringAttr(
@@ -113,7 +115,7 @@ class MailTransportServiceTab(Tab):
                 "catchall_entry",
                 _("Catchall entry"),
                 [
-                    StringAttr("hrcCatchallTableDomain", _("Domain")),
+                    StringAttr("hrcCatchallTableDomain", _("Domain"), format="hostname"),
                     EmailAttr("hrcCatchallTableRecipient", _("Recipient")),
                 ],
                 separator=";",
@@ -126,8 +128,8 @@ class MailTransportServiceTab(Tab):
                 "alias_entry",
                 _("Domain alias entry"),
                 [
-                    StringAttr("hrcDomainAliasTableFrom", _("From domain")),
-                    StringAttr("hrcDomainAliasTableTo", _("To domain")),
+                    StringAttr("hrcDomainAliasTableFrom", _("From domain"), format="hostname"),
+                    StringAttr("hrcDomainAliasTableTo", _("To domain"), format="hostname"),
                 ],
                 separator=";",
             ),

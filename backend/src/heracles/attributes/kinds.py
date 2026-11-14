@@ -20,7 +20,6 @@ from heracles.attributes.base import (
 )
 from heracles.attributes.keys import option_key
 from heracles.i18n import _
-from heracles.ldap import dn as dnlib
 
 # ---------------------------------------------------------------------------
 # Text family
@@ -69,6 +68,8 @@ class TextAttr(_StrAttr):
 _EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+|[^@\s]+@[^@\s]+")
 _PHONE_RE = re.compile(r"\+?[0-9(][0-9 ().\-/]{2,}")
 _URL_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*:\S+")
+#: ``http(s)`` URLs must name a host.
+_WEB_URL_RE = re.compile(r"https?://[^/\s?#]+\S*", re.IGNORECASE)
 
 
 class EmailAttr(_StrAttr):
@@ -102,7 +103,9 @@ class UrlAttr(_StrAttr):
 
     def _validate(self, value: str) -> list[str]:
         errors = self._check_text(value)
-        if _URL_RE.fullmatch(value) is None:
+        if _URL_RE.fullmatch(value) is None or (
+            value.lower().startswith(("http:", "https:")) and _WEB_URL_RE.fullmatch(value) is None
+        ):
             errors.append(_("Invalid URL."))
         return errors
 
@@ -643,12 +646,11 @@ class MultiSelectAttr(Attribute[list[str]]):
 
 
 class _DnAttr(_StrAttr):
-    def _validate(self, value: str) -> list[str]:
-        errors = self._check_text(value)
-        parts = dnlib.split(value)
-        if not parts or any("=" not in p for p in parts):
-            errors.append(_("Invalid distinguished name."))
-        return errors
+    """A distinguished name: its syntax is the ``dn`` format, also sent in the descriptor."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("format", "dn")
+        super().__init__(*args, **kwargs)
 
 
 class ObjectRefAttr(_DnAttr):

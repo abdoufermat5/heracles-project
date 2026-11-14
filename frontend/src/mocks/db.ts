@@ -11,6 +11,8 @@ import type {
   TypeDescriptor,
   Values,
 } from '@/api/types'
+import { matchesFormat } from '@/lib/formats'
+import '@/lib/objectFormats'
 import { typeDescriptors, typeRdn } from './typeDefs'
 
 export const BASE_DN = 'dc=example,dc=com'
@@ -454,7 +456,13 @@ class Db {
     return errors
   }
 
-  private validateAttr(a: AttributeDescriptor, v: unknown, key: string, errors: Record<string, string>) {
+  private validateAttr(
+    a: AttributeDescriptor,
+    v: unknown,
+    key: string,
+    errors: Record<string, string>,
+    siblings?: Values,
+  ) {
     if (a.kind === 'display' || a.kind === 'hidden') return
     const empty = v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)
     if (empty) {
@@ -463,7 +471,7 @@ class Db {
     }
     if (a.kind === 'composite' && a.fields && typeof v === 'object' && !Array.isArray(v)) {
       for (const f of a.fields) {
-        this.validateAttr(f, (v as Values)[f.name], `${key}.${f.name}`, errors)
+        this.validateAttr(f, (v as Values)[f.name], `${key}.${f.name}`, errors, v as Values)
       }
       return
     }
@@ -478,7 +486,14 @@ class Db {
     }
     const c = a.constraints
     if (typeof v === 'string') {
-      if (c?.pattern && !new RegExp(c.pattern).test(v)) errors[key] = 'Invalid format'
+      if (c?.pattern && !new RegExp(`^(?:${c.pattern})$`).test(v)) errors[key] = 'Invalid format'
+      else if (c?.format && !matchesFormat(c.format, v)) errors[key] = `Invalid ${c.format}`
+      else if (
+        c?.format_by &&
+        siblings &&
+        !matchesFormat(c.format_by.formats[String(siblings[c.format_by.field] ?? '')] ?? '', v.trim())
+      )
+        errors[key] = 'Invalid value for this type'
       else if (c?.min_length && v.length < c.min_length)
         errors[key] = `Must be at least ${c.min_length} characters`
       else if (c?.max_length && v.length > c.max_length)

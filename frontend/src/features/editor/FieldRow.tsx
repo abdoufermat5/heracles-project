@@ -46,38 +46,45 @@ export function FieldRow({ control, tab, attr, readOnly, lockedInEdit = false }:
         )}
       </div>
 
-      {attr.kind === 'password' ? (
-        <PasswordRow
-          control={control}
-          name={name}
-          id={id}
-          attr={attr}
-          readOnly={readOnly}
-          value={field.value}
-          onChange={field.onChange}
-          error={message}
-        />
-      ) : isCompositeList(attr) ? (
-        <CompositeTable
-          descriptor={attr}
-          id={id}
-          value={field.value}
-          onChange={field.onChange}
-          readOnly={readOnly}
-          errorTree={error}
-        />
-      ) : (
-        <FieldInput
-          descriptor={attr}
-          id={id}
-          value={field.value}
-          onChange={field.onChange}
-          readOnly={readOnly}
-          invalid={!!error}
-          error={message}
-          errorTree={error}
-        />
-      )}
+      <div
+        onBlur={(e) => {
+          // validate once the cursor leaves the whole control (a list has several inputs)
+          if (!e.currentTarget.contains(e.relatedTarget)) field.onBlur()
+        }}
+      >
+        {attr.kind === 'password' ? (
+          <PasswordRow
+            control={control}
+            name={name}
+            id={id}
+            attr={attr}
+            readOnly={readOnly}
+            value={field.value}
+            onChange={field.onChange}
+            error={message}
+          />
+        ) : isCompositeList(attr) ? (
+          <CompositeTable
+            descriptor={attr}
+            id={id}
+            value={field.value}
+            onChange={field.onChange}
+            readOnly={readOnly}
+            errorTree={error}
+          />
+        ) : (
+          <FieldInput
+            descriptor={attr}
+            id={id}
+            value={field.value}
+            onChange={field.onChange}
+            readOnly={readOnly}
+            invalid={!!error}
+            error={message}
+            errorTree={error}
+          />
+        )}
+      </div>
 
       {attr.description && !message && (
         <p className="text-xs leading-normal text-muted-foreground">{attr.description}</p>
