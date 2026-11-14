@@ -63,7 +63,7 @@ export const settingsFr: typeof settingsEn = {
         default_shell: 'Shell de connexion par défaut attribué aux nouveaux comptes POSIX.',
         acl_tab_on_objects: 'Afficher l\'onglet ACL directement sur les fiches des objets.',
         department_categories: 'Catégories activées pour les unités organisationnelles et départements.',
-        plugins_menu_blacklist: 'Liste des identifiants d\'extensions masqués des menus de navigation.',
+        plugins_menu_blacklist: 'Liste des identifiants de modules masqués des menus de navigation.',
         acl_target_filter_limit: 'Nombre maximal d\'entrées évaluées lors du filtrage des cibles ACL.',
         management_config: 'Propriétés de configuration pour les flux de gestion de l\'annuaire.',
         management_user_config: 'Paramètres de gestion des flux utilisateurs de l\'annuaire.',
@@ -252,18 +252,18 @@ export const settingsFr: typeof settingsEn = {
         },
         plugin_data: {
           found:
-            'Des entrées utilisent le schéma de plugins désactivés ({{plugins}} ; {{count}} entrées), ce qui les masque dans la console.',
+            'Des entrées utilisent le schéma de modules désactivés ({{plugins}} ; {{count}} entrées), ce qui les masque dans la console.',
           found_one:
-            'Une entrée utilise le schéma d\'un plugin désactivé ({{plugins}}), ce qui la masque dans la console.',
+            'Une entrée utilise le schéma d\'un module désactivé ({{plugins}}), ce qui la masque dans la console.',
           found_other:
-            'Des entrées utilisent le schéma de plugins désactivés ({{plugins}} ; {{count}} entrées), ce qui les masque dans la console.',
-          ok: 'Aucune donnée n\'appartient à un plugin désactivé.',
+            'Des entrées utilisent le schéma de modules désactivés ({{plugins}} ; {{count}} entrées), ce qui les masque dans la console.',
+          ok: 'Aucune donnée n\'appartient à un module désactivé.',
           failed: 'La vérification a échoué : {{error}}.',
         },
       },
     },
     tasks: {
-      search: 'Rechercher des tâches par nom…',
+      search: 'Rechercher une tâche…',
       history: 'Historique d\'exécution',
       created: 'Créé le',
       lastRun: 'Dernière exécution',

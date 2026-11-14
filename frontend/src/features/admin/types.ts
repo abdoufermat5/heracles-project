@@ -26,6 +26,9 @@ export interface CatalogObject {
   key: string
   label: string
   type: string
+  /** Stable name of the tab, and whether it is the main tab of its type. */
+  tab?: string
+  main?: boolean
   attributes: CatalogAttribute[]
 }
 
@@ -108,7 +111,8 @@ export interface RightsReport {
   rights: string
   attributes: Record<string, string>
   warnings: string[]
-  rules: { origin: string; scope: AssignmentScope; blocks: string[] }[]
+  /** `self_only`: the blocks that only apply to the person's own entry. */
+  rules: { origin: string; scope: AssignmentScope; blocks: string[]; self_only?: string[] }[]
   bootstrap_admin: boolean
 }
 
@@ -225,6 +229,8 @@ export interface TaskReport {
   time: string
   status: 'ok' | 'error' | 'skipped' | string
   summary: string
+  /** Counters of the run (`mails_sent`, …); the summary is built from them client-side. */
+  counts?: Record<string, number>
   errors: string[]
   /** Why the run was skipped (an English sentence from the server), otherwise null. */
   reason?: string | null

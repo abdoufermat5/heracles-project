@@ -1,5 +1,6 @@
 import { AlertTriangle, Layers, Puzzle } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
+import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -7,7 +8,7 @@ import { isApiError } from '@/api/client'
 import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { typeLabel } from '@/lib/labels'
+import { tabLabel, typeLabel } from '@/lib/labels'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PageLayout } from '@/components/patterns'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -29,6 +30,11 @@ const GROUPS: { id: Group; titleKey: string }[] = [
   { id: 'unavailable', titleKey: 'plugins.groupUnavailable' },
 ]
 
+/** Human name of a plugin by its id; an unknown (third-party) plugin keeps its id. */
+function pluginLabel(t: TFunction, name: string): string {
+  return t(`plugins.names.${name}`, { defaultValue: name })
+}
+
 function PluginCard({
   p,
   canWrite,
@@ -39,6 +45,7 @@ function PluginCard({
   onToggle: (enabled: boolean) => void
 }) {
   const { t } = useTranslation()
+  const label = pluginLabel(t, p.name)
   // why the switch cannot be used; shown as its tooltip
   const blocked = !p.available
     ? t('plugins.toggleUnavailable')
@@ -53,7 +60,7 @@ function PluginCard({
       checked={p.enabled}
       disabled={blocked !== null}
       onCheckedChange={onToggle}
-      aria-label={t('plugins.toggle', { name: p.name })}
+      aria-label={t('plugins.toggle', { name: label })}
     />
   )
 
@@ -68,9 +75,11 @@ function PluginCard({
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Puzzle className="size-4 text-primary" aria-hidden />
-                <h3 className="text-body font-semibold tracking-tight text-foreground">{p.name}</h3>
+                <h3 className="text-body font-semibold tracking-tight text-foreground">{label}</h3>
               </div>
-              <p className="font-mono text-xs tabular-nums text-muted-foreground">{p.version}</p>
+              <p className="font-mono text-xs tabular-nums text-muted-foreground">
+                <span>{p.name}</span> · <span>{p.version}</span>
+              </p>
             </div>
             <div className="flex items-center gap-2">
               {!p.available ? (
@@ -95,6 +104,9 @@ function PluginCard({
         </CardHeader>
 
         <CardContent className="space-y-3 pt-0">
+          {p.locked && p.enabled && (
+            <p className="text-caption text-muted-foreground">{t('plugins.toggleLocked')}</p>
+          )}
           {!p.available && p.missing_object_classes.length > 0 && (
             <div className="flex items-start gap-2 rounded-sm border border-warning/30 bg-warning-soft p-2.5 text-caption text-warning">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -128,8 +140,10 @@ function PluginCard({
                   {p.tabs.map((tab) => (
                     <Badge key={`${tab.type}/${tab.name}`} variant="outline">
                       <Layers className="size-3 mr-1 opacity-70" aria-hidden />
-                      {tab.label}
-                      <span className="ml-1 opacity-60">({tab.type})</span>
+                      {tabLabel(t, tab)}
+                      <span className="ml-1 opacity-60">
+                        ({typeLabel(t, { name: tab.type, label: tab.type })})
+                      </span>
                     </Badge>
                   ))}
                 </div>
@@ -159,12 +173,12 @@ export function PluginsPage() {
         onSuccess: (res) => {
           toast.success(
             t(enabled ? 'plugins.turnedOn' : 'plugins.turnedOff', {
-              name: p.name,
+              name: pluginLabel(t, p.name),
             }),
           )
           if (res.restart_required) toast.info(t('plugins.restartRequired'))
         },
-        onError: (e) => toast.error(isApiError(e) ? e.message : t('plugins.toggleFailed', { name: p.name })),
+        onError: (e) => toast.error(isApiError(e) ? e.message : t('plugins.toggleFailed', { name: pluginLabel(t, p.name) })),
       },
     )
 

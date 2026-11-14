@@ -293,7 +293,7 @@ describe('import / export availability', () => {
     io,
   })
 
-  it('asks for no rights and shows nothing when the capability says the plugin is off', async () => {
+  it('asks for no rights and says the module is off when the capability says the plugin is off', async () => {
     server.use(
       http.get('/api/v2/admin/capabilities', () => HttpResponse.json(caps(false))),
     )
@@ -306,7 +306,7 @@ describe('import / export availability', () => {
     server.events.on('request:start', listener)
 
     renderApp('/io')
-    expect(await screen.findByText('No import or export rights')).toBeInTheDocument()
+    expect(await screen.findByText('The import / export module is off')).toBeInTheDocument()
     expect(probed).toEqual([])
     expect(screen.queryByRole('link', { name: 'Import / export' })).not.toBeInTheDocument()
 

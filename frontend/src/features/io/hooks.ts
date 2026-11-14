@@ -35,6 +35,10 @@ export function useIoAccess() {
 
   return {
     ...query,
+    /** The import / export module is switched off (as opposed to the user lacking rights). */
+    moduleDisabled: knownAbsent,
+    /** The user may open the modules page to switch it on. */
+    canManageModules: caps.data?.plugins === true,
     data: knownAbsent ? NO_ACCESS : query.data,
     isPending: knownAbsent ? false : enabled ? query.isPending : true,
     isError: enabled && query.isError,

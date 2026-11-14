@@ -324,7 +324,7 @@ describe('plugins page', () => {
     renderApp('/admin/plugins')
     const posix = (await screen.findByText('posix')).closest('[data-plugin]') as HTMLElement
     expect(within(posix).getByText('Enabled')).toBeInTheDocument()
-    expect(within(posix).getByText('Unix group')).toBeInTheDocument()
+    expect(within(posix).getByText('POSIX group')).toBeInTheDocument()
     expect(within(posix).getByText('0.1.0')).toBeInTheDocument()
     const samba = (await screen.findByText('samba')).closest('[data-plugin]') as HTMLElement
     expect(within(samba).getByText('Unavailable')).toBeInTheDocument()
@@ -348,7 +348,7 @@ describe('plugins page', () => {
     signIn()
     renderApp('/admin/plugins')
     const dns = (await screen.findByText('dns')).closest('[data-plugin]') as HTMLElement
-    await userEvent.click(within(dns).getByRole('switch', { name: 'Enable plugin dns' }))
+    await userEvent.click(within(dns).getByRole('switch', { name: 'Enable plugin DNS' }))
     await waitFor(() => expect(lastRequest('PATCH', '/plugins/dns')?.body).toEqual({ enabled: true }))
     await waitFor(() =>
       expect(document.querySelector('[data-group="enabled"] [data-plugin="dns"]')).not.toBeNull(),
@@ -360,7 +360,7 @@ describe('plugins page', () => {
     adminMock.failPluginToggle = true
     renderApp('/admin/plugins')
     const dns = (await screen.findByText('dns')).closest('[data-plugin]') as HTMLElement
-    await userEvent.click(within(dns).getByRole('switch', { name: 'Enable plugin dns' }))
+    await userEvent.click(within(dns).getByRole('switch', { name: 'Enable plugin DNS' }))
     await waitFor(() => expect(lastRequest('PATCH', '/plugins/dns')).toBeDefined())
     await waitFor(() =>
       expect(document.querySelector('[data-group="available"] [data-plugin="dns"]')).not.toBeNull(),

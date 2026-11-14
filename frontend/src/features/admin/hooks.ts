@@ -1,7 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TFunction } from 'i18next'
+import { useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { qk } from '@/api/hooks'
+import { attributeLabel, localText, tabLabel, typeLabel } from '@/lib/labels'
 import { adminApi } from './api'
-import type { Assignment, ConfigValue, Hook, PluginInfo, RoleInput, RoleTemplate } from './types'
+import type {
+  Assignment,
+  Catalog,
+  ConfigValue,
+  Hook,
+  PluginInfo,
+  RoleInput,
+  RoleTemplate,
+} from './types'
 
 export const ak = {
   caps: ['admin', 'capabilities'] as const,
@@ -21,8 +33,41 @@ export function useCapabilities() {
   return useQuery({ queryKey: ak.caps, queryFn: adminApi.capabilities, staleTime: 60_000 })
 }
 
+/** Catalog with the names of categories, tabs and attributes translated by their stable ids. */
+function translateCatalog(t: TFunction, catalog: Catalog): Catalog {
+  return {
+    ...catalog,
+    categories: catalog.categories.map((category) => ({
+      ...category,
+      label: t(`labels.typePlurals.${category.category}`, {
+        defaultValue: localText(t, category.label),
+      }),
+      objects: category.objects.map((object) => ({
+        ...object,
+        label:
+          object.main && object.type
+            ? typeLabel(t, { name: object.type, label: object.label })
+            : object.tab
+              ? tabLabel(t, { name: object.tab, label: object.label })
+              : localText(t, object.label),
+        attributes: object.attributes.map((attribute) => ({
+          ...attribute,
+          label: attributeLabel(t, attribute.name, attribute.label),
+        })),
+      })),
+    })),
+  }
+}
+
 export function useCatalog() {
-  return useQuery({ queryKey: ak.catalog, queryFn: adminApi.catalog, staleTime: 5 * 60_000 })
+  const { t } = useTranslation()
+  const select = useCallback((catalog: Catalog) => translateCatalog(t, catalog), [t])
+  return useQuery({
+    queryKey: ak.catalog,
+    queryFn: adminApi.catalog,
+    staleTime: 5 * 60_000,
+    select,
+  })
 }
 
 export function useRoles() {

@@ -16,7 +16,8 @@ type TabId = 'export' | 'ldif' | 'csv'
 
 export function IoPage() {
   const { t } = useTranslation()
-  const { data, isPending, isError, error, refetch } = useIoAccess()
+  const { data, isPending, isError, error, refetch, moduleDisabled, canManageModules } =
+    useIoAccess()
 
   if (isError) return <ErrorState error={error} onRetry={() => void refetch()} />
 
@@ -32,6 +33,19 @@ export function IoPage() {
           <Skeleton className="h-9 w-72" />
           <Skeleton className="h-64" />
         </div>
+      ) : moduleDisabled ? (
+        <EmptyState
+          icon={<Lock aria-hidden />}
+          title={t('admin.ioDisabled')}
+          description={canManageModules ? t('admin.ioDisabledHelpAdmin') : t('admin.ioDisabledHelp')}
+          action={
+            canManageModules ? (
+              <Button asChild variant="outline" size="sm">
+                <Link to="/admin/plugins">{t('admin.openModules')}</Link>
+              </Button>
+            ) : undefined
+          }
+        />
       ) : tabs.length === 0 ? (
         <EmptyState
           icon={<Lock aria-hidden />}
