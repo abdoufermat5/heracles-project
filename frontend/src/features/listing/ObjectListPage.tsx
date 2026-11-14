@@ -6,6 +6,7 @@ import {
   FolderInput,
   Lock,
   LockOpen,
+  MoreHorizontal,
   Pencil,
   Trash2,
   Users,
@@ -26,6 +27,12 @@ import {
 import type { ObjectListItem, TreeNode } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { BulkActionBar, Pagination } from '@/components/patterns/DataControls'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { supportsTemplates } from '@/features/editor/api'
@@ -59,7 +66,7 @@ import {
   type Density,
   type StatusFilter,
 } from './types'
-import { DEFAULT_PAGE_SIZE, PAGE_SIZES, useListSearch } from './urlState'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES, statusOfView, useListSearch } from './urlState'
 
 function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value)
@@ -80,16 +87,6 @@ function findDepartmentLabel(nodes: TreeNode[] | undefined, dn: string | null): 
   return null
 }
 
-const VIEW_STORAGE_PREFIX = 'heracles.listing.view.'
-
-/** Status filter behind a saved view of the user list. */
-function statusForView(v: string): StatusFilter {
-  if (v === 'active') return 'active'
-  if (v === 'locked') return 'locked'
-  if (v === 'expiring') return 'expired'
-  return 'all'
-}
-
 export function ObjectListPage({
   type,
   view = 'objects',
@@ -97,7 +94,7 @@ export function ObjectListPage({
 }: {
   type: string
   view?: 'objects' | 'templates'
-  /** Saved view to open with (dashboard links: "locked", "expiring"). */
+  /** View named by the link (dashboard cards: "locked", "expiring"); it is the status filter. */
   initialView?: string
 }) {
   const { t } = useTranslation()
@@ -108,16 +105,6 @@ export function ObjectListPage({
   const me = useMe()
   const tree = useTree()
   const { base: globalBase, scope: globalScope } = useScope()
-
-  // Saved view (for user list)
-  const [savedView, setSavedView] = useState<string>(() => {
-    if (initialView) return initialView
-    try {
-      return localStorage.getItem(`${VIEW_STORAGE_PREFIX}${type}`) || 'all'
-    } catch {
-      return 'all'
-    }
-  })
 
   // The view (filters, sort, page, columns) lives in the URL: shareable, back/forward-safe.
   const { search, update } = useListSearch()
@@ -139,9 +126,10 @@ export function ObjectListPage({
     }
   }, [debouncedQuery, update])
 
-  const statusFilter: StatusFilter = search.status ?? statusForView(savedView)
+  // The view of the user list is the status filter, kept in the URL (a link may name it).
+  const statusFilter: StatusFilter = search.status ?? statusOfView(initialView) ?? 'all'
   const setStatusFilter = (v: StatusFilter) =>
-    update({ status: v === 'all' ? undefined : v, page: undefined })
+    update({ status: v === 'all' ? undefined : v, filter: undefined, page: undefined })
   const [employeeTypes, setEmployeeTypes] = useState<string[]>([])
   const filterBase = search.base ?? null
   const setFilterBase = (b: string | null) => update({ base: b ?? undefined, page: undefined })
@@ -183,17 +171,6 @@ export function ObjectListPage({
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [addToGroupOpen, setAddToGroupOpen] = useState(false)
   const [restoreOpen, setRestoreOpen] = useState(false)
-
-  // Sync saved view change
-  const handleSavedViewChange = (v: string) => {
-    setSavedView(v)
-    try {
-      localStorage.setItem(`${VIEW_STORAGE_PREFIX}${type}`, v)
-    } catch {
-      /* ignore */
-    }
-    update({ status: undefined, page: undefined })
-  }
 
   // Handlers for persistence
   const handleDensityChange = (newDensity: Density) => {
@@ -304,6 +281,10 @@ export function ObjectListPage({
     () => Object.keys(selection).filter((k) => selection[k]),
     [selection],
   )
+
+  const selectedItems = selectedDns.flatMap((dn) => itemsMap.get(dn) ?? [])
+  const anySelectedLocked = selectedItems.some((item) => item.locked)
+  const anySelectedUnlocked = selectedItems.some((item) => !item.locked)
 
   const del = useDeleteObjects(type)
   const lock = useAccountLock(type)
@@ -461,8 +442,6 @@ export function ObjectListPage({
               onStatusFilterChange={setStatusFilter}
               employeeTypeFilter={employeeTypes}
               onEmployeeTypeFilterChange={setEmployeeTypes}
-              savedView={savedView}
-              onSavedViewChange={handleSavedViewChange}
               availableColumns={desc.data?.columns ?? []}
               columnVisibility={columnVisibility}
               onToggleColumn={handleToggleColumn}
@@ -490,16 +469,17 @@ export function ObjectListPage({
                 type={type}
                 typeLabel={desc.data ? typeLabel(t, desc.data) : undefined}
                 isFiltered={hasFilterActive}
+                hasSearch={Boolean(search.q)}
                 canCreate={summary?.can_create}
                 filterError={filterError}
                 onClearLdapFilter={() => update({ ldap: undefined, page: undefined })}
                 onClearFilter={() => {
                   setSearchQuery('')
                   setEmployeeTypes([])
-                  setSavedView('all')
                   update({
                     q: undefined,
                     status: undefined,
+                    filter: undefined,
                     base: undefined,
                     ldap: undefined,
                     page: undefined,
@@ -508,92 +488,6 @@ export function ObjectListPage({
               />
             ) : (
               <>
-                <BulkActionBar
-                  count={selectedDns.length}
-                  onClear={() => setSelection({})}
-                >
-                  {type === 'user' && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={lock.isPending}
-                        onClick={() => void runLock(selectedDns, true)}
-                      >
-                        <Lock className="size-4" />
-                        {t('listing.lock')}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={lock.isPending}
-                        onClick={() => void runLock(selectedDns, false)}
-                      >
-                        <LockOpen className="size-4" />
-                        {t('listing.unlock')}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setAddToGroupOpen(true)}
-                      >
-                        <Users className="size-4" />
-                        {t('peopleUI.bulk.addToGroup')}
-                      </Button>
-                    </>
-                  )}
-                  {canEditObjects && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setBulkEditOpen(true)}
-                    >
-                      <Pencil className="size-4" />
-                      {t('bulkEdit.action')}
-                    </Button>
-                  )}
-                  {canCreate && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCopyMove({ mode: 'copy', dns: selectedDns })}
-                      >
-                        <Copy className="size-4" />
-                        {t('copy.copyTo')}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCopyMove({ mode: 'move', dns: selectedDns })}
-                      >
-                        <FolderInput className="size-4" />
-                        {t('copy.moveTo')}
-                      </Button>
-                    </>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleExportCsv(true)}
-                  >
-                    <Download className="size-4" />
-                    {t('peopleUI.bulk.exportCsv')}
-                  </Button>
-                  {canDeleteObjects && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      disabled={del.isPending}
-                      onClick={() => setConfirmDelete(true)}
-                    >
-                      <Trash2 className="size-4" />
-                      {t('common.delete')}
-                    </Button>
-                  )}
-                </BulkActionBar>
-
                 {desc.data && (
                   <div className="overflow-hidden rounded-md border bg-card">
                     <ListingTable
@@ -644,6 +538,92 @@ export function ObjectListPage({
                     </div>
                   </div>
                 )}
+
+                {/* Below the table: it appears without moving the rows, and sticks to the viewport */}
+                <BulkActionBar count={selectedDns.length} onClear={() => setSelection({})}>
+                  {type === 'user' && (
+                    <>
+                      {anySelectedUnlocked && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={lock.isPending}
+                          onClick={() => void runLock(selectedDns, true)}
+                        >
+                          <Lock className="size-4" />
+                          {t('listing.lock')}
+                        </Button>
+                      )}
+                      {anySelectedLocked && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={lock.isPending}
+                          onClick={() => void runLock(selectedDns, false)}
+                        >
+                          <LockOpen className="size-4" />
+                          {t('listing.unlock')}
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => setAddToGroupOpen(true)}>
+                        <Users className="size-4" />
+                        {t('peopleUI.bulk.addToGroup')}
+                      </Button>
+                    </>
+                  )}
+                  {canEditObjects && (
+                    <Button variant="ghost" size="sm" onClick={() => setBulkEditOpen(true)}>
+                      <Pencil className="size-4" />
+                      {t('bulkEdit.action')}
+                    </Button>
+                  )}
+                  {canDeleteObjects && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      disabled={del.isPending}
+                      onClick={() => setConfirmDelete(true)}
+                    >
+                      <Trash2 className="size-4" />
+                      {t('common.delete')}
+                    </Button>
+                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('listingUI.moreActions')}
+                        title={t('listingUI.moreActions')}
+                      >
+                        <MoreHorizontal aria-hidden />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" side="top">
+                      {canCreate && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() => setCopyMove({ mode: 'copy', dns: selectedDns })}
+                          >
+                            <Copy className="size-4" />
+                            {t('copy.copyTo')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setCopyMove({ mode: 'move', dns: selectedDns })}
+                          >
+                            <FolderInput className="size-4" />
+                            {t('copy.moveTo')}
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                      <DropdownMenuItem onClick={() => handleExportCsv(true)}>
+                        <Download className="size-4" />
+                        {t('peopleUI.bulk.exportCsv')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </BulkActionBar>
               </>
             )}
           </div>

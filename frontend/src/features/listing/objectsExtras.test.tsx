@@ -87,7 +87,8 @@ describe('copy and move', () => {
     renderApp('/types/user')
     await selectRows(1)
     const bar = await screen.findByRole('region', { name: 'Bulk actions' })
-    await userEvent.click(within(bar).getByRole('button', { name: 'Copy to…' }))
+    await userEvent.click(within(bar).getByRole('button', { name: 'More actions' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Copy to…' }))
     const dialog = await screen.findByRole('dialog')
 
     // a destination is required
@@ -117,7 +118,8 @@ describe('copy and move', () => {
     renderApp('/types/user')
     await selectRows(1)
     const bar = await screen.findByRole('region', { name: 'Bulk actions' })
-    await userEvent.click(within(bar).getByRole('button', { name: 'Copy to…' }))
+    await userEvent.click(within(bar).getByRole('button', { name: 'More actions' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Copy to…' }))
     const dialog = await screen.findByRole('dialog')
     await chooseDepartment('ou=Lyon,dc=example,dc=com')
     await userEvent.clear(within(dialog).getByRole('textbox', { name: /New Login/ }))

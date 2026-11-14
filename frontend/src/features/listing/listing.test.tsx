@@ -245,7 +245,7 @@ describe('server labels in French', () => {
     renderApp('/types/user')
 
     expect(await screen.findByRole('heading', { name: 'Utilisateurs' })).toBeInTheDocument()
-    expect(await screen.findByRole('link', { name: /Nouveau : personne/ })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /Nouvel utilisateur/ })).toBeInTheDocument()
 
     const nav = await screen.findByRole('navigation', { name: 'Navigation principale' })
     expect(within(nav).getByRole('link', { name: /Utilisateurs/ })).toBeInTheDocument()

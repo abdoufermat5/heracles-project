@@ -8,6 +8,16 @@ export const DEFAULT_PAGE_SIZE = 25
 export type ListStatus = 'active' | 'locked' | 'expired'
 
 /**
+ * Status behind a view named by a link (`?filter=locked`, dashboard cards). The view is the
+ * status filter: choosing a view in the toolbar writes `status` to the URL, nothing else
+ * remembers it.
+ */
+export function statusOfView(view: string | undefined): ListStatus | undefined {
+  if (view === 'active' || view === 'locked') return view
+  return view === 'expiring' ? 'expired' : undefined
+}
+
+/**
  * Everything that defines a listing view, kept in the URL so a view can be shared,
  * bookmarked and walked with back/forward. Absent keys mean "default".
  */

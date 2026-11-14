@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { TypeDescriptor, TypeSummary } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { typeLabel } from '@/lib/labels'
+import { createLabel } from './types'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,7 +93,7 @@ export function ListingHeader({
           <Button asChild size="sm">
             <Link to="/types/$type/new" params={{ type }}>
               <Plus aria-hidden />
-              {t('listing.create', { type: descriptor ? typeLabel(t, descriptor) : type })}
+              {createLabel(t, type, descriptor ? typeLabel(t, descriptor) : type)}
             </Link>
           </Button>
         )}

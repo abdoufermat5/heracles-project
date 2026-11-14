@@ -2,11 +2,14 @@ import { Link } from '@tanstack/react-router'
 import { Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { createLabel } from './types'
 
 interface ListingEmptyStateProps {
   type: string
   typeLabel?: string
   isFiltered: boolean
+  /** A search term is part of the active filters. */
+  hasSearch?: boolean
   canCreate?: boolean
   onClearFilter: () => void
   /** Server message when the advanced LDAP filter was refused (400). */
@@ -18,6 +21,7 @@ export function ListingEmptyState({
   type,
   typeLabel,
   isFiltered,
+  hasSearch = false,
   canCreate = false,
   onClearFilter,
   filterError = null,
@@ -44,13 +48,13 @@ export function ListingEmptyState({
     return (
       <div className="flex flex-col items-center justify-center gap-2 rounded-b-md border border-dashed bg-card px-6 py-12 text-center">
         <p className="text-body font-semibold text-foreground">
-          {t('listing.noMatches')}
+          {hasSearch ? t('listing.noMatches') : t('listingUI.noMatchesFilters')}
         </p>
         <p className="text-body text-muted-foreground">
-          {t('listing.noMatchesHelp')}
+          {hasSearch ? t('listing.noMatchesHelp') : t('listingUI.noMatchesFiltersHelp')}
         </p>
         <Button variant="outline" size="sm" className="mt-2" onClick={onClearFilter}>
-          {t('listing.clearSearch')}
+          {hasSearch ? t('listing.clearSearch') : t('listingUI.clearFilters')}
         </Button>
       </div>
     )
@@ -59,11 +63,12 @@ export function ListingEmptyState({
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-b-md border border-dashed bg-card px-6 py-12 text-center">
       <p className="text-body font-semibold text-foreground">{t('listing.empty')}</p>
+      <p className="text-body text-muted-foreground">{t('listingUI.emptyHelp')}</p>
       {canCreate && (
         <Button asChild size="sm" className="mt-2">
           <Link to="/types/$type/new" params={{ type }}>
             <Plus aria-hidden />
-            {t('listing.create', { type: typeLabel ?? type })}
+            {createLabel(t, type, typeLabel ?? type)}
           </Link>
         </Button>
       )}

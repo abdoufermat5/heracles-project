@@ -44,8 +44,6 @@ interface ListingToolbarProps {
   onStatusFilterChange: (status: StatusFilter) => void
   employeeTypeFilter?: string[]
   onEmployeeTypeFilterChange?: (types: string[]) => void
-  savedView?: string
-  onSavedViewChange?: (view: string) => void
   availableColumns: ColumnDescriptor[]
   columnVisibility: Record<string, boolean>
   onToggleColumn: (key: string) => void
@@ -83,8 +81,6 @@ export function ListingToolbar({
   onStatusFilterChange,
   employeeTypeFilter = [],
   onEmployeeTypeFilterChange,
-  savedView = 'all',
-  onSavedViewChange,
   availableColumns,
   columnVisibility,
   onToggleColumn,
@@ -158,8 +154,8 @@ export function ListingToolbar({
 
   return (
     <div className="space-y-3 pb-3">
-      {/* 1. Saved views tabs (for users) */}
-      {isUser && onSavedViewChange && (
+      {/* 1. Views of the user list: shortcuts for the status filter, which lives in the URL */}
+      {isUser && supportsStatusFilter && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-caption font-semibold tracking-[0.06em] uppercase text-muted-foreground mr-1">
             {t('peopleUI.views.savedViews')}:
@@ -174,16 +170,16 @@ export function ListingToolbar({
                 { id: 'all', label: t('peopleUI.views.all') },
                 { id: 'active', label: t('peopleUI.views.active') },
                 { id: 'locked', label: t('peopleUI.views.locked') },
-                { id: 'expiring', label: t('peopleUI.views.expiring') },
+                { id: 'expired', label: t('listingUI.viewExpired') },
               ] as const
             ).map((v) => (
               <button
                 key={v.id}
                 role="tab"
                 type="button"
-                aria-selected={savedView === v.id}
-                onClick={() => onSavedViewChange(v.id)}
-                className={cn(segmentClass, savedView === v.id ? segmentOn : segmentOff)}
+                aria-selected={statusFilter === v.id}
+                onClick={() => onStatusFilterChange(v.id)}
+                className={cn(segmentClass, statusFilter === v.id ? segmentOn : segmentOff)}
               >
                 {v.label}
               </button>
@@ -204,7 +200,7 @@ export function ListingToolbar({
             ref={searchInputRef}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={t('listing.searchPlaceholder', { type: label.toLowerCase() })}
+            placeholder={t('listing.searchPlaceholder', { type: label })}
             aria-label={t('listing.search')}
             className="h-8 pr-12 pl-8 text-body"
             type="search"

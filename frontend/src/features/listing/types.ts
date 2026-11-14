@@ -1,3 +1,9 @@
+import type { TFunction } from 'i18next'
+
+/** Text of the "create" button of a listing: the users' own wording, "Create: <type>" for the rest. */
+export function createLabel(t: TFunction, type: string, typeName: string): string {
+  return type === 'user' ? t('listingUI.createUser') : t('listingUI.create', { type: typeName })
+}
 
 export type Density = 'comfortable' | 'compact'
 export type StatusFilter = 'all' | 'active' | 'locked' | 'expired'

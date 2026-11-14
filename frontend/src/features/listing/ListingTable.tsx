@@ -41,6 +41,12 @@ import { attributeLabel } from '@/lib/labels'
 import { cn, initials } from '@/lib/utils'
 import { formatCellValue, isMonospaceKey, type Density } from './types'
 
+/** Member count the listing reports on a group row (the field is absent on other rows). */
+function memberCount(item: ObjectListItem): number | undefined {
+  const n = item.members_count
+  return typeof n === 'number' ? n : undefined
+}
+
 interface ListingTableProps {
   type: string
   descriptor: TypeDescriptor
@@ -329,6 +335,21 @@ export function ListingTable({
           },
         })
       })
+
+      // Groups: the member count, as soon as the listing reports it
+      if (type === 'group' && rows.some((r) => memberCount(r) !== undefined)) {
+        cols.push({
+          id: 'members',
+          header: t('listingUI.members'),
+          enableSorting: false,
+          accessorFn: (r) => memberCount(r),
+          cell: ({ getValue }) => (
+            <span className="font-medium tabular-nums text-foreground">
+              {String(getValue() ?? '—')}
+            </span>
+          ),
+        })
+      }
     }
 
     // Actions column
