@@ -1,6 +1,23 @@
 export const resilienceEn = {
   resilience: {
     errorTitle: 'Something went wrong',
+    errors: {
+      generic: { title: 'Something went wrong', body: 'The operation could not be completed. Try again in a moment.' },
+      not_found: { title: 'Not found', body: 'This page or directory entry does not exist, or it has been moved or deleted.' },
+      forbidden: { title: 'Access denied', body: 'You do not have the rights needed to see or change this. Ask an administrator if you think you should.' },
+      unauthenticated: { title: 'Sign in required', body: 'Your session is not active. Sign in again to continue.' },
+      reauth_required: { title: 'Confirm your identity', body: 'This action needs a recent sign-in. Confirm your password and try again.' },
+      second_factor_required: { title: 'Second factor required', body: 'Complete the second verification step to continue.' },
+      last_second_factor: { title: 'Last second factor', body: 'This is the last second factor of the account, so it cannot be removed.' },
+      validation: { title: 'Invalid data', body: 'Some of the values are not valid. Check them and try again.' },
+      locked: { title: 'Locked by someone else', body: 'Another person is editing this entry. Try again once they are done.' },
+      conflict: { title: 'Changed in the meantime', body: 'This entry was modified by someone else after you opened it. Reload it and redo your change.' },
+      ldap_error: { title: 'Directory error', body: 'The directory refused the operation. Details are below if you need to report it.' },
+      directory_unavailable: { title: 'Directory unreachable', body: 'The directory does not answer for now. Try again in a moment.' },
+      internal: { title: 'Server error', body: 'The server hit an unexpected problem. Try again; if it persists, tell your administrator.' },
+    },
+    back: 'Back',
+    dashboard: 'Go to the dashboard',
     errorBody:
       'The page could not be displayed. You can try again; if it keeps failing, send the details below to your administrator.',
     details: 'Technical details',

@@ -148,13 +148,21 @@ function Checklist({
                   <Circle className="size-5 shrink-0 text-muted-foreground" aria-hidden />
                 )
               ) : (
-                <input
-                  type="checkbox"
-                  checked={done}
-                  onChange={() => toggle(item.id)}
+                // a step the console cannot detect: the same circle, ticked by hand
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={done}
                   aria-label={t('onboarding.markDone', { item: title })}
-                  className="size-4 shrink-0 accent-primary"
-                />
+                  onClick={() => toggle(item.id)}
+                  className="shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {done ? (
+                    <CheckCircle2 className="size-5 text-success" aria-hidden />
+                  ) : (
+                    <Circle className="size-5 text-muted-foreground hover:text-foreground" aria-hidden />
+                  )}
+                </button>
               )}
               <div className="min-w-0 flex-1">
                 <p className={cn('text-body font-medium', done ? 'text-muted-foreground' : 'text-foreground')}>

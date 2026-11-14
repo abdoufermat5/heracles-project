@@ -14,7 +14,6 @@ describe('ErrorPanel', () => {
   it('shows the request id of the failed response in the details', () => {
     const err = new ApiError(502, { code: 'ldap_error', message: 'Directory said no' }, 'req-1234')
     render(<ErrorPanel error={err} onRetry={() => undefined} />)
-    expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong')
     expect(screen.getByTestId('request-id')).toHaveTextContent('req-1234')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Copy details' })).toBeInTheDocument()

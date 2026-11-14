@@ -4,7 +4,6 @@ import {
   createRoute,
   createRouter,
   lazyRouteComponent,
-  Link,
   Outlet,
   redirect,
   type AsyncRouteComponent,
@@ -19,7 +18,7 @@ import { qk } from '@/api/hooks'
 import { WorkspaceShell } from '@/components/shell/WorkspaceShell'
 import { adminApi } from '@/features/admin/api'
 import { ak } from '@/features/admin/hooks'
-import { Button } from '@/components/ui/button'
+import { ErrorNavigation } from '@/components/ErrorState'
 import { EmptyState } from '@/components/ui/empty-state'
 import { RouteError } from '@/components/resilience'
 import { AdminGate, type AdminCapability } from '@/features/admin/AdminGate'
@@ -78,11 +77,11 @@ function NotFound() {
       <EmptyState
         icon={<Compass className="size-6 text-muted-foreground" aria-hidden />}
         title={t('common.notFound')}
-        description={t('common.notFoundHelp', 'The requested page or directory object could not be found.')}
+        description={t('common.notFoundHelp')}
         action={
-          <Button asChild variant="outline" size="sm" className="h-8">
-            <Link to="/">{t('nav.dashboard')}</Link>
-          </Button>
+          <div className="flex flex-wrap justify-center gap-2">
+            <ErrorNavigation />
+          </div>
         }
         className="max-w-md w-full py-14"
       />
@@ -170,12 +169,15 @@ const appRoute = createRoute({
 
 const dashboardRoute = createRoute({ getParentRoute: () => appRoute, path: '/', component: DashboardPage })
 const meRoute = createRoute({ getParentRoute: () => appRoute, path: '/me', component: MePage })
-// Living design reference; not linked from the navigation.
+// Living design reference (English only): production builds answer with the not-found page.
 const styleguideRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/styleguide',
-  component: StyleguidePage,
+  component: import.meta.env.DEV ? StyleguidePage : NotFound,
 })
+
+// Any other address: the not-found page, inside the signed-in shell like a missing object.
+const notFoundRoute = createRoute({ getParentRoute: () => appRoute, path: '$', component: NotFound })
 
 const listRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -326,6 +328,7 @@ const routeTree = rootRoute.addChildren([
     adminHealthRoute,
     adminPluginsRoute,
     adminTasksRoute,
+    notFoundRoute,
   ]),
 ])
 

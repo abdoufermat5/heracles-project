@@ -94,9 +94,13 @@ describe('full flow', () => {
     expect(screen.getAllByRole('link', { name: /Edit my account/ })[0]).toBeInTheDocument()
   })
 
-  it('renders 404 empty state for unknown routes', async () => {
+  it('renders 404 empty state for unknown routes inside the shell', async () => {
     renderApp('/unknown-page')
+    await userEvent.type(await screen.findByLabelText('Username'), 'admin')
+    await userEvent.type(screen.getByLabelText('Password'), 'secret')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
     expect(await screen.findByText('Not found')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Dashboard' })[0]).toBeInTheDocument()
   })
 })

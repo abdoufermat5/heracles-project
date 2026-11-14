@@ -3,7 +3,9 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
+import { ErrorNavigation } from '@/components/ErrorState'
 import { Button } from '@/components/ui/button'
+import { describeError } from './describeError'
 
 /** Plain-text report of an error, for the "Copy details" button. */
 export function errorReport(error: unknown): string {
@@ -23,13 +25,18 @@ export function ErrorPanel({ error, onRetry }: { error: unknown; onRetry: () => 
   const { t } = useTranslation()
   const requestId = isApiError(error) ? error.requestId : undefined
   const report = errorReport(error)
+  const d = describeError(t, error)
   return (
     <div role="alert" className="mx-auto my-10 max-w-xl rounded-md border border-border bg-card p-5">
       <div className="flex items-start gap-2.5">
         <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
         <div className="min-w-0 space-y-2">
-          <p className="text-sm font-semibold tracking-tight text-foreground">{t('resilience.errorTitle')}</p>
-          <p className="text-body text-muted-foreground">{t('resilience.errorBody')}</p>
+          <p className="text-sm font-semibold tracking-tight text-foreground">
+            {isApiError(error) ? d.title : t('resilience.errorTitle')}
+          </p>
+          <p className="text-body text-muted-foreground">
+            {isApiError(error) ? d.body : t('resilience.errorBody')}
+          </p>
           <details className="text-body">
             <summary className="cursor-pointer text-muted-foreground">{t('resilience.details')}</summary>
             {requestId && (
@@ -42,9 +49,12 @@ export function ErrorPanel({ error, onRetry }: { error: unknown; onRetry: () => 
             </pre>
           </details>
           <div className="flex gap-2 pt-1">
-            <Button size="sm" onClick={onRetry}>
-              {t('resilience.retry')}
-            </Button>
+            {!d.notFound && (
+              <Button size="sm" onClick={onRetry}>
+                {t('resilience.retry')}
+              </Button>
+            )}
+            <ErrorNavigation />
             <Button
               size="sm"
               variant="outline"

@@ -86,6 +86,24 @@ function usePersistedSet(key: string): [Set<string>, (id: string) => void] {
 
 // ------------------------------------------------------------------- the model
 
+/**
+ * Types the sidebar does not list: access roles are edited from the access control page,
+ * the canonical UI for them.
+ */
+const HIDDEN_TYPES: ReadonlySet<string> = new Set(['acl_role'])
+
+/**
+ * Types shown in another group than the one they declare, as primary entries: the
+ * applications people are granted access to belong with access, not with the settings.
+ */
+const REGROUPED: Readonly<Record<string, NavGroup>> = {
+  application: 'access',
+  web_application: 'access',
+}
+
+const groupOf = (ty: TypeSummary): NavGroup => REGROUPED[ty.name] ?? ty.nav_group
+const levelOf = (ty: TypeSummary) => (ty.name in REGROUPED ? 'primary' : ty.nav)
+
 interface NavItem {
   key: string
   to: NavPath
@@ -229,7 +247,7 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
   const [moreOpen, setMoreOpen] = useState<Set<string>>(() => new Set())
   const [filter, setFilter] = useState('')
 
-  const all = useMemo(() => types ?? [], [types])
+  const all = useMemo(() => (types ?? []).filter((x) => !HIDDEN_TYPES.has(x.name)), [types])
   const hasType = (name: string) => all.some((x) => x.name === name)
 
   const typeItem = (ty: TypeSummary): NavItem => {
@@ -252,7 +270,7 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
   const groups = useMemo<Group[]>(() => {
     const byGroup = (g: NavGroup, nav: 'primary' | 'secondary') =>
       all
-        .filter((x) => x.nav_group === g && x.nav === nav && !favorites.has(x.name))
+        .filter((x) => groupOf(x) === g && levelOf(x) === nav && !favorites.has(x.name))
         .map(typeItem)
     const extra: Record<NavGroup, NavItem[]> = {
       people: [],

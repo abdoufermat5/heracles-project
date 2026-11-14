@@ -1,6 +1,23 @@
 export const resilienceFr = {
   resilience: {
     errorTitle: 'Une erreur est survenue',
+    errors: {
+      generic: { title: 'Une erreur est survenue', body: 'L’opération n’a pas pu aboutir. Réessayez dans un instant.' },
+      not_found: { title: 'Introuvable', body: 'Cette page ou cette entrée de l’annuaire n’existe pas, ou elle a été déplacée ou supprimée.' },
+      forbidden: { title: 'Accès refusé', body: 'Vous n’avez pas les droits nécessaires pour voir ou modifier ceci. Demandez à un administrateur si vous pensez en avoir besoin.' },
+      unauthenticated: { title: 'Connexion requise', body: 'Votre session n’est plus active. Reconnectez-vous pour continuer.' },
+      reauth_required: { title: 'Confirmez votre identité', body: 'Cette action demande une connexion récente. Confirmez votre mot de passe puis réessayez.' },
+      second_factor_required: { title: 'Second facteur requis', body: 'Terminez la seconde étape de vérification pour continuer.' },
+      last_second_factor: { title: 'Dernier second facteur', body: 'C’est le dernier second facteur du compte : il ne peut pas être retiré.' },
+      validation: { title: 'Données invalides', body: 'Certaines valeurs ne sont pas valides. Vérifiez-les puis réessayez.' },
+      locked: { title: 'Verrouillé par une autre personne', body: 'Quelqu’un d’autre modifie cette entrée. Réessayez lorsqu’elle aura terminé.' },
+      conflict: { title: 'Modifié entre-temps', body: 'Cette entrée a été modifiée par quelqu’un d’autre après son ouverture. Rechargez-la et refaites votre modification.' },
+      ldap_error: { title: 'Erreur d’annuaire', body: 'L’annuaire a refusé l’opération. Les détails ci-dessous sont utiles pour la signaler.' },
+      directory_unavailable: { title: 'Annuaire injoignable', body: 'L’annuaire ne répond pas pour le moment. Réessayez dans un instant.' },
+      internal: { title: 'Erreur du serveur', body: 'Le serveur a rencontré un problème inattendu. Réessayez ; si cela persiste, prévenez votre administrateur.' },
+    },
+    back: 'Retour',
+    dashboard: 'Aller au tableau de bord',
     errorBody:
       "La page n'a pas pu être affichée. Vous pouvez réessayer ; si cela persiste, transmettez les détails ci-dessous à votre administrateur.",
     details: 'Détails techniques',

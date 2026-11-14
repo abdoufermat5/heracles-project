@@ -1,18 +1,14 @@
-import { Link, Outlet, useNavigate } from '@tanstack/react-router'
+import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Building2,
   Globe,
-  Languages,
   LogOut,
   Menu,
-  Monitor,
-  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCcw,
   Search,
-  Sun,
   User as UserIcon,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -30,8 +26,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -41,10 +35,12 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { setTechnicalDetails, useTechnicalDetails } from '@/lib/preferences'
 import { useScope } from '@/lib/scope'
-import { useTheme, type ThemeChoice } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { clearRecentItems } from './recent'
 import { CommandPalette } from './CommandPalette'
+import { currentObjectOf } from './paletteActions'
+import { LanguageMenu, ThemeMenu } from './PreferenceMenus'
+import { RecentTracker } from './RecentTracker'
 import { SidebarNav } from './Sidebar'
 import { ShortcutSheet, useShellHotkeys } from './ShortcutSheet'
 
@@ -91,7 +87,7 @@ function DepartmentSwitcher() {
                 <li key={n.dn} className="flex items-center gap-1">
                   {i > 0 && <span className="text-muted-foreground/60">/</span>}
                   <span className={cn(i === (path?.length ?? 0) - 1 ? 'font-medium text-foreground' : 'text-muted-foreground')}>
-                    {n.label}
+                    {i === 0 ? t('patterns.topLevel') : n.label}
                   </span>
                 </li>
               ))}
@@ -117,7 +113,7 @@ function DepartmentSwitcher() {
               className="h-6 gap-1 text-caption text-muted-foreground hover:text-foreground"
             >
               <RotateCcw className="size-3" />
-              <span>Reset</span>
+              <span>{t('shell.reset')}</span>
             </Button>
           )}
         </div>
@@ -140,10 +136,9 @@ function DepartmentSwitcher() {
 
 /** Account menu; the portal variant leaves out console-only settings. */
 export function UserMenu({ portal = false }: { portal?: boolean }) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const technical = useTechnicalDetails()
   const { data: me } = useMe()
-  const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
   const qc = useQueryClient()
 
@@ -163,7 +158,6 @@ export function UserMenu({ portal = false }: { portal?: boolean }) {
     .slice(0, 2)
     .join('')
     .toUpperCase()
-  const lang = i18n.language.startsWith('fr') ? 'fr' : 'en'
 
   return (
     <DropdownMenu>
@@ -197,25 +191,6 @@ export function UserMenu({ portal = false }: { portal?: boolean }) {
           <UserIcon className="size-3.5" />
           <span>{t('user.me')}</span>
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="flex items-center gap-1.5 px-2 py-1.5 text-caption font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-          <Sun className="size-3" />
-          <span>{t('user.theme')}</span>
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={theme} onValueChange={(v) => setTheme(v as ThemeChoice)}>
-          <DropdownMenuRadioItem value="system">
-            <Monitor className="size-3.5 mr-1" />
-            {t('user.themeSystem')}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="light">
-            <Sun className="size-3.5 mr-1" />
-            {t('user.themeLight')}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="dark">
-            <Moon className="size-3.5 mr-1" />
-            {t('user.themeDark')}
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
         {!portal && (
           <>
             <DropdownMenuSeparator />
@@ -229,15 +204,6 @@ export function UserMenu({ portal = false }: { portal?: boolean }) {
           </>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="flex items-center gap-1.5 px-2 py-1.5 text-caption font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-          <Languages className="size-3" />
-          <span>{t('user.language')}</span>
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={lang} onValueChange={(v) => void i18n.changeLanguage(v)}>
-          <DropdownMenuRadioItem value="en">English</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="fr">Français</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void logout()} className="gap-2 text-destructive focus:text-destructive">
           <LogOut className="size-3.5" />
           <span>{t('user.logout')}</span>
@@ -248,8 +214,7 @@ export function UserMenu({ portal = false }: { portal?: boolean }) {
 }
 
 export function AppShell() {
-  const { t, i18n } = useTranslation()
-  const { resolved, toggle } = useTheme()
+  const { t } = useTranslation()
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(COLLAPSE_KEY) === '1'
@@ -259,6 +224,8 @@ export function AppShell() {
   })
   const [mobileNav, setMobileNav] = useState(false)
   const [palette, setPalette] = useState(false)
+  const pathname = useRouterState({ select: (st) => st.location.pathname })
+  const openObject = currentObjectOf(pathname)
 
   useEffect(() => {
     try {
@@ -370,27 +337,8 @@ export function AppShell() {
                 <Search className="size-4" />
               </Button>
 
-              {/* Language Quick Toggle */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 text-muted-foreground hover:text-foreground"
-                onClick={() => void i18n.changeLanguage(i18n.language.startsWith('fr') ? 'en' : 'fr')}
-                aria-label={t('user.language')}
-              >
-                <Languages className="size-4" />
-              </Button>
-
-              {/* Theme Quick Toggle */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 text-muted-foreground hover:text-foreground"
-                onClick={toggle}
-                aria-label={t('user.toggleTheme')}
-              >
-                {resolved === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-              </Button>
+              <LanguageMenu />
+              <ThemeMenu />
 
               <span className="mx-1 h-5 w-px bg-border" aria-hidden />
 
@@ -406,6 +354,8 @@ export function AppShell() {
             </div>
           </main>
         </div>
+
+        {openObject && <RecentTracker key={`${openObject.type}:${openObject.dn}`} type={openObject.type} dn={openObject.dn} />}
 
         {/* Global Command Palette */}
         <CommandPalette open={palette} onOpenChange={setPalette} />

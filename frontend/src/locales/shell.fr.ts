@@ -18,7 +18,7 @@ export const shellFr: typeof shellEn = {
       goDashboard: 'Tableau de bord',
       goUsers: 'Utilisateurs',
       goGroups: 'Groupes',
-      goRoles: 'Rôles et accès',
+      goRoles: 'Contrôle d’accès',
       goAudit: "Journal d'audit",
       goConfig: 'Paramètres',
       goHealth: 'Santé',

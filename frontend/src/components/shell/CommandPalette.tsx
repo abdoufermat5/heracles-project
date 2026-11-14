@@ -43,6 +43,22 @@ function useDebounced<T>(value: T, ms = 220): T {
 }
 
 const itemClass = 'flex items-center gap-2 px-2.5'
+const badgeClass = 'shrink-0 whitespace-nowrap rounded-sm bg-muted px-1 text-caption text-muted-foreground'
+
+/**
+ * Types the object search skips: the audit trail, archives, registrations and scheduled
+ * tasks are internal records, not something a person looks for by name; access roles are
+ * edited from the access control page.
+ */
+function searchable(ty: { name: string }): boolean {
+  return !/_task$/.test(ty.name) && !['audit_event', 'archived_object', 'registration', 'acl_role'].includes(ty.name)
+}
+
+function stringValue(values: Record<string, unknown>, key: string): string | undefined {
+  const v = values[key]
+  const first = Array.isArray(v) ? v[0] : v
+  return typeof first === 'string' && first ? first : undefined
+}
 
 /** A palette row: an action or a destination, with an optional prefetch hint on intent. */
 interface Entry extends PaletteAction {
@@ -93,9 +109,23 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     enabled: open && dq.length >= 2 && !!types,
     queryFn: async () => {
       const results = await Promise.all(
-        (types ?? []).map(async (ty) => {
+        (types ?? []).filter(searchable).map(async (ty) => {
           const r = await api.listObjects(ty.name, { q: dq, limit: 5, scope: 'sub' }).catch(() => null)
-          return { type: ty, items: r?.items ?? [] }
+          const items = r?.items ?? []
+          if (items.length === 0) return { type: ty, items: [] }
+          // the display name and the login live in two different attributes of the type
+          const desc = await qc
+            .ensureQueryData({ queryKey: qk.type(ty.name), queryFn: () => api.type(ty.name), staleTime: 5 * 60_000 })
+            .catch(() => null)
+          return {
+            type: ty,
+            items: items.map((it) => {
+              const main = desc ? stringValue(it.values, desc.main_attr) : undefined
+              const name = desc ? stringValue(it.values, desc.name_attr) : undefined
+              const label = name ?? main ?? Object.values(it.values).find((v): v is string => typeof v === 'string') ?? rdnValue(it.dn)
+              return { dn: it.dn, label, secondary: main && main !== label ? main : undefined }
+            }),
+          }
         }),
       )
       return results.filter((r) => r.items.length > 0)
@@ -144,7 +174,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       }))
     const shortcutTypes = new Set(['user', 'group'])
     const typeNav: Entry[] = (types ?? [])
-      .filter((ty) => !shortcutTypes.has(ty.name))
+      .filter((ty) => !shortcutTypes.has(ty.name) && ty.name !== 'acl_role')
       .map((ty) => ({
         id: `type:${ty.name}`,
         label: typeLabelPlural(t, ty),
@@ -171,7 +201,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         },
       }),
       ...(types ?? [])
-        .filter((ty) => ty.can_create && !shortcutTypes.has(ty.name))
+        .filter((ty) => ty.can_create && !shortcutTypes.has(ty.name) && ty.name !== 'acl_role')
         .map((ty) => ({
           id: `create:${ty.name}`,
           label: t('palette.create', { type: typeLabel(t, ty) }),
@@ -258,7 +288,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   >
                     <Clock className="size-3.5 text-muted-foreground shrink-0" aria-hidden />
                     <span className="font-medium text-foreground truncate">{item.title}</span>
-                    <span className="rounded-sm bg-muted px-1 text-caption text-muted-foreground">
+                    <span className={badgeClass}>
                       {labelOfType(item.type)}
                     </span>
                     <span className="font-dn text-muted-foreground ml-auto truncate text-caption max-w-[220px]">
@@ -289,8 +319,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             {search.data?.map((g) => (
               <CommandGroup key={g.type.name} heading={typeLabelPlural(t, g.type)}>
                 {g.items.map((it) => {
-                  const first = Object.values(it.values).find((v) => typeof v === 'string')
-                  const label = typeof first === 'string' ? first : rdnValue(it.dn)
+                  const label = it.label
                   return (
                     <CommandItem
                       key={it.dn}
@@ -302,9 +331,10 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                     >
                       <TypeIcon name={g.type.icon} className="size-3.5 text-muted-foreground shrink-0" />
                       <span className="font-medium text-foreground truncate">{label}</span>
-                      <span className="rounded-sm bg-muted px-1 text-caption text-muted-foreground">
-                        {typeLabel(t, g.type)}
-                      </span>
+                      <span className={badgeClass}>{typeLabel(t, g.type)}</span>
+                      {it.secondary && (
+                        <span className="truncate font-mono text-caption text-muted-foreground">{it.secondary}</span>
+                      )}
                       <span className="font-dn text-muted-foreground ml-auto truncate text-caption max-w-[220px]">
                         {it.dn}
                       </span>

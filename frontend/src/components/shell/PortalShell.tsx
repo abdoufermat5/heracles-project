@@ -1,11 +1,9 @@
 import { Link, Navigate, Outlet, useRouterState } from '@tanstack/react-router'
-import { Languages, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Logo } from '@/components/Logo'
-import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useTheme } from '@/lib/theme'
 import { UserMenu } from './AppShell'
+import { LanguageMenu, ThemeMenu } from './PreferenceMenus'
 
 /**
  * Console pages lead back to the portal home. Only those: while signing out the
@@ -19,8 +17,7 @@ const CONSOLE_PATH = /^\/($|types(\/|$)|admin(\/|$)|io$|styleguide$)/
  * internals.
  */
 export function PortalShell() {
-  const { t, i18n } = useTranslation()
-  const { resolved, toggle } = useTheme()
+  const { t } = useTranslation()
   const path = useRouterState({ select: (s) => s.location.pathname })
 
   if (CONSOLE_PATH.test(path)) return <Navigate to="/me" replace />
@@ -41,24 +38,8 @@ export function PortalShell() {
             </Link>
             <span className="hidden text-body text-muted-foreground sm:inline">{t('portal.title')}</span>
             <div className="ml-auto flex items-center gap-1.5">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={() => void i18n.changeLanguage(i18n.language.startsWith('fr') ? 'en' : 'fr')}
-                aria-label={t('user.language')}
-              >
-                <Languages className="size-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={toggle}
-                aria-label={t('user.toggleTheme')}
-              >
-                {resolved === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-              </Button>
+              <LanguageMenu />
+              <ThemeMenu />
               <UserMenu portal />
             </div>
           </div>

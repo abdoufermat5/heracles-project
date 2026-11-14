@@ -17,7 +17,7 @@ export const shellEn = {
       goDashboard: 'Dashboard',
       goUsers: 'Users',
       goGroups: 'Groups',
-      goRoles: 'Roles and access',
+      goRoles: 'Access control',
       goAudit: 'Audit log',
       goConfig: 'Settings',
       goHealth: 'Health',
