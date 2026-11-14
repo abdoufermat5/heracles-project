@@ -27,7 +27,7 @@ from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.settings import ApiSettings
 from heracles.api.state import AppState
 from heracles.attributes import attribute_key
-from heracles.core import config_store, setup_checks
+from heracles.core import config_store, formats, setup_checks
 from heracles.core.generalized_time import format_generalized_time, parse_generalized_time
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Modification, NoSuchObjectError, Scope
@@ -44,7 +44,14 @@ from heracles.schema import names as schema
 from heracles.tasks.scheduler import RunRecord
 from heracles.tasks.syslog import syslog_configured
 from heracles.tasks.wiring import task_store
-from heracles.triggers import HOOK_MODES, TabHook, TriggerSettings, parse_hook
+from heracles.triggers import (
+    HOOK_MODES,
+    TabHook,
+    TriggerSettings,
+    check_hook_fields,
+    parse_hook,
+    parse_hooks,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -403,7 +410,6 @@ def task_rows(
     domain: Domain,
     *,
     kind: str | None = None,
-    status: str | None = None,
     last_runs: Mapping[str, RunRecord] | None = None,
 ) -> list[dict[str, Any]]:
     """Task objects readable by the user, with the progress of their granular sub-tasks."""
@@ -437,8 +443,6 @@ def task_rows(
             if not domain.is_admin(user.dn) and not evaluator.permissions(entry.dn, key).read:
                 continue
             state = (entry.text(schema.TASKS_STATUS_ATTR) or "").strip()
-            if status and state.lower() != status.lower():
-                continue
             subs = granular.get(dnlib.normalize(entry.dn), [])
             failed = [d for d, s in subs if s.lower() in _FAILED]
             rows.append(
@@ -474,6 +478,8 @@ def _task_entry(user: CurrentUser, domain: Domain, dn: str) -> tuple[Any, str, s
     matches the entry), not of any task type.
     """
     directory = user.directory
+    if (problem := formats.check("dn", dn)) is not None:
+        raise validation(problem, {"dn": problem})
     entry = directory.get(dn)
     if entry is None or not entry.has_object_class(schema.OC.TASKS):
         raise not_found("Task not found")
@@ -618,8 +624,13 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
     @router.post("/acl/roles", status_code=201)
     def create_role(body: RoleBody, user: CurrentUserDep, domain: DomainDep) -> dict[str, Any]:
         department = body.base or user.directory.base_dn
+        if body.base:  # the shape of the value says nothing about the directory
+            with admin_errors():
+                acl_admin.check_department(user.directory, body.base, exists=False)
         _require(user, domain, ROLE_KEY, "c", department)
         with admin_errors():
+            if body.base:
+                acl_admin.check_department(user.directory, body.base)
             container = acl_admin.role_container(user.directory, department, None)
             dn = acl_admin.create_role(
                 user.directory,
@@ -802,23 +813,30 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
     ) -> dict[str, Any]:
         remember(domain)
         _require(user, domain, CONFIG_KEY, "w")
+        current = effective(state, user.directory_id)
+        # a tab already used by a stored trigger stays accepted (a plugin may have been switched
+        # off since); any other tab must be one the type registry knows
+        known_tabs = {*tab_keys(domain.registry), *(h.tab for h in parse_hooks(current.tab_hooks))}
         errors: dict[str, str] = {}
         values: list[str] = []
+        seen: dict[tuple[str, str, str], int] = {}
         for index, item in enumerate(body.hooks):
+            prefix = f"hooks.{index}."
+            for field_name, message in check_hook_fields(item.tab, item.mode, item.command).items():
+                errors[prefix + field_name] = message
             tab = item.tab.strip()
-            if not tab or any(ch in tab for ch in "|\n"):
-                errors[f"hooks.{index}.tab"] = "Invalid tab."
-            if item.mode not in HOOK_MODES:
-                errors[f"hooks.{index}.mode"] = "Unknown mode."
-            if not item.command.strip() or "\n" in item.command:
-                errors[f"hooks.{index}.command"] = "A single-line command is required."
-            if not any(k.startswith(f"hooks.{index}.") for k in errors):
-                values.append(
-                    TabHook(tab, item.mode, item.command.strip(), item.enabled).serialise()
-                )
+            if prefix + "tab" not in errors and tab not in known_tabs:
+                errors[prefix + "tab"] = "Unknown tab."
+            command = item.command.strip()
+            same = (tab, item.mode, command)
+            if not any(k.startswith(prefix) for k in errors):
+                if same in seen:
+                    errors[prefix + "command"] = f"Same trigger as #{seen[same] + 1}."
+                else:
+                    seen[same] = index
+                    values.append(TabHook(tab, item.mode, command, item.enabled).serialise())
         if errors:
             raise validation("Invalid triggers", errors)
-        current = effective(state, user.directory_id)
         kept = [raw for raw in current.tab_hooks if parse_hook(raw) is None]
         changes: dict[str, Any] = {"tab_hooks": [*values, *kept]}
         if body.display_output is not None:
@@ -863,9 +881,12 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         _require(user, domain, CONFIG_KEY, "w")
         ctx = check_context(user, domain)
         try:
-            outcome = setup_checks.run_fix(ctx, check_id, body.dns, body.options)
+            problems = setup_checks.validate_fix(ctx, check_id, body.dns, body.options)
         except setup_checks.UnknownCheckError:
             raise not_found("This check has no fix") from None
+        if problems:
+            raise validation("Invalid fix options", problems)
+        outcome = setup_checks.run_fix(ctx, check_id, body.dns, body.options)
         invalidate_acl_cache(user.session)
         _audit(user, domain, "config", "setup_check", user.directory.base_dn, f"fix: {check_id}")
         remaining = setup_checks.run_checks(ctx, [check_id])
@@ -920,12 +941,20 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         kind: str | None = None,
         status: str | None = None,
     ) -> dict[str, Any]:
-        store = task_store(request.app)
-        last_runs = store.last_by_kind(user.directory_id) if store else {}
-        rows = task_rows(user, domain, kind=kind, status=status, last_runs=last_runs)
         kinds = sorted(
             {(i.name, i.type.label) for i in domain.registry.list() if i.acl_category == "tasks"}
         )
+        if kind and kind not in {name for name, _label in kinds}:
+            raise validation("Unknown task kind", {"kind": "Unknown task kind."})
+        store = task_store(request.app)
+        last_runs = store.last_by_kind(user.directory_id) if store else {}
+        rows = task_rows(user, domain, kind=kind, last_runs=last_runs)
+        if status:
+            # the two states the scheduler sets, plus any other the entries carry
+            states = {"activated", "deactivated", *(str(r["status"]).lower() for r in rows)}
+            if status.lower() not in states:
+                raise validation("Unknown task status", {"status": "Unknown task status."})
+            rows = [r for r in rows if str(r["status"]).lower() == status.lower()]
         return {
             "tasks": rows,
             "kinds": [{"name": n, "label": label} for n, label in kinds],

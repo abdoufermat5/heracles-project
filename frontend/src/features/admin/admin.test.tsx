@@ -15,8 +15,15 @@ import { adminMock } from '@/mocks/adminHandlers'
 import { BASE_DN } from '@/mocks/db'
 import { must, renderApp, signIn } from '@/test/utils'
 import { server } from '@/mocks/server'
-import { nextDraft, normalise } from './configModel'
+import {
+  effectiveValues,
+  nextDraft,
+  normalise,
+  validateDraft,
+  validateField,
+} from './configModel'
 import { useTogglePlugin } from './hooks'
+import { checkHook, MAX_COMMAND_LENGTH } from './hookRules'
 import { toggleRight } from './rights'
 import type { ConfigField } from './types'
 
@@ -84,6 +91,7 @@ describe('config model', () => {
     options: [],
     secret: false,
     default: 8,
+    constraints: { min: 1 },
     value: 8,
     source: 'default',
     hidden: false,
@@ -101,6 +109,59 @@ describe('config model', () => {
     expect(normalise({ kind: 'list' }, null)).toEqual([])
   })
 
+  it('checks each setting against the constraints the server exposes', () => {
+    const make = (over: Partial<ConfigField>): ConfigField => ({ ...field, constraints: {}, ...over })
+    const rdn = make({ key: 'user_rdn', kind: 'str', constraints: { format: 'rdn' }, value: 'ou=people' })
+    const port = make({ key: 'cas_port', kind: 'int', constraints: { min: 1, max: 65535 }, value: null })
+    const hash = make({ key: 'password_default_hash', kind: 'select', options: ['ssha', 'argon2'], value: 'ssha' })
+    const shells = make({
+      key: 'shells',
+      kind: 'list',
+      constraints: { item_format: 'abs_path', unique: true },
+      value: ['/bin/sh'],
+    })
+    const none = effectiveValues([rdn, port, hash, shells], {})
+    expect(validateField(rdn, 'anything', none)).not.toBeNull()
+    expect(validateField(rdn, 'ou=staff', none)).toBeNull()
+    expect(validateField(rdn, '', none)).toBeNull()
+    expect(validateField(port, 0, none)).toBe('Must be at least 1')
+    expect(validateField(port, 70000, none)).toBe('Must be at most 65535')
+    expect(validateField(port, 1.5, none)).toBe('Enter a whole number')
+    expect(validateField(port, 389, none)).toBeNull()
+    expect(validateField(hash, 'foo', none)).not.toBeNull()
+    expect(validateField(hash, 'argon2', none)).toBeNull()
+    expect(validateField(shells, ['/bin/sh', 'zsh'], none)).toContain('zsh')
+    expect(validateField(shells, ['/bin/sh', '/bin/sh'], none)).toContain('/bin/sh')
+  })
+
+  it('reports a cross-field error on the key being written', () => {
+    const make = (key: string, kind: ConfigField['kind'], value: ConfigField['value']): ConfigField => ({
+      ...field,
+      key,
+      kind,
+      value,
+      constraints: {},
+    })
+    const fields = [
+      make('shells', 'list', ['/bin/bash', '/bin/sh']),
+      make('default_shell', 'str', '/bin/bash'),
+      make('uid_number_base', 'str', '1100'),
+      make('min_id', 'int', 1000),
+      make('uid_pool_min', 'int', null),
+      make('uid_pool_max', 'int', null),
+    ]
+    expect(Object.keys(validateDraft(fields, { shells: ['/bin/sh'] }))).toEqual(['shells'])
+    expect(Object.keys(validateDraft(fields, { default_shell: '/bin/zsh' }))).toEqual(['default_shell'])
+    expect(validateDraft(fields, { shells: ['/bin/sh'], default_shell: '/bin/sh' })).toEqual({})
+    expect(Object.keys(validateDraft(fields, { uid_pool_min: 5, uid_pool_max: 2 }))).toEqual(['uid_pool_max'])
+    expect(Object.keys(validateDraft(fields, { uid_number_base: '1100-1500', min_id: 2000 }))).toEqual([
+      'uid_number_base',
+    ])
+    expect(Object.keys(validateDraft(fields, { min_id: 5000 }))).toEqual([])
+    // emptying a list falls back to its default instead of failing
+    expect(validateDraft(fields, { shells: [] })).toEqual({})
+  })
+
   it('toggles rights in canonical order', () => {
     expect(toggleRight('rw', 'c')).toBe('rwc')
     expect(toggleRight('rwc', 'w')).toBe('rc')
@@ -113,24 +174,23 @@ describe('administration navigation', () => {
     signIn()
     renderApp('/')
     const nav = await screen.findByRole('navigation', { name: 'Main navigation' })
+    // every administration tool lives in one collapsible block, apart from the object types
+    const admin = await within(nav).findByTestId('nav-admin')
+    await userEvent.click(within(admin).getByRole('button', { name: 'Administration' }))
     for (const name of ['Configuration', 'Directory health', 'Plugins', 'Tasks', 'Access control'])
-      expect(await within(nav).findByRole('link', { name })).toBeInTheDocument()
-    // permissions live with the other access entries, tasks with the activity entries
+      expect(await within(admin).findByRole('link', { name })).toBeInTheDocument()
     expect(
-      within(within(nav).getByTestId('nav-group-access')).getByRole('link', {
-        name: 'Access control',
-      }),
-    ).toBeInTheDocument()
-    expect(
-      within(within(nav).getByTestId('nav-group-activity')).getByRole('link', { name: 'Tasks' }),
-    ).toBeInTheDocument()
+      within(within(nav).getByTestId('nav-directory')).queryByRole('link', { name: 'Tasks' }),
+    ).not.toBeInTheDocument()
   })
 
   it('hides the entries the user has no rights for', async () => {
     signIn('viewer')
     renderApp('/')
     const nav = await screen.findByRole('navigation', { name: 'Main navigation' })
-    expect(await within(nav).findByRole('link', { name: 'Configuration' })).toBeInTheDocument()
+    const admin = await within(nav).findByTestId('nav-admin')
+    await userEvent.click(within(admin).getByRole('button', { name: 'Administration' }))
+    expect(await within(admin).findByRole('link', { name: 'Configuration' })).toBeInTheDocument()
     expect(within(nav).queryByRole('link', { name: 'Access control' })).not.toBeInTheDocument()
     expect(within(nav).queryByRole('link', { name: 'Tasks' })).not.toBeInTheDocument()
   })
@@ -157,13 +217,12 @@ describe('configuration screen', () => {
     expect(await screen.findByText('No changes.')).toBeInTheDocument()
   })
 
-  it('marks the settings that are only stored for compatibility', async () => {
+  it('marks a stored-only setting outside Advanced, not an honoured one', async () => {
     signIn()
     renderApp('/admin/config')
-    await userEvent.click(await screen.findByRole('button', { name: 'Advanced' }))
-    const row = (await screen.findByText('Time zone')).closest('div.grid')
-    expect(row).not.toBeNull()
-    expect(within(row as HTMLElement).getByText('Stored for compatibility')).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign-in & security' }))
+    const stored = (await screen.findByText('CAS host')).closest('div.grid')
+    expect(within(stored as HTMLElement).getByText('Stored for compatibility')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Passwords' }))
     const honoured = (await screen.findByText('Minimum length')).closest('div.grid')
     expect(within(honoured as HTMLElement).queryByText('Stored for compatibility')).toBeNull()
@@ -211,6 +270,140 @@ describe('configuration screen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByText('Must not be negative.')).toBeInTheDocument()
     expect(input).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('refuses an invalid value inline and blocks saving until it is fixed', async () => {
+    signIn()
+    renderApp('/admin/config')
+    const rdn = await screen.findByLabelText('Users container')
+    await userEvent.clear(rdn)
+    await userEvent.type(rdn, 'anything')
+    // the message shows once the field has been left
+    expect(screen.queryByText('Enter one RDN, such as ou=people')).not.toBeInTheDocument()
+    await userEvent.tab()
+    expect(await screen.findByText('Enter one RDN, such as ou=people')).toBeInTheDocument()
+    expect(rdn).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    expect(screen.getByText('1 setting needs fixing')).toBeInTheDocument()
+    // the navigation counts the invalid settings of the group
+    expect(screen.getByRole('button', { name: /General/ })).toHaveTextContent('1')
+    expect(screen.getAllByLabelText('1 setting needs fixing').length).toBeGreaterThan(0)
+    await userEvent.clear(rdn)
+    await userEvent.type(rdn, 'ou=staff')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled())
+    expect(screen.queryByText('Enter one RDN, such as ou=people')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(lastRequest('PUT', '/config')).toBeDefined())
+    expect(lastRequest('PUT', '/config')?.body).toEqual({ changes: { user_rdn: 'ou=staff' } })
+  })
+
+  it('checks numbers against their bounds and keeps what was typed', async () => {
+    signIn()
+    renderApp('/admin/config')
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign-in & security' }))
+    const port = await screen.findByLabelText('CAS port')
+    expect(port).toHaveAttribute('min', '1')
+    expect(port).toHaveAttribute('max', '65535')
+    await userEvent.type(port, '0')
+    await userEvent.tab()
+    expect(await screen.findByText('Must be at least 1')).toBeInTheDocument()
+    expect(port).toHaveValue(0)
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+  })
+
+  it('offers the supported hash methods as choices and ties the default to the allowed ones', async () => {
+    signIn()
+    renderApp('/admin/config')
+    await userEvent.click(await screen.findByRole('button', { name: 'Passwords' }))
+    const group = await screen.findByRole('group', { name: 'Allowed hash methods' })
+    await userEvent.click(within(group).getByRole('checkbox', { name: 'argon2' }))
+    // the default (ssha) is not among the allowed hashes: the list is at fault
+    expect(await screen.findByText('Must include the default hash (ssha).')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    await userEvent.click(within(group).getByRole('checkbox', { name: 'ssha' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled())
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(lastRequest('PUT', '/config')).toBeDefined())
+    expect(lastRequest('PUT', '/config')?.body).toEqual({
+      changes: { password_allowed_hashes: ['ssha', 'argon2'] },
+    })
+  })
+
+  it('shows the server refusal on the field, switches to its group and focuses it', async () => {
+    signIn()
+    server.use(
+      http.put('/api/v2/admin/config', () =>
+        HttpResponse.json(
+          {
+            error: {
+              code: 'validation',
+              message: 'Invalid configuration',
+              fields: { password_min_length: 'Must be at least 1.' },
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+    )
+    renderApp('/admin/config')
+    const rdn = await screen.findByLabelText('Users container')
+    await userEvent.clear(rdn)
+    await userEvent.type(rdn, 'ou=x')
+    await userEvent.click(screen.getByRole('button', { name: 'Passwords' }))
+    const length = await screen.findByLabelText('Minimum length')
+    await userEvent.clear(length)
+    await userEvent.type(length, '5')
+    await userEvent.click(screen.getByRole('button', { name: /^General/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await screen.findByText('Must be at least 1.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Minimum length')).toHaveFocus()
+    expect(screen.getByLabelText('Minimum length')).toHaveValue(5)
+  })
+
+  it('renders and edits settings from a server that sends no constraints', async () => {
+    signIn()
+    server.use(
+      http.get('/api/v2/admin/config', () =>
+        HttpResponse.json({
+          exists: true,
+          can_write: true,
+          sections: ['password'],
+          fields: [
+            {
+              key: 'password_min_length',
+              section: 'password',
+              kind: 'int',
+              honoured: true,
+              options: [],
+              secret: false,
+              default: 8,
+              value: 8,
+              source: 'default',
+              hidden: false,
+            },
+          ],
+        }),
+      ),
+    )
+    renderApp('/admin/config')
+    await userEvent.click(await screen.findByRole('button', { name: 'Passwords' }))
+    const input = await screen.findByLabelText('Minimum length')
+    expect(input).toHaveAttribute('min', '0')
+    await userEvent.clear(input)
+    await userEvent.type(input, '3')
+    await userEvent.tab()
+    expect(input).not.toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
+  })
+
+  it('says once, at the top of Advanced, that those settings are only stored', async () => {
+    signIn()
+    renderApp('/admin/config')
+    await userEvent.click(await screen.findByRole('button', { name: 'Advanced' }))
+    expect(await screen.findAllByText(/stores them but does not act on them/)).toHaveLength(1)
+    expect(screen.queryByText('Stored for compatibility')).not.toBeInTheDocument()
+    // the legacy sections are subheadings, not filters
+    expect(screen.getByRole('heading', { name: 'Look & feel' })).toBeInTheDocument()
   })
 
   it('is read-only without the right to write', async () => {
@@ -523,5 +716,169 @@ describe('health results and run history', () => {
     const failed = (await within(runs).findByText('lifecycle')).closest('tr') as HTMLElement
     expect(within(failed).getByText('1 error(s)')).toBeInTheDocument()
     expect(within(failed).getByText('smtp refused the connection')).toBeInTheDocument()
+  })
+})
+
+describe('trigger form validation', () => {
+  async function openDialog() {
+    signIn()
+    renderApp('/admin/config')
+    await userEvent.click(await screen.findByRole('button', { name: 'Automation & triggers' }))
+    await screen.findByText('No triggers')
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }))
+    return await screen.findByRole('dialog')
+  }
+
+  async function pickTab(dialog: HTMLElement, name: string) {
+    await userEvent.click(within(dialog).getByRole('combobox', { name: 'Tab' }))
+    await userEvent.click(await screen.findByRole('option', { name }))
+  }
+
+  it('refuses an empty tab and a command starting with # inline, and keeps the dialog open', async () => {
+    const dialog = await openDialog()
+    await userEvent.type(within(dialog).getByLabelText('Command'), '# not active')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'OK' }))
+    expect(await within(dialog).findByText('Choose a tab.')).toBeInTheDocument()
+    expect(
+      within(dialog).getByText('A command cannot start with “#”: turn the trigger off instead.'),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByText('Fields to fix: 2.')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Command')).toHaveAttribute('aria-invalid', 'true')
+    expect(within(dialog).getByRole('combobox', { name: 'Tab' })).toHaveAttribute('aria-invalid', 'true')
+    // the typed command is kept and nothing reached the list or the server
+    expect(within(dialog).getByLabelText('Command')).toHaveValue('# not active')
+    expect(lastRequest('PUT', '/hooks')).toBeUndefined()
+  })
+
+  it('refuses a trigger that already exists', async () => {
+    const dialog = await openDialog()
+    await pickTab(dialog, 'posixAccount')
+    const command = within(dialog).getByLabelText('Command')
+    await userEvent.type(command, 'echo %uid%')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'OK' }))
+    expect(await screen.findByText('echo %uid%')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }))
+    const again = await screen.findByRole('dialog')
+    await pickTab(again, 'posixAccount')
+    await userEvent.type(within(again).getByLabelText('Command'), 'echo %uid%')
+    await userEvent.click(within(again).getByRole('button', { name: 'OK' }))
+    expect(await within(again).findByText('This trigger already exists.')).toBeInTheDocument()
+  })
+
+  it('checkHook mirrors the server rules (line break, NUL, length, unknown tab or event)', () => {
+    const base = { tab: 'user', mode: 'check', command: 'true', enabled: true }
+    const check = (patch: Partial<typeof base>) =>
+      checkHook({ ...base, ...patch }, [], ['user'], ['check', 'postcreate'])
+    expect(check({})).toEqual({})
+    expect(check({ command: 'echo a\necho b' }).command).toBe('The command must fit on one line.')
+    expect(check({ command: 'echo \0' }).command).toBe('The command must fit on one line.')
+    expect(check({ command: 'x'.repeat(MAX_COMMAND_LENGTH + 1) }).command).toMatch(/at most 1000/i)
+    expect(check({ command: 'x'.repeat(MAX_COMMAND_LENGTH) })).toEqual({})
+    expect(check({ command: 'echo # fine' })).toEqual({})
+    expect(check({ tab: 'nowhere' }).tab).toBe('This tab does not exist.')
+    expect(check({ tab: 'a|b' }).tab).toBe('This tab does not exist.')
+    expect(check({ mode: 'whenever' }).mode).toBe('Choose an event.')
+  })
+
+  it('shows what the server refused on the trigger row and keeps the typed values', async () => {
+    server.use(
+      http.put('/api/v2/admin/hooks', () =>
+        HttpResponse.json(
+          {
+            error: {
+              code: 'validation',
+              message: 'Invalid triggers',
+              fields: { 'hooks.0.command': 'Same trigger as #1.' },
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+    )
+    const dialog = await openDialog()
+    await pickTab(dialog, 'user')
+    await userEvent.type(within(dialog).getByLabelText('Command'), 'true')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'OK' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText('Same trigger as #1.')).toBeInTheDocument()
+    expect(screen.getByText('true')).toBeInTheDocument()
+  })
+})
+
+describe('health fix validation', () => {
+  it('blocks a fix with no entry selected and says why', async () => {
+    signIn()
+    renderApp('/admin/health')
+    const card = (await screen.findByText('Users location')).closest('li') as HTMLElement
+    await userEvent.click(within(card).getByRole('checkbox', { name: `uid=a,ou=misc,${BASE_DN}` }))
+    await userEvent.click(within(card).getByRole('checkbox', { name: `uid=b,ou=misc,${BASE_DN}` }))
+    expect(within(card).getByText('Select at least one entry to fix.')).toBeInTheDocument()
+    expect(within(card).getByRole('button', { name: 'Fix 0 selected' })).toBeDisabled()
+  })
+
+  it('asks for a user before the promote button works, and says why', async () => {
+    signIn()
+    renderApp('/admin/health')
+    const card = (await screen.findByText('Super administrator')).closest('li') as HTMLElement
+    expect(within(card).getByText('Choose a user to enable this button.')).toBeInTheDocument()
+    expect(within(card).getByRole('button', { name: 'Make administrator' })).toBeDisabled()
+  })
+
+  it('shows an entry the server refused next to that entry, not only in a toast', async () => {
+    server.use(
+      http.post('/api/v2/admin/checks/:id/fix', () =>
+        HttpResponse.json(
+          {
+            error: {
+              code: 'validation',
+              message: 'Invalid fix options',
+              fields: { 'dns.0': 'This check does not report this entry.' },
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+    )
+    signIn()
+    renderApp('/admin/health')
+    const card = (await screen.findByText('Users location')).closest('li') as HTMLElement
+    await userEvent.click(within(card).getByRole('button', { name: 'Fix 2 selected' }))
+    const refused = await within(card).findByText(
+      'The check no longer reports this entry. Run the checks again.',
+    )
+    expect(refused.closest('li')).toHaveTextContent(`uid=a,ou=misc,${BASE_DN}`)
+    expect(within(card).getByRole('checkbox', { name: `uid=a,ou=misc,${BASE_DN}` })).toBeChecked()
+  })
+})
+
+describe('task filter validation', () => {
+  it('shows a filter the server refuses on its own control and lets the user clear it', async () => {
+    server.use(
+      http.get('/api/v2/admin/tasks', ({ request }) => {
+        if (new URL(request.url).searchParams.get('status') !== 'Deactivated') return undefined
+        return HttpResponse.json(
+          {
+            error: {
+              code: 'validation',
+              message: 'Unknown task status',
+              fields: { status: 'Unknown task status.' },
+            },
+          },
+          { status: 422 },
+        )
+      }),
+    )
+    signIn()
+    renderApp('/admin/tasks')
+    await screen.findByText('purge-audit')
+    await userEvent.click(screen.getByRole('combobox', { name: 'Status' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Deactivated' }))
+    expect(
+      await screen.findByText('This status is not used by any task. Pick another status or clear the filter.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Status' })).toHaveAttribute('aria-invalid', 'true')
+    await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(await screen.findByText('purge-audit')).toBeInTheDocument()
   })
 })

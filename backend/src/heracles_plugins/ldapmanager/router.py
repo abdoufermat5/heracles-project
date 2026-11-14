@@ -15,6 +15,7 @@ from heracles.api.domain import DomainDep
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.v2.objects import object_errors
 from heracles.attributes import JSON
+from heracles.core import formats
 from heracles.ldap.client import (
     DirectoryClient,
     DirectoryError,
@@ -81,6 +82,25 @@ def _templates() -> Any:
         raise ApiError(501, "not_implemented", "Object templates are not available") from None
 
 
+def _parse_csv(body: CsvParseBody) -> csvlib.ParsedCsv:
+    """Parse the document; a refused separator is reported on its own field."""
+    if body.separator not in csvlib.SEPARATORS:
+        raise validation("Unsupported separator", {"separator": "Unsupported separator"})
+    try:
+        return csvlib.parse_csv(body.text, body.separator, has_header=body.has_header)
+    except csvlib.CsvError as exc:
+        raise validation(str(exc), {"text": str(exc)}) from None
+
+
+def _container_problem(directory: DirectoryClient, base: str) -> dict[str, str]:
+    """``{"base": message}`` unless ``base`` is an existing entry (its format is checked first)."""
+    try:
+        found = directory.get(base) is not None
+    except DirectoryError:
+        found = False
+    return {} if found else {"base": "The container does not exist."}
+
+
 def check_export_size(
     directory: DirectoryClient,
     start: str,
@@ -133,6 +153,8 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
     ) -> StreamingResponse:
         gate = Access(domain, user)
         directory = user.directory
+        if base and (problem := formats.check("dn", base)) is not None:
+            raise validation(problem, {"base": problem})
         start = base or directory.base_dn
         gate.require_export(start)
         try:
@@ -258,10 +280,7 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
     def csv_parse(body: CsvParseBody, user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
         """Parse a CSV document: the columns and the first rows (for the preview)."""
         del user, domain
-        try:
-            parsed = csvlib.parse_csv(body.text, body.separator, has_header=body.has_header)
-        except csvlib.CsvError as exc:
-            raise validation(str(exc), {"text": str(exc)}) from None
+        parsed = _parse_csv(body)
         return {
             "columns": list(parsed.columns),
             "rows": [list(r) for r in parsed.rows[:PREVIEW_ROWS]],
@@ -276,6 +295,8 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         template: Annotated[str | None, Query()] = None,
     ) -> list[JSON]:
         """The attributes a column can be mapped to (limited to a template's fields)."""
+        if template and (problem := formats.check("dn", template)) is not None:
+            raise validation(problem, {"template": problem})
         with object_errors():
             info = domain.registry.get(type_name)
             fields = csvlib.importable_fields(info)
@@ -283,16 +304,18 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
                 service, _policy = domain.service(user, info.name)
                 wanted = _templates().template_fields(service, info.name, template)
                 fields = csvlib.template_fields_only(fields, cast("dict[str, list[str]]", wanted))
-        tabs = {t.name: t.display_label() for t in info.tabs}
+        tabs = {t.name: t for t in info.tabs}
         return [
             {
                 "key": f.key,
                 "tab": f.tab,
-                "tab_label": tabs[f.tab],
+                "tab_label": tabs[f.tab].display_label(),
+                "tab_optional": tabs[f.tab].optional,
                 "attribute": f.attribute.name,
                 "label": f.attribute.label,
                 "kind": f.attribute.kind,
                 "required": f.attribute.required,
+                "has_default": f.attribute.default is not None,
                 "multivalued": f.attribute.multivalued,
             }
             for f in fields
@@ -305,42 +328,65 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         """Create one object per CSV line through the normal creation path."""
         gate = Access(domain, user)
         directory = user.directory
+        if body.base and (problem := formats.check("dn", body.base)) is not None:
+            raise validation(problem, {"base": problem})
         default_base = body.base or directory.base_dn
         if not gate.can_import_csv(default_base):
             raise forbidden("You are not allowed to import CSV files")
         with object_errors():
             info = domain.registry.get(type_name)
-        try:
-            parsed = csvlib.parse_csv(body.text, body.separator, has_header=body.has_header)
-        except csvlib.CsvError as exc:
-            raise validation(str(exc), {"text": str(exc)}) from None
+        errors: dict[str, str] = {}
+        if body.base:
+            errors.update(_container_problem(directory, body.base))
+        if body.template and (problem := formats.check("dn", body.template)) is not None:
+            errors["template"] = problem
+        parsed = _parse_csv(body)
+        if not parsed.rows:
+            errors["text"] = "The file has no data line."
         available = csvlib.importable_fields(info)
         service, _policy = domain.service(user, info.name)
-        if body.template:
+        if body.template and "template" not in errors:
             module = _templates()
             with object_errors():
                 wanted = module.template_fields(service, info.name, body.template)
             available = csvlib.template_fields_only(available, cast("dict[str, list[str]]", wanted))
         by_key = {f.key: f for f in available}
-        errors: dict[str, str] = {}
         mapping: list[tuple[int, csvlib.Field]] = []
+        used_columns: set[int] = set()
         for item in body.mapping:
             target = by_key.get(item.field)
             if target is None:
                 errors[f"mapping.{item.field}"] = "Unknown field"
             elif item.column >= len(parsed.columns):
                 errors[f"mapping.{item.field}"] = "Unknown column"
+            elif item.column in used_columns:
+                errors[f"mapping.{item.field}"] = "This column is already mapped to another field"
+            elif any(target is other for _column, other in mapping):
+                errors[f"mapping.{item.field}"] = "This field is already mapped to a column"
             else:
+                used_columns.add(item.column)
                 mapping.append((item.column, target))
+        if not body.mapping:
+            errors["mapping"] = "Map at least one column."
         fixed: dict[str, csvlib.Field] = {}
-        for key in body.fixed:
+        for key, text in body.fixed.items():
             found = by_key.get(key)
             if found is None:
                 errors[f"fixed.{key}"] = "Unknown field"
+            elif not text.strip():
+                errors[f"fixed.{key}"] = "A value is required"
             else:
+                try:
+                    csvlib.coerce(found.attribute, text)
+                except csvlib.CsvError as exc:
+                    errors[f"fixed.{key}"] = str(exc)
                 fixed[key] = found
+        if not body.template and not any(k.startswith("mapping") for k in errors):
+            covered = {f.key for _column, f in mapping} | set(fixed)
+            for missing in csvlib.missing_required(info, available, covered):
+                errors[f"mapping.{missing.key}"] = "Required: map a column or set a fixed value"
         if errors:
-            raise validation("Invalid mapping", errors)
+            raise validation("Invalid import", errors)
 
         results: list[JSON] = []
         imported = 0

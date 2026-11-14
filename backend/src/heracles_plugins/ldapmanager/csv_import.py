@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -107,6 +107,26 @@ def template_fields_only(
 ) -> list[Field]:
     """The fields a template asks for (``tab -> attribute names``)."""
     return [f for f in fields if f.attribute.name in set(wanted.get(f.tab, ()))]
+
+
+def missing_required(
+    info: TypeInfo, fields: Sequence[Field], covered: Collection[str]
+) -> list[Field]:
+    """Required fields without a default that no column or fixed value fills.
+
+    Only tabs the import creates are concerned: the always-on tabs, and an optional tab as
+    soon as one of its fields is covered (the import activates exactly those).
+    """
+    optional = {t.name for t in info.tabs if t.optional}
+    touched = {f.tab for f in fields if f.key in covered}
+    return [
+        f
+        for f in fields
+        if f.attribute.required
+        and f.attribute.default is None
+        and f.key not in covered
+        and (f.tab not in optional or f.tab in touched)
+    ]
 
 
 def _item_kind(attr: AnyAttribute) -> str:

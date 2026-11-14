@@ -9,12 +9,15 @@ export function FormField({
   id,
   label,
   hint,
+  error,
   children,
   className,
 }: {
   id: string
   label: string
   hint?: string
+  /** Problem with the value: shown under the control (give the control `aria-invalid`). */
+  error?: string | null
   children: React.ReactNode
   className?: string
 }) {
@@ -24,6 +27,11 @@ export function FormField({
         {label}
       </Label>
       {children}
+      {error && (
+        <p id={`${id}-error`} role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
       {hint && (
         <p id={`${id}-hint`} className="text-xs text-muted-foreground">
           {hint}

@@ -5,6 +5,7 @@ import i18n from '@/i18n'
 import { db } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { renderApp, signIn } from '@/test/utils'
+import { afterEach, beforeEach, vi } from 'vitest'
 import { guessMapping } from './mapping'
 
 const LDIF = [
@@ -26,6 +27,7 @@ describe('import / export page', () => {
   it('is listed in the sidebar and shows the three tabs', async () => {
     signIn()
     renderApp('/')
+    await userEvent.click(await screen.findByRole('button', { name: 'Administration' }))
     const link = await screen.findByRole('link', { name: 'Import / export' })
     await userEvent.click(link)
     expect(await screen.findByRole('tab', { name: 'Export LDIF' })).toBeInTheDocument()
@@ -56,26 +58,27 @@ describe('import / export page', () => {
     expect(screen.queryByRole('link', { name: 'Import / export' })).not.toBeInTheDocument()
   })
 
-  it('builds the export download link from the form', async () => {
-    await open()
-    const link = await screen.findByRole('link', { name: 'Download LDIF' })
-    const initial = new URL(link.getAttribute('href') ?? '', 'http://localhost')
-    expect(initial.pathname).toBe('/api/v2/ldif/export')
-    expect(initial.searchParams.get('scope')).toBe('sub')
-    expect(initial.searchParams.get('wrap')).toBe('76')
-
-    await userEvent.type(screen.getByLabelText('Base DN'), 'ou=Paris,dc=example,dc=com')
-    await userEvent.selectOptions(screen.getByLabelText('Scope'), 'one')
-    const wrap = screen.getByLabelText(/Wrap lines after/)
-    await userEvent.clear(wrap)
-    await userEvent.type(wrap, '0')
-    const url = new URL(
-      screen.getByRole('link', { name: 'Download LDIF' }).getAttribute('href') ?? '',
-      'http://localhost',
-    )
-    expect(url.searchParams.get('base')).toBe('ou=Paris,dc=example,dc=com')
-    expect(url.searchParams.get('scope')).toBe('one')
-    expect(url.searchParams.get('wrap')).toBe('0')
+  it('downloads the export built from the form', async () => {
+    const urls: URL[] = []
+    const listener = ({ request }: { request: Request }) => {
+      const url = new URL(request.url)
+      if (url.pathname === '/api/v2/ldif/export') urls.push(url)
+    }
+    server.events.on('request:start', listener)
+    URL.createObjectURL = vi.fn(() => 'blob:export')
+    URL.revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    try {
+      await open()
+      await userEvent.click(await screen.findByRole('button', { name: 'Download LDIF' }))
+      await waitFor(() => expect(click).toHaveBeenCalled())
+      expect(urls[0]?.searchParams.get('scope')).toBe('sub')
+      expect(urls[0]?.searchParams.get('wrap')).toBe('76')
+      expect(urls[0]?.searchParams.get('filter')).toBe('(objectClass=*)')
+    } finally {
+      server.events.removeListener('request:start', listener)
+      vi.restoreAllMocks()
+    }
   })
 })
 
@@ -143,7 +146,7 @@ describe('LDIF import', () => {
       ),
     )
     await open()
-    await paste('garbage')
+    await paste('dn: ou=a,dc=example,dc=com\nobjectClass: top\n')
     await userEvent.click(screen.getByRole('button', { name: 'Preview (dry run)' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid LDIF: line 1')
   })
@@ -319,6 +322,7 @@ describe('import / export availability', () => {
     )
     signIn()
     const first = renderApp('/')
+    await userEvent.click(await screen.findByRole('button', { name: 'Administration' }))
     expect(await screen.findByRole('link', { name: 'Import / export' })).toBeInTheDocument()
     expect(await screen.findByText('Import your users')).toBeInTheDocument()
     first.unmount()
@@ -331,5 +335,186 @@ describe('import / export availability', () => {
     expect(screen.queryByText('Import your users')).not.toBeInTheDocument()
     expect(screen.queryByText('Import people')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Import / export' })).not.toBeInTheDocument()
+  })
+})
+
+describe('input validation', () => {
+  const exportCalls: URL[] = []
+  const listener = ({ request }: { request: Request }) => {
+    const url = new URL(request.url)
+    if (url.pathname === '/api/v2/ldif/export') exportCalls.push(url)
+  }
+
+  beforeEach(() => {
+    exportCalls.length = 0
+    server.events.on('request:start', listener)
+    URL.createObjectURL = vi.fn(() => 'blob:export')
+    URL.revokeObjectURL = vi.fn()
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+  })
+  afterEach(() => {
+    server.events.removeListener('request:start', listener)
+    vi.restoreAllMocks()
+  })
+
+  it('export: refuses a malformed base DN and filter inline, and downloads once they are fixed', async () => {
+    await open()
+    const base = await screen.findByLabelText('Base DN')
+    await userEvent.type(base, 'not a dn')
+    await userEvent.tab()
+    expect(await screen.findByText(/Enter a distinguished name/)).toBeInTheDocument()
+    expect(base).toHaveAttribute('aria-invalid', 'true')
+
+    const filter = screen.getByLabelText('LDAP filter')
+    await userEvent.clear(filter)
+    await userEvent.type(filter, '(uid=')
+    const wrap = screen.getByLabelText(/Wrap lines after/)
+    await userEvent.clear(wrap)
+    await userEvent.type(wrap, '5000')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Download LDIF' }))
+    expect(await screen.findByText('Fields to fix: 3.')).toBeInTheDocument()
+    expect(screen.getByText(/Enter a valid LDAP filter/)).toBeInTheDocument()
+    expect(screen.getByText('Must be at most 1000')).toBeInTheDocument()
+    expect(exportCalls).toEqual([])
+
+    await userEvent.clear(base)
+    await userEvent.type(base, 'ou=Paris,dc=example,dc=com')
+    await userEvent.clear(filter)
+    await userEvent.type(filter, '(objectClass=*)')
+    await userEvent.clear(wrap)
+    await userEvent.type(wrap, '0')
+    await userEvent.selectOptions(screen.getByLabelText('Scope'), 'one')
+    await userEvent.click(screen.getByRole('button', { name: 'Download LDIF' }))
+    await waitFor(() => expect(exportCalls).toHaveLength(1))
+    const url = exportCalls[0]
+    expect(url?.searchParams.get('base')).toBe('ou=Paris,dc=example,dc=com')
+    expect(url?.searchParams.get('scope')).toBe('one')
+    expect(url?.searchParams.get('wrap')).toBe('0')
+  })
+
+  it('export: shows an unknown base on the base field', async () => {
+    await open()
+    await userEvent.type(await screen.findByLabelText('Base DN'), 'ou=Nowhere,dc=example,dc=com')
+    await userEvent.click(screen.getByRole('button', { name: 'Download LDIF' }))
+    expect(await screen.findByText('This entry does not exist in the directory.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Base DN')).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('LDIF: refuses a document that does not parse, with its line, before any request', async () => {
+    const requests: string[] = []
+    server.events.on('request:start', ({ request }) => {
+      if (new URL(request.url).pathname.endsWith('/ldif/import')) requests.push(request.url)
+    })
+    await open()
+    await userEvent.click(await screen.findByRole('tab', { name: 'Import LDIF' }))
+    const area = await screen.findByLabelText('Or paste LDIF text')
+    await userEvent.click(area)
+    await userEvent.paste('garbage')
+    await userEvent.click(screen.getByRole('button', { name: 'Preview (dry run)' }))
+    expect(await screen.findByText('Line 1: expected “attribute: value”.')).toBeInTheDocument()
+    expect(area).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByText('Fields to fix: 1.')).toBeInTheDocument()
+
+    await userEvent.clear(area)
+    await userEvent.click(area)
+    await userEvent.paste('dn: not a dn\nobjectClass: top\n')
+    await userEvent.click(screen.getByRole('button', { name: 'Preview (dry run)' }))
+    expect(await screen.findByText('Line 1: “not a dn” is not a valid DN.')).toBeInTheDocument()
+
+    await userEvent.clear(area)
+    await userEvent.click(area)
+    await userEvent.paste('dn: ou=a,dc=example,dc=com\nobjectClass: top\ndn: ou=b,dc=example,dc=com\n')
+    expect(await screen.findByText(/Line 3: “dn:” inside a record/)).toBeInTheDocument()
+    expect(requests).toEqual([])
+  })
+
+  it('LDIF: shows the refusal of the server on the document field', async () => {
+    server.use(
+      http.post('/api/v2/ldif/import', () =>
+        HttpResponse.json(
+          { error: { code: 'validation', message: 'Invalid LDIF', fields: { text: 'invalid base64 value' } } },
+          { status: 422 },
+        ),
+      ),
+    )
+    await open()
+    await userEvent.click(await screen.findByRole('tab', { name: 'Import LDIF' }))
+    const area = await screen.findByLabelText('Or paste LDIF text')
+    await userEvent.click(area)
+    await userEvent.paste('dn: ou=a,dc=example,dc=com\nobjectClass: top\n')
+    await userEvent.click(screen.getByRole('button', { name: 'Preview (dry run)' }))
+    expect(await screen.findByText('invalid base64 value')).toBeInTheDocument()
+    expect(area).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('CSV: blocks the import while a required field, a duplicate or a fixed value is wrong', async () => {
+    const requests: string[] = []
+    server.events.on('request:start', ({ request }) => {
+      if (new URL(request.url).pathname.endsWith('/import')) requests.push(request.url)
+    })
+    await open()
+    await userEvent.click(await screen.findByRole('tab', { name: 'Import CSV' }))
+    await userEvent.click(await screen.findByLabelText('Or paste CSV text'))
+    await userEvent.paste('uid,givenName,sn\nimp1,Ada,Lovelace\n')
+    await userEvent.click(screen.getByRole('button', { name: 'Load and preview' }))
+    await screen.findByText(/Preview/)
+
+    // a required attribute without a column
+    await userEvent.selectOptions(screen.getByLabelText('sn'), '')
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }))
+    expect(
+      await screen.findByText('Map a column or set a fixed value for “Last name”.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Fields to fix: 1.')).toBeInTheDocument()
+
+    // two columns on the same attribute
+    await userEvent.selectOptions(screen.getByLabelText('sn'), 'main.uid')
+    const duplicates = await screen.findAllByText('This attribute is already filled from another column.')
+    expect(duplicates).toHaveLength(2)
+    expect(screen.getByLabelText('uid')).toHaveAttribute('aria-invalid', 'true')
+
+    // fixed values: attribute and value required, number checked
+    await userEvent.selectOptions(screen.getByLabelText('sn'), 'main.sn')
+    await userEvent.click(screen.getByRole('button', { name: 'Add a fixed value' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }))
+    expect(await screen.findByText('Choose an attribute.')).toBeInTheDocument()
+    await userEvent.selectOptions(screen.getByLabelText('Attribute'), 'main.employeeNumber')
+    await userEvent.type(screen.getByLabelText('Value'), 'many')
+    expect(await screen.findByText('Enter a whole number')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }))
+    expect(requests).toEqual([])
+
+    await userEvent.selectOptions(screen.getByLabelText('Attribute'), 'main.mail')
+    await userEvent.clear(screen.getByLabelText('Value'))
+    await userEvent.type(screen.getByLabelText('Value'), 'ada@example.com')
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }))
+    expect(await screen.findByText('1 entry successfully imported')).toBeInTheDocument()
+  })
+
+  it('CSV: shows what the server refused on the field concerned', async () => {
+    server.use(
+      http.post('/api/v2/csv/:type/import', () =>
+        HttpResponse.json(
+          {
+            error: {
+              code: 'validation',
+              message: 'Invalid import',
+              fields: { 'mapping.main.uid': 'This column is already mapped to another field' },
+            },
+          },
+          { status: 422 },
+        ),
+      ),
+    )
+    await open()
+    await userEvent.click(await screen.findByRole('tab', { name: 'Import CSV' }))
+    await userEvent.click(await screen.findByLabelText('Or paste CSV text'))
+    await userEvent.paste('uid,givenName,sn\nimp1,Ada,Lovelace\n')
+    await userEvent.click(screen.getByRole('button', { name: 'Load and preview' }))
+    await screen.findByText(/Preview/)
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }))
+    expect(await screen.findByText('This column is already mapped to another field')).toBeInTheDocument()
+    expect(screen.getByLabelText('uid')).toHaveAttribute('aria-invalid', 'true')
   })
 })

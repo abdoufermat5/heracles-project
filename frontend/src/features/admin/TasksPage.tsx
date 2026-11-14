@@ -308,6 +308,9 @@ export function TasksPage() {
   }
 
   const hasActiveFilters = Boolean(kind || status || search)
+  // a filter the server refuses (a kind that vanished, say) is shown on its own control
+  const refused = filtered.isError && isApiError(filtered.error) ? filtered.error.fields : {}
+  const filterProblems = refused.kind || refused.status ? refused : null
 
   return (
     <PageLayout title={t('tasks.title')} description={t('tasks.description')}>
@@ -317,7 +320,7 @@ export function TasksPage() {
         </p>
       )}
       {(everything.data?.kinds.length ?? 0) > 0 && <NewTaskButton kinds={everything.data?.kinds ?? []} />}
-      {filtered.isError ? (
+      {filtered.isError && !filterProblems ? (
         <ErrorState error={filtered.error} onRetry={() => void filtered.refetch()} />
       ) : (
         <div className="space-y-4">
@@ -371,7 +374,12 @@ export function TasksPage() {
                 {t('tasks.kind')}
               </Label>
               <Select value={kind || ALL} onValueChange={(v) => setKind(v === ALL ? '' : v)}>
-                <SelectTrigger id="tasks-kind" className="h-8 w-56 text-small">
+                <SelectTrigger
+                  id="tasks-kind"
+                  className="h-8 w-56 text-small"
+                  aria-invalid={filterProblems?.kind ? true : undefined}
+                  aria-describedby={filterProblems?.kind ? 'tasks-kind-error' : undefined}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -383,6 +391,11 @@ export function TasksPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {filterProblems?.kind && (
+                <p id="tasks-kind-error" role="alert" className="max-w-56 text-xs text-destructive">
+                  {t('tasks.errors.kind')}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -390,7 +403,12 @@ export function TasksPage() {
                 {t('tasks.status')}
               </Label>
               <Select value={status || ALL} onValueChange={(v) => setStatus(v === ALL ? '' : v)}>
-                <SelectTrigger id="tasks-status" className="h-8 w-44 text-small">
+                <SelectTrigger
+                  id="tasks-status"
+                  className="h-8 w-44 text-small"
+                  aria-invalid={filterProblems?.status ? true : undefined}
+                  aria-describedby={filterProblems?.status ? 'tasks-status-error' : undefined}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -402,6 +420,11 @@ export function TasksPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {filterProblems?.status && (
+                <p id="tasks-status-error" role="alert" className="max-w-44 text-xs text-destructive">
+                  {t('tasks.errors.status')}
+                </p>
+              )}
             </div>
 
             {hasActiveFilters && (
@@ -421,7 +444,7 @@ export function TasksPage() {
             )}
           </div>
 
-          {filtered.isPending || !view ? (
+          {filterProblems ? null : filtered.isPending || !view ? (
             <Skeleton className="h-48 w-full" />
           ) : tasksToDisplay.length === 0 ? (
             <EmptyState

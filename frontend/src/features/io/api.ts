@@ -1,4 +1,5 @@
-import { API_BASE, buildQuery, request } from '@/api/client'
+import { API_BASE, ApiError, buildQuery, request } from '@/api/client'
+import type { ApiErrorBody } from '@/api/types'
 
 export interface IoAccess {
   ldif_export: boolean
@@ -58,6 +59,10 @@ export interface CsvField {
   label: string
   kind: string
   required: boolean
+  /** The attribute has a default value, so a missing column does not leave it empty. */
+  has_default?: boolean
+  /** The tab only exists on the object when something fills one of its attributes. */
+  tab_optional?: boolean
   multivalued: boolean
 }
 
@@ -79,7 +84,7 @@ export interface TemplateInfo {
   name: string
 }
 
-/** URL of the LDIF download (a plain GET: the browser sends the session cookie). */
+/** Query of the LDIF download (a plain GET: the browser sends the session cookie). */
 export function ldifExportUrl(p: LdifExportParams): string {
   return `${API_BASE}/ldif/export${buildQuery({
     base: p.base.trim(),
@@ -88,6 +93,26 @@ export function ldifExportUrl(p: LdifExportParams): string {
     wrap: p.wrap,
     filename: 'export.ldif',
   })}`
+}
+
+/**
+ * Fetch the export. The server refuses a bad base or filter (422 with `fields`) and an unknown
+ * base (404) before streaming anything: those come back as an `ApiError` the form can show
+ * on the field, instead of an error document saved as the download.
+ */
+export async function ldifExport(p: LdifExportParams): Promise<Blob> {
+  const res = await fetch(ldifExportUrl(p), { credentials: 'include' })
+  if (!res.ok) {
+    let body: ApiErrorBody['error']
+    try {
+      const json = (await res.json()) as Partial<ApiErrorBody>
+      body = json.error ?? { code: 'internal', message: res.statusText }
+    } catch {
+      body = { code: 'internal', message: res.statusText || `HTTP ${res.status}` }
+    }
+    throw new ApiError(res.status, body, res.headers.get('X-Request-ID') ?? undefined)
+  }
+  return await res.blob()
 }
 
 export const ioApi = {

@@ -16,6 +16,7 @@ import structlog
 from heracles.acl import admin as acl_admin
 from heracles.acl.model import AclAssignment, AclScope, Ignored
 from heracles.acl.parser import parse_assignment, serialise_assignment
+from heracles.core import formats
 from heracles.core.config_store import RuntimeConfig, effective_settings
 from heracles.core.containers import ensure_container
 from heracles.ldap import dn as dnlib
@@ -969,6 +970,68 @@ def run_checks(ctx: CheckContext, only: Sequence[str] | None = None) -> list[Che
                 )
             )
     return results
+
+
+#: Options a fix needs (all required); any other key is refused.
+FIX_OPTIONS: Final[dict[str, tuple[str, ...]]] = {"super_admin": ("dn",)}
+
+
+def validate_fix(
+    ctx: CheckContext,
+    check_id: str,
+    dns: Sequence[str] = (),
+    options: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Problems of a fix request: ``{field: English message}`` (empty = it can run).
+
+    ``dns`` must be well-formed DNs the check reports now (a fix only touches those); ``options``
+    holds exactly the keys of :data:`FIX_OPTIONS`, each filled, and ``dn`` names an existing
+    person of this directory. Raises :class:`UnknownCheckError` when the check has no fix.
+    """
+    for cid, _check, fix in CHECKS:
+        if cid == check_id and fix is not None:
+            break
+    else:
+        raise UnknownCheckError(check_id)
+    errors: dict[str, str] = {}
+    accepted = FIX_OPTIONS.get(check_id, ())
+    given = options or {}
+    for key in given:
+        if key not in accepted:
+            errors[f"options.{key}"] = "Not an option of this fix."
+    for name in accepted:
+        value = given.get(name, "").strip()
+        if not value:
+            errors[f"options.{name}"] = "This option is required."
+        elif name == "dn":
+            if (problem := formats.check("dn", value)) is not None:
+                errors["options.dn"] = problem
+            elif not _is_person(ctx, value):
+                errors["options.dn"] = "Choose an existing user."
+    wellformed: list[tuple[int, str]] = []
+    for index, dn in enumerate(dns):
+        if (problem := formats.check("dn", dn)) is not None or not dn.strip():
+            errors[f"dns.{index}"] = problem or "Expected a distinguished name."
+        else:
+            wellformed.append((index, dn))
+    if wellformed:
+        reported = {dnlib.normalize(d) for r in run_checks(ctx, [check_id]) for d in r.dns}
+        for index, dn in wellformed:
+            if dnlib.normalize(dn) not in reported:
+                errors[f"dns.{index}"] = "This check does not report this entry."
+    return errors
+
+
+def _is_person(ctx: CheckContext, dn: str) -> bool:
+    try:
+        entry = ctx.directory.get(dn)
+    except DirectoryError:
+        return False
+    return (
+        entry is not None
+        and dnlib.is_descendant(dn, ctx.base)
+        and any(entry.has_object_class(c) for c in _PERSON_CLASSES)
+    )
 
 
 def run_fix(

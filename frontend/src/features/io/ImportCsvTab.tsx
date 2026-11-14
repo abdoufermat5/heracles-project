@@ -11,10 +11,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 import type { CsvImportResponse, CsvParseResponse } from './api'
 import { useCsvFields, useCsvImport, useCsvParse, useTemplates } from './hooks'
 import { guessMapping } from './mapping'
 import { FormField, NATIVE_SELECT, Notice, readFileText, WizardStepper } from './parts'
+import { checkFixedRow, checkMapping, type FixedRow } from './rules'
 
 const SEPARATORS = [
   { value: ',', key: 'comma' },
@@ -24,12 +26,6 @@ const SEPARATORS = [
 ] as const
 
 const IGNORE = ''
-
-interface FixedRow {
-  id: number
-  field: string
-  value: string
-}
 
 export function ImportCsvTab() {
   const { t } = useTranslation()
@@ -45,6 +41,9 @@ export function ImportCsvTab() {
   const [fixed, setFixed] = useState<FixedRow[]>([])
   const [error, setError] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<CsvImportResponse | null>(null)
+  const [attempted, setAttempted] = useState(false)
+  const [touchedFixed, setTouchedFixed] = useState<Record<number, boolean>>({})
+  const [refused, setRefused] = useState<Record<string, string>>({})
 
   const type = chosenType || creatable[0]?.name || ''
   const parse = useCsvParse()
@@ -69,16 +68,19 @@ export function ImportCsvTab() {
   const reset = () => {
     setOutcome(null)
     setError(null)
+    setRefused({})
   }
 
   const load = async (content: string) => {
     reset()
     setParsed(null)
     setOverrides({})
+    setAttempted(false)
     try {
       setParsed(await parse.mutateAsync({ text: content, separator, has_header: hasHeader }))
     } catch (e) {
-      setError(isApiError(e) ? e.message : t('common.error'))
+      if (isApiError(e) && (e.fields.text || e.fields.separator)) setRefused(e.fields)
+      else setError(isApiError(e) ? e.message : t('common.error'))
     }
   }
 
@@ -91,11 +93,15 @@ export function ImportCsvTab() {
 
   const submit = async () => {
     reset()
+    if (problemCount > 0) {
+      setAttempted(true)
+      return
+    }
     const picked = Object.entries(mapping)
       .filter(([, field]) => field !== IGNORE)
       .map(([column, field]) => ({ column: Number(column), field }))
     const values: Record<string, string> = {}
-    for (const row of fixed) if (row.field && row.value !== '') values[row.field] = row.value
+    for (const row of fixed) values[row.field] = row.value.trim()
     try {
       const res = await importer.mutateAsync({
         text,
@@ -108,11 +114,34 @@ export function ImportCsvTab() {
       })
       setOutcome(res)
     } catch (e) {
-      setError(isApiError(e) ? e.message : t('common.error'))
+      // a refusal about a field is shown on that field; other failures in a notice
+      if (isApiError(e) && Object.keys(e.fields).length > 0) {
+        setRefused(e.fields)
+        if (e.fields.base) setError(t('io.errors.container'))
+      } else setError(isApiError(e) ? e.message : t('common.error'))
     }
   }
 
-  const canImport = parsed !== null && parsed.total > 0 && Object.values(mapping).some(Boolean)
+  // what is wrong with the mapping and the fixed values, found without asking the server
+  const problems = checkMapping(mapping, fixed, fields, template !== '')
+  const fixedErrors = fixed.map((row, i) => checkFixedRow(row, fixed.slice(0, i), fields))
+  const noRows = parsed !== null && parsed.total === 0
+  const problemCount =
+    problems.duplicates.size +
+    problems.missing.length +
+    (problems.nothingMapped ? 1 : 0) +
+    fixedErrors.filter((e) => e.field || e.value).length +
+    (noRows ? 1 : 0)
+  // required fields: after an attempt, or when the server says so
+  const missingShown = [
+    ...(attempted ? problems.missing : []),
+    ...fields.filter(
+      (f) =>
+        refused[`mapping.${f.key}`] !== undefined &&
+        !Object.values(mapping).includes(f.key) &&
+        !problems.missing.some((m) => m.key === f.key && attempted),
+    ),
+  ]
   const currentStep = outcome ? 4 : parsed ? 2 : 1
 
   const resetAll = () => {
@@ -120,6 +149,8 @@ export function ImportCsvTab() {
     setParsed(null)
     setOverrides({})
     setFixed([])
+    setAttempted(false)
+    setTouchedFixed({})
     reset()
   }
 
@@ -159,14 +190,20 @@ export function ImportCsvTab() {
               ))}
             </select>
           </FormField>
-          <FormField id="csv-separator" label={t('io.csv.separator')}>
+          <FormField
+            id="csv-separator"
+            label={t('io.csv.separator')}
+            error={refused.separator ? t('io.errors.separator') : null}
+          >
             <select
               id="csv-separator"
               className={NATIVE_SELECT}
               value={separator}
+              aria-invalid={!!refused.separator}
               onChange={(e) => {
                 setSeparator(e.target.value)
                 setParsed(null)
+                reset()
               }}
             >
               {SEPARATORS.map((s) => (
@@ -177,15 +214,22 @@ export function ImportCsvTab() {
             </select>
           </FormField>
           {(templates.data?.length ?? 0) > 0 && (
-            <FormField id="csv-template" label={t('io.csv.template')} hint={t('io.csv.templateHelp')}>
+            <FormField
+              id="csv-template"
+              label={t('io.csv.template')}
+              hint={t('io.csv.templateHelp')}
+              error={refused.template ? t('io.errors.template') : null}
+            >
               <select
                 id="csv-template"
                 className={NATIVE_SELECT}
                 value={template}
+                aria-invalid={!!refused.template}
                 onChange={(e) => {
                   setTemplate(e.target.value)
                   setFixed([])
                   setOverrides({})
+                  reset()
                 }}
                 aria-describedby="csv-template-hint"
               >
@@ -223,12 +267,18 @@ export function ImportCsvTab() {
             className="block w-full text-body file:mr-3 file:h-8 file:rounded-md file:border file:border-input file:bg-card file:px-3 file:text-body file:font-medium"
           />
         </FormField>
-        <FormField id="csv-text" label={t('io.csv.text')}>
+        <FormField
+          id="csv-text"
+          label={t('io.csv.text')}
+          error={refused.text ?? (noRows ? t('io.errors.csv.noRows') : null)}
+        >
           <Textarea
             id="csv-text"
             className="min-h-32 font-mono text-xs"
             spellCheck={false}
             value={text}
+            aria-invalid={!!refused.text || noRows}
+            aria-describedby={refused.text || noRows ? 'csv-text-error' : undefined}
             onChange={(e) => {
               setText(e.target.value)
               setParsed(null)
@@ -258,29 +308,57 @@ export function ImportCsvTab() {
                   {parsed.columns.length} columns detected
                 </Badge>
               </div>
+              {attempted && problems.nothingMapped && (
+                <p role="alert" className="text-xs text-destructive">
+                  {t('io.errors.csv.nothingMapped')}
+                </p>
+              )}
               <div className="grid gap-3 md:grid-cols-2">
-                {parsed.columns.map((name, index) => (
-                  <div key={index} className="flex items-center gap-2 rounded-md border bg-muted/20 p-2">
-                    <Label htmlFor={`csv-col-${index}`} className="w-36 shrink-0 truncate font-mono text-xs">
-                      {name}
-                    </Label>
-                    <select
-                      id={`csv-col-${index}`}
-                      className={NATIVE_SELECT}
-                      value={mapping[index] ?? IGNORE}
-                      onChange={(e) => setOverrides({ ...overrides, [index]: e.target.value })}
-                    >
-                      <option value={IGNORE}>{t('io.csv.ignore')}</option>
-                      {fields.map((f) => (
-                        <option key={f.key} value={f.key}>
-                          {f.tab_label} / {f.label}
-                          {f.required ? ' *' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
+                {parsed.columns.map((name, index) => {
+                  const key = mapping[index] ?? IGNORE
+                  const clash = key !== IGNORE && problems.duplicates.has(key)
+                  const refusedColumn = key !== IGNORE ? refused[`mapping.${key}`] : undefined
+                  return (
+                    <div key={index} className="space-y-1 rounded-md border bg-muted/20 p-2">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor={`csv-col-${index}`} className="w-36 shrink-0 truncate font-mono text-xs">
+                          {name}
+                        </Label>
+                        <select
+                          id={`csv-col-${index}`}
+                          className={cn(NATIVE_SELECT, (clash || refusedColumn) && 'border-destructive')}
+                          value={key}
+                          aria-invalid={clash || !!refusedColumn}
+                          onChange={(e) => {
+                            setOverrides({ ...overrides, [index]: e.target.value })
+                            setRefused({})
+                          }}
+                        >
+                          <option value={IGNORE}>{t('io.csv.ignore')}</option>
+                          {fields.map((f) => (
+                            <option key={f.key} value={f.key}>
+                              {f.tab_label} / {f.label}
+                              {f.required ? ' *' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {(clash || refusedColumn) && (
+                        <p role="alert" className="text-xs text-destructive">
+                          {clash ? t('io.errors.csv.duplicateField') : refusedColumn}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
+              {missingShown.length > 0 && (
+                <ul role="alert" className="space-y-0.5 text-xs text-destructive">
+                  {missingShown.map((f) => (
+                    <li key={f.key}>{t('io.errors.csv.requiredField', { field: f.label })}</li>
+                  ))}
+                </ul>
+              )}
             </section>
 
             <section aria-labelledby="csv-fixed-title" className="space-y-3">
@@ -290,40 +368,59 @@ export function ImportCsvTab() {
                 </h3>
                 <p className="text-xs text-muted-foreground">{t('io.csv.fixedHelp')}</p>
               </div>
-              {fixed.map((row) => (
-                <div key={row.id} className="flex items-center gap-2">
-                  <select
-                    aria-label={t('io.csv.fixedField')}
-                    className={NATIVE_SELECT}
-                    value={row.field}
-                    onChange={(e) =>
-                      setFixed(fixed.map((r) => (r.id === row.id ? { ...r, field: e.target.value } : r)))
-                    }
-                  >
-                    <option value="">{t('io.csv.chooseField')}</option>
-                    {fields.map((f) => (
-                      <option key={f.key} value={f.key}>
-                        {f.tab_label} / {f.label}
-                      </option>
-                    ))}
-                  </select>
-                  <Input
-                    aria-label={t('io.csv.fixedValue')}
-                    value={row.value}
-                    onChange={(e) =>
-                      setFixed(fixed.map((r) => (r.id === row.id ? { ...r, value: e.target.value } : r)))
-                    }
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={t('io.csv.removeFixed')}
-                    onClick={() => setFixed(fixed.filter((r) => r.id !== row.id))}
-                  >
-                    <Trash2 className="size-4" aria-hidden />
-                  </Button>
-                </div>
-              ))}
+              {fixed.map((row, i) => {
+                const shown = attempted || touchedFixed[row.id]
+                const own = fixedErrors[i] ?? {}
+                const fieldError = shown ? own.field : undefined
+                const valueError = (shown ? own.value : undefined) ?? refused[`fixed.${row.field}`]
+                return (
+                  <div key={row.id} className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <select
+                        aria-label={t('io.csv.fixedField')}
+                        className={cn(NATIVE_SELECT, fieldError && 'border-destructive')}
+                        value={row.field}
+                        aria-invalid={!!fieldError}
+                        onChange={(e) => {
+                          setFixed(fixed.map((r) => (r.id === row.id ? { ...r, field: e.target.value } : r)))
+                          setRefused({})
+                        }}
+                        onBlur={() => setTouchedFixed({ ...touchedFixed, [row.id]: true })}
+                      >
+                        <option value="">{t('io.csv.chooseField')}</option>
+                        {fields.map((f) => (
+                          <option key={f.key} value={f.key}>
+                            {f.tab_label} / {f.label}
+                          </option>
+                        ))}
+                      </select>
+                      <Input
+                        aria-label={t('io.csv.fixedValue')}
+                        value={row.value}
+                        aria-invalid={!!valueError}
+                        onChange={(e) => {
+                          setFixed(fixed.map((r) => (r.id === row.id ? { ...r, value: e.target.value } : r)))
+                          setRefused({})
+                        }}
+                        onBlur={() => setTouchedFixed({ ...touchedFixed, [row.id]: true })}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t('io.csv.removeFixed')}
+                        onClick={() => setFixed(fixed.filter((r) => r.id !== row.id))}
+                      >
+                        <Trash2 className="size-4" aria-hidden />
+                      </Button>
+                    </div>
+                    {(fieldError ?? valueError) && (
+                      <p role="alert" className="text-xs text-destructive">
+                        {fieldError ?? valueError}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
               <Button
                 variant="outline"
                 size="sm"
@@ -365,10 +462,18 @@ export function ImportCsvTab() {
             </section>
 
             {/* Confirm & execute */}
-            <div className="flex items-center gap-3 border-t pt-4">
-              <Button onClick={() => void submit()} disabled={!canImport || importer.isPending}>
+            <div className="flex flex-wrap items-center gap-3 border-t pt-4">
+              <Button onClick={() => void submit()} disabled={importer.isPending}>
                 {t('io.csv.import')}
               </Button>
+              {problemCount > 0 && (
+                <p
+                  role={attempted ? 'alert' : 'status'}
+                  className={cn('text-small', attempted ? 'text-destructive' : 'text-muted-foreground')}
+                >
+                  {t('io.errors.blocked', { count: problemCount })}
+                </p>
+              )}
               {outcome && (
                 <Button variant="ghost" onClick={resetAll}>
                   <RotateCcw className="size-4 mr-1" />

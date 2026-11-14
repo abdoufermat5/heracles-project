@@ -1,5 +1,5 @@
 import { CheckCircle2, FileUp, Play, RotateCcw, ShieldAlert } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { isApiError } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import type { LdifAction, LdifImportResponse } from './api'
 import { useLdifImport } from './hooks'
 import { FormField, Notice, readFileText, WizardStepper } from './parts'
+import { checkLdif } from './rules'
 
 const TONE: Record<LdifAction, 'success' | 'primary' | 'neutral' | 'warning' | 'destructive'> = {
   add: 'success',
@@ -74,6 +75,12 @@ export function ImportLdifTab() {
   const [previewed, setPreviewed] = useState(false)
   const [result, setResult] = useState<LdifImportResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [refusedText, setRefusedText] = useState<string | null>(null)
+  const [touched, setTouched] = useState(false)
+  const [attempted, setAttempted] = useState(false)
+  // what the document would be refused for, found without asking the server
+  const problem = useMemo(() => (text.trim() === '' ? null : checkLdif(text)), [text])
+  const textError = (touched || attempted ? problem : null) ?? refusedText
 
   const steps = [
     { id: 1, label: t('settingsUI.io.wizard.stepUpload') },
@@ -87,10 +94,15 @@ export function ImportLdifTab() {
     setPreviewed(false)
     setResult(null)
     setError(null)
+    setRefusedText(null)
   }
 
   const run = async (dryRun: boolean) => {
     setError(null)
+    if (problem) {
+      setAttempted(true)
+      return
+    }
     try {
       const data = await mutation.mutateAsync({
         text,
@@ -103,7 +115,9 @@ export function ImportLdifTab() {
     } catch (e) {
       setResult(null)
       setPreviewed(false)
-      setError(isApiError(e) ? e.message : t('common.error'))
+      // a refusal about the document sits under the document, other failures in a notice
+      if (isApiError(e) && e.fields.text) setRefusedText(e.fields.text)
+      else setError(isApiError(e) ? e.message : t('common.error'))
     }
   }
 
@@ -111,6 +125,7 @@ export function ImportLdifTab() {
     if (!file) return
     const content = await readFileText(file)
     change(() => setText(content))
+    setTouched(true)
   }
 
   const resetAll = () => {
@@ -120,6 +135,9 @@ export function ImportLdifTab() {
     setPreviewed(false)
     setResult(null)
     setError(null)
+    setRefusedText(null)
+    setTouched(false)
+    setAttempted(false)
   }
 
   const currentStepNum = result && !result.dry_run ? 4 : previewed ? 2 : 1
@@ -148,12 +166,15 @@ export function ImportLdifTab() {
               className="block w-full text-body file:mr-3 file:h-8 file:rounded-md file:border file:border-input file:bg-card file:px-3 file:text-body file:font-medium"
             />
           </FormField>
-          <FormField id="ldif-text" label={t('io.ldif.text')}>
+          <FormField id="ldif-text" label={t('io.ldif.text')} error={textError}>
             <Textarea
               id="ldif-text"
               className="min-h-48 font-mono text-xs"
               spellCheck={false}
               value={text}
+              aria-invalid={!!textError}
+              aria-describedby={textError ? 'ldif-text-error' : undefined}
+              onBlur={() => setTouched(true)}
               onChange={(e) => change(() => setText(e.target.value))}
               placeholder={'dn: ou=example,dc=example,dc=com\nobjectClass: organizationalUnit\nou: example'}
             />
@@ -205,6 +226,11 @@ export function ImportLdifTab() {
             <Play className="size-4" aria-hidden />
             {t('io.ldif.apply')}
           </Button>
+          {attempted && problem && (
+            <p role="alert" className="text-small text-destructive">
+              {t('io.errors.blocked', { count: 1 })}
+            </p>
+          )}
           {result && !result.dry_run && (
             <Button variant="ghost" onClick={resetAll} className="ml-auto">
               <RotateCcw className="size-4 mr-1" />

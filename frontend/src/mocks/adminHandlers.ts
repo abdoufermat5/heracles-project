@@ -4,6 +4,7 @@ import type {
   Assignment,
   Capabilities,
   Catalog,
+  ConfigConstraints,
   ConfigField,
   ConfigKind,
   ConfigValue,
@@ -13,6 +14,8 @@ import type {
   RightsReport,
   TaskRow,
 } from '@/features/admin/types'
+import { validateDraft } from '@/features/admin/configModel'
+import { matchesFormat } from '@/lib/formats'
 import { BASE_DN, db, departments } from './db'
 
 const A = '/api/v2/admin'
@@ -148,28 +151,114 @@ interface FieldSeed {
   honoured?: boolean
   options?: string[]
   secret?: boolean
+  constraints?: ConfigConstraints
   value: ConfigValue
   stored?: boolean
 }
 
+/** Hash schemes the server's password module can produce. */
+const HASHES = [
+  'crypt/md5',
+  'crypt/sha-256',
+  'crypt/sha-512',
+  'crypt/blowfish',
+  'md5',
+  'smd5',
+  'sha',
+  'ssha',
+  'ssha512',
+  'argon2',
+  'clear',
+]
+
 const FIELD_SEEDS: FieldSeed[] = [
   { key: 'language', section: 'look_and_feel', kind: 'select', options: ['en', 'fr'], value: 'en' },
-  { key: 'timezone', section: 'look_and_feel', kind: 'str', value: 'UTC' },
-  { key: 'min_id', section: 'core', kind: 'int', honoured: true, value: 1000 },
+  { key: 'timezone', section: 'look_and_feel', kind: 'str', constraints: { format: 'timezone' }, value: 'UTC' },
+  { key: 'min_id', section: 'core', kind: 'int', honoured: true, constraints: { min: 0, max: 4294967295 }, value: 1000 },
+  {
+    key: 'uid_number_base',
+    section: 'core',
+    kind: 'str',
+    honoured: true,
+    constraints: { format: 'id_range' },
+    value: '1100',
+  },
+  { key: 'uid_pool_min', section: 'core', kind: 'int', constraints: { min: 0, max: 4294967295 }, value: null },
+  { key: 'uid_pool_max', section: 'core', kind: 'int', constraints: { min: 0, max: 4294967295 }, value: null },
   {
     key: 'shells',
     section: 'core',
     kind: 'list',
     honoured: true,
+    constraints: { item_format: 'abs_path', unique: true },
     value: ['/bin/bash', '/bin/sh', '/bin/zsh', '/usr/bin/fish', '/bin/false', '/usr/sbin/nologin'],
   },
-  { key: 'default_shell', section: 'core', kind: 'str', honoured: true, value: '/bin/bash' },
-  { key: 'mail_domain', section: 'core', kind: 'str', honoured: true, value: '' },
+  {
+    key: 'default_shell',
+    section: 'core',
+    kind: 'str',
+    honoured: true,
+    constraints: { format: 'abs_path' },
+    value: '/bin/bash',
+  },
+  {
+    key: 'mail_domain',
+    section: 'core',
+    kind: 'str',
+    honoured: true,
+    constraints: { format: 'domain' },
+    value: '',
+  },
   { key: 'strict_naming_rules', section: 'core', kind: 'bool', value: false },
-  { key: 'password_min_length', section: 'password', kind: 'int', honoured: true, value: 8 },
-  { key: 'password_default_hash', section: 'password', kind: 'str', honoured: true, value: 'ssha' },
-  { key: 'login_attribute', section: 'login', kind: 'str', honoured: true, value: 'uid' },
-  { key: 'session_lifetime', section: 'login', kind: 'int', honoured: true, value: 1800 },
+  {
+    key: 'password_min_length',
+    section: 'password',
+    kind: 'int',
+    honoured: true,
+    constraints: { min: 1, max: 1024 },
+    value: 8,
+  },
+  {
+    key: 'password_min_differ',
+    section: 'password',
+    kind: 'int',
+    honoured: true,
+    constraints: { min: 0, max: 1024 },
+    value: 0,
+  },
+  {
+    key: 'password_default_hash',
+    section: 'password',
+    kind: 'select',
+    honoured: true,
+    options: HASHES,
+    value: 'ssha',
+  },
+  {
+    key: 'password_allowed_hashes',
+    section: 'password',
+    kind: 'list',
+    honoured: true,
+    options: HASHES,
+    constraints: { unique: true },
+    value: [],
+  },
+  {
+    key: 'login_attribute',
+    section: 'login',
+    kind: 'str',
+    honoured: true,
+    constraints: { format: 'attribute' },
+    value: 'uid',
+  },
+  {
+    key: 'session_lifetime',
+    section: 'login',
+    kind: 'int',
+    honoured: true,
+    constraints: { min: 60, max: 31536000 },
+    value: 1800,
+  },
   {
     key: 'login_method',
     section: 'login',
@@ -177,15 +266,17 @@ const FIELD_SEEDS: FieldSeed[] = [
     options: ['form', 'http_basic', 'http_header', 'cas'],
     value: 'form',
   },
-  { key: 'cas_host', section: 'login', kind: 'str', value: '' },
-  { key: 'ssl_ca_cert_path', section: 'ssl', kind: 'path', value: '' },
-  { key: 'user_rdn', section: 'storage', kind: 'str', honoured: true, value: 'ou=people' },
+  { key: 'cas_host', section: 'login', kind: 'str', constraints: { format: 'hostname' }, value: '' },
+  { key: 'cas_port', section: 'login', kind: 'int', constraints: { min: 1, max: 65535 }, value: null },
+  { key: 'ssl_ca_cert_path', section: 'ssl', kind: 'path', constraints: { format: 'abs_path' }, value: '' },
+  { key: 'user_rdn', section: 'storage', kind: 'str', honoured: true, constraints: { format: 'rdn' }, value: 'ou=people' },
   { key: 'snapshots_enabled', section: 'snapshots', kind: 'bool', value: true },
   { key: 'recovery_enabled', section: 'recovery', kind: 'bool', value: true },
+  { key: 'recovery_email', section: 'recovery', kind: 'str', constraints: { format: 'email' }, value: '' },
   { key: 'recovery_salt', section: 'recovery', kind: 'str', secret: true, value: 'pepper' },
-  { key: 'tasks_rdn', section: 'tasks', kind: 'str', value: '' },
-  { key: 'mail_template_rdn', section: 'mail_templates', kind: 'str', value: '' },
-  { key: 'debug_level', section: 'debugging', kind: 'int', value: 0 },
+  { key: 'tasks_rdn', section: 'tasks', kind: 'str', constraints: { format: 'rdn' }, value: '' },
+  { key: 'mail_template_rdn', section: 'mail_templates', kind: 'str', constraints: { format: 'rdn' }, value: '' },
+  { key: 'debug_level', section: 'debugging', kind: 'int', constraints: { min: 0 }, value: 0 },
   { key: 'dashboard_prefix', section: 'misc', kind: 'list', value: [] },
 ]
 
@@ -589,6 +680,7 @@ function configView() {
       options: s.options ?? [],
       secret: !!s.secret,
       default: s.value,
+      constraints: s.constraints ?? {},
       value: hidden ? null : value,
       source: adminMock.values.has(s.key) ? 'directory' : 'default',
       hidden,
@@ -763,7 +855,22 @@ export const adminHandlers: HttpHandler[] = [
         templates: AclRole['templates']
       }
       record('POST', '/acl/roles', body)
-      if (!body.cn) return err(422, 'validation', 'Invalid role', { cn: 'A name is required.' })
+      // the server's rules (`check_role_name`, duplicates)
+      const name = (body.cn ?? '').trim()
+      const nameProblem =
+        name === ''
+          ? 'A name is required.'
+          : name.length > 64
+            ? 'Use at most 64 characters.'
+            : // eslint-disable-next-line no-control-regex
+              /[,#;:+="<>\\\u0000-\u001f]/.test(name)
+              ? 'Do not use the characters , # ; : + = " < > \\ or control characters.'
+              : adminMock.roles.some((r) => r.dn === `cn=${name},${ROLES_DN}`)
+                ? 'A role with this name already exists.'
+                : null
+      if (nameProblem) return err(422, 'validation', 'Invalid data', { cn: nameProblem })
+      if ((body.description ?? '').length > 512)
+        return err(422, 'validation', 'Invalid data', { description: 'Use at most 512 characters.' })
       const role: AclRole = {
         dn: `cn=${body.cn},${ROLES_DN}`,
         cn: body.cn,
@@ -815,6 +922,17 @@ export const adminHandlers: HttpHandler[] = [
       const body = (await request.json()) as { assignments: Assignment[] }
       record('PUT', '/acl/assignments', body)
       const entry = dn(params.dn)
+      for (const [i, a] of body.assignments.entries()) {
+        const problems: Record<string, string> = {}
+        for (const key of ['user_filter', 'target_filter'] as const) {
+          const text = (a[key] ?? '').trim()
+          if (text !== '' && !matchesFormat('ldap_filter', text))
+            problems[`assignments.${i}.${key}`] = 'Expected a valid LDAP filter, such as (objectClass=person).'
+        }
+        if (a.role && !a.ignored && !adminMock.roles.some((r) => r.dn === a.role))
+          problems[`assignments.${i}.role`] = 'This role does not exist.'
+        if (Object.keys(problems).length > 0) return err(422, 'validation', 'Invalid data', problems)
+      }
       adminMock.assignments[entry] = body.assignments.map((a) => ({
         ...a,
         role_name: a.role ? (adminMock.roles.find((r) => r.dn === a.role)?.cn ?? null) : null,
@@ -847,23 +965,18 @@ export const adminHandlers: HttpHandler[] = [
       const body = (await request.json()) as { changes: Record<string, ConfigValue> }
       record('PUT', '/config', body)
       if (!capabilities().config_write) return err(403, 'forbidden', 'Not allowed')
-      const unknown: Record<string, string> = {}
+      const errors: Record<string, string> = {}
       for (const [k, v] of Object.entries(body.changes)) {
         const seed = FIELD_SEEDS.find((s) => s.key === k)
-        if (!seed) unknown[k] = 'Unknown setting.'
+        if (!seed) errors[k] = 'Unknown setting.'
         else if (seed.kind === 'int' && v !== null && typeof v !== 'number')
-          unknown[k] = 'Expected a whole number.'
-        else if (
-          k === 'mail_domain' &&
-          typeof v === 'string' &&
-          v !== '' &&
-          !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/.test(
-            v,
-          )
-        )
-          unknown[k] = 'Expected a domain name.'
+          errors[k] = 'Expected a whole number.'
       }
-      if (Object.keys(unknown).length > 0) return err(422, 'validation', 'Invalid configuration', unknown)
+      // the constraints of the field metadata (bounds, formats, options) and the rules that tie
+      // several settings together, as the server checks them
+      if (Object.keys(errors).length === 0)
+        Object.assign(errors, validateDraft(configView().fields, body.changes))
+      if (Object.keys(errors).length > 0) return err(422, 'validation', 'Invalid configuration', errors)
       for (const [k, v] of Object.entries(body.changes)) {
         adminMock.values.set(k, v)
         if (k === 'mail_domain') db.mailDomain = typeof v === 'string' ? v : ''
@@ -880,8 +993,20 @@ export const adminHandlers: HttpHandler[] = [
       const body = (await request.json()) as { hooks: Hook[]; display_output?: boolean }
       record('PUT', '/hooks', body)
       const errors: Record<string, string> = {}
+      const seen = new Set<string>()
       body.hooks.forEach((h, i) => {
-        if (!h.command.trim()) errors[`hooks.${i}.command`] = 'A single-line command is required.'
+        const command = h.command.trim()
+        const key = `${h.tab}|${h.mode}|${command}`
+        if (!h.tab.trim()) errors[`hooks.${i}.tab`] = 'A tab is required.'
+        else if (!hooksView().tabs.includes(h.tab) && !adminMock.hooks.some((x) => x.tab === h.tab))
+          errors[`hooks.${i}.tab`] = 'Unknown tab.'
+        if (!hooksView().modes.includes(h.mode)) errors[`hooks.${i}.mode`] = 'Unknown mode.'
+        if (!command) errors[`hooks.${i}.command`] = 'A command is required.'
+        else if (/[\r\n\0]/.test(command)) errors[`hooks.${i}.command`] = 'A single-line command is required.'
+        else if (command.startsWith('#'))
+          errors[`hooks.${i}.command`] = "A command cannot start with '#'; deactivate the trigger instead."
+        else if (seen.has(key)) errors[`hooks.${i}.command`] = `Same trigger as #${[...seen].indexOf(key) + 1}.`
+        seen.add(key)
       })
       if (Object.keys(errors).length > 0) return err(422, 'validation', 'Invalid triggers', errors)
       adminMock.hooks = body.hooks
@@ -899,6 +1024,21 @@ export const adminHandlers: HttpHandler[] = [
       record('POST', `/checks/${String(params.id)}/fix`, body)
       const check = adminMock.checks.find((c) => c.id === params.id)
       if (!check?.fixable) return err(404, 'not_found', 'This check has no fix')
+      const problems: Record<string, string> = {}
+      for (const key of Object.keys(body.options)) {
+        if (!check.options.includes(key)) problems[`options.${key}`] = 'Not an option of this fix.'
+      }
+      for (const name of check.options) {
+        const value = (body.options[name] ?? '').trim()
+        if (!value) problems[`options.${name}`] = 'This option is required.'
+        else if (name === 'dn' && !matchesFormat('dn', value))
+          problems[`options.${name}`] = 'Expected a distinguished name.'
+      }
+      body.dns.forEach((d, i) => {
+        if (!matchesFormat('dn', d) || !check.dns.includes(d))
+          problems[`dns.${i}`] = 'This check does not report this entry.'
+      })
+      if (Object.keys(problems).length > 0) return err(422, 'validation', 'Invalid fix options', problems)
       const fixed = check.options.includes('dn') ? (body.options.dn ? [body.options.dn] : []) : body.dns
       const remaining = check.dns.filter((d) => !fixed.includes(d))
       const next: HealthCheck = remaining.length === 0 || check.options.includes('dn')
@@ -932,6 +1072,11 @@ export const adminHandlers: HttpHandler[] = [
       const u = new URL(request.url)
       const kind = u.searchParams.get('kind')
       const status = u.searchParams.get('status')
+      if (kind && !['audit_task', 'reminder_task'].includes(kind))
+        return err(422, 'validation', 'Unknown task kind', { kind: 'Unknown task kind.' })
+      const known = ['activated', 'deactivated', ...adminMock.tasks.map((r) => r.status.toLowerCase())]
+      if (status && !known.includes(status.toLowerCase()))
+        return err(422, 'validation', 'Unknown task status', { status: 'Unknown task status.' })
       const rows = adminMock.tasks.filter(
         (r) => (!kind || r.kind === kind) && (!status || r.status.toLowerCase() === status.toLowerCase()),
       )

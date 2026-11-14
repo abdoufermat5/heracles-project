@@ -1,5 +1,6 @@
 import { http, HttpResponse, type HttpHandler } from 'msw'
 import type { TabState } from '@/api/types'
+import { matchesFormat } from '@/lib/formats'
 import { BASE_DN, db, departments } from './db'
 
 // --- P3 compat ---
@@ -11,11 +12,14 @@ const CSV_FIELDS = [
   { tab: 'main', attribute: 'uid', label: 'Login', kind: 'string', required: true, multivalued: false },
   { tab: 'main', attribute: 'givenName', label: 'First name', kind: 'string', required: true, multivalued: false },
   { tab: 'main', attribute: 'sn', label: 'Last name', kind: 'string', required: true, multivalued: false },
-  { tab: 'main', attribute: 'mail', label: 'Email', kind: 'string', required: true, multivalued: false },
+  { tab: 'main', attribute: 'mail', label: 'Email', kind: 'string', required: false, multivalued: false },
+  { tab: 'main', attribute: 'employeeNumber', label: 'Employee number', kind: 'int', required: false, multivalued: false },
 ].map((f) => ({
   ...f,
   key: `${f.tab}.${f.attribute}`,
   tab_label: 'Identity',
+  tab_optional: false,
+  has_default: false,
 }))
 
 function parseCsv(text: string, separator: string, hasHeader: boolean) {
@@ -34,8 +38,8 @@ function parseCsv(text: string, separator: string, hasHeader: boolean) {
   }
 }
 
-function err(status: number, code: string, message: string) {
-  return HttpResponse.json({ error: { code, message } }, { status })
+function err(status: number, code: string, message: string, fields?: Record<string, string>) {
+  return HttpResponse.json({ error: { code, message, ...(fields ? { fields } : {}) } }, { status })
 }
 
 export const ioHandlers: HttpHandler[] = [
@@ -51,6 +55,20 @@ export const ioHandlers: HttpHandler[] = [
 
   // object templates are provided by another module: not available in the mock
   http.get(`${B}/types/:type/templates`, () => err(404, 'not_found', 'No templates')),
+
+  http.get(`${B}/ldif/export`, ({ request }) => {
+    if (!db.me()) return err(401, 'unauthenticated', 'Authentication required')
+    const q = new URL(request.url).searchParams
+    const base = q.get('base') ?? ''
+    const problems: Record<string, string> = {}
+    if (!matchesFormat('dn', base)) problems.base = 'Expected a distinguished name.'
+    if (!matchesFormat('ldap_filter', q.get('filter') ?? '')) problems.filter = 'Invalid filter.'
+    if (Object.keys(problems).length > 0) return err(422, 'validation', 'Invalid export', problems)
+    if (base && base !== BASE_DN && db.get(base) === undefined) return err(404, 'not_found', `Entry not found: ${base}`)
+    return new HttpResponse(`dn: ${base || BASE_DN}\nobjectClass: top\n`, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    })
+  }),
 
   http.post(`${B}/ldif/import`, async ({ request }) => {
     const body = (await request.json()) as {
@@ -104,6 +122,22 @@ export const ioHandlers: HttpHandler[] = [
       mapping: { column: number; field: string }[]
       fixed: Record<string, string>
     }
+    // the checks of the server, before any line is processed
+    const problems: Record<string, string> = {}
+    const seen = new Set<string>()
+    for (const m of body.mapping) {
+      if (seen.has(m.field)) problems[`mapping.${m.field}`] = 'This field is already mapped to a column'
+      seen.add(m.field)
+    }
+    if (body.mapping.length === 0) problems.mapping = 'Map at least one column.'
+    for (const [key, value] of Object.entries(body.fixed)) {
+      if (!value.trim()) problems[`fixed.${key}`] = 'A value is required'
+    }
+    const covered = new Set([...seen, ...Object.keys(body.fixed)])
+    for (const f of CSV_FIELDS) {
+      if (f.required && !covered.has(f.key)) problems[`mapping.${f.key}`] = 'Required: map a column or set a fixed value'
+    }
+    if (Object.keys(problems).length > 0) return err(422, 'validation', 'Invalid import', problems)
     const parsed = parseCsv(body.text, body.separator, body.has_header)
     const results = parsed.rows.map((row, i) => {
       const values: Record<string, string> = { ...body.fixed }

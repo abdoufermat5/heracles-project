@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label'
 import { PageLayout } from '@/components/patterns'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { checkFormat } from '@/lib/formats'
 import { useCapabilities, useChecks, useFix } from './hooks'
 import type { CheckStatus, HealthCheck } from './types'
 
@@ -59,13 +60,14 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
   const fix = useFix()
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [adminDn, setAdminDn] = useState('')
+  const [problems, setProblems] = useState<Record<string, string>>({})
   const { variant, Icon, borderClass } = STATUS_STYLE[check.status]
   const selected = check.dns.filter((d) => !excluded.has(d))
   const needsUser = check.options.includes('dn')
   const canApply =
     canFix &&
     check.fixable &&
-    (needsUser ? adminDn !== '' : selected.length > 0 || check.dns.length === 0)
+    (needsUser ? adminDn !== '' && checkFormat('dn', adminDn) === null : selected.length > 0 || check.dns.length === 0)
   const showDns = check.dns.length > 0 && !needsUser
 
   const explanation = t(`settingsUI.health.checkExpl.${check.id}`) || check.message
@@ -81,6 +83,7 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
   const howToFix = t(`settingsUI.health.checkFix.${check.id}`)
 
   const apply = async () => {
+    setProblems({})
     try {
       const out = await fix.mutateAsync({
         id: check.id,
@@ -95,9 +98,24 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
       }
       setExcluded(new Set())
     } catch (e) {
-      toast.error(isApiError(e) ? e.message : t('common.error'))
+      // a refused value is shown on the field it is about; only other failures are a toast
+      if (isApiError(e) && Object.keys(e.fields).length > 0) setProblems(e.fields)
+      else toast.error(isApiError(e) ? e.message : t('common.error'))
     }
   }
+
+  // what the server refused, in the interface language, by the entry or option concerned
+  const refusedDns = new Map<string, string>()
+  let refusedOption: string | undefined
+  for (const key of Object.keys(problems)) {
+    const entry = /^dns\.(\d+)$/.exec(key)
+    const dn = entry ? selected[Number(entry[1])] : undefined
+    if (dn) refusedDns.set(dn, t('setup.errors.entry'))
+    else if (key === 'options.dn') refusedOption = t('setup.errors.user')
+    else if (key.startsWith('options.')) refusedOption = t('setup.errors.unknownOption')
+  }
+  const userError = adminDn ? checkFormat('dn', adminDn) : null
+  const userProblem = userError ?? refusedOption
 
   const failures = fix.data ? Object.entries(fix.data.result.failed) : []
 
@@ -165,10 +183,22 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
             refType="user"
             selected={adminDn ? [adminDn] : []}
             label={adminDn || t('setup.chooseAdminPlaceholder')}
-            onPick={setAdminDn}
+            onPick={(dn) => {
+              setAdminDn(dn)
+              setProblems({})
+            }}
             disabled={!canFix}
+            invalid={!!userProblem}
           />
-          <p className="text-caption text-muted-foreground">{t('setup.chooseAdminHelp')}</p>
+          {userProblem ? (
+            <p id={`fix-${check.id}-user-note`} role="alert" className="text-caption text-destructive">
+              {userProblem}
+            </p>
+          ) : (
+            <p id={`fix-${check.id}-user-note`} className="text-caption text-muted-foreground">
+              {adminDn === '' && canFix ? t('setup.errors.chooseUser') : t('setup.chooseAdminHelp')}
+            </p>
+          )}
         </div>
       )}
 
@@ -177,16 +207,23 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
           <p className="text-caption font-medium text-muted-foreground">
             {t('setup.affected')} ({selected.length}/{check.dns.length}):
           </p>
+          {check.fixable && canFix && selected.length === 0 && (
+            <p role="alert" className="text-caption text-destructive">
+              {t('setup.errors.noneSelected')}
+            </p>
+          )}
           <ul className="space-y-1" aria-label={t('setup.affected')}>
             {check.dns.map((dn, i) => {
               const id = `fix-${check.id}-${i}`
+              const refused = refusedDns.get(dn)
               return (
-                <li key={dn} className="flex items-center gap-2">
+                <li key={dn} className="flex flex-wrap items-center gap-2">
                   {check.fixable ? (
                     <Checkbox
                       id={id}
                       checked={!excluded.has(dn)}
                       disabled={!canFix}
+                      aria-invalid={refused ? true : undefined}
                       onCheckedChange={(on) =>
                         setExcluded((prev) => {
                           const next = new Set(prev)
@@ -200,6 +237,11 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
                   <Label htmlFor={id} className="break-all font-mono text-xs font-normal">
                     {dn}
                   </Label>
+                  {refused && (
+                    <span role="alert" className="w-full pl-6 text-xs text-destructive">
+                      {refused}
+                    </span>
+                  )}
                 </li>
               )
             })}

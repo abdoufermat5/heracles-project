@@ -45,6 +45,9 @@ HOOK_MODES: Final = (
 )
 """Modes a trigger can be attached to."""
 
+#: Longest trigger command accepted from the console.
+MAX_COMMAND_LENGTH: Final = 1000
+
 DEFAULT_TIMEOUT: Final = 30.0
 MAX_OUTPUT: Final = 4000
 MASK: Final = "********"
@@ -85,6 +88,33 @@ def parse_hook(value: str) -> TabHook | None:
     if not command.strip():
         return None
     return TabHook(tab, mode, command, enabled)
+
+
+def check_hook_fields(tab: str, mode: str, command: str) -> dict[str, str]:
+    """Problems of a trigger typed in the console: ``{field: English message}`` (empty = valid).
+
+    A ``#`` first character would be read back as the "deactivated" marker, a line break or
+    NUL cannot be stored in one value, and the tab key may not contain the field separator.
+    Whether the tab exists is the caller's concern (it needs the type registry).
+    """
+    errors: dict[str, str] = {}
+    key = tab.strip()
+    if not key:
+        errors["tab"] = "A tab is required."
+    elif any(ch in key for ch in "|\r\n\x00"):
+        errors["tab"] = "Invalid tab."
+    if mode not in HOOK_MODES:
+        errors["mode"] = "Unknown mode."
+    text = command.strip()
+    if not text:
+        errors["command"] = "A command is required."
+    elif any(ch in text for ch in "\r\n\x00"):
+        errors["command"] = "A single-line command is required."
+    elif text.startswith("#"):
+        errors["command"] = "A command cannot start with '#'; deactivate the trigger instead."
+    elif len(text) > MAX_COMMAND_LENGTH:
+        errors["command"] = f"At most {MAX_COMMAND_LENGTH} characters."
+    return errors
 
 
 def parse_hooks(values: Sequence[str]) -> list[TabHook]:

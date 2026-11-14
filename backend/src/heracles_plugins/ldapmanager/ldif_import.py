@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
-from heracles.core import config_store
+from heracles.core import config_store, formats
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Entry, Modification
 from heracles.schema import names as schema
@@ -147,7 +147,7 @@ def run_import(
         result = EntryResult(index, entry.dn, "error")
         results.append(result)
         key = dnlib.normalize(entry.dn)
-        if not dnlib.split(entry.dn):
+        if not entry.dn.strip() or formats.check("dn", entry.dn) is not None:
             result.error = "Invalid DN"
             continue
         if not allowed(entry.dn):

@@ -8,8 +8,10 @@ from heracles.triggers.events import (
 )
 from heracles.triggers.hooks import (
     HOOK_MODES,
+    MAX_COMMAND_LENGTH,
     HookResult,
     TabHook,
+    check_hook_fields,
     mask_attrs,
     parse_hook,
     parse_hooks,
@@ -19,12 +21,14 @@ from heracles.triggers.hooks import (
 
 __all__ = [
     "HOOK_MODES",
+    "MAX_COMMAND_LENGTH",
     "HookResult",
     "TabHook",
     "TriggerEvents",
     "TriggerSettings",
     "active_tab_keys",
     "apply_changes",
+    "check_hook_fields",
     "mask_attrs",
     "parse_hook",
     "parse_hooks",

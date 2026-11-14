@@ -1,5 +1,5 @@
 import { Pencil, Plus, Save, TriangleAlert, Trash2, Undo2 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
@@ -36,26 +36,46 @@ import {
 } from '@/components/ui/table'
 import { Workflow } from 'lucide-react'
 import { useHooks, useSaveHooks } from './hooks'
+import { checkHook, checkHooks, type HookErrors, type HookField } from './hookRules'
 import type { Hook, HooksView } from './types'
+
+type Touched = Partial<Record<HookField, boolean>>
 
 function HookDialog({
   view,
+  tabs,
   initial,
+  others,
   errors,
   onCancel,
   onSave,
 }: {
   view: HooksView
+  /** Tabs the server accepts, plus the ones already stored. */
+  tabs: readonly string[]
   initial: Hook
-  errors: Record<string, string>
+  /** The other triggers: this one must differ from all of them. */
+  others: readonly Hook[]
+  /** Errors the server returned for this trigger, by field. */
+  errors: HookErrors
   onCancel: () => void
   onSave: (h: Hook) => void
 }) {
   const { t } = useTranslation()
   const [hook, setHook] = useState(initial)
-  // keep a tab that is no longer known (stored by an older configuration) selectable
-  const tabs = view.tabs.includes(hook.tab) || hook.tab === '' ? view.tabs : [hook.tab, ...view.tabs]
-  const valid = hook.tab !== '' && hook.mode !== '' && hook.command.trim() !== ''
+  const [touched, setTouched] = useState<Touched>({})
+  const [attempted, setAttempted] = useState(false)
+  const choices = tabs.includes(hook.tab) || hook.tab === '' ? tabs : [hook.tab, ...tabs]
+  const problems = checkHook(hook, others, tabs, view.modes)
+  const count = Object.keys(problems).length
+  const touch = (field: HookField) => setTouched((s) => ({ ...s, [field]: true }))
+  // a server error stays until the user changes the field it is about
+  const shown = (field: HookField): string | undefined =>
+    (touched[field] || attempted ? problems[field] : undefined) ??
+    (hook[field] === initial[field] ? errors[field] : undefined)
+  const tabError = shown('tab')
+  const modeError = shown('mode')
+  const commandError = shown('command')
   return (
     <Dialog open onOpenChange={(o) => !o && onCancel()}>
       <DialogContent className="sm:max-w-xl">
@@ -67,24 +87,52 @@ function HookDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="hook-tab">{t('hooks.tab')}</Label>
-              <Select value={hook.tab} onValueChange={(tab) => setHook({ ...hook, tab })}>
-                <SelectTrigger id="hook-tab" className="w-full" aria-invalid={!!errors.tab}>
+              <Select
+                value={hook.tab}
+                onValueChange={(tab) => {
+                  setHook({ ...hook, tab })
+                  touch('tab')
+                }}
+                onOpenChange={(open) => !open && touch('tab')}
+              >
+                <SelectTrigger
+                  id="hook-tab"
+                  className="w-full"
+                  aria-invalid={!!tabError}
+                  aria-describedby={tabError ? 'hook-tab-error' : undefined}
+                >
                   <SelectValue placeholder={t('hooks.chooseTab')} />
                 </SelectTrigger>
                 <SelectContent>
-                  {tabs.map((tab) => (
+                  {choices.map((tab) => (
                     <SelectItem key={tab} value={tab}>
                       {tab}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {errors.tab && <p className="text-xs text-destructive">{errors.tab}</p>}
+              {tabError && (
+                <p id="hook-tab-error" role="alert" className="text-xs text-destructive">
+                  {tabError}
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <Label htmlFor="hook-mode">{t('hooks.mode')}</Label>
-              <Select value={hook.mode} onValueChange={(mode) => setHook({ ...hook, mode })}>
-                <SelectTrigger id="hook-mode" className="w-full" aria-invalid={!!errors.mode}>
+              <Select
+                value={hook.mode}
+                onValueChange={(mode) => {
+                  setHook({ ...hook, mode })
+                  touch('mode')
+                }}
+                onOpenChange={(open) => !open && touch('mode')}
+              >
+                <SelectTrigger
+                  id="hook-mode"
+                  className="w-full"
+                  aria-invalid={!!modeError}
+                  aria-describedby={modeError ? 'hook-mode-error' : undefined}
+                >
                   <SelectValue placeholder={t('hooks.chooseMode')} />
                 </SelectTrigger>
                 <SelectContent>
@@ -95,7 +143,11 @@ function HookDialog({
                   ))}
                 </SelectContent>
               </Select>
-              {errors.mode && <p className="text-xs text-destructive">{errors.mode}</p>}
+              {modeError && (
+                <p id="hook-mode-error" role="alert" className="text-xs text-destructive">
+                  {modeError}
+                </p>
+              )}
             </div>
           </div>
           <div className="space-y-1">
@@ -105,10 +157,16 @@ function HookDialog({
               className="font-mono text-xs"
               placeholder="/usr/local/bin/provision %uid%"
               value={hook.command}
-              aria-invalid={!!errors.command}
+              aria-invalid={!!commandError}
+              aria-describedby={commandError ? 'hook-command-error' : undefined}
+              onBlur={() => touch('command')}
               onChange={(e) => setHook({ ...hook, command: e.target.value })}
             />
-            {errors.command && <p className="text-xs text-destructive">{errors.command}</p>}
+            {commandError && (
+              <p id="hook-command-error" role="alert" className="text-xs text-destructive">
+                {commandError}
+              </p>
+            )}
             <p className="text-caption text-muted-foreground">{t('hooks.placeholders')}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -122,11 +180,22 @@ function HookDialog({
             </Label>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="items-center">
+          {attempted && count > 0 && (
+            <p role="alert" className="mr-auto text-small text-destructive">
+              {t('hooks.errors.dialogBlocked', { count })}
+            </p>
+          )}
           <Button type="button" variant="outline" onClick={onCancel}>
             {t('common.cancel')}
           </Button>
-          <Button type="button" disabled={!valid} onClick={() => onSave({ ...hook, command: hook.command.trim() })}>
+          <Button
+            type="button"
+            onClick={() => {
+              if (count > 0) setAttempted(true)
+              else onSave({ ...hook, tab: hook.tab.trim(), command: hook.command.trim() })
+            }}
+          >
             {t('common.ok')}
           </Button>
         </DialogFooter>
@@ -138,13 +207,26 @@ function HookDialog({
 function HooksEditor({ view }: { view: HooksView }) {
   const { t } = useTranslation()
   const save = useSaveHooks()
-  const [rows, setRows] = useState<Hook[]>(view.hooks)
+  const [rows, setRowsRaw] = useState<Hook[]>(view.hooks)
   const [displayOutput, setDisplayOutput] = useState(view.display_output)
   const [editing, setEditing] = useState<{ position: number; hook: Hook } | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const readOnly = !view.can_write
   const dirty =
     JSON.stringify(rows) !== JSON.stringify(view.hooks) || displayOutput !== view.display_output
+  // a tab already stored stays valid even when the server no longer lists it
+  const knownTabs = useMemo(
+    () => [...new Set([...view.tabs, ...view.hooks.map((h) => h.tab)])],
+    [view.tabs, view.hooks],
+  )
+  const clientErrors = checkHooks(rows, knownTabs, view.modes)
+  const invalidRows = Object.keys(clientErrors).length
+
+  // editing the list makes the server's answer about the previous list obsolete
+  const setRows = (next: Hook[]) => {
+    setRowsRaw(next)
+    setErrors({})
+  }
 
   const submit = async () => {
     setErrors({})
@@ -152,19 +234,28 @@ function HooksEditor({ view }: { view: HooksView }) {
       await save.mutateAsync({ hooks: rows, displayOutput })
       toast.success(t('hooks.saved'))
     } catch (e) {
-      if (isApiError(e) && e.fields) setErrors(e.fields)
-      toast.error(isApiError(e) ? e.message : t('common.error'))
+      if (isApiError(e) && Object.keys(e.fields).length > 0) setErrors(e.fields)
+      else toast.error(isApiError(e) ? e.message : t('common.error'))
     }
   }
 
-  const fieldErrors = (position: number): Record<string, string> => {
-    const out: Record<string, string> = {}
+  const fieldErrors = (position: number): HookErrors => {
+    const out: HookErrors = {}
     for (const [k, v] of Object.entries(errors)) {
-      const m = /^hooks\.(\d+)\.(\w+)$/.exec(k)
-      if (m && Number(m[1]) === position && m[2]) out[m[2]] = v
+      const m = /^hooks\.(\d+)\.(tab|mode|command)$/.exec(k)
+      if (m && Number(m[1]) === position) out[m[2] as HookField] = v
     }
     return out
   }
+
+  /** What is wrong with a row: the browser's own check, else what the server said. */
+  const rowError = (position: number): string | undefined => {
+    const found = { ...fieldErrors(position), ...clientErrors[position] }
+    return found.command ?? found.tab ?? found.mode
+  }
+
+  // server errors that name no trigger field (they would otherwise never be seen)
+  const generalErrors = Object.entries(errors).filter(([k]) => !/^hooks\.\d+\.(tab|mode|command)$/.test(k))
 
   return (
     <div className="space-y-3">
@@ -242,8 +333,15 @@ function HooksEditor({ view }: { view: HooksView }) {
                       }
                     />
                   </TableCell>
-                  <TableCell className="max-w-md truncate font-mono text-xs text-muted-foreground" title={h.command}>
-                    {h.command}
+                  <TableCell className="max-w-md font-mono text-xs text-muted-foreground">
+                    <div className="truncate" title={h.command}>
+                      {h.command}
+                    </div>
+                    {rowError(i) && (
+                      <p role="alert" className="mt-0.5 font-sans text-destructive">
+                        {rowError(i)}
+                      </p>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -272,9 +370,9 @@ function HooksEditor({ view }: { view: HooksView }) {
         </div>
       )}
 
-      {Object.keys(errors).length > 0 && editing === null && (
+      {generalErrors.length > 0 && editing === null && (
         <ul role="alert" className="text-xs text-destructive">
-          {Object.entries(errors).map(([k, v]) => (
+          {generalErrors.map(([k, v]) => (
             <li key={k}>
               {k}: {v}
             </li>
@@ -286,6 +384,11 @@ function HooksEditor({ view }: { view: HooksView }) {
         <p className="mr-auto text-body text-muted-foreground" aria-live="polite">
           {readOnly ? t('config.readOnly') : dirty ? t('hooks.unsaved') : t('config.noChanges')}
         </p>
+        {invalidRows > 0 && (
+          <p role="alert" className="text-small text-destructive">
+            {t('hooks.errors.blocked', { count: invalidRows })}
+          </p>
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -293,13 +396,16 @@ function HooksEditor({ view }: { view: HooksView }) {
           onClick={() => {
             setRows(view.hooks)
             setDisplayOutput(view.display_output)
-            setErrors({})
           }}
         >
           <Undo2 />
           {t('config.discard')}
         </Button>
-        <Button size="sm" disabled={readOnly || !dirty || save.isPending} onClick={() => void submit()}>
+        <Button
+          size="sm"
+          disabled={readOnly || !dirty || save.isPending || invalidRows > 0}
+          onClick={() => void submit()}
+        >
           <Save />
           {t('common.save')}
         </Button>
@@ -309,7 +415,9 @@ function HooksEditor({ view }: { view: HooksView }) {
         <HookDialog
           key={editing.position}
           view={view}
+          tabs={knownTabs}
           initial={editing.hook}
+          others={rows.filter((_, j) => j !== editing.position)}
           errors={fieldErrors(editing.position)}
           onCancel={() => setEditing(null)}
           onSave={(h) => {
