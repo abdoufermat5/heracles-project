@@ -52,6 +52,9 @@ ASSIGNMENT_KEY = "acl/aclAssignment"
 CONFIG_KEY = "config/config"
 """ACL object keys guarding the administration screens (``rwcd`` rights)."""
 
+IO_PLUGIN = "ldapmanager"
+"""Plugin providing the LDIF/CSV import and export tools (capability ``io``)."""
+
 
 # ------------------------------------------------------------------- access
 
@@ -375,6 +378,8 @@ def _report_of(run: RunRecord | None) -> dict[str, Any] | None:
         "status": run.status,
         "summary": run.summary,
         "errors": list(run.errors),
+        "reason": run.reason,
+        "reason_key": run.reason_key,
     }
 
 
@@ -560,6 +565,8 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
             "health": config,
             "plugins": config,
             "tasks": has_tasks,
+            # the LDIF/CSV tools answer 404 while their plugin is off
+            "io": any(name == IO_PLUGIN for name, _factory in domain.registry.api_router_factories),
         }
 
     # -------------------------------------------------------------- ACL

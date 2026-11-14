@@ -98,6 +98,7 @@ def test_capabilities(client: TestClient) -> None:
     caps = Api(client).login("admin").get("/capabilities").json()
     assert caps["is_admin"] is False  # the demo admin is not a bootstrap admin, only ACL admin
     assert caps["acl"] and caps["config"] and caps["config_write"]
+    assert caps["io"] is True  # the demo mounts the import/export plugin
     user = Api(TestClient(build_demo_app(), base_url="http://testserver")).login("bmartin")
     assert user.get("/capabilities").json() == {
         "is_admin": False,
@@ -109,6 +110,7 @@ def test_capabilities(client: TestClient) -> None:
         "health": False,
         "plugins": False,
         "tasks": False,
+        "io": True,  # the demo exposes every plugin, import/export included
     }
     assert user.get("/acl/roles").status_code == 403
     assert user.get("/config").status_code == 403
@@ -472,6 +474,9 @@ def test_failing_prelock_trigger_aborts_the_lock(client: TestClient, admin: Api)
 def test_health_checks_and_fix(admin: Api) -> None:
     results = {r["id"]: r for r in admin.get("/checks").json()}
     assert results["default_roles"]["status"] == "warning"
+    assert results["default_roles"]["message_key"] == "default_roles.missing"
+    assert results["default_roles"]["message_params"]["count"] == 3
+    assert results["root_object"]["message_params"] == {"dn": BASE}
     fixed = admin.post("/checks/default_roles/fix", {"dns": []})
     assert fixed.status_code == 200, fixed.text
     assert len(fixed.json()["result"]["fixed"]) == 3

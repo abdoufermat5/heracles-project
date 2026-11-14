@@ -1,7 +1,8 @@
 """Directory health: checks (with optional fixes) for new or migrated directories.
 
-Every check returns a :class:`CheckResult` (status, message, offending DNs, whether a fix
-exists). Fixes only touch the DNs they are given and report what they did.
+Every check returns a :class:`CheckResult` (status, English message, stable ``message_key`` with
+its ``message_params``, offending DNs, whether a fix exists). Fixes only touch the DNs they are
+given and report what they did.
 """
 
 from __future__ import annotations
@@ -97,16 +98,72 @@ _CONTAINER_NAMES: Final = frozenset(
 )
 
 
+#: Outcomes of a check message: the second segment of ``message_key`` (``<check id>.<outcome>``).
+#: ``ok`` when nothing is wrong; the others say what is (see :data:`CHECK_MESSAGE_PARAMS` for
+#: the parameters each one carries).
+MESSAGE_OUTCOMES: Final = (
+    "ok",
+    "missing",
+    "unmarked",
+    "unwritable",
+    "plaintext",
+    "found",
+    "bootstrap_only",
+    "misplaced",
+    "duplicates",
+    "failed",
+)
+
+#: Parameters interpolated in the localised message of every outcome (the English ``message``
+#: stays the fallback). Values are JSON scalars or lists of strings.
+CHECK_MESSAGE_PARAMS: Final[Mapping[str, tuple[str, ...]]] = {
+    "root_object.missing": ("dn",),
+    "root_object.unmarked": ("dn",),
+    "root_object.ok": (),
+    "bind_write.missing": ("dn",),
+    "bind_write.unwritable": ("dn",),
+    "bind_write.ok": (),
+    "transport.plaintext": ("uris",),
+    "transport.ok": (),
+    "hidden_users.found": ("count",),
+    "hidden_users.ok": (),
+    "super_admin.ok": ("count",),
+    "super_admin.bootstrap_only": (),
+    "super_admin.missing": (),
+    "default_roles.missing": ("count", "roles"),
+    "default_roles.ok": (),
+    "users_tree.misplaced": ("count", "noun", "rdn"),
+    "users_tree.ok": ("noun", "rdn"),
+    "groups_tree.misplaced": ("count", "noun", "rdn"),
+    "groups_tree.ok": ("noun", "rdn"),
+    "posix_groups_tree.misplaced": ("count", "noun", "rdn"),
+    "posix_groups_tree.ok": ("noun", "rdn"),
+    "departments.unmarked": ("count",),
+    "departments.ok": (),
+    "duplicate_ids.duplicates": ("uids", "gids"),
+    "duplicate_ids.ok": (),
+    "plugin_data.found": ("plugins", "count"),
+    "plugin_data.ok": (),
+}
+"""Parameters of every message key produced by :data:`CHECKS` (``<check id>.failed`` takes
+``error``)."""
+
+
 @dataclass(slots=True)
 class CheckResult:
     id: str
     status: Status
+    #: English fallback; the client renders ``message_key`` with ``message_params``.
     message: str
     dns: list[str] = field(default_factory=lambda: [])
     #: A fix exists (``fix`` can be called for this check).
     fixable: bool = False
     #: Names of extra options the fix needs (``uid``, ``dn``, ...).
     options: list[str] = field(default_factory=lambda: [])
+    #: Stable, language-neutral identifier of the message: ``<check id>.<outcome>``.
+    message_key: str = ""
+    #: Values interpolated in the localised message (JSON scalars or lists of strings).
+    message_params: dict[str, Any] = field(default_factory=lambda: {})
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -116,6 +173,8 @@ class CheckResult:
             "dns": self.dns,
             "fixable": self.fixable,
             "options": self.options,
+            "message_key": self.message_key,
+            "message_params": self.message_params,
         }
 
 
@@ -312,7 +371,14 @@ def _move(ctx: CheckContext, dn: str, container_rdn: str) -> str:
 def check_root(ctx: CheckContext) -> CheckResult:
     entry = ctx.directory.get(ctx.base)
     if entry is None:
-        return CheckResult("root_object", "error", "The base entry does not exist.", [ctx.base])
+        return CheckResult(
+            "root_object",
+            "error",
+            "The base entry does not exist.",
+            [ctx.base],
+            message_key="root_object.missing",
+            message_params={"dn": ctx.base},
+        )
     if not _is_marked(entry):
         return CheckResult(
             "root_object",
@@ -320,8 +386,12 @@ def check_root(ctx: CheckContext) -> CheckResult:
             "The base entry is not marked as a department.",
             [ctx.base],
             fixable=True,
+            message_key="root_object.unmarked",
+            message_params={"dn": ctx.base},
         )
-    return CheckResult("root_object", "ok", "The base entry is correctly set up.")
+    return CheckResult(
+        "root_object", "ok", "The base entry is correctly set up.", message_key="root_object.ok"
+    )
 
 
 def fix_root(ctx: CheckContext, dns: Sequence[str], options: Mapping[str, str]) -> FixResult:
@@ -350,7 +420,14 @@ def fix_root(ctx: CheckContext, dns: Sequence[str], options: Mapping[str, str]) 
 def check_bind_write(ctx: CheckContext) -> CheckResult:
     entry = ctx.directory.get(ctx.base)
     if entry is None:
-        return CheckResult("bind_write", "error", "The base entry does not exist.", [ctx.base])
+        return CheckResult(
+            "bind_write",
+            "error",
+            "The base entry does not exist.",
+            [ctx.base],
+            message_key="bind_write.missing",
+            message_params={"dn": ctx.base},
+        )
     try:
         description = entry.get("description")
         if description:
@@ -360,14 +437,22 @@ def check_bind_write(ctx: CheckContext) -> CheckResult:
             ctx.directory.modify(ctx.base, [Modification("delete", "description")])
     except DirectoryError:
         return CheckResult(
-            "bind_write", "error", "The directory account cannot write to the base entry."
+            "bind_write",
+            "error",
+            "The directory account cannot write to the base entry.",
+            message_key="bind_write.unwritable",
+            message_params={"dn": ctx.base},
         )
-    return CheckResult("bind_write", "ok", "The directory account can write.")
+    return CheckResult(
+        "bind_write", "ok", "The directory account can write.", message_key="bind_write.ok"
+    )
 
 
 def check_transport(ctx: CheckContext) -> CheckResult:
     if not ctx.plaintext_uris:
-        return CheckResult("transport", "ok", "The directory connection is encrypted.")
+        return CheckResult(
+            "transport", "ok", "The directory connection is encrypted.", message_key="transport.ok"
+        )
     return CheckResult(
         "transport",
         "warning",
@@ -375,6 +460,8 @@ def check_transport(ctx: CheckContext) -> CheckResult:
         "every password sent through the console travel unencrypted ("
         + ", ".join(ctx.plaintext_uris)
         + "). Use ldaps:// or enable StartTLS.",
+        message_key="transport.plaintext",
+        message_params={"uris": list(ctx.plaintext_uris)},
     )
 
 
@@ -393,13 +480,17 @@ def _hidden_accounts(ctx: CheckContext) -> list[Entry]:
 def check_hidden_users(ctx: CheckContext) -> CheckResult:
     found = _hidden_accounts(ctx)
     if not found:
-        return CheckResult("hidden_users", "ok", "Every account is visible.")
+        return CheckResult(
+            "hidden_users", "ok", "Every account is visible.", message_key="hidden_users.ok"
+        )
     return CheckResult(
         "hidden_users",
         "warning",
         f"{len(found)} account(s) lack the person classes and are not listed as users.",
         [e.dn for e in found],
         fixable=True,
+        message_key="hidden_users.found",
+        message_params={"count": len(found)},
     )
 
 
@@ -451,7 +542,13 @@ def _super_assignments(ctx: CheckContext) -> list[tuple[str, AclAssignment]]:
 def check_super_admin(ctx: CheckContext) -> CheckResult:
     found = _super_assignments(ctx)
     if found:
-        return CheckResult("super_admin", "ok", f"{len(found)} assignment(s) grant full rights.")
+        return CheckResult(
+            "super_admin",
+            "ok",
+            f"{len(found)} assignment(s) grant full rights.",
+            message_key="super_admin.ok",
+            message_params={"count": len(found)},
+        )
     if ctx.bootstrap_admins:
         return CheckResult(
             "super_admin",
@@ -459,6 +556,7 @@ def check_super_admin(ctx: CheckContext) -> CheckResult:
             "Only the bootstrap administrators from the configuration have full rights.",
             fixable=True,
             options=["dn"],
+            message_key="super_admin.bootstrap_only",
         )
     return CheckResult(
         "super_admin",
@@ -466,6 +564,7 @@ def check_super_admin(ctx: CheckContext) -> CheckResult:
         "Nobody has full rights on the directory.",
         fixable=True,
         options=["dn"],
+        message_key="super_admin.missing",
     )
 
 
@@ -560,7 +659,9 @@ def check_default_roles(ctx: CheckContext) -> CheckResult:
     present = {r.cn.lower() for r in acl_admin.list_roles(ctx.directory)}
     missing = [cn for cn, _d, _t in DEFAULT_ROLES if cn.lower() not in present]
     if not missing:
-        return CheckResult("default_roles", "ok", "The default roles exist.")
+        return CheckResult(
+            "default_roles", "ok", "The default roles exist.", message_key="default_roles.ok"
+        )
     container = acl_admin.role_container(ctx.directory, None, ctx.roles_rdn)
     return CheckResult(
         "default_roles",
@@ -568,6 +669,8 @@ def check_default_roles(ctx: CheckContext) -> CheckResult:
         f"Missing default roles: {', '.join(missing)}.",
         [f"cn={cn},{container}" for cn in missing],
         fixable=True,
+        message_key="default_roles.missing",
+        message_params={"count": len(missing), "roles": missing},
     )
 
 
@@ -607,13 +710,21 @@ def _check_misplaced(
 ) -> CheckResult:
     found = _misplaced(ctx, flt, container_rdn)
     if not found:
-        return CheckResult(check_id, "ok", f"Every {noun} is in the {container_rdn} tree.")
+        return CheckResult(
+            check_id,
+            "ok",
+            f"Every {noun} is in the {container_rdn} tree.",
+            message_key=f"{check_id}.ok",
+            message_params={"noun": noun, "rdn": container_rdn},
+        )
     return CheckResult(
         check_id,
         "warning",
         f"{len(found)} {noun}(s) are outside the {container_rdn} tree.",
         found,
         fixable=True,
+        message_key=f"{check_id}.misplaced",
+        message_params={"count": len(found), "noun": noun, "rdn": container_rdn},
     )
 
 
@@ -681,13 +792,17 @@ def _unmarked_departments(ctx: CheckContext) -> list[Entry]:
 def check_departments(ctx: CheckContext) -> CheckResult:
     found = _unmarked_departments(ctx)
     if not found:
-        return CheckResult("departments", "ok", "Every department is visible.")
+        return CheckResult(
+            "departments", "ok", "Every department is visible.", message_key="departments.ok"
+        )
     return CheckResult(
         "departments",
         "warning",
         f"{len(found)} organizational unit(s) are not marked as departments.",
         [e.dn for e in found],
         fixable=True,
+        message_key="departments.unmarked",
+        message_params={"count": len(found)},
     )
 
 
@@ -723,7 +838,12 @@ def check_duplicate_ids(ctx: CheckContext) -> CheckResult:
     uids = _duplicates(ctx, _STD.POSIX_ACCOUNT, "uidNumber")
     gids = _duplicates(ctx, _STD.POSIX_GROUP, "gidNumber")
     if not uids and not gids:
-        return CheckResult("duplicate_ids", "ok", "No duplicated numeric identifier.")
+        return CheckResult(
+            "duplicate_ids",
+            "ok",
+            "No duplicated numeric identifier.",
+            message_key="duplicate_ids.ok",
+        )
     dns = sorted({d for group in (*uids.values(), *gids.values()) for d in group})
     parts: list[str] = []
     if uids:
@@ -731,7 +851,12 @@ def check_duplicate_ids(ctx: CheckContext) -> CheckResult:
     if gids:
         parts.append("gidNumber " + ", ".join(sorted(gids)))
     return CheckResult(
-        "duplicate_ids", "warning", "Duplicated identifiers: " + "; ".join(parts) + ".", dns
+        "duplicate_ids",
+        "warning",
+        "Duplicated identifiers: " + "; ".join(parts) + ".",
+        dns,
+        message_key="duplicate_ids.duplicates",
+        message_params={"uids": sorted(uids), "gids": sorted(gids)},
     )
 
 
@@ -759,20 +884,31 @@ def _plugin_entry_count(ctx: CheckContext, classes: Sequence[str]) -> tuple[int,
 def check_plugin_data(ctx: CheckContext) -> CheckResult:
     """Entries that use the classes of a plugin switched off (its tabs are hidden)."""
     found: list[str] = []
+    plugins: list[str] = []
+    count = 0
     for name, classes in ctx.disabled_plugins:
         if not classes:
             continue
-        count, truncated = _plugin_entry_count(ctx, classes)
-        if count:
-            found.append(f"{name} ({'at least ' if truncated else ''}{count})")
+        entries, truncated = _plugin_entry_count(ctx, classes)
+        if entries:
+            plugins.append(name)
+            count += entries
+            found.append(f"{name} ({'at least ' if truncated else ''}{entries})")
     if not found:
-        return CheckResult("plugin_data", "ok", "No data belongs to a disabled plugin.")
+        return CheckResult(
+            "plugin_data",
+            "ok",
+            "No data belongs to a disabled plugin.",
+            message_key="plugin_data.ok",
+        )
     return CheckResult(
         "plugin_data",
         "warning",
         "Entries use the schema of disabled plugins, which hides them in the console: "
         + ", ".join(found)
         + ".",
+        message_key="plugin_data.found",
+        message_params={"plugins": plugins, "count": count},
     )
 
 
@@ -824,7 +960,13 @@ def run_checks(ctx: CheckContext, only: Sequence[str] | None = None) -> list[Che
         except DirectoryError as exc:
             log.warning("check_failed", check=check_id, error=type(exc).__name__)
             results.append(
-                CheckResult(check_id, "error", f"The check failed: {type(exc).__name__}.")
+                CheckResult(
+                    check_id,
+                    "error",
+                    f"The check failed: {type(exc).__name__}.",
+                    message_key=f"{check_id}.failed",
+                    message_params={"error": type(exc).__name__},
+                )
             )
     return results
 

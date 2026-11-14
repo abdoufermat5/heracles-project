@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
@@ -9,10 +11,28 @@ from heracles import demo
 from heracles.acl.model import AclAssignment
 from heracles.acl.parser import parse_assignment
 from heracles.core import setup_checks as sc
-from heracles.ldap.client import Modification
+from heracles.ldap.client import DirectoryError, Modification
 from heracles.ldap.memory import MemoryDirectory
 
 BASE = demo.BASE
+
+MESSAGE_KEY = re.compile(r"^(?P<check>[a-z_]+)\.(?P<outcome>[a-z_]+)$")
+
+#: ``message_params`` every key of the demo report must carry.
+REQUIRED_PARAMS: dict[str, set[str]] = {
+    "root_object.unmarked": {"dn"},
+    "bind_write.ok": set(),
+    "transport.ok": set(),
+    "hidden_users.ok": set(),
+    "super_admin.ok": {"count"},
+    "default_roles.missing": {"count", "roles"},
+    "users_tree.ok": {"noun", "rdn"},
+    "groups_tree.ok": {"noun", "rdn"},
+    "posix_groups_tree.ok": {"noun", "rdn"},
+    "departments.ok": set(),
+    "duplicate_ids.ok": set(),
+    "plugin_data.ok": set(),
+}
 
 
 @pytest.fixture
@@ -22,6 +42,110 @@ def directory() -> MemoryDirectory:
 
 def _by_id(results: list[sc.CheckResult]) -> dict[str, sc.CheckResult]:
     return {r.id: r for r in results}
+
+
+def _assert_message(result: sc.CheckResult, params: set[str]) -> None:
+    match = MESSAGE_KEY.match(result.message_key)
+    assert match is not None and match["check"] == result.id
+    assert match["outcome"] in sc.MESSAGE_OUTCOMES
+    assert set(result.message_params) == params
+    for value in result.message_params.values():
+        if isinstance(value, list):
+            values = cast("list[object]", value)
+            assert all(isinstance(v, str) for v in values)
+        else:
+            assert isinstance(value, int | str)
+
+
+def test_documented_message_keys_use_the_outcome_vocabulary() -> None:
+    for key in sc.CHECK_MESSAGE_PARAMS:
+        match = MESSAGE_KEY.match(key)
+        assert match is not None and match["outcome"] in sc.MESSAGE_OUTCOMES
+
+
+def test_every_check_reports_a_translatable_message(directory: MemoryDirectory) -> None:
+    results = sc.run_checks(sc.context_for(directory))
+    assert [r.id for r in results] == list(sc.CHECK_IDS)
+    for result in results:
+        _assert_message(result, REQUIRED_PARAMS[result.message_key])
+        assert result.message_key in sc.CHECK_MESSAGE_PARAMS
+        assert set(sc.CHECK_MESSAGE_PARAMS[result.message_key]) == set(result.message_params)
+        assert result.message and result.to_json()["message"] == result.message
+    by_id = _by_id(results)
+    assert by_id["super_admin"].message_key == "super_admin.ok"
+    assert by_id["super_admin"].message_params["count"] >= 1
+    assert by_id["root_object"].message_key == "root_object.unmarked"
+
+
+def test_missing_entries_report_a_key() -> None:
+    empty = MemoryDirectory("dc=none,dc=test")
+    ctx = sc.context_for(empty)
+    for result in (sc.check_root(ctx), sc.check_bind_write(ctx)):
+        assert result.message_key == f"{result.id}.missing"
+        assert result.message_params == {"dn": ctx.base}
+
+
+def test_unwritable_base_entry_reports_a_key(
+    directory: MemoryDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ctx = sc.context_for(directory)
+
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise DirectoryError("unwilling to perform operation")
+
+    monkeypatch.setattr(ctx.directory, "modify", refuse)
+    result = sc.check_bind_write(ctx)
+    assert result.status == "error"
+    assert (result.message_key, result.message_params) == ("bind_write.unwritable", {"dn": BASE})
+
+
+def test_plaintext_transport_reports_its_uris(directory: MemoryDirectory) -> None:
+    ctx = sc.context_for(directory, plaintext_uris=["ldap://ldap.test"])
+    (result,) = sc.run_checks(ctx, ["transport"])
+    assert result.message_key == "transport.plaintext"
+    assert result.message_params == {"uris": ["ldap://ldap.test"]}
+
+
+def test_tree_checks_report_a_misplaced_key(directory: MemoryDirectory) -> None:
+    ctx = sc.context_for(directory)
+    user = f"uid=stray,ou=lyon,{BASE}"
+    directory.add(
+        user, {"objectClass": [b"inetOrgPerson"], "uid": [b"stray"], "cn": [b"S"], "sn": [b"S"]}
+    )
+    directory.add(
+        f"cn=stray-group,ou=lyon,{BASE}",
+        {"objectClass": [b"groupOfNames"], "cn": [b"stray-group"], "member": [user.encode()]},
+    )
+    directory.add(
+        f"cn=stray-posix,ou=lyon,{BASE}",
+        {"objectClass": [b"posixGroup"], "cn": [b"stray-posix"], "gidNumber": [b"5"]},
+    )
+    expected = {
+        "users_tree": ("user", "ou=people"),
+        "groups_tree": ("group", "ou=groups"),
+        "posix_groups_tree": ("POSIX group", "ou=groups"),
+    }
+    for result in (
+        sc.check_users_tree(ctx),
+        sc.check_groups_tree(ctx),
+        sc.check_posix_groups_tree(ctx),
+    ):
+        noun, rdn = expected[result.id]
+        assert result.message_key == f"{result.id}.misplaced"
+        assert result.message_params == {"count": 1, "noun": noun, "rdn": rdn}
+
+
+def test_a_failing_check_reports_its_error_type(
+    directory: MemoryDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(_ctx: sc.CheckContext) -> sc.CheckResult:
+        raise DirectoryError("nope")
+
+    monkeypatch.setattr(sc, "CHECKS", (("root_object", boom, None),))
+    (result,) = sc.run_checks(sc.context_for(directory))
+    assert (result.id, result.status) == ("root_object", "error")
+    assert result.message_key == "root_object.failed"
+    assert result.message_params == {"error": "DirectoryError"}
 
 
 def test_demo_directory_report(directory: MemoryDirectory) -> None:
@@ -51,7 +175,9 @@ def test_root_fix(directory: MemoryDirectory) -> None:
     ctx = sc.context_for(directory)
     outcome = sc.run_fix(ctx, "root_object")
     assert outcome.fixed == [BASE]
-    assert sc.check_root(ctx).status == "ok"
+    fixed = sc.check_root(ctx)
+    assert fixed.status == "ok"
+    assert (fixed.message_key, fixed.message_params) == ("root_object.ok", {})
     entry = directory.get(BASE)
     assert entry is not None
     assert entry.text("ou") == "heracles" and entry.text("description")

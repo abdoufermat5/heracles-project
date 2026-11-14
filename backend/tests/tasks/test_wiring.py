@@ -106,6 +106,14 @@ def test_run_now_runs_the_pass_and_exposes_reports() -> None:
 
         runs = client.get("/api/v2/admin/tasks/runs").json()["runs"]
         assert runs and runs[0]["runner"]
+        assert all("reason" in run for run in runs)
+        # a deliberate skip is not an error: the report carries the reason, not an error
+        scheduler.run_pass()
+        runs = client.get("/api/v2/admin/tasks/runs").json()["runs"]
+        skipped = [run for run in runs if run["status"] == "skipped"]
+        assert skipped and all(not run["errors"] and run["reason"] for run in skipped)
+        # the sentence is translated by the client from the stable id
+        assert all(run["reason_key"] == "no_mailer" for run in skipped)
         listing = client.get("/api/v2/admin/tasks").json()
         assert listing["capabilities"]["scheduler_in_process"] is True
         assert listing["capabilities"]["syslog_configured"] is False

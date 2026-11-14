@@ -85,6 +85,15 @@ def test_disabled_plugin_routes_answer_404_until_enabled(client: TestClient) -> 
     assert admin.client.get(url, params={"base": demo.BASE}).status_code == 404
 
 
+def test_io_capability_follows_the_import_export_plugin(client: TestClient) -> None:
+    admin = Api(client).login("admin")
+    assert admin.get("/capabilities").json()["io"] is False
+    assert patch(admin, "ldapmanager", True).status_code == 200
+    assert admin.get("/capabilities").json()["io"] is True
+    assert patch(admin, "ldapmanager", False).status_code == 200
+    assert admin.get("/capabilities").json()["io"] is False
+
+
 def test_requires_config_write(client: TestClient) -> None:
     assert patch(Api(client), "dns", True).status_code in (401, 403)
     assert patch(Api(client).login("helpdesk"), "dns", True).status_code == 403

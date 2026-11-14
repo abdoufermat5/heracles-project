@@ -68,6 +68,10 @@ TASKS_MIGRATIONS: Sequence[str] = (
     );
     CREATE INDEX task_runs_runner ON task_runs (runner, id);
     """,
+    # why a run was skipped (a human sentence), see RunRecord.reason
+    "ALTER TABLE task_runs ADD COLUMN reason TEXT;",
+    # stable id of that sentence, for clients that translate it
+    "ALTER TABLE task_runs ADD COLUMN reason_key TEXT;",
 )
 
 
@@ -84,6 +88,10 @@ class RunRecord:
     status: str
     counts: Mapping[str, int] = field(default_factory=lambda: {})
     errors: Sequence[str] = ()
+    #: Why the run was skipped (a human sentence), ``None`` otherwise.
+    reason: str | None = None
+    #: Stable id of :attr:`reason` (``no_mailer``), so a client can translate it.
+    reason_key: str | None = None
     id: int = 0
 
     @property
@@ -104,6 +112,8 @@ class RunRecord:
             "status": self.status,
             "counts": dict(self.counts),
             "errors": list(self.errors),
+            "reason": self.reason,
+            "reason_key": self.reason_key,
             "summary": self.summary,
         }
 
@@ -175,7 +185,8 @@ class TaskStore:
         with self._db.transaction() as conn:
             conn.execute(
                 "INSERT INTO task_runs (directory, runner, kind, started_at, finished_at,"
-                " status, counts, errors) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " status, counts, errors, reason, reason_key)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     run.directory,
                     run.runner,
@@ -185,6 +196,8 @@ class TaskStore:
                     run.status,
                     json.dumps(dict(run.counts)),
                     json.dumps(list(run.errors)),
+                    run.reason,
+                    run.reason_key,
                 ),
             )
             conn.execute(
@@ -225,6 +238,8 @@ def _record_of(row: Any) -> RunRecord:
         status=row["status"],
         counts=json.loads(row["counts"]),
         errors=json.loads(row["errors"]),
+        reason=row["reason"],
+        reason_key=row["reason_key"],
     )
 
 
@@ -311,12 +326,15 @@ class Scheduler:
     ) -> RunRecord:
         started = self._now()
         if runner.needs_mailer and self.mailer is None:
-            log.warning("tasks.runner_skipped", runner=runner.name, reason="no mail server")
+            reason = "no mail server is configured: the runner was skipped"
+            log.info("tasks.runner_skipped", runner=runner.name, reason=reason)
             return RunRecord(
                 started_at=started,
                 finished_at=started,
                 status="skipped",
-                errors=["no mail server is configured: the runner was skipped"],
+                errors=[],
+                reason=reason,
+                reason_key="no_mailer",
                 directory=dir_id,
                 runner=runner.name,
                 kind=runner.kind,

@@ -6,6 +6,7 @@ import importlib
 from dataclasses import dataclass, field
 
 import pytest
+from structlog.testing import capture_logs
 
 from heracles.auth.mail import MemoryMailer
 from heracles.ldap.memory import MemoryDirectory
@@ -65,8 +66,9 @@ def test_reports_are_recorded_and_pruned() -> None:
     recent = scheduler.store.recent()
     assert len(recent) == 3 and recent[0].runner == "r"
     failed = next(r for r in recent if r.runner == "f")
-    assert failed.status == "error" and "boom" in failed.errors[0]
-    assert next(r for r in recent if r.runner == "r").errors == ["bad task"]
+    assert failed.status == "error" and "boom" in failed.errors[0] and failed.reason is None
+    reported = next(r for r in recent if r.runner == "r")
+    assert reported.errors == ["bad task"] and reported.reason is None
     assert set(scheduler.store.last_by_kind()) == {"kf", "kr"}
     assert recent[0].as_dict()["summary"] == "1 error(s)"
 
@@ -79,11 +81,22 @@ def test_runner_needing_a_mailer_is_skipped_without_one() -> None:
         return FakeReport()
 
     runner = TaskRunner("mailing", run, kind="k", needs_mailer=True)
-    skipped = make(runner).run_pass(["a"])
+    scheduler = make(runner)
+    with capture_logs() as logs:
+        skipped = scheduler.run_pass(["a"])
     assert skipped is not None and skipped[0].status == "skipped" and not calls
-    assert "no mail server" in skipped[0].errors[0]
+    record = skipped[0]
+    assert record.errors == [] and record.reason and "no mail server" in record.reason
+    assert any(
+        entry["event"] == "tasks.runner_skipped" and entry["log_level"] == "info" for entry in logs
+    )
+    (stored,) = scheduler.store.recent()
+    assert (stored.status, list(stored.errors), stored.reason) == ("skipped", [], record.reason)
+    assert stored.reason_key == "no_mailer" == record.reason_key
+    assert stored.as_dict()["reason"] == record.reason
+    assert stored.as_dict()["reason_key"] == "no_mailer"
     ran = make(runner, mailer=MemoryMailer()).run_pass(["a"])
-    assert ran is not None and ran[0].status == "ok" and calls == ["run"]
+    assert ran is not None and ran[0].status == "ok" and ran[0].reason is None and calls == ["run"]
 
 
 def test_lease_prevents_concurrent_passes() -> None:
