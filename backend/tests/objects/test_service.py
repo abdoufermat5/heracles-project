@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from heracles.attributes import set_default_password_hasher
+from heracles.auth.passwords import lock
 from heracles.ldap.client import Modification, Scope
 from heracles.objects import (
     EventContext,
@@ -519,6 +520,42 @@ def test_list_paging_and_sort(service: ObjectService, directory: FakeDirectory) 
     desc = service.list("user", BASE, limit=1, descending=True)
     assert desc.items[0].values["uid"] == "u4"
     assert service.list("user", BASE, cursor="%%%").items[0].values["uid"] == "u0"
+
+
+def test_list_sorts_user_status(service: ObjectService, directory: FakeDirectory) -> None:
+    for uid, password in (("aaa", lock("{SSHA}p")), ("mmm", None), ("zzz", "{SSHA}p")):
+        attrs: dict[str, Any] = {
+            "objectClass": ["inetOrgPerson", "organizationalPerson", "person"],
+            "uid": uid,
+            "cn": uid,
+            "sn": uid,
+        }
+        if password is not None:
+            attrs["userPassword"] = password
+        directory.put(f"uid={uid},{PEOPLE}", **attrs)
+    page = service.list("user", BASE, sort="status", extra_attrs=["userPassword"])
+    # active, then pending (no password), then locked, whatever the login order says
+    assert [row.values["uid"] for row in page.items] == ["zzz", "mmm", "aaa"]
+
+
+def test_list_sorts_user_department(service: ObjectService, directory: FakeDirectory) -> None:
+    directory.put(
+        f"uid=aaa,{PARIS_PEOPLE}",
+        objectClass=["inetOrgPerson", "organizationalPerson", "person"],
+        uid="aaa",
+        cn="Paris",
+        sn="Paris",
+    )
+    directory.put(
+        f"uid=zzz,{PEOPLE}",
+        objectClass=["inetOrgPerson", "organizationalPerson", "person"],
+        uid="zzz",
+        cn="Root",
+        sn="Root",
+    )
+    page = service.list("user", BASE, Scope.SUBTREE, sort="department")
+    # the base department's DN sorts before the Paris one, so the login order is reversed
+    assert [row.values["uid"] for row in page.items] == ["zzz", "aaa"]
 
 
 def test_list_query_filter(service: ObjectService, directory: FakeDirectory) -> None:

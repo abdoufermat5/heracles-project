@@ -58,6 +58,11 @@ from heracles.schema import names as schema
 
 DEFAULT_LIMIT = 50
 
+#: Computed sort keys of the user listing. They are not stored attributes: ``department`` is
+#: the department DN of the entry and ``status`` orders active, pending (no password yet) and
+#: locked rows. ``groups_count`` is not sortable: it is counted per page, not over the listing.
+_USER_SORT_KEYS = frozenset({"department", "status"})
+
 type Touched = list[tuple[str, str]]
 type StrList = list[str]
 
@@ -115,6 +120,20 @@ def department_of(dn: str, container_rdn: str) -> str:
             parts = dnlib.split(container)
             return ",".join(parts[len(dnlib.split(container_rdn)) :])
     return container
+
+
+def _user_status_rank(stored_password: str | None) -> str:
+    """Sort text of the user status column: active (0), pending (1), locked (2).
+
+    The listing cannot show other statuses (the attributes they would come from are not
+    fetched), and these three are exactly what its ``locked`` flag and ``password_set``
+    field say. Ascending order therefore puts usable accounts first.
+    """
+    if not stored_password:
+        return "1"
+    from heracles.auth.passwords import is_locked
+
+    return "2" if is_locked(stored_password) else "0"
 
 
 def _text(raw: bytes) -> str:
@@ -339,28 +358,40 @@ class ObjectService:
             ]
         except NoSuchObjectError:
             entries = []
-        main_tab = info.main_tab.name
 
         def order(e: Entry) -> tuple[str, str]:
-            # an attribute the caller cannot read must not decide the order of the rows
-            text = (
-                (e.text(sort_key) or "") if self.policy.can_read(e.dn, main_tab, sort_key) else ""
-            )
-            return text.lower(), dnlib.normalize(e.dn)
+            return self._sort_text(info, e, sort_key).lower(), dnlib.normalize(e.dn)
 
         entries.sort(key=order, reverse=descending)
         return entries
 
+    def _sort_text(self, info: TypeInfo, entry: Entry, sort_key: str) -> str:
+        """Text that orders one entry for ``sort_key`` (empty when it must not decide)."""
+        key = sort_key.lower()
+        if key == "department" and info.name == "user":
+            return department_of(entry.dn, info.type.rdn)
+        if key == "status" and info.name == "user":
+            return _user_status_rank(entry.text("userPassword"))
+        # an attribute the caller cannot read must not decide the order of the rows
+        if not self.policy.can_read(entry.dn, info.main_tab.name, sort_key):
+            return ""
+        return entry.text(sort_key) or ""
+
     @staticmethod
     def _sort_key(info: TypeInfo, requested: str | None) -> str:
-        """The requested sort column when it is a listing column, else the main attribute.
+        """The requested sort key when it is a listing column, else the main attribute.
 
-        Other attributes (the password fetched for the account lock flag, say) are not
-        columns and are never a sort key.
+        A listing column is a type column, the name attribute or the main attribute. User
+        listings also accept the computed keys :data:`_USER_SORT_KEYS`. Other attributes
+        (the password fetched for the account lock flag, say) are not columns and are never
+        a sort key.
         """
-        columns = {c.lower() for c in (*info.type.columns, info.type.name_attr) if c}
-        if requested and requested.lower() in columns | {info.type.main_attr.lower()}:
-            return requested
+        if requested:
+            key = requested.lower()
+            columns = {c.lower() for c in (*info.type.columns, info.type.name_attr) if c}
+            columns.add(info.type.main_attr.lower())
+            if key in columns or (info.name == "user" and key in _USER_SORT_KEYS):
+                return key
         return info.type.main_attr
 
     def count(self, type_name: str, base: str | None = None, scope: Scope = Scope.ONE) -> int:

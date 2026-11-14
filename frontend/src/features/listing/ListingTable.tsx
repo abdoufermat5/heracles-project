@@ -166,9 +166,10 @@ export function ListingTable({
     ]
 
     if (isUser) {
-      // 1. Person column (avatar, display name, login underneath)
+      // 1. Person column (avatar, display name, login underneath). The column id is the
+      // name attribute: that is what the server sorts the column by.
       cols.push({
-        id: 'person',
+        id: descriptor.name_attr,
         header: t('peopleUI.columns.person'),
         accessorFn: (r) => String(r.values[descriptor.name_attr] ?? r.values[descriptor.main_attr] ?? r.dn),
         cell: ({ row }) => {
@@ -213,10 +214,11 @@ export function ListingTable({
         },
       })
 
-      // 3. Department column (OrgPath)
+      // 3. Department column (OrgPath; the server sorts rows by their department DN)
       cols.push({
         id: 'department',
         header: t('peopleUI.columns.department'),
+        accessorFn: (r) => (typeof r.values.base === 'string' ? r.values.base : r.dn),
         cell: ({ row }) => (
           typeof row.original.values.base === 'string' ? (
             <OrgPath dn={row.original.values.base} includeSelf />
@@ -241,10 +243,11 @@ export function ListingTable({
         },
       })
 
-      // 5. Groups count column
+      // 5. Groups count column (counted per page by the server: not sortable over the listing)
       cols.push({
         id: 'groups',
         header: t('peopleUI.columns.groups'),
+        enableSorting: false,
         accessorFn: (r) => r.groups_count ?? (r.values.groups_count as number) ?? 0,
         cell: ({ row }) => {
           const count = row.original.groups_count ?? (row.original.values.groups_count as number) ?? 0
@@ -257,7 +260,6 @@ export function ListingTable({
         uid: true,
         cn: true,
         mail: true,
-        person: true,
         status: true,
         department: true,
         groups: true,
