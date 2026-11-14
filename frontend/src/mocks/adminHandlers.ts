@@ -155,8 +155,15 @@ interface FieldSeed {
 const FIELD_SEEDS: FieldSeed[] = [
   { key: 'language', section: 'look_and_feel', kind: 'select', options: ['en', 'fr'], value: 'en' },
   { key: 'timezone', section: 'look_and_feel', kind: 'str', value: 'UTC' },
-  { key: 'min_id', section: 'core', kind: 'int', honoured: true, value: 0 },
-  { key: 'shells', section: 'core', kind: 'list', honoured: true, value: ['/bin/bash', '/bin/sh'] },
+  { key: 'min_id', section: 'core', kind: 'int', honoured: true, value: 1000 },
+  {
+    key: 'shells',
+    section: 'core',
+    kind: 'list',
+    honoured: true,
+    value: ['/bin/bash', '/bin/sh', '/bin/zsh', '/usr/bin/fish', '/bin/false', '/usr/sbin/nologin'],
+  },
+  { key: 'default_shell', section: 'core', kind: 'str', honoured: true, value: '/bin/bash' },
   { key: 'strict_naming_rules', section: 'core', kind: 'bool', value: false },
   { key: 'password_min_length', section: 'password', kind: 'int', honoured: true, value: 8 },
   { key: 'password_default_hash', section: 'password', kind: 'str', honoured: true, value: 'ssha' },

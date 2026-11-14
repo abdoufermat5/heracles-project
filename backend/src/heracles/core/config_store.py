@@ -21,7 +21,7 @@ import time
 import weakref
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, cast
 
 from heracles.core.containers import ensure_container
 from heracles.ldap.client import (
@@ -57,6 +57,19 @@ SECTIONS: Final = (
     "debugging",
     "misc",
 )
+
+
+#: Login shells offered by the POSIX tab until the configuration lists others (the same list
+#: the plugin ships), and the one given to new accounts.
+DEFAULT_SHELLS: Final = (
+    "/bin/bash",
+    "/bin/sh",
+    "/bin/zsh",
+    "/usr/bin/fish",
+    "/bin/false",
+    "/usr/sbin/nologin",
+)
+DEFAULT_SHELL: Final = "/bin/bash"
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +117,7 @@ CONFIG_FIELDS: Final[tuple[ConfigField, ...]] = (
     _f("account_primary_attribute", "core", "select", options=("uid", "cn"), default="uid"),
     _f("next_id_hook", "core", "path"),
     _f("strict_naming_rules", "core", "bool"),
-    _f("min_id", "core", "int", honoured=True, default=0),
+    _f("min_id", "core", "int", honoured=True, default=1000),
     _f("uid_number_base", "core", honoured=True, default="1100"),
     _f("gid_number_base", "core", honoured=True, default="1100"),
     _f(
@@ -126,8 +139,8 @@ CONFIG_FIELDS: Final[tuple[ConfigField, ...]] = (
     _f("ldap_size_limit", "core", "int", default=200),
     _f("wildcard_foreign_keys", "core", "bool"),
     _f("modification_detection_attribute", "core"),
-    _f("shells", "core", "list", honoured=True),
-    _f("default_shell", "core", honoured=True),
+    _f("shells", "core", "list", honoured=True, default=list(DEFAULT_SHELLS)),
+    _f("default_shell", "core", honoured=True, default=DEFAULT_SHELL),
     _f("acl_tab_on_objects", "core", "bool"),
     _f("department_categories", "core", "list"),
     _f("plugins_menu_blacklist", "core", "list"),
@@ -402,9 +415,9 @@ class RuntimeConfig:
     acl_role_rdn: str = "ou=aclroles"
     uid_number_base: str = "1100"
     gid_number_base: str = "1100"
-    min_id: int = 0
-    shells: list[str] = field(default_factory=lambda: [])
-    default_shell: str = ""
+    min_id: int = 1000
+    shells: list[str] = field(default_factory=lambda: list(DEFAULT_SHELLS))
+    default_shell: str = DEFAULT_SHELL
     language: str = "en"
     timezone: str = "UTC"
     ldap_size_limit: int = 200
@@ -463,7 +476,10 @@ def merge(snapshot: ConfigSnapshot, yaml: YamlDefaults | None = None) -> Runtime
     values: dict[str, Any] = {}
     for f in CONFIG_FIELDS:
         if f.default is not None:
-            values[f.key] = f.default
+            default: Any = f.default
+            values[f.key] = (
+                list(cast("list[Any]", default)) if isinstance(default, list) else default
+            )
         elif f.kind == "list":
             values[f.key] = []
     values.update(

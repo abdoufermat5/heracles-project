@@ -96,7 +96,7 @@ def test_stored_boolean_case_and_unparseable_int(directory: MemoryDirectory) -> 
     cs.invalidate(directory)
     cfg = cs.effective_settings(directory)
     assert cfg.get("force_ssl") is True
-    assert cfg.min_id == 0
+    assert cfg.min_id == 1000
 
 
 def test_tab_hooks_roundtrip(directory: MemoryDirectory) -> None:

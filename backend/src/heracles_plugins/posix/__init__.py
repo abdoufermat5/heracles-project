@@ -74,7 +74,7 @@ class PosixSettings:
     home_pattern: str = "/home/{uid}"
     uid_number_base: str = "1100"
     gid_number_base: str = "1100"
-    min_id: int = 0
+    min_id: int = 1000
     groups_rdn: str = "ou=groups"
 
 
