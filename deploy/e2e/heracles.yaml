@@ -1,4 +1,4 @@
-# Configuration of the end-to-end test stack (docker compose --profile e2e).
+# Configuration of the end-to-end test stack and `make dev` (both profiles mount this file).
 directories:
   - id: main
     label: Test directory

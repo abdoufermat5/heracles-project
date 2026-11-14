@@ -40,7 +40,10 @@ services:
 
   # End-to-end stack: docker compose -f deploy/docker-compose.yml --profile e2e up -d --build
   heracles:
-    # `dev` runs the same container against the test LDAP for `make dev`.
+    # `dev` runs the same container against the test LDAP for `make dev`, with the same
+    # configuration file. Its `api.login.trusted_proxies` trusts the Docker bridge network so
+    # the audit log and the sessions list record the browser address the Vite proxy forwards
+    # (`xfwd`), not the gateway the connection reaches the published port from.
     profiles: [e2e, dev]
     build:
       context: ..
