@@ -43,7 +43,7 @@ def md4(data: bytes) -> bytes:
 
 
 def nt_hash(password: str) -> str:
-    """Upper-case hex NT hash (``hrcSmbNTPassword``)."""
+    """Upper-case hex NT hash (``sambaNTPassword``)."""
     return md4(password.encode("utf-16-le")).hex().upper()
 
 

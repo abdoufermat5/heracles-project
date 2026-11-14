@@ -2,7 +2,7 @@
 
 Password hashes, clear-text service passwords and Kerberos keys must never reach an audit
 event, an export or a rule whose outcome is visible. Names are matched by fragment because
-plugins add their own (``hrcSmbNTPassword``, ``hrcIpmiPassword``, ...).
+plugins add their own (``sambaNTPassword``, ``hrcIpmiPassword``, ...).
 """
 
 from __future__ import annotations

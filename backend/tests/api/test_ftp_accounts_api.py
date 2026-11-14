@@ -57,7 +57,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
 
     def _build_demo_dir() -> MemoryDirectory:
         d = orig_builder()
-        d.set_schema_object_classes(d.schema_object_classes() | {"hrcftpaccount"})
+        d.set_schema_object_classes(d.schema_object_classes() | {"pureftpduser"})
         return d
 
     monkeypatch.setattr(demo, "build_demo_directory", _build_demo_dir)
@@ -92,9 +92,9 @@ def test_create_and_patch_user_ftp(app_client: TestClient) -> None:
                 "ftp_accounts": {
                     "active": True,
                     "values": {
-                        "hrcFtpStatus": True,
-                        "hrcFtpUploadRatio": 3,
-                        "hrcFtpQuotaFiles": 500,
+                        "FTPStatus": True,
+                        "FTPUploadRatio": 3,
+                        "FTPQuotaFiles": 500,
                     },
                 },
             },
@@ -107,9 +107,9 @@ def test_create_and_patch_user_ftp(app_client: TestClient) -> None:
     assert read_res.status_code == 200
     tab = read_res.json()["tabs"]["ftp_accounts"]
     assert tab["active"] is True
-    assert tab["values"]["hrcFtpStatus"] is True
-    assert tab["values"]["hrcFtpUploadRatio"] == 3
-    assert tab["values"]["hrcFtpQuotaFiles"] == 500
+    assert tab["values"]["FTPStatus"] is True
+    assert tab["values"]["FTPUploadRatio"] == 3
+    assert tab["values"]["FTPQuotaFiles"] == 500
 
     patch_res = a.patch(
         f"/objects/user/{q(dn)}",
@@ -117,8 +117,8 @@ def test_create_and_patch_user_ftp(app_client: TestClient) -> None:
             "tabs": {
                 "ftp_accounts": {
                     "values": {
-                        "hrcFtpStatus": False,
-                        "hrcFtpQuotaFiles": 1000,
+                        "FTPStatus": False,
+                        "FTPQuotaFiles": 1000,
                     }
                 }
             }
@@ -126,5 +126,5 @@ def test_create_and_patch_user_ftp(app_client: TestClient) -> None:
     )
     assert patch_res.status_code == 200
     tab = patch_res.json()["tabs"]["ftp_accounts"]
-    assert tab["values"]["hrcFtpStatus"] is False
-    assert tab["values"]["hrcFtpQuotaFiles"] == 1000
+    assert tab["values"]["FTPStatus"] is False
+    assert tab["values"]["FTPQuotaFiles"] == 1000

@@ -1,7 +1,10 @@
-"""No legacy identifier or third-party product name outside the migration table.
+"""No legacy identifier or third-party product name outside the allowed places.
 
 Legacy LDAP names may appear only in ``heracles/migrate/legacy_map.py`` and the
-migration tests; everywhere else Heracles uses its own ``hrc*`` schema.
+migration tests. Third-party product names are allowed only where they are
+unavoidable: Heracles' external schema module (the identifiers the installed SMB
+and FTP servers read) and the dev deployment files that install those servers.
+Everywhere else Heracles uses generic ids, labels and its own ``hrc*`` schema.
 """
 
 from __future__ import annotations
@@ -13,12 +16,27 @@ from pathlib import Path
 
 import pytest
 
+from heracles.schema.external import EXTERNAL_SCHEMA_NAMES
+
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWED = (
     "backend/src/heracles/migrate/legacy_map.py",
     "backend/tests/migrate/",
     "backend/tests/test_no_legacy_names.py",
+    # The external schemas the SMB and FTP servers read: their identifiers live in
+    # this one module (see its docstring).
+    "backend/src/heracles/schema/external.py",
+    # Dev deployment: the Dockerfiles and scripts of those servers, the compose file
+    # that runs them, and the directory data and schema files they load.
+    "deploy/dev/",
+    "deploy/docker-compose.yml",
+    "deploy/ldap/seed.ldif",
+    "deploy/ldap/schema/12-samba.ldif",
+    "deploy/ldap/schema/13-pureftpd.ldif",
+    "deploy/ldap/schema/14-dhcp.ldif",
 )
+"""Allowed path prefixes."""
+
 SKIPPED_SUFFIXES = (".png", ".jpg", ".ico", ".woff", ".woff2", ".svg", ".lock")
 SKIPPED_NAMES = ("pnpm-lock.yaml", "uv.lock")
 LEGACY = re.compile(
@@ -35,6 +53,11 @@ PRODUCTS = re.compile(
     re.IGNORECASE,
 )
 """Third-party product names of the plugins, replaced by generic ids and labels."""
+EXTERNAL_NAMES = re.compile(
+    "|".join(re.escape(name) for name in sorted(EXTERNAL_SCHEMA_NAMES, key=len, reverse=True)),
+    re.IGNORECASE,
+)
+"""The external schema identifiers that stay product-named (see ``schema/external.py``)."""
 
 
 def _tracked_files() -> list[str]:
@@ -65,6 +88,8 @@ def test_no_legacy_names_outside_the_migration_table() -> None:
         except UnicodeDecodeError:
             continue
         for number, line in enumerate(text.splitlines(), 1):
-            if LEGACY.search(line) or PRODUCTS.search(line):
+            # The external schema identifiers are allowed as exact names, nothing else.
+            rest = EXTERNAL_NAMES.sub("", line)
+            if LEGACY.search(rest) or PRODUCTS.search(rest):
                 hits.append(f"{rel}:{number}: {line.strip()[:120]}")
     assert hits == [], "legacy names found:\n" + "\n".join(hits)

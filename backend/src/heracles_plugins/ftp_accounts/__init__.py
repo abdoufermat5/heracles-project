@@ -5,6 +5,7 @@ from __future__ import annotations
 from heracles.attributes import BooleanAttr, IntAttr
 from heracles.i18n import _
 from heracles.objects import Plugin, Section, Tab, TabAttachment
+from heracles.schema.external import FTP_ACCOUNT_CLASS
 
 PLUGIN_NAME = "ftp_accounts"
 
@@ -36,23 +37,23 @@ class FtpAccountTab(Tab):
     label = _("FTP")
     description = _("FTP account: home, quotas and bandwidth limits")
     optional = True
-    object_classes = ("hrcFtpAccount",)
+    object_classes = (FTP_ACCOUNT_CLASS,)
 
     status = Section(
         _("Status"),
-        FtpStatusAttr("hrcFtpStatus", _("FTP enabled"), default=True),
+        FtpStatusAttr("FTPStatus", _("FTP enabled"), default=True),
     )
     ratios = Section(
         _("Ratios"),
-        IntAttr("hrcFtpUploadRatio", _("Upload ratio"), min=0),
-        IntAttr("hrcFtpDownloadRatio", _("Download ratio"), min=0),
+        IntAttr("FTPUploadRatio", _("Upload ratio"), min=0),
+        IntAttr("FTPDownloadRatio", _("Download ratio"), min=0),
     )
     quotas = Section(
         _("Quotas and bandwidth"),
-        IntAttr("hrcFtpQuotaFiles", _("File quota"), min=0),
-        IntAttr("hrcFtpQuotaMBytes", _("Quota (MB)"), min=0),
-        IntAttr("hrcFtpUploadBandwidth", _("Upload bandwidth (KB/s)"), min=0),
-        IntAttr("hrcFtpDownloadBandwidth", _("Download bandwidth (KB/s)"), min=0),
+        IntAttr("FTPQuotaFiles", _("File quota"), min=0),
+        IntAttr("FTPQuotaMBytes", _("Quota (MB)"), min=0),
+        IntAttr("FTPUploadBandwidth", _("Upload bandwidth (KB/s)"), min=0),
+        IntAttr("FTPDownloadBandwidth", _("Download bandwidth (KB/s)"), min=0),
     )
 
 

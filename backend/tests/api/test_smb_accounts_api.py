@@ -12,7 +12,6 @@ from fastapi.testclient import TestClient
 from heracles import demo
 from heracles.server import build_demo_app
 
-SAMBA_CLASSES = ("hrcSmbAccount", "hrcSmbGroupMapping", "hrcSmbDomain", "hrcSmbIdmapEntry")
 DOMAIN_SID = "S-1-5-21-1-2-3"
 
 
@@ -48,10 +47,7 @@ class Api:
 
 
 @pytest.fixture
-def smb_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
-    monkeypatch.setattr(
-        demo, "PLUGIN_OBJECT_CLASSES", frozenset({*demo.PLUGIN_OBJECT_CLASSES, *SAMBA_CLASSES})
-    )
+def smb_client() -> Iterator[TestClient]:
     with TestClient(build_demo_app()) as client:
         yield client
 
@@ -78,7 +74,7 @@ def test_domain_and_user_flow(smb_client: TestClient) -> None:
         "/objects/smb_domain",
         {
             "base": demo.BASE,
-            "tabs": {"main": {"values": {"hrcSmbDomainName": "CORP", "hrcSmbSID": DOMAIN_SID}}},
+            "tabs": {"main": {"values": {"sambaDomainName": "CORP", "sambaSID": DOMAIN_SID}}},
         },
     )
     assert r.status_code == 201, r.text
@@ -103,16 +99,16 @@ def test_domain_and_user_flow(smb_client: TestClient) -> None:
     dn = r.json()["dn"]
     obj = a.get(f"/objects/user/{q(dn)}").json()
     values = obj["tabs"]["smb"]["values"]
-    assert values["hrcSmbSID"].startswith(DOMAIN_SID + "-")
-    assert values["hrcSmbDomainName"] == "CORP"
-    assert values["hrcSmbAcctFlags"] == "[UX         ]"
+    assert values["sambaSID"].startswith(DOMAIN_SID + "-")
+    assert values["sambaDomainName"] == "CORP"
+    assert values["sambaAcctFlags"] == "[UX         ]"
     assert values["flag_pwdNeverExpires"] is True
-    assert values["hrcSmbNTPassword"] is None  # hashes never leave the server
-    assert values["hrcSmbLMPassword"] is None
+    assert values["sambaNTPassword"] is None  # hashes never leave the server
+    assert values["sambaLMPassword"] is None
 
-    r = a.patch(f"/objects/user/{q(dn)}", {"tabs": {"smb": {"values": {"hrcSmbLogonHours": "zz"}}}})
+    r = a.patch(f"/objects/user/{q(dn)}", {"tabs": {"smb": {"values": {"sambaLogonHours": "zz"}}}})
     assert r.status_code == 422
-    assert "smb.hrcSmbLogonHours" in r.json()["error"]["fields"]
+    assert "smb.sambaLogonHours" in r.json()["error"]["fields"]
 
 
 def test_missing_domain_is_reported_on_the_smb_tab(smb_client: TestClient) -> None:
@@ -127,4 +123,4 @@ def test_missing_domain_is_reported_on_the_smb_tab(smb_client: TestClient) -> No
     }
     r = admin.post("/objects/user", body)
     assert r.status_code == 422  # no domain configured: reported on the smb tab
-    assert "smb.hrcSmbDomainName" in r.json()["error"]["fields"]
+    assert "smb.sambaDomainName" in r.json()["error"]["fields"]

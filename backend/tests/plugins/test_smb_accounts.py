@@ -35,14 +35,6 @@ GROUPS = f"ou=groups,{BASE}"
 DOMAIN_SID = "S-1-5-21-111-222-333"
 NOW = 1_700_000_000
 
-SAMBA_CLASSES = [
-    "hrcSmbAccount",
-    "hrcSmbGroupMapping",
-    "hrcSmbDomain",
-    "hrcSmbIdmapEntry",
-    "hrcSmbUnixIdPool",
-]
-
 
 @pytest.fixture(autouse=True)
 def fixed_now(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
@@ -58,9 +50,7 @@ def directory() -> MemoryDirectory:
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     for ou in ("people", "groups"):
         d.add(f"ou={ou},{BASE}", {"objectClass": [b"organizationalUnit"], "ou": [ou.encode()]})
-    d.set_schema_object_classes(
-        [*d.schema_object_classes(), *PLUGIN_OBJECT_CLASSES, *SAMBA_CLASSES]
-    )
+    d.set_schema_object_classes([*d.schema_object_classes(), *PLUGIN_OBJECT_CLASSES])
     return d
 
 
@@ -171,18 +161,18 @@ def test_logon_hours_grid_round_trip() -> None:
 
 
 def test_attribute_validation() -> None:
-    hours = LogonHoursAttr("hrcSmbLogonHours", "h")
+    hours = LogonHoursAttr("sambaLogonHours", "h")
     assert hours.validate("F" * 42) == []
     assert hours.validate("F" * 41)
     assert hours.validate("Z" * 42)
-    ws = WorkstationsAttr("hrcSmbUserWorkstations", "w")
+    ws = WorkstationsAttr("sambaUserWorkstations", "w")
     assert ws.validate("pc1,pc2") == []
     assert ws.validate("pc1,,pc2")
     assert ws.validate("pc1,PC1")
 
 
 def test_unix_date_attr() -> None:
-    attr = UnixDateAttr("hrcSmbKickoffTime", "k")
+    attr = UnixDateAttr("sambaKickoffTime", "k")
     assert attr.to_ldap(date(2024, 1, 2)) == [b"1704153600"]
     assert attr.from_ldap([b"1704153600"]) == date(2024, 1, 2)
     assert attr.from_ldap([b"2147483647"]) is None
@@ -197,11 +187,11 @@ def test_user_tab_computes_sid_and_primary_group(
 ) -> None:
     dn = new_user(service)
     entry = entry_of(directory, dn)
-    assert entry.has_object_class("hrcSmbAccount")
+    assert entry.has_object_class("sambaSamAccount")
     uid_number = int(entry.text("uidNumber"))
-    assert entry.text("hrcSmbSID") == f"{DOMAIN_SID}-{uid_number * 2 + 1000}"
-    assert entry.text("hrcSmbPrimaryGroupSID") == f"{DOMAIN_SID}-513"
-    assert entry.text("hrcSmbAcctFlags") == "[U          ]"
+    assert entry.text("sambaSID") == f"{DOMAIN_SID}-{uid_number * 2 + 1000}"
+    assert entry.text("sambaPrimaryGroupSID") == f"{DOMAIN_SID}-513"
+    assert entry.text("sambaAcctFlags") == "[U          ]"
     for virtual in ("flag_disabled", "hrc_pwdCantChange", "wellKnownRid", "primaryGroupStatus"):
         assert not entry.get(virtual)
 
@@ -211,14 +201,14 @@ def test_primary_group_sid_uses_group_mapping(
 ) -> None:
     group = new_group(service)
     gid = int(entry_of(directory, group).text("gidNumber"))
-    group_sid = entry_of(directory, group).text("hrcSmbSID")
+    group_sid = entry_of(directory, group).text("sambaSID")
     assert group_sid == f"{DOMAIN_SID}-{gid * 2 + 1000 + 1}"
     dn = new_user(service)
     posix_tab = {"posix": {"values": {"primaryGroup": group}}}
     service.update("user", dn, posix_tab)
-    service.update("user", dn, {"smb": {"values": {"hrcSmbDomainName": ""}}})
+    service.update("user", dn, {"smb": {"values": {"sambaDomainName": ""}}})
     assert entry_of(directory, dn).text("gidNumber") == str(gid)
-    assert entry_of(directory, dn).text("hrcSmbPrimaryGroupSID") == group_sid
+    assert entry_of(directory, dn).text("sambaPrimaryGroupSID") == group_sid
 
 
 def test_sid_collision_increments(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -227,11 +217,11 @@ def test_sid_collision_increments(service: ObjectService, directory: MemoryDirec
     taken = f"{DOMAIN_SID}-{(uid_number + 1) * 2 + 1000}"
     directory.add(
         f"cn=other,{GROUPS}",
-        {"objectClass": [b"hrcSmbGroupMapping"], "cn": [b"other"], "hrcSmbSID": [taken.encode()]},
+        {"objectClass": [b"sambaGroupMapping"], "cn": [b"other"], "sambaSID": [taken.encode()]},
     )
     second = new_user(service, "b")
     assert (
-        entry_of(directory, second).text("hrcSmbSID")
+        entry_of(directory, second).text("sambaSID")
         == f"{DOMAIN_SID}-{(uid_number + 1) * 2 + 1001}"
     )
 
@@ -243,7 +233,7 @@ def test_requires_posix_tab(service: ObjectService) -> None:
     }
     with pytest.raises(ObjectValidationError) as exc:
         service.create("user", BASE, tabs)
-    assert "smb.hrcSmbDomainName" in exc.value.fields
+    assert "smb.sambaDomainName" in exc.value.fields
 
 
 def test_posix_not_required_when_disabled(directory: MemoryDirectory) -> None:
@@ -253,14 +243,14 @@ def test_posix_not_required_when_disabled(directory: MemoryDirectory) -> None:
         "smb": {"active": True},
     }
     dn = service.create("user", BASE, tabs)
-    assert entry_of(directory, dn).text("hrcSmbSID") == f"{DOMAIN_SID}-1000"
+    assert entry_of(directory, dn).text("sambaSID") == f"{DOMAIN_SID}-1000"
 
 
 def test_missing_domain_is_an_error(directory: MemoryDirectory) -> None:
     service = build(directory, smb.SMBSettings())
     with pytest.raises(ObjectValidationError) as exc:
         new_user(service)
-    assert "smb.hrcSmbDomainName" in exc.value.fields
+    assert "smb.sambaDomainName" in exc.value.fields
 
 
 def test_domain_entry_supplies_sid_and_rid_base(
@@ -272,17 +262,17 @@ def test_domain_entry_supplies_sid_and_rid_base(
         {
             "main": {
                 "values": {
-                    "hrcSmbDomainName": "CORP",
-                    "hrcSmbSID": "S-1-5-21-9-9-9",
-                    "hrcSmbAlgorithmicRidBase": 500,
+                    "sambaDomainName": "CORP",
+                    "sambaSID": "S-1-5-21-9-9-9",
+                    "sambaAlgorithmicRidBase": 500,
                 }
             }
         },
     )
-    dn = new_user(service, smb_values={"hrcSmbDomainName": "CORP"})
+    dn = new_user(service, smb_values={"sambaDomainName": "CORP"})
     entry = entry_of(directory, dn)
-    assert entry.text("hrcSmbDomainName") == "CORP"
-    assert entry.text("hrcSmbSID") == f"S-1-5-21-9-9-9-{int(entry.text('uidNumber')) * 2 + 500}"
+    assert entry.text("sambaDomainName") == "CORP"
+    assert entry.text("sambaSID") == f"S-1-5-21-9-9-9-{int(entry.text('uidNumber')) * 2 + 500}"
 
 
 def test_single_domain_is_the_default(directory: MemoryDirectory) -> None:
@@ -290,10 +280,10 @@ def test_single_domain_is_the_default(directory: MemoryDirectory) -> None:
     service.create(
         "smb_domain",
         BASE,
-        {"main": {"values": {"hrcSmbDomainName": "ONLY", "hrcSmbSID": "S-1-5-21-5-5-5"}}},
+        {"main": {"values": {"sambaDomainName": "ONLY", "sambaSID": "S-1-5-21-5-5-5"}}},
     )
     dn = new_user(service)
-    assert entry_of(directory, dn).text("hrcSmbDomainName") == "ONLY"
+    assert entry_of(directory, dn).text("sambaDomainName") == "ONLY"
 
 
 def test_password_writes_hashes_and_last_set(
@@ -301,47 +291,47 @@ def test_password_writes_hashes_and_last_set(
 ) -> None:
     dn = new_user(service, main={"userPassword": "password"})
     entry = entry_of(directory, dn)
-    assert entry.text("hrcSmbNTPassword") == "8846F7EAEE8FB117AD06BDD830B7586C"
-    assert entry.get("hrcSmbLMPassword") == []
-    assert entry.text("hrcSmbPwdLastSet") == str(NOW)
+    assert entry.text("sambaNTPassword") == "8846F7EAEE8FB117AD06BDD830B7586C"
+    assert entry.get("sambaLMPassword") == []
+    assert entry.text("sambaPwdLastSet") == str(NOW)
     assert entry.text("userPassword") == "{TEST}password"  # stored hashed by the main tab
 
 
 def test_lm_password_only_when_enabled(directory: MemoryDirectory) -> None:
     service = build(directory, smb.SMBSettings(domain_sid=DOMAIN_SID, generate_lm_password=True))
     dn = new_user(service, main={"userPassword": "password"})
-    assert entry_of(directory, dn).text("hrcSmbLMPassword") == "E52CAC67419A9A224A3B108F3FA6CB6D"
+    assert entry_of(directory, dn).text("sambaLMPassword") == "E52CAC67419A9A224A3B108F3FA6CB6D"
     service.update("user", dn, {"main": {"values": {"userPassword": "x" * 20}}})
     entry = entry_of(directory, dn)
-    assert entry.get("hrcSmbLMPassword") == []
-    assert entry.text("hrcSmbNTPassword") == nt_hash("x" * 20)
+    assert entry.get("sambaLMPassword") == []
+    assert entry.text("sambaNTPassword") == nt_hash("x" * 20)
 
 
 def test_hashes_are_not_exposed(service: ObjectService, directory: MemoryDirectory) -> None:
     dn = new_user(service, main={"userPassword": "password"})
     state = service.load("user", dn)
-    assert state.tabs["smb"].values["hrcSmbNTPassword"] is None
+    assert state.tabs["smb"].values["sambaNTPassword"] is None
     tab = next(t for t in service.registry.get("user").tabs if t.name == "smb")
     exposed = state.to_json([tab])["tabs"]["smb"]["values"]  # type: ignore[index]
-    assert exposed["hrcSmbNTPassword"] is None  # type: ignore[index]
+    assert exposed["sambaNTPassword"] is None  # type: ignore[index]
 
 
 def test_unrelated_update_keeps_hashes(service: ObjectService, directory: MemoryDirectory) -> None:
     dn = new_user(service, main={"userPassword": "password"})
-    service.update("user", dn, {"smb": {"values": {"hrcSmbHomePath": r"\\srv\home"}}})
+    service.update("user", dn, {"smb": {"values": {"sambaHomePath": r"\\srv\home"}}})
     entry = entry_of(directory, dn)
-    assert entry.text("hrcSmbNTPassword") == nt_hash("password")
-    assert entry.text("hrcSmbHomePath") == r"\\srv\home"
-    assert entry.text("hrcSmbPwdLastSet") == str(NOW)
+    assert entry.text("sambaNTPassword") == nt_hash("password")
+    assert entry.text("sambaHomePath") == r"\\srv\home"
+    assert entry.text("sambaPwdLastSet") == str(NOW)
 
 
 def test_password_cannot_change_flag(service: ObjectService, directory: MemoryDirectory) -> None:
     dn = new_user(service, smb_values={"hrc_pwdCantChange": True}, main={"userPassword": "pw"})
-    assert entry_of(directory, dn).text("hrcSmbPwdLastSet") == "4294967295"
+    assert entry_of(directory, dn).text("sambaPwdLastSet") == "4294967295"
     state = service.load("user", dn)
     assert state.tabs["smb"].values["hrc_pwdCantChange"] is True
     service.update("user", dn, {"smb": {"values": {"hrc_pwdCantChange": False}}})
-    assert entry_of(directory, dn).text("hrcSmbPwdLastSet") == str(NOW)
+    assert entry_of(directory, dn).text("sambaPwdLastSet") == str(NOW)
 
 
 def test_flags_are_composed_and_unknown_letters_kept(
@@ -351,10 +341,10 @@ def test_flags_are_composed_and_unknown_letters_kept(
         service,
         smb_values={"flag_disabled": True, "flag_pwdNeverExpires": True},
     )
-    assert entry_of(directory, dn).text("hrcSmbAcctFlags") == "[DUX        ]"
-    directory.modify(dn, [Modification("replace", "hrcSmbAcctFlags", [b"[UXQL       ]"])])
+    assert entry_of(directory, dn).text("sambaAcctFlags") == "[DUX        ]"
+    directory.modify(dn, [Modification("replace", "sambaAcctFlags", [b"[UXQL       ]"])])
     service.update("user", dn, {"smb": {"values": {"flag_noPwdRequired": True}}})
-    assert entry_of(directory, dn).text("hrcSmbAcctFlags") == "[NULXQ      ]"
+    assert entry_of(directory, dn).text("sambaAcctFlags") == "[NULXQ      ]"
     state = service.load("user", dn)
     assert state.tabs["smb"].values["flag_autoLocked"] is True
 
@@ -367,33 +357,33 @@ def test_expiration_sync_posix_to_smb(directory: MemoryDirectory) -> None:
         "smb": {"active": True},
     }
     dn = service.create("user", BASE, tabs)
-    assert entry_of(directory, dn).text("hrcSmbKickoffTime") == "1704153600"
+    assert entry_of(directory, dn).text("sambaKickoffTime") == "1704153600"
     assert entry_of(directory, dn).text("shadowExpire") == "19724"
 
 
 def test_expiration_sync_smb_to_posix(directory: MemoryDirectory) -> None:
     service = build(directory, smb.SMBSettings(domain_sid=DOMAIN_SID, expiration_sync="smb"))
-    dn = new_user(service, smb_values={"hrcSmbKickoffTime": "2024-01-02"})
+    dn = new_user(service, smb_values={"sambaKickoffTime": "2024-01-02"})
     assert entry_of(directory, dn).text("shadowExpire") == "19724"
-    assert entry_of(directory, dn).text("hrcSmbKickoffTime") == "1704153600"
+    assert entry_of(directory, dn).text("sambaKickoffTime") == "1704153600"
 
 
 def test_no_expiration_sync_by_default(service: ObjectService, directory: MemoryDirectory) -> None:
-    dn = new_user(service, smb_values={"hrcSmbKickoffTime": "2024-01-02"})
+    dn = new_user(service, smb_values={"sambaKickoffTime": "2024-01-02"})
     assert entry_of(directory, dn).get("shadowExpire") == []
 
 
 def test_logon_hours_validation(service: ObjectService) -> None:
     with pytest.raises(ObjectValidationError) as exc:
-        new_user(service, smb_values={"hrcSmbLogonHours": "ABC"})
-    assert "smb.hrcSmbLogonHours" in exc.value.fields
+        new_user(service, smb_values={"sambaLogonHours": "ABC"})
+    assert "smb.sambaLogonHours" in exc.value.fields
 
 
 def test_munged_dial_is_untouched(service: ObjectService, directory: MemoryDirectory) -> None:
     dn = new_user(service)
-    directory.modify(dn, [Modification("add", "hrcSmbMungedDial", [b"\x00blob"])])
-    service.update("user", dn, {"smb": {"values": {"hrcSmbHomePath": "x"}}})
-    assert entry_of(directory, dn).first("hrcSmbMungedDial") == b"\x00blob"
+    directory.modify(dn, [Modification("add", "sambaMungedDial", [b"\x00blob"])])
+    service.update("user", dn, {"smb": {"values": {"sambaHomePath": "x"}}})
+    assert entry_of(directory, dn).first("sambaMungedDial") == b"\x00blob"
 
 
 def test_deactivating_removes_smb_attributes(
@@ -402,8 +392,8 @@ def test_deactivating_removes_smb_attributes(
     dn = new_user(service, main={"userPassword": "pw"})
     service.update("user", dn, {"smb": {"active": False}})
     entry = entry_of(directory, dn)
-    assert not entry.has_object_class("hrcSmbAccount")
-    assert entry.get("hrcSmbSID") == [] and entry.get("hrcSmbNTPassword") == []
+    assert not entry.has_object_class("sambaSamAccount")
+    assert entry.get("sambaSID") == [] and entry.get("sambaNTPassword") == []
     assert entry.has_object_class("posixAccount")
 
 
@@ -412,13 +402,13 @@ def test_lock_hook() -> None:
 
     entry = Entry(
         "uid=a,dc=test",
-        {"objectClass": [b"hrcSmbAccount"], "hrcSmbAcctFlags": [b"[UX         ]"]},
+        {"objectClass": [b"sambaSamAccount"], "sambaAcctFlags": [b"[UX         ]"]},
     )
     (mod,) = smb.lock_account(entry, True)
     assert mod.values == [b"[DUX        ]"]
     locked = Entry(
         "uid=a,dc=test",
-        {"objectClass": [b"hrcSmbAccount"], "hrcSmbAcctFlags": [b"[DUX        ]"]},
+        {"objectClass": [b"sambaSamAccount"], "sambaAcctFlags": [b"[DUX        ]"]},
     )
     (mod,) = smb.lock_account(locked, False)
     assert mod.values == [b"[UX         ]"]
@@ -433,15 +423,15 @@ def test_account_lock_hook_is_registered(service: ObjectService) -> None:
 def test_id_mapping_adds_and_removes_class(directory: MemoryDirectory) -> None:
     service = build(directory, smb.SMBSettings(domain_sid=DOMAIN_SID, id_mapping=True))
     dn = new_user(service)
-    assert entry_of(directory, dn).has_object_class("hrcSmbIdmapEntry")
+    assert entry_of(directory, dn).has_object_class("sambaIdmapEntry")
     group = new_group(service)
-    assert entry_of(directory, group).has_object_class("hrcSmbIdmapEntry")
+    assert entry_of(directory, group).has_object_class("sambaIdmapEntry")
     service.update("user", dn, {"smb": {"active": False}})
-    assert not entry_of(directory, dn).has_object_class("hrcSmbIdmapEntry")
+    assert not entry_of(directory, dn).has_object_class("sambaIdmapEntry")
 
 
 def test_no_id_mapping_by_default(service: ObjectService, directory: MemoryDirectory) -> None:
-    assert not entry_of(directory, new_user(service)).has_object_class("hrcSmbIdmapEntry")
+    assert not entry_of(directory, new_user(service)).has_object_class("sambaIdmapEntry")
 
 
 # --------------------------------------------------------------- group tab
@@ -450,15 +440,15 @@ def test_no_id_mapping_by_default(service: ObjectService, directory: MemoryDirec
 def test_group_tab_defaults(service: ObjectService, directory: MemoryDirectory) -> None:
     dn = new_group(service)
     entry = entry_of(directory, dn)
-    assert entry.has_object_class("hrcSmbGroupMapping")
-    assert entry.text("hrcSmbGroupType") == "2"
+    assert entry.has_object_class("sambaGroupMapping")
+    assert entry.text("sambaGroupType") == "2"
     assert entry.text("displayName") == "staff"
     assert entry.get("wellKnownRid") == []
 
 
 def test_group_well_known_rid(service: ObjectService, directory: MemoryDirectory) -> None:
     dn = new_group(service, "admins", {"wellKnownRid": "512"})
-    assert entry_of(directory, dn).text("hrcSmbSID") == f"{DOMAIN_SID}-512"
+    assert entry_of(directory, dn).text("sambaSID") == f"{DOMAIN_SID}-512"
     assert service.load("posix_group", dn).tabs["smb"].values["wellKnownRid"] == "512"
     with pytest.raises(ObjectValidationError) as exc:
         new_group(service, "admins2", {"wellKnownRid": "512"})
@@ -469,7 +459,7 @@ def test_group_alias_defaults_to_local_type(
     service: ObjectService, directory: MemoryDirectory
 ) -> None:
     dn = new_group(service, "adm", {"wellKnownRid": "544"})
-    assert entry_of(directory, dn).text("hrcSmbGroupType") == "4"
+    assert entry_of(directory, dn).text("sambaGroupType") == "4"
 
 
 def test_group_invalid_well_known_rid(service: ObjectService) -> None:
@@ -487,11 +477,11 @@ def test_workstation_machine_account(service: ObjectService, directory: MemoryDi
         {"main": {"values": {"cn": "pc01"}}, "smb": {"active": True}},
     )
     entry = entry_of(directory, dn)
-    assert entry.has_object_class("posixAccount") and entry.has_object_class("hrcSmbAccount")
+    assert entry.has_object_class("posixAccount") and entry.has_object_class("sambaSamAccount")
     assert entry.text("uid") == "pc01$"
-    assert entry.text("hrcSmbAcctFlags") == "[W          ]"
-    assert entry.text("hrcSmbPrimaryGroupSID") == f"{DOMAIN_SID}-515"
-    assert entry.text("hrcSmbSID") == f"{DOMAIN_SID}-{int(entry.text('uidNumber')) * 2 + 1000}"
+    assert entry.text("sambaAcctFlags") == "[W          ]"
+    assert entry.text("sambaPrimaryGroupSID") == f"{DOMAIN_SID}-515"
+    assert entry.text("sambaSID") == f"{DOMAIN_SID}-{int(entry.text('uidNumber')) * 2 + 1000}"
     assert entry.text("homeDirectory") == "/dev/null"
     assert entry.text("loginShell") == "/bin/false"
     assert entry.text("gidNumber") == "515"
@@ -513,16 +503,16 @@ def test_workstation_rename_updates_uid(service: ObjectService, directory: Memor
 
 def test_domain_type(service: ObjectService, directory: MemoryDirectory) -> None:
     info = service.registry.get("smb_domain")
-    assert info.acl_object(info.main_tab) == "hrcSmbDomain/hrcSmbDomain"
+    assert info.acl_object(info.main_tab) == "smbDomain/smbDomain"
     dn = service.create(
         "smb_domain",
         BASE,
-        {"main": {"values": {"hrcSmbDomainName": "CORP", "hrcSmbSID": DOMAIN_SID}}},
+        {"main": {"values": {"sambaDomainName": "CORP", "sambaSID": DOMAIN_SID}}},
     )
-    assert dn == f"hrcSmbDomainName=CORP,{BASE}"
+    assert dn == f"sambaDomainName=CORP,{BASE}"
     with pytest.raises(ObjectValidationError):
         service.create(
-            "smb_domain", BASE, {"main": {"values": {"hrcSmbDomainName": "X", "hrcSmbSID": "bad"}}}
+            "smb_domain", BASE, {"main": {"values": {"sambaDomainName": "X", "sambaSID": "bad"}}}
         )
 
 

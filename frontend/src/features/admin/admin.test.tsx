@@ -328,7 +328,7 @@ describe('plugins page', () => {
     expect(within(posix).getByText('0.1.0')).toBeInTheDocument()
     const smb = (await screen.findByText('smb_accounts')).closest('[data-plugin]') as HTMLElement
     expect(within(smb).getByText('Unavailable')).toBeInTheDocument()
-    expect(within(smb).getByText('hrcSmbAccount')).toBeInTheDocument()
+    expect(within(smb).getByText('sambaSamAccount')).toBeInTheDocument()
   })
 
   it('groups the cards as enabled, available and unavailable', async () => {

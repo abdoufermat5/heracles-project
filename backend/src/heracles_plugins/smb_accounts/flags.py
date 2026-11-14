@@ -9,7 +9,7 @@ from heracles.attributes import DateAttr, StringAttr
 from heracles.i18n import _
 
 FLAG_WIDTH = 11
-#: Canonical order of the flag letters in ``hrcSmbAcctFlags``.
+#: Canonical order of the flag letters in ``sambaAcctFlags``.
 FLAG_ORDER = "NDHTUMWSLXI"
 
 FLAG_NORMAL = "U"
@@ -19,9 +19,9 @@ FLAG_NEEDS_NO_AUTH = "N"
 FLAG_AUTOLOCKED = "L"
 FLAG_WORKSTATION = "W"
 
-#: ``hrcSmbPwdLastSet`` value meaning "the password cannot be changed".
+#: ``sambaPwdLastSet`` value meaning "the password cannot be changed".
 PWD_CANNOT_CHANGE = 4294967295
-#: ``hrcSmbKickoffTime`` value meaning "never".
+#: ``sambaKickoffTime`` value meaning "never".
 KICKOFF_NEVER = 2147483647
 
 LOGON_HOURS_LENGTH = 42

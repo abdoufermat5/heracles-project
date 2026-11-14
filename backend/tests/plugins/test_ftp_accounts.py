@@ -22,7 +22,7 @@ def directory() -> MemoryDirectory:
     d = MemoryDirectory(BASE)
     d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
     d.add(PEOPLE, {"objectClass": [b"organizationalUnit"], "ou": [b"people"]})
-    d.set_schema_object_classes(d.schema_object_classes() | {"hrcftpaccount"})
+    d.set_schema_object_classes(d.schema_object_classes() | {"pureftpduser"})
     return d
 
 
@@ -85,10 +85,10 @@ def test_tab_schema_requirement() -> None:
     assert status.enabled
     assert registry.get("user").tab("ftp_accounts") is None
 
-    # When hrcFtpAccount is present in schema, tab is attached
+    # When PureFTPdUser is present in schema, tab is attached
     registry2 = TypeRegistry()
     register_builtin_types(registry2)
-    status2 = registry2.register_plugin(ftp_accounts.plugin(), classes | {"hrcftpaccount"})
+    status2 = registry2.register_plugin(ftp_accounts.plugin(), classes | {"pureftpduser"})
     assert status2.enabled
     assert registry2.get("user").tab("ftp_accounts") is not None
 
@@ -108,33 +108,33 @@ def test_create_user_with_ftp_tab(service: ObjectService, directory: MemoryDirec
             "ftp_accounts": {
                 "active": True,
                 "values": {
-                    "hrcFtpStatus": True,
-                    "hrcFtpUploadRatio": 2,
-                    "hrcFtpDownloadRatio": 1,
-                    "hrcFtpQuotaFiles": 1000,
-                    "hrcFtpQuotaMBytes": 500,
-                    "hrcFtpUploadBandwidth": 100,
-                    "hrcFtpDownloadBandwidth": 200,
+                    "FTPStatus": True,
+                    "FTPUploadRatio": 2,
+                    "FTPDownloadRatio": 1,
+                    "FTPQuotaFiles": 1000,
+                    "FTPQuotaMBytes": 500,
+                    "FTPUploadBandwidth": 100,
+                    "FTPDownloadBandwidth": 200,
                 },
             }
         },
     )
     entry = stored_entry(directory, dn)
-    assert entry.has_object_class("hrcFtpAccount")
-    assert entry.text("hrcFtpStatus") == "TRUE"
-    assert entry.text("hrcFtpUploadRatio") == "2"
-    assert entry.text("hrcFtpDownloadRatio") == "1"
-    assert entry.text("hrcFtpQuotaFiles") == "1000"
-    assert entry.text("hrcFtpQuotaMBytes") == "500"
-    assert entry.text("hrcFtpUploadBandwidth") == "100"
-    assert entry.text("hrcFtpDownloadBandwidth") == "200"
+    assert entry.has_object_class("PureFTPdUser")
+    assert entry.text("FTPStatus") == "TRUE"
+    assert entry.text("FTPUploadRatio") == "2"
+    assert entry.text("FTPDownloadRatio") == "1"
+    assert entry.text("FTPQuotaFiles") == "1000"
+    assert entry.text("FTPQuotaMBytes") == "500"
+    assert entry.text("FTPUploadBandwidth") == "100"
+    assert entry.text("FTPDownloadBandwidth") == "200"
 
     obj = service.load("user", dn)
     tab = obj.tabs["ftp_accounts"]
     assert tab.active
-    assert tab.values["hrcFtpStatus"] is True
-    assert tab.values["hrcFtpUploadRatio"] == 2
-    assert tab.values["hrcFtpQuotaFiles"] == 1000
+    assert tab.values["FTPStatus"] is True
+    assert tab.values["FTPUploadRatio"] == 2
+    assert tab.values["FTPQuotaFiles"] == 1000
 
 
 def test_update_user_ftp_tab(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -144,8 +144,8 @@ def test_update_user_ftp_tab(service: ObjectService, directory: MemoryDirectory)
             "ftp_accounts": {
                 "active": True,
                 "values": {
-                    "hrcFtpStatus": True,
-                    "hrcFtpUploadRatio": 1,
+                    "FTPStatus": True,
+                    "FTPUploadRatio": 1,
                 },
             }
         },
@@ -157,17 +157,17 @@ def test_update_user_ftp_tab(service: ObjectService, directory: MemoryDirectory)
             "ftp_accounts": {
                 "active": True,
                 "values": {
-                    "hrcFtpStatus": False,
-                    "hrcFtpUploadRatio": 5,
-                    "hrcFtpQuotaFiles": 200,
+                    "FTPStatus": False,
+                    "FTPUploadRatio": 5,
+                    "FTPQuotaFiles": 200,
                 },
             }
         },
     )
     entry = stored_entry(directory, dn)
-    assert entry.text("hrcFtpStatus") == "FALSE"
-    assert entry.text("hrcFtpUploadRatio") == "5"
-    assert entry.text("hrcFtpQuotaFiles") == "200"
+    assert entry.text("FTPStatus") == "FALSE"
+    assert entry.text("FTPUploadRatio") == "5"
+    assert entry.text("FTPQuotaFiles") == "200"
 
 
 def test_deactivate_ftp_tab(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -176,7 +176,7 @@ def test_deactivate_ftp_tab(service: ObjectService, directory: MemoryDirectory) 
         {
             "ftp_accounts": {
                 "active": True,
-                "values": {"hrcFtpStatus": True, "hrcFtpQuotaFiles": 50},
+                "values": {"FTPStatus": True, "FTPQuotaFiles": 50},
             }
         },
     )
@@ -187,9 +187,9 @@ def test_deactivate_ftp_tab(service: ObjectService, directory: MemoryDirectory) 
         {"ftp_accounts": {"active": False, "values": {}}},
     )
     entry = stored_entry(directory, dn)
-    assert not entry.has_object_class("hrcFtpAccount")
-    assert entry.get("hrcFtpStatus") == []
-    assert entry.get("hrcFtpQuotaFiles") == []
+    assert not entry.has_object_class("PureFTPdUser")
+    assert entry.get("FTPStatus") == []
+    assert entry.get("FTPQuotaFiles") == []
 
 
 def test_invalid_negative_quota(service: ObjectService) -> None:
@@ -199,8 +199,8 @@ def test_invalid_negative_quota(service: ObjectService) -> None:
             {
                 "ftp_accounts": {
                     "active": True,
-                    "values": {"hrcFtpQuotaFiles": -5},
+                    "values": {"FTPQuotaFiles": -5},
                 }
             },
         )
-    assert "ftp_accounts.hrcFtpQuotaFiles" in exc.value.fields
+    assert "ftp_accounts.FTPQuotaFiles" in exc.value.fields

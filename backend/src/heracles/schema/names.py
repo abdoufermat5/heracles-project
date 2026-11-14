@@ -14,6 +14,15 @@ import re
 from dataclasses import astuple, dataclass
 from typing import Final
 
+from heracles.schema.external import (
+    FTP_ACCOUNT_CLASS,
+    SMB_ACCOUNT_CLASS,
+    SMB_DOMAIN_CLASS,
+    SMB_GROUP_MAPPING_CLASS,
+    SMB_IDMAP_CLASS,
+    SMB_UNIX_ID_POOL_CLASS,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ObjectClasses:
@@ -194,12 +203,12 @@ PLUGIN_OBJECT_CLASSES: Final = frozenset(
         "hrcGroupMail",
         "hrcMailAliasRedirection",
         "hrcMailAliasDistribution",
-        # smb
-        "hrcSmbAccount",
-        "hrcSmbGroupMapping",
-        "hrcSmbDomain",
-        "hrcSmbIdmapEntry",
-        "hrcSmbUnixIdPool",
+        # smb: external schema the SMB server reads (see schema/external.py)
+        SMB_ACCOUNT_CLASS,
+        SMB_GROUP_MAPPING_CLASS,
+        SMB_DOMAIN_CLASS,
+        SMB_IDMAP_CLASS,
+        SMB_UNIX_ID_POOL_CLASS,
         # workflow tasks
         "hrcAuditEvent",
         "hrcAuditTasks",
@@ -248,7 +257,7 @@ PLUGIN_OBJECT_CLASSES: Final = frozenset(
         "hrcMailProtectionUser",
         # account extensions
         "hrcFileSharingAccount",
-        "hrcFtpAccount",
+        FTP_ACCOUNT_CLASS,
         "hrcQuotaService",
         "systemQuotas",
         "radiusprofile",
