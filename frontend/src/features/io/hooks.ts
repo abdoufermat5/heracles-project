@@ -1,54 +1,45 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { isApiError } from '@/api/client'
+import { useCapabilities } from '@/features/admin/hooks'
 import { ioApi, type IoAccess } from './api'
 
-const IO_ABSENT_KEY = 'heracles.io.absent'
 const NO_ACCESS: IoAccess = { ldif_export: false, ldif_import: false, csv_import: false }
 
-function ioKnownAbsent(): boolean {
-  try {
-    return sessionStorage.getItem(IO_ABSENT_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-/** Called when the import / export plugin is switched on or off. */
-export function forgetIoAbsence(): void {
-  try {
-    sessionStorage.removeItem(IO_ABSENT_KEY)
-  } catch {
-    /* storage unavailable */
-  }
-}
-
 /**
- * Rights on the import / export tools. The tools belong to a plugin: when it is off
- * the endpoint answers 404, which means "no access". The answer is remembered for the
- * browser session so pages do not ask again (and do not log a failed request each time).
+ * Rights on the import / export tools.
+ *
+ * The capabilities already say whether the plugin is available: when it is not, the answer
+ * is "no access" and nothing is requested. Servers older than that flag are probed; they
+ * answer 404 while the plugin is off, which still means no access.
  */
 export function useIoAccess() {
-  return useQuery({
+  const caps = useCapabilities()
+  const knownAbsent = caps.data?.io === false
+  // A server older than the flag has no `io` field: probe it, its 404 still means no access.
+  const enabled = caps.isError || (caps.data !== undefined && caps.data.io !== false)
+
+  const query = useQuery({
     queryKey: ['io', 'access'],
     queryFn: async (): Promise<IoAccess> => {
-      if (ioKnownAbsent()) return NO_ACCESS
       try {
         return await ioApi.access()
       } catch (e) {
-        if (isApiError(e) && e.status === 404) {
-          try {
-            sessionStorage.setItem(IO_ABSENT_KEY, '1')
-          } catch {
-            /* storage unavailable */
-          }
-          return NO_ACCESS
-        }
+        if (isApiError(e) && e.status === 404) return NO_ACCESS
         throw e
       }
     },
+    enabled,
     staleTime: 5 * 60_000,
     retry: false,
   })
+
+  return {
+    ...query,
+    data: knownAbsent ? NO_ACCESS : query.data,
+    isPending: knownAbsent ? false : enabled ? query.isPending : true,
+    isError: enabled && query.isError,
+    error: enabled ? query.error : null,
+  }
 }
 
 export function useCsvFields(type: string, template: string | null) {

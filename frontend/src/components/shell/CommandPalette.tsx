@@ -21,6 +21,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { useCapabilities } from '@/features/admin/hooks'
 import { comboLabels } from '@/lib/hotkeys'
 import { TypeIcon } from '@/lib/icons'
+import { typeLabel, typeLabelPlural } from '@/lib/labels'
 import { nameValue, rdnValue } from '@/lib/objects'
 import { useTheme } from '@/lib/theme'
 import { addRecentItem, clearRecentItems, getRecentItems } from './recent'
@@ -146,7 +147,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       .filter((ty) => !shortcutTypes.has(ty.name))
       .map((ty) => ({
         id: `type:${ty.name}`,
-        label: ty.label_plural,
+        label: typeLabelPlural(t, ty),
         icon: Clock,
         typeIcon: ty.icon,
         run: () => go('/types/$type', { params: { type: ty.name } }),
@@ -173,7 +174,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         .filter((ty) => ty.can_create && !shortcutTypes.has(ty.name))
         .map((ty) => ({
           id: `create:${ty.name}`,
-          label: t('palette.create', { type: ty.label }),
+          label: t('palette.create', { type: typeLabel(t, ty) }),
           icon: Plus,
           run: () => go('/types/$type/new', { params: { type: ty.name } }),
         })),
@@ -201,7 +202,10 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     addRecentItem({ dn, type, title, subtitle: dn })
     run(() => go('/types/$type/$dn', { params: { type, dn } }))
   }
-  const typeLabel = (name: string) => types?.find((ty) => ty.name === name)?.label ?? name
+  const labelOfType = (name: string) => {
+    const ty = types?.find((x) => x.name === name)
+    return ty ? typeLabel(t, ty) : name
+  }
 
   return (
     <Dialog
@@ -255,7 +259,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                     <Clock className="size-3.5 text-muted-foreground shrink-0" aria-hidden />
                     <span className="font-medium text-foreground truncate">{item.title}</span>
                     <span className="rounded-sm bg-muted px-1 text-caption text-muted-foreground">
-                      {typeLabel(item.type)}
+                      {labelOfType(item.type)}
                     </span>
                     <span className="font-dn text-muted-foreground ml-auto truncate text-caption max-w-[220px]">
                       {item.dn}
@@ -283,7 +287,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
 
             {search.data && search.data.length > 0 && <CommandSeparator className="my-1" />}
             {search.data?.map((g) => (
-              <CommandGroup key={g.type.name} heading={g.type.label_plural}>
+              <CommandGroup key={g.type.name} heading={typeLabelPlural(t, g.type)}>
                 {g.items.map((it) => {
                   const first = Object.values(it.values).find((v) => typeof v === 'string')
                   const label = typeof first === 'string' ? first : rdnValue(it.dn)
@@ -299,7 +303,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                       <TypeIcon name={g.type.icon} className="size-3.5 text-muted-foreground shrink-0" />
                       <span className="font-medium text-foreground truncate">{label}</span>
                       <span className="rounded-sm bg-muted px-1 text-caption text-muted-foreground">
-                        {g.type.label}
+                        {typeLabel(t, g.type)}
                       </span>
                       <span className="font-dn text-muted-foreground ml-auto truncate text-caption max-w-[220px]">
                         {it.dn}

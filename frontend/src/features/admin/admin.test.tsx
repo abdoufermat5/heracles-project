@@ -8,6 +8,7 @@ import { renderHook } from '@testing-library/react'
 import { createElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { qk } from '@/api/hooks'
+import i18n from '@/i18n'
 import en from '@/locales/en'
 import fr from '@/locales/fr'
 import { adminMock } from '@/mocks/adminHandlers'
@@ -450,5 +451,77 @@ describe('tasks dashboard', () => {
     renderApp('/admin/tasks')
     const row = (await screen.findByText('old-reminder')).closest('tr') as HTMLElement
     expect(within(row).getByRole('button', { name: 'Run old-reminder now' })).toBeDisabled()
+  })
+})
+
+describe('health results and run history', () => {
+  const caps = {
+    is_admin: true,
+    console: true,
+    acl: true,
+    config: true,
+    config_write: true,
+    hooks: true,
+    health: true,
+    plugins: true,
+    tasks: true,
+    io: true,
+  }
+
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('renders a health result in French with its interpolated parameters', async () => {
+    signIn()
+    await i18n.changeLanguage('fr')
+    renderApp('/admin/health')
+
+    expect(
+      await screen.findByText(/2 utilisateur\(s\) sont hors de l'arborescence ou=people/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/2 users are outside/)).not.toBeInTheDocument()
+  })
+
+  it('falls back to the English message when the key has no translation', async () => {
+    server.use(
+      http.get('/api/v2/admin/capabilities', () => HttpResponse.json(caps)),
+      http.get('/api/v2/admin/checks', () =>
+        HttpResponse.json([
+          {
+            id: 'root_object',
+            status: 'ok',
+            message: 'Fallback sentence.',
+            message_key: 'root_object.unknown_outcome',
+            message_params: {},
+            dns: [],
+            fixable: false,
+            options: [],
+          },
+        ]),
+      ),
+    )
+    signIn()
+    await i18n.changeLanguage('fr')
+    renderApp('/admin/health')
+
+    expect(await screen.findByText('Fallback sentence.')).toBeInTheDocument()
+    expect(screen.queryByText(/settingsUI\.health\.result/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/unknown_outcome/)).not.toBeInTheDocument()
+  })
+
+  it('shows why a run was skipped without an error count, and keeps the errors of a failed run', async () => {
+    signIn()
+    renderApp('/admin/tasks')
+
+    const runs = await screen.findByRole('region', { name: 'Recent runs' })
+    const skipped = (await within(runs).findByText('user_reminder')).closest('tr') as HTMLElement
+    // translated from the stable id, not the English sentence the server sent
+    expect(within(skipped).getByText(/No mail server is configured/)).toBeInTheDocument()
+    expect(within(skipped).queryByText(/error\(s\)/)).not.toBeInTheDocument()
+
+    const failed = (await within(runs).findByText('lifecycle')).closest('tr') as HTMLElement
+    expect(within(failed).getByText('1 error(s)')).toBeInTheDocument()
+    expect(within(failed).getByText('smtp refused the connection')).toBeInTheDocument()
   })
 })

@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getUserStatus } from '@/features/people/utils'
+import { attributeLabel } from '@/lib/labels'
 import { cn, initials } from '@/lib/utils'
 import { formatCellValue, isMonospaceKey, type Density } from './types'
 
@@ -259,7 +260,7 @@ export function ListingTable({
         if (coreKeys[c.key]) return
         cols.push({
           id: c.key,
-          header: c.label,
+          header: attributeLabel(t, c.key, c.label),
           accessorFn: (r) => r.values[c.key],
           cell: ({ getValue }) => {
             const rawVal = getValue()
@@ -282,7 +283,7 @@ export function ListingTable({
       descriptor.columns.forEach((c) => {
         cols.push({
           id: c.key,
-          header: c.label,
+          header: attributeLabel(t, c.key, c.label),
           accessorFn: (r) => r.values[c.key],
           cell: ({ row, getValue }) => {
             const rawVal = getValue()

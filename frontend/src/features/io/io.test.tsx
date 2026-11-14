@@ -278,3 +278,58 @@ describe('guessMapping', () => {
     })
   })
 })
+
+describe('import / export availability', () => {
+  const caps = (io: boolean) => ({
+    is_admin: true,
+    console: true,
+    acl: true,
+    config: true,
+    config_write: true,
+    hooks: true,
+    health: true,
+    plugins: true,
+    tasks: true,
+    io,
+  })
+
+  it('asks for no rights and shows nothing when the capability says the plugin is off', async () => {
+    server.use(
+      http.get('/api/v2/admin/capabilities', () => HttpResponse.json(caps(false))),
+    )
+    signIn()
+    const probed: string[] = []
+    const listener = ({ request }: { request: Request }) => {
+      const path = new URL(request.url).pathname
+      if (path === '/api/v2/ldapmanager/access') probed.push(path)
+    }
+    server.events.on('request:start', listener)
+
+    renderApp('/io')
+    expect(await screen.findByText('No import or export rights')).toBeInTheDocument()
+    expect(probed).toEqual([])
+    expect(screen.queryByRole('link', { name: 'Import / export' })).not.toBeInTheDocument()
+
+    server.events.removeListener('request:start', listener)
+  })
+
+  it('keeps the navigation and the dashboard checklist entry when the plugin is available', async () => {
+    server.use(
+      http.get('/api/v2/admin/capabilities', () => HttpResponse.json(caps(true))),
+    )
+    signIn()
+    const first = renderApp('/')
+    expect(await screen.findByRole('link', { name: 'Import / export' })).toBeInTheDocument()
+    expect(await screen.findByText('Import your users')).toBeInTheDocument()
+    first.unmount()
+
+    server.use(
+      http.get('/api/v2/admin/capabilities', () => HttpResponse.json(caps(false))),
+    )
+    renderApp('/')
+    await screen.findByRole('region', { name: 'Needs attention' })
+    expect(screen.queryByText('Import your users')).not.toBeInTheDocument()
+    expect(screen.queryByText('Import people')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Import / export' })).not.toBeInTheDocument()
+  })
+})

@@ -396,6 +396,7 @@ export const adminEn = {
     lastReport: 'Last report',
     noReport: 'Not run by the scheduler yet',
     runStatus: { ok: 'OK', error: 'Errors', skipped: 'Skipped' },
+    skipReasons: { no_mailer: 'No mail server is configured, so the runner did nothing.' },
     newTask: 'New task',
     newTaskKind: 'Kind of task',
     newTaskPick: 'Choose a kind',

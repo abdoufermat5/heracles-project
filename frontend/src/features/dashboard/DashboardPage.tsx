@@ -25,6 +25,7 @@ import { RecentActivityCard } from '@/features/audit/RecentActivityCard'
 import { useIoAccess } from '@/features/io/hooks'
 import { GetStartedCard } from '@/features/onboarding/GetStartedCard'
 import { TypeIcon } from '@/lib/icons'
+import { typeLabelPlural } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 
 /** Dashboard card keys are plural ("users", "dns_zones"); routes use the type name. */
@@ -335,7 +336,9 @@ export function DashboardPage() {
                   params={{ type: typeOfCard(c.key) }}
                   className="block rounded-lg border bg-card px-4 py-3 hover:border-primary/40"
                 >
-                  <span className="block text-small text-muted-foreground">{c.label}</span>
+                  <span className="block text-small text-muted-foreground">
+                    {typeLabelPlural(t, { name: typeOfCard(c.key), label: c.label })}
+                  </span>
                   <span className="mt-0.5 flex items-baseline gap-2">
                     <span className="text-title font-semibold tabular-nums text-foreground">
                       {c.value.toLocaleString()}

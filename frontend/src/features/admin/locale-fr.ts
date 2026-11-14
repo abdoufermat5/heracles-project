@@ -388,6 +388,9 @@ export const adminFr: typeof adminEn = {
     total: 'Tâches : {{count}}',
     active: 'Actives : {{count}}',
     failedSubtasks: 'Sous-tâches en échec : {{count}}',
+    skipReasons: {
+      no_mailer: 'Aucun serveur de messagerie n’est configuré : l’exécuteur n’a rien fait.',
+    },
     kind: 'Type',
     allKinds: 'Tous les types',
     status: 'État',

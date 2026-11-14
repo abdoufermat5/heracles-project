@@ -7,6 +7,7 @@ import { isApiError } from '@/api/client'
 import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { typeLabel } from '@/lib/labels'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PageLayout } from '@/components/patterns'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -113,7 +114,7 @@ function PluginCard({
                 <div className="flex flex-wrap gap-1">
                   {p.types.map((ty) => (
                     <Badge key={ty.name} variant="secondary" title={ty.category}>
-                      {ty.label}
+                      {typeLabel(t, ty)}
                     </Badge>
                   ))}
                 </div>

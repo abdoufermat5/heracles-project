@@ -48,6 +48,7 @@ import {
   valuesFromDetail,
   type FormValues,
 } from '@/lib/objects'
+import { typeLabel } from '@/lib/labels'
 import { useScope } from '@/lib/scope'
 import { makeResolver } from '@/lib/validation'
 import { useObjectLdif, useSecondFactors } from './api'
@@ -259,7 +260,9 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
   const canEdit = isCreate || objectRights.includes('w') || objectRights.includes('m')
   const canDelete = !isCreate && objectRights.includes('d')
 
-  const title = isCreate ? t('editor.newTitle', { type: desc.label }) : nameValue(desc, detail)
+  const title = isCreate
+    ? t('editor.newTitle', { type: typeLabel(t, desc) })
+    : nameValue(desc, detail)
 
   // Find photo if available
   const photo = useMemo(() => {
@@ -370,7 +373,7 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
             tabs: buildCreateTabs(desc, values, active),
           })
           showTriggerOutput(res)
-          toast.success(t('editor.created', { type: desc.label }))
+          toast.success(t('editor.created', { type: typeLabel(t, desc) }))
           baseline.current = { values, active }
           bypassGuard.current = true
           form.reset(values)

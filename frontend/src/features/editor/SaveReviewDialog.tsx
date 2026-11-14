@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { FieldDiff } from '@/lib/objects'
+import { attributeLabel } from '@/lib/labels'
 
 function formatVal(v: unknown, empty: string): string {
   if (v === null || v === undefined || v === '') return empty
@@ -53,7 +54,7 @@ export function SaveReviewDialog({ open, target, diffs, busy = false, onConfirm,
             return (
               <li key={`${d.tab}.${d.attr}`} className="space-y-1.5 px-3 py-2.5">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-body font-medium">{d.attrLabel}</span>
+                  <span className="text-body font-medium">{attributeLabel(t, d.attr, d.attrLabel)}</span>
                   <span className="font-mono text-caption text-muted-foreground">{d.attr}</span>
                 </div>
                 <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2 font-mono text-xs">

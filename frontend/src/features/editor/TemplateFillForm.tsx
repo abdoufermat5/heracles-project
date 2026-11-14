@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ErrorState } from '@/components/ErrorState'
+import { typeLabel } from '@/lib/labels'
 import { allAttributes, defaultValue, splitFieldKey, type FormValues } from '@/lib/objects'
 import { useScope } from '@/lib/scope'
 import { makeResolver } from '@/lib/validation'
@@ -126,7 +127,7 @@ function FillInner({
           template: templateDn,
           tabs: templateCreateTabs(values),
         })
-        toast.success(t('templates.created_object', { type: desc.label }))
+        toast.success(t('templates.created_object', { type: typeLabel(t, desc) }))
         void navigate({ to: '/types/$type/$dn', params: { type, dn: res.dn } })
       } catch (e) {
         if (isApiError(e) && e.code === 'validation') {
@@ -157,13 +158,13 @@ function FillInner({
           className="inline-flex items-center gap-1 text-body text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft className="size-3.5" aria-hidden />
-          <span>{t('editor.backToList', { type: desc.label })}</span>
+          <span>{t('editor.backToList', { type: typeLabel(t, desc) })}</span>
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">
-                {t('editor.newTitle', { type: desc.label })}
+                {t('editor.newTitle', { type: typeLabel(t, desc) })}
               </h1>
               <Badge variant="neutral">{templateName}</Badge>
             </div>
@@ -178,7 +179,7 @@ function FillInner({
             </Button>
             <Button type="submit" size="sm" disabled={form.formState.isSubmitting || !base}>
               <Save aria-hidden />
-              {t('templates.createFrom', { type: desc.label })}
+              {t('templates.createFrom', { type: typeLabel(t, desc) })}
             </Button>
           </div>
         </div>

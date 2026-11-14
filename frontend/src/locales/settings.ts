@@ -149,7 +149,7 @@ export const settingsEn = {
         hasWarningsHelp: 'Some non-critical issues were found that may need your attention.',
         hasErrors: 'Action required',
         hasErrorsHelp: 'Critical directory inconsistencies or permission issues require remediation.',
-        total: 'Total checks',
+        total: 'Total checks: {{count}}',
         passed: 'Passed',
         warnings: 'Warnings',
         errors: 'Errors',
@@ -185,6 +185,80 @@ export const settingsEn = {
         duplicate_ids: 'Report only. Manually reassign duplicate numeric IDs on the conflicting entries to prevent Unix permission collisions.',
         plugin_data: 'Report only. Enable the plugin again, or clean up the entries.',
         transport: 'Report only. Use an ldaps:// URI, or ldap:// with StartTLS, in the directory configuration.',
+      },
+      result: {
+        root_object: {
+          missing: 'The base entry does not exist ({{dn}}).',
+          unmarked: 'The base entry is not marked as a department ({{dn}}).',
+          ok: 'The base entry is correctly set up.',
+          failed: 'The check failed: {{error}}.',
+        },
+        bind_write: {
+          missing: 'The base entry does not exist ({{dn}}).',
+          unwritable: 'The directory account cannot write to the base entry ({{dn}}).',
+          ok: 'The directory account can write.',
+          failed: 'The check failed: {{error}}.',
+        },
+        transport: {
+          plaintext:
+            'The connection uses ldap:// without StartTLS ({{uris}}): the bind password and every password sent through the console travel unencrypted.',
+          ok: 'The directory connection is encrypted.',
+          failed: 'The check failed: {{error}}.',
+        },
+        hidden_users: {
+          found: '{{count}} account(s) lack the person classes and are not listed as users.',
+          ok: 'Every account is visible.',
+          failed: 'The check failed: {{error}}.',
+        },
+        super_admin: {
+          ok: '{{count}} assignments grant full rights.',
+          ok_one: '{{count}} assignment grants full rights.',
+          ok_other: '{{count}} assignments grant full rights.',
+          bootstrap_only:
+            'Only the bootstrap administrators from the configuration have full rights.',
+          missing: 'Nobody has full rights on the directory.',
+          failed: 'The check failed: {{error}}.',
+        },
+        default_roles: {
+          missing: 'Missing default roles: {{roles}}.',
+          ok: 'The default roles exist.',
+          failed: 'The check failed: {{error}}.',
+        },
+        users_tree: {
+          ok: 'Every user is in the {{rdn}} tree.',
+          misplaced: '{{count}} user(s) are outside the {{rdn}} tree.',
+          failed: 'The check failed: {{error}}.',
+        },
+        groups_tree: {
+          ok: 'Every group is in the {{rdn}} tree.',
+          misplaced: '{{count}} group(s) are outside the {{rdn}} tree.',
+          failed: 'The check failed: {{error}}.',
+        },
+        posix_groups_tree: {
+          ok: 'Every POSIX group is in the {{rdn}} tree.',
+          misplaced: '{{count}} POSIX group(s) are outside the {{rdn}} tree.',
+          failed: 'The check failed: {{error}}.',
+        },
+        departments: {
+          unmarked:
+            '{{count}} organizational unit(s) are not marked as departments.',
+          ok: 'Every department is visible.',
+          failed: 'The check failed: {{error}}.',
+        },
+        duplicate_ids: {
+          duplicates: 'Duplicated identifiers (uidNumber: {{uids}}; gidNumber: {{gids}}).',
+          ok: 'No duplicated numeric identifier.',
+          failed: 'The check failed: {{error}}.',
+        },
+        plugin_data: {
+          found: 'Entries use the schema of disabled plugins ({{plugins}}; {{count}} entries), which hides them in the console.',
+          found_one:
+            'An entry uses the schema of a disabled plugin ({{plugins}}), which hides it in the console.',
+          found_other:
+            'Entries use the schema of disabled plugins ({{plugins}}; {{count}} entries), which hides them in the console.',
+          ok: 'No data belongs to a disabled plugin.',
+          failed: 'The check failed: {{error}}.',
+        },
       },
     },
     tasks: {

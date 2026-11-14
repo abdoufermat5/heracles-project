@@ -79,14 +79,28 @@ function RunStatusBadge({ status }: { status: string }) {
   return <Badge variant={variant}>{label}</Badge>
 }
 
+/** Why a runner did nothing: the server sentence, translated by its stable id. */
+function useSkipText() {
+  const { t } = useTranslation()
+  return (reason: string | null | undefined, key?: string | null): string => {
+    if (!reason) return ''
+    return key ? t(`tasks.skipReasons.${key}`, { defaultValue: reason }) : reason
+  }
+}
+
 function LastReport({ report }: { report: TaskReport | null | undefined }) {
   const { t, i18n } = useTranslation()
+  const skipText = useSkipText()
   if (!report) return <span className="text-muted-foreground">{t('tasks.noReport')}</span>
   return (
     <div className="space-y-0.5" title={report.errors.join('\n') || undefined}>
       <RunStatusBadge status={report.status} />
       <p className="text-caption text-muted-foreground">
-        {report.summary} · {formatDateTime(report.time, i18n.language)}
+        {report.status === 'skipped' && report.reason
+          ? skipText(report.reason, report.reason_key)
+          : report.summary}{' '}
+        ·{' '}
+        {formatDateTime(report.time, i18n.language)}
       </p>
     </div>
   )
@@ -130,6 +144,7 @@ function NewTaskButton({ kinds }: { kinds: { name: string; label: string }[] }) 
 
 function RecentRuns({ history }: { history: boolean }) {
   const { t, i18n } = useTranslation()
+  const skipText = useSkipText()
   const runs = useTaskRuns()
   const list: TaskRun[] = runs.data?.runs ?? []
   return (
@@ -174,9 +189,19 @@ function RecentRuns({ history }: { history: boolean }) {
                     <RunStatusBadge status={r.status} />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {r.summary}
-                    {r.errors.length > 0 && (
-                      <span className="block text-caption text-destructive">{r.errors[0]}</span>
+                    {r.status === 'skipped' ? (
+                      // A skip is not a failure: show why the runner did nothing, never an
+                      // error line (older rows may still carry one).
+                      <span className="block text-caption">
+                        {skipText(r.reason, r.reason_key) || r.summary}
+                      </span>
+                    ) : (
+                      <>
+                        {r.summary}
+                        {r.errors.length > 0 && (
+                          <span className="block text-caption text-destructive">{r.errors[0]}</span>
+                        )}
+                      </>
                     )}
                   </TableCell>
                 </TableRow>

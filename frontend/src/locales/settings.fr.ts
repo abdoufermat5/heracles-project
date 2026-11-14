@@ -147,7 +147,7 @@ export const settingsFr: typeof settingsEn = {
         hasWarningsHelp: 'Des problèmes non critiques ont été détectés et méritent votre attention.',
         hasErrors: 'Intervention requise',
         hasErrorsHelp: 'Des incohérences critiques ou des problèmes de droits nécessitent une correction immédiate.',
-        total: 'Total vérifications',
+        total: 'Total vérifications : {{count}}',
         passed: 'Réussies',
         warnings: 'Avertissements',
         errors: 'Erreurs',
@@ -183,6 +183,83 @@ export const settingsFr: typeof settingsEn = {
         duplicate_ids: 'Rapport seul. Réattribuez manuellement des identifiants uniques aux entrées en conflit.',
         plugin_data: 'Rapport seul. Réactivez le module ou nettoyez les entrées.',
         transport: 'Rapport seul. Utilisez une URI ldaps://, ou ldap:// avec StartTLS, dans la configuration de l\'annuaire.',
+      },
+      result: {
+        root_object: {
+          missing: 'L\'entrée racine n\'existe pas ({{dn}}).',
+          unmarked: 'L\'entrée racine n\'est pas marquée comme département ({{dn}}).',
+          ok: 'L\'entrée racine est correctement configurée.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        bind_write: {
+          missing: 'L\'entrée racine n\'existe pas ({{dn}}).',
+          unwritable: 'Le compte d\'annuaire ne peut pas écrire dans l\'entrée racine ({{dn}}).',
+          ok: 'Le compte d\'annuaire peut écrire.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        transport: {
+          plaintext:
+            'La connexion utilise ldap:// sans StartTLS ({{uris}}) : le mot de passe de connexion et ceux envoyés depuis la console circulent en clair.',
+          ok: 'La connexion à l\'annuaire est chiffrée.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        hidden_users: {
+          found:
+            '{{count}} compte(s) n\'ont pas les classes personne et ne figurent pas parmi les utilisateurs.',
+          ok: 'Tous les comptes sont visibles.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        super_admin: {
+          ok: '{{count}} affectations accordent tous les droits.',
+          ok_one: '{{count}} affectation accorde tous les droits.',
+          ok_other: '{{count}} affectations accordent tous les droits.',
+          bootstrap_only:
+            'Seuls les administrateurs d\'amorçage de la configuration disposent de tous les droits.',
+          missing: 'Personne ne dispose de tous les droits sur l\'annuaire.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        default_roles: {
+          missing: 'Rôles par défaut manquants : {{roles}}.',
+          ok: 'Les rôles par défaut existent.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        users_tree: {
+          ok: 'Tous les utilisateurs sont dans l\'arborescence {{rdn}}.',
+          misplaced: '{{count}} utilisateur(s) sont hors de l\'arborescence {{rdn}}.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        groups_tree: {
+          ok: 'Tous les groupes sont dans l\'arborescence {{rdn}}.',
+          misplaced: '{{count}} groupe(s) sont hors de l\'arborescence {{rdn}}.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        posix_groups_tree: {
+          ok: 'Tous les groupes POSIX sont dans l\'arborescence {{rdn}}.',
+          misplaced: '{{count}} groupe(s) POSIX sont hors de l\'arborescence {{rdn}}.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        departments: {
+          unmarked:
+            '{{count}} unité(s) organisationnelle(s) ne sont pas marquées comme départements.',
+          ok: 'Tous les départements sont visibles.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        duplicate_ids: {
+          duplicates:
+            'Identifiants en double (uidNumber : {{uids}} ; gidNumber : {{gids}}).',
+          ok: 'Aucun identifiant numérique en double.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        plugin_data: {
+          found:
+            'Des entrées utilisent le schéma de plugins désactivés ({{plugins}} ; {{count}} entrées), ce qui les masque dans la console.',
+          found_one:
+            'Une entrée utilise le schéma d\'un plugin désactivé ({{plugins}}), ce qui la masque dans la console.',
+          found_other:
+            'Des entrées utilisent le schéma de plugins désactivés ({{plugins}} ; {{count}} entrées), ce qui les masque dans la console.',
+          ok: 'Aucune donnée n\'appartient à un plugin désactivé.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
       },
     },
     tasks: {

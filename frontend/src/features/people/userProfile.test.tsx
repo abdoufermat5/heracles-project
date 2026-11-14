@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { db } from '@/mocks/db'
+import { BASE_DN, db } from '@/mocks/db'
+import { server } from '@/mocks/server'
 import { must, renderApp, signIn } from '@/test/utils'
 
 describe('User profile page', () => {
@@ -108,5 +109,23 @@ describe('User profile page', () => {
     expect(confirmBtn).not.toBeDisabled()
 
     await userEvent.click(within(alert).getByRole('button', { name: 'Cancel' }))
+  })
+})
+
+describe('missing object', () => {
+  it('issues no reference, snapshot or second-factor request', async () => {
+    signIn()
+    const seen: string[] = []
+    const listener = ({ request }: { request: Request }) => {
+      const path = new URL(request.url).pathname
+      if (/\/(references|snapshots|second-factors)$/.test(path)) seen.push(path)
+    }
+    server.events.on('request:start', listener)
+
+    renderApp(`/types/user/${encodeURIComponent(`uid=ghost,ou=people,${BASE_DN}`)}`)
+    expect(await screen.findByText('Not found')).toBeInTheDocument()
+
+    expect(seen).toEqual([])
+    server.events.removeListener('request:start', listener)
   })
 })

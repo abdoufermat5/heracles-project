@@ -2,6 +2,7 @@ import { peopleEn } from './people'
 import { accessEn } from './access'
 import { settingsEn } from './settings'
 import { objectsEn } from './objects'
+import { labelsEn } from './labels'
 import { sidebarEn } from './sidebar'
 import { shellEn } from './shell'
 import { resilienceEn } from './resilience'
@@ -34,6 +35,7 @@ const en = {
   nav: { main: 'Main navigation', dashboard: 'Dashboard', people: 'People', organization: 'Organization' },
   // --- P3 objects ---
   ...objectsEn,
+  ...labelsEn,
   ...peopleEn,
   ...accessEn,
   ...settingsEn,

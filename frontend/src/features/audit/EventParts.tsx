@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { useTypes } from '@/api/hooks'
 import { Badge } from '@/components/ui/badge'
+import { typeLabel as translatedTypeLabel } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 import { actionTone, formatAbsolute, formatRelative, parseAttribute } from './format'
 import type { AuditEvent } from './types'
@@ -59,10 +60,15 @@ export function ActorChip({ actor }: { actor: AuditEvent['actor'] }) {
 
 /** The object concerned: label, DN secondary and a link when it still can be opened. */
 export function ObjectCell({ event }: { event: AuditEvent }) {
+  const { t } = useTranslation()
   const { data: types } = useTypes()
   const { object } = event
   const known = types?.some((x) => x.name === object.type) ?? false
-  const typeLabel = types?.find((x) => x.name === object.type)?.label ?? object.type
+  const found = types?.find((x) => x.name === object.type)
+  // plugin and health-check entries have no object type: they are named by audit id.
+  const typeLabel = found
+    ? translatedTypeLabel(t, found)
+    : t(`labels.auditTypes.${object.type}`, { defaultValue: object.type })
   const linkable = known && object.dn.includes('=') && event.action !== 'delete'
   return (
     <span className="block min-w-0">

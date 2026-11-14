@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { attributeLabel } from '@/lib/labels'
 import type { Scope } from '@/lib/scope'
 import { cn } from '@/lib/utils'
 import { DepartmentFilterChip } from './DepartmentFilterChip'
@@ -306,6 +307,7 @@ export function ListingToolbar({
               <DropdownMenuSeparator />
               {orderedColumns.map((col, idx) => {
                 const isChecked = columnVisibility[col.key] !== false
+                const label = attributeLabel(t, col.key, col.label)
                 return (
                   <div key={col.key} className="flex items-center">
                     <DropdownMenuCheckboxItem
@@ -314,7 +316,7 @@ export function ListingToolbar({
                       onCheckedChange={() => onToggleColumn(col.key)}
                       onSelect={(e) => e.preventDefault()}
                     >
-                      {col.label}
+                      {label}
                     </DropdownMenuCheckboxItem>
                     {onMoveColumn && (
                       <>
@@ -323,7 +325,7 @@ export function ListingToolbar({
                           disabled={idx === 0}
                           onClick={() => onMoveColumn(col.key, -1)}
                           aria-label={t('safety.moveColumn', {
-                            name: col.label,
+                            name: label,
                             direction: t('safety.moveUp'),
                           })}
                           className="rounded-sm p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
@@ -335,7 +337,7 @@ export function ListingToolbar({
                           disabled={idx === orderedColumns.length - 1}
                           onClick={() => onMoveColumn(col.key, 1)}
                           aria-label={t('safety.moveColumn', {
-                            name: col.label,
+                            name: label,
                             direction: t('safety.moveDown'),
                           })}
                           className="rounded-sm p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"

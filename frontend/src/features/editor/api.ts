@@ -239,12 +239,16 @@ export function useReferences(type: string, dn: string, enabled = true) {
   })
 }
 
-/** Second factors of a user; the query fails (403) when the caller may not see them. */
-export function useSecondFactors(dn: string | null) {
+/**
+ * Second factors of a user; the query fails (403) when the caller may not see them.
+ * `enabled` lets a page wait until its object query succeeded, so a missing object does
+ * not also fire this one.
+ */
+export function useSecondFactors(dn: string | null, enabled = true) {
   return useQuery({
     queryKey: objectKeys.secondFactors(dn ?? ''),
     queryFn: () => objectsApi.secondFactors(dn ?? ''),
-    enabled: dn !== null,
+    enabled: enabled && dn !== null,
     retry: false,
   })
 }
@@ -264,10 +268,11 @@ export function useSecondFactorMutations(dn: string) {
   }
 }
 
-export function useSnapshots(type: string, dn: string) {
+export function useSnapshots(type: string, dn: string, enabled = true) {
   return useQuery({
     queryKey: objectKeys.snapshots(type, dn),
     queryFn: () => objectsApi.snapshots(type, dn),
+    enabled,
   })
 }
 

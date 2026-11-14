@@ -21,7 +21,16 @@ const STRENGTH_KEYS = [
   'settingsUI.portal.strengthStrong',
 ] as const
 
-export function PasswordSection({ userDn, allowed = true }: { userDn: string; allowed?: boolean }) {
+export function PasswordSection({
+  userDn,
+  username,
+  allowed = true,
+}: {
+  userDn: string
+  /** Login of the account: the hidden login field password managers expect. */
+  username: string
+  allowed?: boolean
+}) {
   const { t } = useTranslation()
   const patch = usePatchObject('user', userDn)
   const [newPassword, setNewPassword] = useState('')
@@ -94,6 +103,17 @@ export function PasswordSection({ userDn, allowed = true }: { userDn: string; al
         }}
         className="max-w-lg space-y-4"
       >
+        {/* Password managers (and Chrome) expect a login field next to a password one. */}
+        <input
+          type="text"
+          name="username"
+          autoComplete="username"
+          value={username}
+          readOnly
+          tabIndex={-1}
+          className="hidden"
+          aria-hidden="true"
+        />
         {/* New password input */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">

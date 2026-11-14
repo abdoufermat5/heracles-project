@@ -60,3 +60,31 @@ describe('Create user wizard', () => {
     })
   })
 })
+
+describe('wizard accessibility', () => {
+  it('names the department combobox and submits the password step on Enter', async () => {
+    signIn()
+    const user = userEvent.setup()
+    renderApp('/types/user/new')
+    await screen.findByRole('heading', { name: 'New person', level: 1 })
+
+    await user.type(screen.getByLabelText(/First name/), 'Claire')
+    await user.type(screen.getByLabelText(/Last name/), 'Danvers')
+    await user.click(screen.getByRole('button', { name: 'Next step' }))
+
+    expect(await screen.findByRole('combobox', { name: /Department/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next step' }))
+
+    const generate = await screen.findByRole('button', { name: 'Generate strong password' })
+    const form = generate.closest('form') as HTMLFormElement
+    expect(form).not.toBeNull()
+    const login = form.querySelector('input[name="username"]') as HTMLInputElement
+    expect(login).toHaveValue('cdanvers')
+
+    const password = screen.getByPlaceholderText('Enter or generate an initial password')
+    await user.type(password, 'SuperSecret123!')
+    await user.type(password, '{Enter}')
+
+    expect(await screen.findByText('Account summary')).toBeInTheDocument()
+  })
+})

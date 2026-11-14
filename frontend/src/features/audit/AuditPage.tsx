@@ -13,6 +13,7 @@ import { PageLayout } from '@/components/patterns'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { typeLabel } from '@/lib/labels'
 import { rdnValue } from '@/lib/objects'
 import { auditApi } from './api'
 import { ActionBadge, ActorChip, AttributeDiff, ObjectCell, WhenCell } from './EventParts'
@@ -123,7 +124,7 @@ export function AuditPage({ object: initialObject = '', actor: initialActor = ''
 
   const typeOptions = (types.data ?? [])
     .filter((x) => x.name !== AUDIT_TYPE)
-    .map((x) => ({ value: x.name, label: x.label }))
+    .map((x) => ({ value: x.name, label: typeLabel(t, x) }))
 
   return (
     <PageLayout

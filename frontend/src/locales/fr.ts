@@ -3,6 +3,7 @@ import { accessFr } from './access.fr'
 import { settingsFr } from './settings.fr'
 import type { Translation } from './en'
 import { objectsFr } from './objects.fr'
+import { labelsFr } from './labels.fr'
 import { sidebarFr } from './sidebar.fr'
 import { shellFr } from './shell.fr'
 import { resilienceFr } from './resilience.fr'
@@ -35,6 +36,7 @@ const fr: Translation = {
   nav: { main: 'Navigation principale', dashboard: 'Tableau de bord', people: 'Personnes', organization: 'Organisation' },
   // --- P3 objects ---
   ...objectsFr,
+  ...labelsFr,
   ...peopleFr,
   ...accessFr,
   ...settingsFr,

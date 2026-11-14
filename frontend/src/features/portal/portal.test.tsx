@@ -123,3 +123,26 @@ describe('portal without access to the own entry', () => {
     expect(screen.queryByText(/@example\.com/)).not.toBeInTheDocument()
   })
 })
+
+describe('password form accessibility', () => {
+  it('submits on Enter and carries the hidden login field', async () => {
+    signIn('employee')
+    const user = userEvent.setup()
+    renderApp('/me')
+
+    const pwdHeading = await screen.findByRole('heading', { name: 'Password' })
+    const form = (pwdHeading.closest('section') as HTMLElement).querySelector('form')
+    expect(form).not.toBeNull()
+    const login = (form as HTMLFormElement).querySelector('input[name="username"]') as HTMLInputElement
+    expect(login).toHaveValue('employee')
+    expect(login).toHaveAttribute('autocomplete', 'username')
+
+    const newPwdInput = within(form as HTMLElement).getByLabelText('New password')
+    const confirmPwdInput = within(form as HTMLElement).getByLabelText('Confirm new password')
+    await user.type(newPwdInput, 'SuperSecret123!')
+    await user.type(confirmPwdInput, 'SuperSecret123!')
+    await user.type(confirmPwdInput, '{Enter}')
+
+    await waitFor(() => expect(newPwdInput).toHaveValue(''))
+  })
+})

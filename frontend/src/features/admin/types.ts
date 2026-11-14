@@ -11,6 +11,8 @@ export interface Capabilities {
   health: boolean
   plugins: boolean
   tasks: boolean
+  /** The import / export plugin is available (its rights endpoint need not be asked). */
+  io: boolean
 }
 
 // ── ACL ───────────────────────────────────────────────────────────────────
@@ -167,6 +169,10 @@ export interface HealthCheck {
   id: string
   status: CheckStatus
   message: string
+  /** Stable id of the message (`<check id>.<outcome>`), when the server sends one. */
+  message_key?: string
+  /** Values interpolated in the localised message (JSON scalars or lists of strings). */
+  message_params?: Record<string, string | number | string[]>
   dns: string[]
   fixable: boolean
   options: string[]
@@ -220,6 +226,10 @@ export interface TaskReport {
   status: 'ok' | 'error' | 'skipped' | string
   summary: string
   errors: string[]
+  /** Why the run was skipped (an English sentence from the server), otherwise null. */
+  reason?: string | null
+  /** Stable id of `reason` (`no_mailer`), for translation; null or absent when it ran. */
+  reason_key?: string | null
 }
 
 export interface TaskRun {
@@ -233,6 +243,10 @@ export interface TaskRun {
   counts: Record<string, number>
   errors: string[]
   summary: string
+  /** Why the run was skipped (an English sentence from the server), otherwise null. */
+  reason: string | null
+  /** Stable id of `reason` (`no_mailer`), for translation; null when it ran. */
+  reason_key?: string | null
 }
 
 export interface TaskCapabilities {

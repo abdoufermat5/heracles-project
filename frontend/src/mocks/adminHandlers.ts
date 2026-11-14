@@ -363,11 +363,22 @@ function initialAssignments(): Record<string, Assignment[]> {
 
 function initialChecks(): HealthCheck[] {
   return [
-    { id: 'root_object', status: 'ok', message: 'The base entry is correct.', dns: [], fixable: false, options: [] },
+    {
+      id: 'root_object',
+      status: 'ok',
+      message: 'The base entry is correct.',
+      message_key: 'root_object.ok',
+      message_params: {},
+      dns: [],
+      fixable: false,
+      options: [],
+    },
     {
       id: 'super_admin',
       status: 'error',
       message: 'No super administrator found.',
+      message_key: 'super_admin.missing',
+      message_params: {},
       dns: [],
       fixable: true,
       options: ['dn'],
@@ -376,6 +387,8 @@ function initialChecks(): HealthCheck[] {
       id: 'default_roles',
       status: 'warning',
       message: 'Missing default roles: editowninfos.',
+      message_key: 'default_roles.missing',
+      message_params: { count: 1, roles: ['editowninfos'] },
       dns: [`cn=editowninfos,${ROLES_DN}`],
       fixable: true,
       options: [],
@@ -384,6 +397,8 @@ function initialChecks(): HealthCheck[] {
       id: 'users_tree',
       status: 'warning',
       message: '2 users are outside the people tree.',
+      message_key: 'users_tree.misplaced',
+      message_params: { count: 2, noun: 'user', rdn: 'ou=people' },
       dns: [`uid=a,ou=misc,${BASE_DN}`, `uid=b,ou=misc,${BASE_DN}`],
       fixable: true,
       options: [],
@@ -392,6 +407,8 @@ function initialChecks(): HealthCheck[] {
       id: 'duplicate_ids',
       status: 'warning',
       message: 'Duplicated identifiers: uidNumber 1001.',
+      message_key: 'duplicate_ids.duplicates',
+      message_params: { uids: ['1001'], gids: [] },
       dns: [`uid=c,ou=people,${BASE_DN}`],
       fixable: false,
       options: [],
@@ -522,6 +539,7 @@ function capabilities(): Capabilities {
       health: false,
       plugins: false,
       tasks: false,
+      io: false,
     }
   if (user === 'viewer')
     return {
@@ -534,6 +552,7 @@ function capabilities(): Capabilities {
       health: true,
       plugins: true,
       tasks: false,
+      io: true,
     }
   return {
     is_admin: true,
@@ -545,6 +564,7 @@ function capabilities(): Capabilities {
     health: true,
     plugins: true,
     tasks: true,
+    io: true,
   }
 }
 
@@ -916,6 +936,20 @@ export const adminHandlers: HttpHandler[] = [
       HttpResponse.json({
         runs: [
           {
+            id: 3,
+            directory: 'main',
+            runner: 'lifecycle',
+            kind: 'lifecycle_task',
+            started: '2030-01-02T03:05:00+00:00',
+            finished: '2030-01-02T03:05:02+00:00',
+            status: 'error',
+            counts: {},
+            errors: ['smtp refused the connection'],
+            summary: '1 error(s)',
+            reason: null,
+            reason_key: null,
+          },
+          {
             id: 2,
             directory: 'main',
             runner: 'audit',
@@ -926,6 +960,8 @@ export const adminHandlers: HttpHandler[] = [
             counts: { events_purged: 5 },
             errors: [],
             summary: 'events_purged 5',
+            reason: null,
+            reason_key: null,
           },
           {
             id: 1,
@@ -936,8 +972,10 @@ export const adminHandlers: HttpHandler[] = [
             finished: '2030-01-02T03:04:00+00:00',
             status: 'skipped',
             counts: {},
-            errors: ['no mail server is configured: the runner was skipped'],
-            summary: '1 error(s)',
+            errors: [],
+            summary: 'nothing to do',
+            reason: 'no mail server is configured: the runner was skipped',
+            reason_key: 'no_mailer',
           },
         ],
       }),

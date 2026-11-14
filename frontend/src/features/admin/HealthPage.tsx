@@ -68,8 +68,16 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
     (needsUser ? adminDn !== '' : selected.length > 0 || check.dns.length === 0)
   const showDns = check.dns.length > 0 && !needsUser
 
-  const explanation =
-    t(`settingsUI.health.checkExpl.${check.id}`) || check.message
+  const explanation = t(`settingsUI.health.checkExpl.${check.id}`) || check.message
+  // The server keys the result (`<check id>.<outcome>`) and sends its English sentence as
+  // the fallback: a missing key, or an older server, still shows readable text.
+  const message = check.message_key
+    ? t(`settingsUI.health.result.${check.message_key}`, {
+        ...check.message_params,
+        joinArrays: ', ',
+        defaultValue: check.message,
+      })
+    : check.message
   const howToFix = t(`settingsUI.health.checkFix.${check.id}`)
 
   const apply = async () => {
@@ -116,8 +124,8 @@ function CheckCard({ check, canFix }: { check: HealthCheck; canFix: boolean }) {
 
           {/* Plain explanation */}
           <p className="text-body text-foreground/90">{explanation}</p>
-          {check.message && check.message !== explanation && (
-            <p className="text-caption text-muted-foreground">{check.message}</p>
+          {message && message !== explanation && (
+            <p className="text-caption text-muted-foreground">{message}</p>
           )}
         </div>
 
@@ -294,7 +302,7 @@ export function HealthPage() {
                 aria-live="polite"
               >
                 <Badge variant="neutral">
-                  {t('settingsUI.health.summary.total')}: {data.length}
+                  {t('settingsUI.health.summary.total', { count: data.length })}
                 </Badge>
                 <Badge variant="success">
                   {t('setup.countOk', { count: counts.ok })}

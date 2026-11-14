@@ -37,6 +37,7 @@ import { TemplateFillForm } from '@/features/editor/TemplateFillForm'
 import { TemplatePicker } from '@/features/editor/TemplatePicker'
 import { showTriggerOutput } from '@/features/editor/triggerOutput'
 import { generatePassword, passwordStrength } from '@/lib/password'
+import { typeLabelPlural } from '@/lib/labels'
 import { useScope } from '@/lib/scope'
 import { nameValue } from '@/lib/objects'
 import { isApiError } from '@/api/client'
@@ -256,7 +257,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
       <div>
         <nav aria-label="Breadcrumbs" className="flex items-center gap-1.5 text-caption text-muted-foreground pb-2">
           <Link to="/types/$type" params={{ type: 'user' }} className="hover:text-foreground">
-            Users
+            {typeLabelPlural(t, { name: 'user', label: 'User', label_plural: 'Users' })}
           </Link>
           <ChevronRight className="size-3.5" aria-hidden />
           <span className="text-foreground font-medium">{t('peopleUI.wizard.breadcrumb')}</span>
@@ -441,11 +442,11 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
           <div className="space-y-6">
             {/* Department selection */}
             <div className="space-y-1.5">
-              <Label className="text-small font-medium">
+              <Label htmlFor="wiz-department" className="text-small font-medium">
                 {t('peopleUI.wizard.step2.department')} <span className="text-destructive">*</span>
               </Label>
               <Select value={effectiveDept} onValueChange={setDepartment}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="wiz-department" className="w-full">
                   <SelectValue placeholder={t('peopleUI.text.chooseDepartment')} />
                 </SelectTrigger>
                 <SelectContent>
@@ -524,7 +525,26 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
       {/* Step 3: Password & Credentials */}
       {step === 3 && (
         <SectionCard title={t('peopleUI.wizard.step3.title')}>
-          <div className="space-y-5">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (canProceedStep3) setStep(4)
+            }}
+            className="space-y-5"
+          >
+            {/* Password managers (and Chrome) expect a login field next to a password one. */}
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              value={uid}
+              readOnly
+              tabIndex={-1}
+              className="hidden"
+              aria-hidden="true"
+            />
+            {/* The wizard's own Next button lives outside the form: this one makes Enter submit. */}
+            <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="wiz-pw" className="text-small font-medium">
@@ -638,7 +658,7 @@ export function CreateUserWizard({ copyFrom = null }: CreateUserWizardProps) {
               />
             </div>
             )}
-          </div>
+          </form>
         </SectionCard>
       )}
 

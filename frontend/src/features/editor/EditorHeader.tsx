@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { TypeDescriptor } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
+import { typeLabel } from '@/lib/labels'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -129,7 +130,7 @@ export function EditorHeader({
         className="inline-flex items-center gap-1 text-body text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="size-3.5" aria-hidden />
-        <span>{t('editor.backToList', { type: desc.label })}</span>
+        <span>{t('editor.backToList', { type: typeLabel(t, desc) })}</span>
       </Link>
 
       {/* Main header row */}
@@ -149,7 +150,7 @@ export function EditorHeader({
                 {title}
               </h1>
               <Badge variant="neutral" className="h-5 rounded-sm px-1.5 text-caption">
-                {desc.label}
+                {typeLabel(t, desc)}
               </Badge>
               {editing && !isCreate && (
                 <Badge variant="outline" className="h-5 rounded-sm px-1.5 text-caption">

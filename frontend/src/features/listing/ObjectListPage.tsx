@@ -31,6 +31,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { supportsTemplates } from '@/features/editor/api'
 import { AddToGroupDialog } from '@/features/people/AddToGroupDialog'
 import { getUserStatus } from '@/features/people/utils'
+import { typeLabel, typeLabelPlural } from '@/lib/labels'
 import { useScope } from '@/lib/scope'
 import { BulkEditDialog } from './BulkEditDialog'
 import { CopyMoveDialog, type CopyMoveMode } from './CopyMoveDialog'
@@ -257,7 +258,11 @@ export function ObjectListPage({
   const rawRows: ObjectListItem[] = useMemo(() => list.data?.items ?? [], [list.data])
   const total = list.data?.total ?? null
   const summary = types.data?.find((x) => x.name === type)
-  const label = summary?.label_plural ?? desc.data?.label ?? type
+  const label = summary
+    ? typeLabelPlural(t, summary)
+    : desc.data
+      ? typeLabelPlural(t, desc.data)
+      : type
 
   // Filter rows by status / employee type if active
   const rows = useMemo(() => {
@@ -434,7 +439,11 @@ export function ObjectListPage({
       )}
 
       {showTemplates ? (
-        <TemplatesView type={type} typeLabel={desc.data?.label ?? type} canCreate={canCreate} />
+        <TemplatesView
+          type={type}
+          typeLabel={desc.data ? typeLabel(t, desc.data) : type}
+          canCreate={canCreate}
+        />
       ) : (
         <div className="flex items-start gap-4">
           <div className="min-w-0 flex-1">
@@ -479,7 +488,7 @@ export function ObjectListPage({
             ) : rows.length === 0 ? (
               <ListingEmptyState
                 type={type}
-                typeLabel={desc.data?.label}
+                typeLabel={desc.data ? typeLabel(t, desc.data) : undefined}
                 isFiltered={hasFilterActive}
                 canCreate={summary?.can_create}
                 filterError={filterError}

@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
+import i18n from '@/i18n'
 import { db } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { must, renderApp, signIn } from '@/test/utils'
@@ -232,3 +233,35 @@ describe('listing page', () => {
   })
 })
 
+
+describe('server labels in French', () => {
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('translates the heading, the navigation entries and the create button', async () => {
+    signIn()
+    await i18n.changeLanguage('fr')
+    renderApp('/types/user')
+
+    expect(await screen.findByRole('heading', { name: 'Utilisateurs' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /Nouveau : personne/ })).toBeInTheDocument()
+
+    const nav = await screen.findByRole('navigation', { name: 'Navigation principale' })
+    expect(within(nav).getByRole('link', { name: /Utilisateurs/ })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: /Groupes/ })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: /Départements/ })).toBeInTheDocument()
+  })
+
+  it('translates the column headers and keeps the range and plural wording', async () => {
+    signIn()
+    await i18n.changeLanguage('fr')
+    renderApp('/types/group')
+
+    await screen.findByText(/^\d+–\d+ sur \d+$/)
+    expect(screen.getByRole('columnheader', { name: /Nom/ })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /Description/ })).toBeInTheDocument()
+    // The en dash range and the count plural rule are untouched by the label layer.
+    expect(screen.getByText(/^\d+–\d+ sur \d+$/)).toBeInTheDocument()
+  })
+})

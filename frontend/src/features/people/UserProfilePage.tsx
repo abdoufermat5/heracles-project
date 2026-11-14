@@ -78,6 +78,7 @@ import {
   type FieldDiff,
   type FormValues,
 } from '@/lib/objects'
+import { typeLabelPlural } from '@/lib/labels'
 import { useTechnicalDetails } from '@/lib/preferences'
 import { makeResolver } from '@/lib/validation'
 import { AddToGroupDialog } from './AddToGroupDialog'
@@ -101,8 +102,11 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
   const del = useDeleteObjects('user')
   const accountLock = useAccountLock('user')
   const isLockedQuery = useObjectAccountLocked('user', dn)
-  const referencesQuery = useReferences('user', dn)
-  const secondFactorsQuery = useSecondFactors(dn)
+  // The side panels only exist once the object itself was read: a missing object must not
+  // also fire the reference, snapshot and second-factor queries (four 404s for one page).
+  const objectLoaded = obj.data !== undefined
+  const referencesQuery = useReferences('user', dn, objectLoaded)
+  const secondFactorsQuery = useSecondFactors(dn, objectLoaded)
   const secondFactorMethods: string[] = []
   if (secondFactorsQuery.data?.totp)
     secondFactorMethods.push(t('peopleUI.userProfile.securitySummary.authenticatorApp'))
@@ -112,7 +116,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
         count: secondFactorsQuery.data.security_keys.length,
       }),
     )
-  const snapshotsQuery = useSnapshots('user', dn)
+  const snapshotsQuery = useSnapshots('user', dn, objectLoaded)
   const canCopy = types.data?.find((x) => x.name === 'user')?.can_create ?? false
   // Modals state
   const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'access' | 'security' | 'advanced'>('overview')
@@ -419,7 +423,7 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
         breadcrumbs={
           <nav aria-label="Breadcrumbs" className="flex items-center gap-1.5 text-caption text-muted-foreground">
             <Link to="/types/$type" params={{ type: 'user' }} className="hover:text-foreground">
-              Users
+              {typeLabelPlural(t, { name: 'user', label: 'User', label_plural: 'Users' })}
             </Link>
             <ChevronRight className="size-3.5" aria-hidden />
             <span className="text-foreground font-medium truncate">{cnVal}</span>

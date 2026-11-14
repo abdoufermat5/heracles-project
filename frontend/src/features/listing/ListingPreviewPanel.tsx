@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import type { ObjectListItem, TypeDescriptor, TypeSummary } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { attributeLabel } from '@/lib/labels'
 import { formatCellValue, isMonospaceKey } from './types'
 
 interface ListingPreviewPanelProps {
@@ -122,7 +123,7 @@ export function ListingPreviewPanel({
                 const mono = isMonospaceKey(col.key)
                 return (
                   <div key={col.key}>
-                    <dt className="label-caps">{col.label}</dt>
+                    <dt className="label-caps">{attributeLabel(t, col.key, col.label)}</dt>
                     <dd
                       className={`mt-1 truncate text-body text-foreground ${mono ? 'font-mono' : ''}`}
                       title={val}

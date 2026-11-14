@@ -57,10 +57,25 @@ export function GetStartedCard() {
   const { data: me } = useMe()
   const { data: caps } = useCapabilities()
   if (!me || !me.is_admin || caps?.console === false) return null
-  return <Checklist uid={me.uid} healthAllowed={caps?.health === true} />
+  return (
+    <Checklist
+      uid={me.uid}
+      healthAllowed={caps?.health === true}
+      ioAllowed={caps?.io !== false}
+    />
+  )
 }
 
-function Checklist({ uid, healthAllowed }: { uid: string; healthAllowed: boolean }) {
+function Checklist({
+  uid,
+  healthAllowed,
+  ioAllowed,
+}: {
+  uid: string
+  healthAllowed: boolean
+  /** Hidden when the server says the import / export plugin is not available. */
+  ioAllowed: boolean
+}) {
   const { t } = useTranslation()
   const [stored, setStored] = useState(() => load(uid))
   const totp = useQuery({ queryKey: qk.totp, queryFn: api.totpStatus, retry: false, enabled: !stored.dismissed })
@@ -94,8 +109,8 @@ function Checklist({ uid, healthAllowed }: { uid: string; healthAllowed: boolean
     },
     { id: 'access', to: '/admin/access', detected: false },
     { id: 'plugins', to: '/admin/plugins', detected: false },
-    { id: 'import', to: '/io', detected: false },
   ]
+  if (ioAllowed) items.push({ id: 'import', to: '/io', detected: false })
   const isDone = (i: Item) => (i.detected ? i.auto === true : false) || stored.done.includes(i.id)
   const doneCount = items.filter(isDone).length
   const toggle = (id: string) =>

@@ -23,6 +23,7 @@ import { useIoAccess } from '@/features/io/hooks'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { TypeIcon } from '@/lib/icons'
+import { typeLabelPlural } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 
 const linkBaseClass =
@@ -236,7 +237,7 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
       key: `type:${ty.name}`,
       to: '/types/$type',
       params: { type: ty.name },
-      label: ty.label_plural,
+      label: typeLabelPlural(t, ty),
       icon: <TypeIcon name={ty.icon} className="size-4 shrink-0" />,
       type: ty.name,
     }

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import { typeLabel } from '@/lib/labels'
 import { splitFieldKey } from '@/lib/objects'
 import { useScope } from '@/lib/scope'
 import { useTemplate, useTemplateMutations, type TemplateDetail } from './api'
@@ -128,7 +129,7 @@ function TemplateForm({ desc, template }: { desc: TypeDescriptor; template: Temp
           className="inline-flex items-center gap-1 text-body text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft className="size-3.5" aria-hidden />
-          <span>{t('templates.backToList', { type: desc.label })}</span>
+          <span>{t('templates.backToList', { type: typeLabel(t, desc) })}</span>
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
@@ -136,7 +137,7 @@ function TemplateForm({ desc, template }: { desc: TypeDescriptor; template: Temp
               <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">
                 {template
                   ? t('templates.editTitle', { name: template.name })
-                  : t('templates.newTitle', { type: desc.label })}
+                  : t('templates.newTitle', { type: typeLabel(t, desc) })}
               </h1>
               <Badge variant="neutral">{t('templates.badge')}</Badge>
             </div>

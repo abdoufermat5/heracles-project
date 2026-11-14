@@ -67,6 +67,7 @@ import {
   type FieldDiff,
   type FormValues,
 } from '@/lib/objects'
+import { typeLabelPlural } from '@/lib/labels'
 import { useTechnicalDetails } from '@/lib/preferences'
 import { initials } from '@/lib/utils'
 import { makeResolver } from '@/lib/validation'
@@ -325,7 +326,7 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
         breadcrumbs={
           <nav aria-label="Breadcrumbs" className="flex items-center gap-1.5 text-caption text-muted-foreground">
             <Link to="/types/$type" params={{ type: 'group' }} className="hover:text-foreground">
-              Groups
+              {typeLabelPlural(t, { name: 'group', label: 'Group', label_plural: 'Groups' })}
             </Link>
             <ChevronRight className="size-3.5" aria-hidden />
             <span className="text-foreground font-medium truncate">{groupName}</span>

@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { ErrorState } from '@/components/ErrorState'
+import { typeLabel } from '@/lib/labels'
 import { useReferences } from './api'
 
 /** Read-only list of the objects that point to this one. */
@@ -21,6 +22,10 @@ export function ReferencesPanel({ type, dn }: { type: string; dn: string }) {
   const { t } = useTranslation()
   const refs = useReferences(type, dn)
   const types = useTypes()
+  const labelOfType = (name: string) => {
+    const found = types.data?.find((x) => x.name === name)
+    return found ? typeLabel(t, found) : name
+  }
 
   return (
     <section aria-labelledby="refs-title" className="rounded-md border bg-card">
@@ -73,7 +78,7 @@ export function ReferencesPanel({ type, dn }: { type: string; dn: string }) {
                 </TableCell>
                 <TableCell>
                   <Badge variant="neutral">
-                    {types.data?.find((x) => x.name === r.type)?.label ?? r.type}
+                    {labelOfType(r.type)}
                   </Badge>
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">

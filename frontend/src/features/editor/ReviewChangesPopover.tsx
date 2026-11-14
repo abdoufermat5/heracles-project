@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { attributeLabel } from '@/lib/labels'
 import type { FieldDiff } from '@/lib/objects'
 
 interface Props {
@@ -45,7 +46,7 @@ export function ReviewChangesPopover({ diffs }: Props) {
                 <li key={`${d.tab}.${d.attr}`} className="space-y-2 px-4 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-body font-medium text-foreground">
-                      {d.attrLabel}
+                      {attributeLabel(t, d.attr, d.attrLabel)}
                     </span>
                     <span className="font-mono text-caption text-muted-foreground">
                       {d.tabLabel}
