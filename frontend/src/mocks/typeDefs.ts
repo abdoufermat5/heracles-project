@@ -15,7 +15,68 @@ const languages = [
   { value: 'es', label: 'Español' },
 ]
 
-export const typeDescriptors: TypeDescriptor[] = [
+/**
+ * Stable label keys, mirroring `heracles.attributes.keys` in the backend: every
+ * segment is percent-escaped so the key keeps only ASCII letters, digits, `-`
+ * and `_`, and never contains a `.` or `:`. The mock descriptors below carry
+ * English wording only; `withTypeKeys` derives the keys the real API sends so
+ * the mock UI translates its labels like the live one.
+ */
+const SAFE = new Set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_')
+const encoder = new TextEncoder()
+
+/** Escape one key segment: ASCII letters, digits, `-` and `_` are kept. */
+const segment = (value: string): string =>
+  Array.from(encoder.encode(value), (b) => {
+    const ch = String.fromCharCode(b)
+    return SAFE.has(ch) ? ch : `%${b.toString(16).toUpperCase().padStart(2, '0')}`
+  }).join('')
+
+const helpKey = (key: string): string => `${key}/help`
+const tabKey = (type: string, tab: string): string => `type/${segment(type)}/tab/${segment(tab)}`
+const sectionKey = (type: string, tab: string, section: string): string =>
+  `${tabKey(type, tab)}/section/${segment(section)}`
+const attributeKey = (type: string, attribute: string): string =>
+  `type/${segment(type)}/attr/${segment(attribute)}`
+const itemKey = (key: string): string => `${key}/item`
+const fieldKey = (key: string, field: string): string => `${key}/field/${segment(field)}`
+const optionKey = (key: string, value: string): string => `${key}/option/${segment(value)}`
+
+/** Attach the label, help, option, item and field keys derived from `key`. */
+const withKeys = (attr: AttributeDescriptor, key: string): AttributeDescriptor => ({
+  ...attr,
+  label_key: key,
+  ...(attr.description ? { description_key: helpKey(key) } : {}),
+  ...(attr.options
+    ? { options: attr.options.map((o) => ({ ...o, label_key: optionKey(key, o.value) })) }
+    : {}),
+  ...(attr.item ? { item: withKeys(attr.item, itemKey(key)) } : {}),
+  ...(attr.fields ? { fields: attr.fields.map((f) => withKeys(f, fieldKey(key, f.name))) } : {}),
+})
+
+/** Attach the keys of a whole type descriptor, as the API describes it. */
+const withTypeKeys = (type: TypeDescriptor): TypeDescriptor => ({
+  ...type,
+  columns: type.columns.map((column) => ({
+    ...column,
+    label_key: attributeKey(type.name, column.key),
+  })),
+  tabs: type.tabs.map((tab) => {
+    const key = tabKey(type.name, tab.name)
+    return {
+      ...tab,
+      label_key: key,
+      ...(tab.description ? { description_key: helpKey(key) } : {}),
+      sections: tab.sections.map((section) => ({
+        ...section,
+        label_key: sectionKey(type.name, tab.name, section.name),
+        attributes: section.attributes.map((a) => withKeys(a, attributeKey(type.name, a.name))),
+      })),
+    }
+  }),
+})
+
+const rawTypeDescriptors: TypeDescriptor[] = [
   {
     name: 'user',
     label: 'User',
@@ -407,6 +468,8 @@ export const typeDescriptors: TypeDescriptor[] = [
     ],
   },
 ]
+
+export const typeDescriptors: TypeDescriptor[] = rawTypeDescriptors.map(withTypeKeys)
 
 export const typeSummaries: TypeSummary[] = [
   { name: 'user', label: 'User', label_plural: 'Users', icon: 'user', category: 'directory', can_create: true, nav: 'primary', nav_group: 'people', count_key: 'user' },
