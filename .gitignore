@@ -21,6 +21,7 @@ deploy/ldap/schema/*.ldif
 !deploy/ldap/schema/heracles.ldif
 # Standard schemas of the servers the dev stack runs (deploy/dev/): the plugins
 # write exactly these attributes, and a fresh clone must be able to start the stack.
+!deploy/ldap/schema/06-dnszone.ldif
 !deploy/ldap/schema/12-smb.ldif
 !deploy/ldap/schema/13-ftp.ldif
 !deploy/ldap/schema/14-dhcp.ldif

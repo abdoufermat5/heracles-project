@@ -7,14 +7,14 @@
   `2.25.147659383274657253636041013514546701909` (`.1.*` attribute types,
   `.2.*` objectClasses).
 * Standard schemas of the servers some plugins drive are bundled because the dev
-  stack runs those servers against this directory: `12-smb.ldif` (SMB accounts),
+  stack runs those servers against this directory: `06-dnszone.ldif` (DNS zones, read
+  by the DNS server of the dev and e2e stacks), `12-smb.ldif` (SMB accounts),
   `13-ftp.ldif` (FTP accounts) and `14-dhcp.ldif` (DHCP configuration); the
   plugins write exactly those attributes. They are copies of the schemas published by
   those servers and are not edited here.
-* Other third-party schemas needed by some plugins (`sudo`, `openssh-lpk`, `dnszone`,
-  `kerberos`, ...) come from those projects and are not distributed here
-  (git-ignored). Copy their `cn=config` LDIF files into this directory, or convert
-  `.schema` files with `make third-party-schema SCHEMAS="/path/sudo.schema ..."`.
+* Other third-party schemas needed by some plugins (`sudo`, `openssh-lpk`, `kerberos`,
+  ...) come from those projects and are not distributed here (git-ignored). Copy their
+  `cn=config` LDIF files into this directory, or convert `.schema` files with `make third-party-schema SCHEMAS="/path/sudo.schema ..."`.
   Prefix them with a number so they load before `heracles.ldif`.
   `../fetch-third-party.sh` fetches the sudo and SSH key schemas at pinned upstream commits
   (checked by SHA-256), as CI does.
