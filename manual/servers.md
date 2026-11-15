@@ -15,9 +15,10 @@ python-ldap integration tests, the backend end-to-end tests and the browser test
   added between releases.
 * The standard schemas `core`, `cosine`, `inetOrgPerson` and `nis` (`posixAccount`,
   `posixGroup`), and the schemas of the plugins you enable: the [plugins reference](plugins.md)
-  lists the object classes each one needs. Some (sudo, SSH public keys, DNS zones, Kerberos, ...)
-  come from their own projects and are not distributed with Heracles; a plugin whose classes are
-  missing stays off.
+  lists the object classes each one needs. Some (sudo, SSH public keys, Kerberos, ...) come from
+  their own projects and are not distributed with Heracles; a plugin whose classes are missing
+  stays off. The repository bundles the DNS zone, SMB, FTP and DHCP schemas for its test stacks
+  (`deploy/ldap/schema`).
 * A **service account** that can read the whole managed subtree and write where Heracles
   manages entries. Heracles applies its own access rules (roles and ACL assignments) on top;
   the server's access control only has to let the service account through.
