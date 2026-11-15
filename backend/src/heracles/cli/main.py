@@ -167,9 +167,9 @@ def _dns(args: argparse.Namespace) -> int:
 
 
 def _schema_export(args: argparse.Namespace) -> int:
-    from heracles.schema.export import render_ldif, render_schema
+    from heracles.schema.export import render_ds, render_ldif, render_schema
 
-    text = render_ldif() if args.format == "ldif" else render_schema()
+    text = {"ldif": render_ldif, "schema": render_schema, "ds": render_ds}[args.format]()
     if args.output in (None, "-"):
         sys.stdout.write(text)
     else:
@@ -326,9 +326,9 @@ def main(
     export = schema_sub.add_parser("export", help="print the schema for the LDAP server")
     export.add_argument(
         "--format",
-        choices=("ldif", "schema"),
+        choices=("ldif", "schema", "ds"),
         default="ldif",
-        help="cn=config LDIF (default) or OpenLDAP .schema file",
+        help="cn=config LDIF (default), OpenLDAP .schema file, or 389 Directory Server schema file",
     )
     export.add_argument("-o", "--output", help="output file (default: standard output)")
     export.set_defaults(func=_schema_export)

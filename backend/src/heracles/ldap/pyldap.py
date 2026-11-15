@@ -405,6 +405,11 @@ class PyLdapDirectory:
                     None,
                 )
                 if not cookie:
+                    if not results:
+                        # Some servers answer a paged search below a missing base with success
+                        # and no entries: an unpaged read of the base gives the real answer
+                        # (NO_SUCH_OBJECT when it does not exist).
+                        conn.search_ext_s(base, ldap.SCOPE_BASE, "(objectClass=*)", ["1.1"])
                     return results
                 paged.cookie = cookie
 

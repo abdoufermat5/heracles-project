@@ -66,6 +66,69 @@ jobs:
       - run: pnpm build
       - run: pnpm check:bundle
 
+  # The python-ldap integration tests, the backend end-to-end tests and the browser tests on
+  # every directory server of the support matrix (manual/servers.md). The sudo and SSH key
+  # schemas are fetched at pinned upstream commits; there is no DNS zone schema in CI.
+  directory-servers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [openldap, 389ds]
+    env:
+      HERACLES_E2E_WITHOUT: dns
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Third-party schemas
+        run: deploy/ldap/fetch-third-party.sh
+      - name: OpenLDAP stack
+        if: matrix.server == 'openldap'
+        run: |
+          docker compose -f deploy/docker-compose.yml --profile e2e up -d --build --wait heracles
+          docker compose -f deploy/docker-compose.yml --profile e2e run --rm integration
+          echo "HERACLES_E2E_URL=http://localhost:8420" >> "$GITHUB_ENV"
+      - name: 389 Directory Server stack
+        if: matrix.server == '389ds'
+        run: |
+          docker build -q -f deploy/Dockerfile -t heracles-ds .
+          docker build -q -f deploy/Dockerfile --target test -t heracles-ds-test .
+          deploy/ds/setup.sh heracles-ds 3391
+          IMAGE=heracles-ds deploy/ds/heracles.sh 3391 8431 heracles-ds-app
+          docker run --rm --network host -e HERACLES_TEST_LDAP_URI=ldap://127.0.0.1:3391 \
+            -e "HERACLES_TEST_LDAP_BIND_DN=cn=Directory Manager" \
+            -e HERACLES_TEST_LDAP_BIND_PASSWORD=admin heracles-ds-test
+          echo "HERACLES_E2E_URL=http://127.0.0.1:8431" >> "$GITHUB_ENV"
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - name: Backend end-to-end tests
+        working-directory: backend
+        run: |
+          uv sync --locked
+          uv run pytest -q -m e2e tests/e2e
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Browser tests
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+          # one retry: the two-factor test waits for a fresh 30-second code
+          pnpm exec playwright test --retries=1
+      - name: Diagnostics
+        if: failure()
+        run: |
+          docker ps -a
+          docker logs heracles-ds-app 2>&1 | tail -80 || true
+          docker compose -f deploy/docker-compose.yml --profile e2e logs --tail 80 heracles || true
+
   # The Helm chart and the plain manifests (deploy/helm, deploy/kubernetes) on a throwaway kind
   # cluster: PostgreSQL and a seeded OpenLDAP run in the cluster, the image is built here.
   kubernetes:

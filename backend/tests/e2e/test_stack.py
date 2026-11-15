@@ -18,6 +18,9 @@ import httpx2
 import pytest
 
 URL = os.environ.get("HERACLES_E2E_URL", "")
+#: Schemas the test server lacks on purpose, comma separated (CI has no ``dns`` schema: it is
+#: not distributed with Heracles); the tests that need them are skipped, nothing else is.
+WITHOUT = {s.strip() for s in os.environ.get("HERACLES_E2E_WITHOUT", "").split(",") if s.strip()}
 BASE = "dc=heracles,dc=test"
 ADMIN = ("alice", "alice-secret")
 
@@ -120,7 +123,10 @@ def test_types_follow_the_loaded_schema(admin: Client) -> None:
     names = {t["name"] for t in ok(admin.get("/types"))}
     # schemas loaded in the test server: core, nis, sudo, ssh, dns, dhcp, systems, smb,
     # mail, ftp
-    assert {"user", "group", "department", "posix_group", "sudo", "dns_zone", "server"} <= names
+    expected = {"user", "group", "department", "posix_group", "sudo", "dns_zone", "server"}
+    if "dns" in WITHOUT:
+        expected.discard("dns_zone")
+    assert expected <= names
     assert "dhcp_configuration" in names
     # not loaded (no ipam schema in the test server)
     assert "ipam_subnet" not in names
@@ -263,6 +269,7 @@ def test_sudo_role(admin: Client, dept: str) -> None:
     assert r.status_code == 422
 
 
+@pytest.mark.skipif("dns" in WITHOUT, reason="the test server has no dns schema")
 def test_dns_zone_with_records_and_reverse(admin: Client, dept: str) -> None:
     dn = ok(
         admin.post(
