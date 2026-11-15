@@ -31,7 +31,7 @@ from heracles_plugins.access.requests import (
     AccessRequest,
     AccessRequestStore,
 )
-from heracles_plugins.access.review_routes import add_review_routes, review_store
+from heracles_plugins.access.review_routes import add_review_routes, can_manage, review_store
 from heracles_plugins.access.rights import can_change_grants, can_read_grants
 
 
@@ -391,8 +391,8 @@ def _store(request: Request, state: AppState) -> AccessRequestStore:
 
 def _may_decide(user: CurrentUser, domain: Domain, cfg: AccessConfig, r: AccessRequest) -> bool:
     target = user.directory.get(r.target_dn, ["objectClass", "owner"])
-    if target is None:
-        return domain.is_admin(user.dn)
+    if target is None:  # renamed or deleted: those who manage access may still reject it
+        return can_manage(user, domain)
     return ap.can_approve(user, domain, cfg, target, r)
 
 

@@ -1,7 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { http, HttpResponse } from 'msw'
 import { db } from '@/mocks/db'
+import { server } from '@/mocks/server'
 import { must, renderApp, signIn } from '@/test/utils'
 
 describe('access requests', () => {
@@ -142,5 +144,31 @@ describe('access reviews', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'JSON (with hash)' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText(/Downloading a review report needs a recent sign-in/)).toBeInTheDocument()
+  })
+})
+
+describe('without the access plugin', () => {
+  beforeEach(() => db.reset())
+
+  it('only probes the status, and shows nothing of it', async () => {
+    const calls: string[] = []
+    const listen = ({ request }: { request: Request }) => {
+      const path = new URL(request.url).pathname
+      if (path.startsWith('/api/v2/access')) calls.push(path)
+    }
+    server.events.on('request:start', listen)
+    server.use(
+      http.get('/api/v2/access/status', () =>
+        HttpResponse.json({ error: { code: 'not_found', message: 'Not found' } }, { status: 404 }),
+      ),
+    )
+    signIn()
+    const target = must(db.all('group')[0])
+    renderApp(`/types/group/${encodeURIComponent(target.dn)}`)
+    await screen.findAllByRole('button', { name: 'Remove member' })
+    expect(screen.queryByRole('button', { name: /^Set end date for / })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Access requests' })).not.toBeInTheDocument()
+    server.events.removeListener('request:start', listen)
+    expect(new Set(calls)).toEqual(new Set(['/api/v2/access/status']))
   })
 })

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { rdnValue } from '@/lib/objects'
 import { accessApi } from './api'
+import { outcomeKey } from './hooks'
 import type { ReviewDecision, ReviewItem } from './types'
 
 /** Review items with keep / revoke buttons; `showDn` adds the DNs (console). */
@@ -57,7 +58,7 @@ export function ReviewItemsTable({
             ) : null}
             <TableCell>
               {item.outcome ? (
-                <span className="text-small text-foreground">{t(`grants.reviews.outcome.${item.outcome}`, { defaultValue: item.outcome })}</span>
+                <span className="text-small text-foreground">{t(`grants.reviews.outcome.${outcomeKey(item.outcome)}`, { defaultValue: item.outcome })}</span>
               ) : item.can_decide ? (
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('grants.reviews.decideFor', { member: rdnValue(item.member) })}>
                   <Button

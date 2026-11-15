@@ -118,7 +118,8 @@ def test_campaign_flows_to_reviewers_and_closes_with_revocations(
     # the report is exported behind step-up and hashes to the value in the audit log
     report = admin.get(f"/access/reviews/{campaign['id']}/report")
     assert report.status_code == 200 and report.headers["x-report-sha256"] == digest
-    assert report.json()["sha256"] == digest
+    assert report.json()["sha256"] == digest and report.json()["matches"] is True
+    assert report.headers["x-report-matches"] == "true"
     csv_report = admin.get(f"/access/reviews/{campaign['id']}/report", format="csv")
     assert csv_report.text.splitlines()[0].startswith("holder,kind,member")
     events = list(directory.search(f"ou=audit,{BASE}", "(hrcAuditAction=access_review)"))

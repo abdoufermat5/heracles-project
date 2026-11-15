@@ -35,6 +35,8 @@ class AccessReport(TaskReport):
 
     grants_expired: int = 0
     end_dates_dropped: int = 0
+    #: Due but kept: the last member of a group (which must have one).
+    grants_overdue: int = 0
 
 
 def _run(ctx: TaskRunContext) -> AccessReport:
@@ -42,6 +44,7 @@ def _run(ctx: TaskRunContext) -> AccessReport:
     result = g.expire_grants(ctx.directory, ctx.now)
     report.grants_expired = result.expired
     report.end_dates_dropped = result.dropped
+    report.grants_overdue = result.overdue
     report.errors.extend(result.errors)
     return report
 

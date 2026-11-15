@@ -195,8 +195,7 @@ def test_last_member_of_a_group_is_kept_and_reported(directory: MemoryDirectory)
     g.set_end_date(directory, ROLE, "roleOccupant", ANN, NOW - timedelta(minutes=1))
     report = g.expire_grants(directory, NOW)
     # the role (no mandatory occupant) still expires
-    assert report.expired == 1 and len(report.errors) == 1
-    assert "last member" in report.errors[0]
+    assert report.expired == 1 and report.overdue == 1 and report.errors == []
     group = directory.get(GROUP)
     assert group is not None and group.texts("member") == [ANN]
     assert dates(directory, GROUP) != []  # kept, retried at the next pass
@@ -220,4 +219,4 @@ def test_one_refused_change_does_not_hold_back_the_others(directory: MemoryDirec
     assert report.expired == 1 and len(report.errors) == 1
     # the refused one is still due and goes at the next pass; the last member stays then
     again = g.expire_grants(directory, NOW)
-    assert again.expired == 0 and "last member" in again.errors[0]
+    assert again.expired == 0 and again.overdue == 1 and again.errors == []

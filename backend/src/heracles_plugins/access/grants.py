@@ -291,6 +291,7 @@ def end_dates_for_removed(entry: Entry, removed: Iterable[tuple[str, str]]) -> l
 class ExpiryReport:
     expired: int = 0
     dropped: int = 0  # end dates whose grant was already gone
+    overdue: int = 0  # due, but the last value of a mandatory membership (kept)
     errors: list[str] = field(default_factory=lambda: [])
     expired_grants: list[Grant] = field(default_factory=lambda: [])
 
@@ -358,7 +359,8 @@ def expire_grants(directory: DirectoryClient, now: datetime) -> ExpiryReport:
             if grant.until > now:
                 continue
             if grant.kind != ACL_KIND and is_last_mandatory(entry, grant.kind):
-                report.errors.append(f"{entry.dn}: {grant.member} is the last {grant.kind}, kept")
+                # not an error (it would fail every pass): counted, and logged for the admins
+                report.overdue += 1
                 log.warning("grant_expiry_last_member", dn=entry.dn, member=grant.member)
                 continue
             revoke = _revoke_changes(entry, grant)

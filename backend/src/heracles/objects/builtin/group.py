@@ -47,15 +47,6 @@ class Group(ObjectType):
             DepartmentAttr("base", _("Department")),
             StringAttr("cn", _("Name"), required=True, pattern=CN_RE),
             TextAttr("description", _("Description")),
-        )
-        members = Section(
-            _("Members"),
-            ListAttr(
-                "member",
-                _("Members"),
-                ObjectRefAttr("member", _("Member"), ref_type="user"),
-                required=True,
-            ),
             ListAttr(
                 "owner",
                 _("Owners"),
@@ -64,6 +55,15 @@ class Group(ObjectType):
                     "People responsible for the group: they approve access requests and "
                     "review its members"
                 ),
+            ),
+        )
+        members = Section(
+            _("Members"),
+            ListAttr(
+                "member",
+                _("Members"),
+                ObjectRefAttr("member", _("Member"), ref_type="user"),
+                required=True,
             ),
         )
 

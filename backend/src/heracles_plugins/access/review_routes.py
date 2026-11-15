@@ -311,11 +311,19 @@ def add_review_routes(router: APIRouter) -> None:
         require_recent_auth(state, user.session)
         doc = rv.report(campaign, store.items(campaign.id))
         digest = rv.report_hash(doc)
+        # a closed campaign's report must hash to the value recorded at close (and in the
+        # audit log): a row changed in the database afterwards shows up here
+        recorded = campaign.report_hash
+        matches = (recorded == digest) if recorded else None
         if format == "csv":
             body = rv.report_csv(doc)
             media = "text/csv; charset=utf-8"
         else:
-            body = json.dumps({"sha256": digest, "report": doc}, ensure_ascii=False, indent=1)
+            body = json.dumps(
+                {"sha256": digest, "recorded_sha256": recorded, "matches": matches, "report": doc},
+                ensure_ascii=False,
+                indent=1,
+            )
             media = "application/json"
         return Response(
             body,
@@ -325,6 +333,7 @@ def add_review_routes(router: APIRouter) -> None:
                     f'attachment; filename="access-review-{campaign.id}.{format}"'
                 ),
                 "X-Report-SHA256": digest,
+                "X-Report-Matches": "" if matches is None else str(matches).lower(),
             },
         )
 

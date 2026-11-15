@@ -109,7 +109,7 @@ export const grantsFr: typeof grantsEn = {
         kept: 'Gardé',
         revoked: 'Retiré',
         gone: 'Déjà retiré',
-        'kept: last member': 'Gardé : dernier membre du groupe',
+        kept_last_member: 'Gardé : dernier membre du groupe',
         failed: 'Retrait impossible',
       },
       close: 'Clôturer la revue',

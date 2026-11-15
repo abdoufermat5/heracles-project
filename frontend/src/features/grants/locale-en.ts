@@ -107,7 +107,7 @@ export const grantsEn = {
         kept: 'Kept',
         revoked: 'Removed',
         gone: 'Already gone',
-        'kept: last member': 'Kept: last member of the group',
+        kept_last_member: 'Kept: last member of the group',
         failed: 'Could not be removed',
       },
       close: 'Close review',
