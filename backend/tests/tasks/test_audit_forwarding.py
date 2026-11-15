@@ -9,9 +9,9 @@ import socket
 import ssl
 import threading
 from collections.abc import Iterator, Mapping
-from typing import Any
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 

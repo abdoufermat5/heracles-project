@@ -399,19 +399,17 @@ def test_audit_export_needs_a_recent_sign_in(
 ) -> None:
     import time
 
+    from heracles.api.state import AppState
+
     seed(directory)
     a = Api(app_client)
     a.login("admin")
-    state = app_client.app.state.heracles  # type: ignore[attr-defined]
-    real = state.clock
-    state.clock = lambda: time.time() + 3600
-    try:
-        r = a.get("/audit/export", format="csv")
-        assert r.status_code == 403
-        assert r.json()["error"]["code"] == "reauth_required"
-        assert a.get("/audit").status_code == 200  # browsing stays allowed
-    finally:
-        state.clock = real
+    state: AppState = app_client.app.state.heracles  # type: ignore[attr-defined]
+    state.clock = lambda: time.time() + 3600  # the login is now an hour old (per-test app)
+    r = a.get("/audit/export", format="csv")
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "reauth_required"
+    assert a.get("/audit").status_code == 200  # browsing stays allowed
 
 
 def test_audit_listing_no_longer_downloads(app_client: TestClient) -> None:
