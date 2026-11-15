@@ -56,6 +56,8 @@ EXTRA_ACTIONS = (
     "task",
     "api_token",
     "purge",
+    "access_request",
+    "access_review",
 )
 ACTIONS = (*OBJECT_ACTIONS, *EXTRA_ACTIONS)
 #: Attribute values longer than this are cut in the log.

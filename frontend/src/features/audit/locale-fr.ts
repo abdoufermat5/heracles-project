@@ -56,6 +56,8 @@ export const auditFr: typeof auditEn = {
       member_add: 'Membre ajouté',
       api_token: 'Jeton d’API',
       purge: 'Journal purgé',
+      access_request: 'Demande d’accès',
+      access_review: 'Revue des accès',
       member_remove: 'Membre retiré',
     },
     results: {
