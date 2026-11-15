@@ -110,6 +110,7 @@ def _rule(
 
 _V2 = "/api/v2"
 _V1 = "/api/v1"
+_SCIM = "/scim/v2"
 _OBJ = r"/objects/\{type_name\}(/.*)?"
 _TYPE = r"/types/\{type_name\}"
 
@@ -146,6 +147,16 @@ RULES: Final[tuple[Rule, ...]] = (
     _rule(_SAFE, _V1 + r"/userlock/\{dn\}", READ, implied_type="user"),
     _rule(frozenset({"PUT"}), _V1 + r"/userlock/\{dn\}", WRITE, implied_type="user"),
     _rule(frozenset({"POST"}), _V1 + r"/archive/\{type\}/\{dn\}", WRITE),
+    # -- SCIM: users and groups (the type is implied by the collection)
+    _rule(_SAFE, _SCIM + "/Users(/.*)?", READ, implied_type="user"),
+    _rule(frozenset({"POST"}), _SCIM + r"/Users/\.search", READ, implied_type="user"),
+    _rule(_MUTATING, _SCIM + "/Users(/.*)?", WRITE, implied_type="user"),
+    _rule(_SAFE, _SCIM + "/Groups(/.*)?", READ, implied_type="group"),
+    _rule(frozenset({"POST"}), _SCIM + r"/Groups/\.search", READ, implied_type="group"),
+    _rule(_MUTATING, _SCIM + "/Groups(/.*)?", WRITE, implied_type="group"),
+    _rule(
+        _SAFE, _SCIM + "/(ServiceProviderConfig|ResourceTypes|Schemas)(/.*)?", READ, any_type=True
+    ),
 )
 
 _INVALID = {"WWW-Authenticate": 'Bearer error="invalid_token"'}

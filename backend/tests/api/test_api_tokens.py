@@ -460,7 +460,7 @@ def test_routes_reachable_with_a_token_are_the_listed_ones(app: FastAPI, state: 
 
     reachable: dict[str, list[str]] = {"read": [], "write": [], "admin": []}
     for method, path in sorted(set(templates())):
-        if not path.startswith("/api/v"):
+        if not path.startswith(("/api/v", "/scim/")):
             continue
         rule = next((r for r in RULES if method in r.methods and r.pattern.match(path)), None)
         if rule is not None:
@@ -501,7 +501,18 @@ EXPECTED_ROUTES: dict[str, list[str]] = {
         "GET /api/v2/types/{type_name}/templates",
         "GET /api/v2/types/{type_name}/templates/{dn}",
         "GET /api/v2/types/{type_name}/templates/{dn}/fields",
+        "GET /scim/v2/Groups",
+        "GET /scim/v2/Groups/{resource_id}",
+        "GET /scim/v2/ResourceTypes",
+        "GET /scim/v2/ResourceTypes/{name}",
+        "GET /scim/v2/Schemas",
+        "GET /scim/v2/Schemas/{urn}",
+        "GET /scim/v2/ServiceProviderConfig",
+        "GET /scim/v2/Users",
+        "GET /scim/v2/Users/{resource_id}",
         "POST /api/v2/types/{type_name}/templates/{dn}/preview",
+        "POST /scim/v2/Groups/.search",
+        "POST /scim/v2/Users/.search",
     ],
     "write": [
         "DELETE /api/v1/objects/{type}/{dn}",
@@ -511,11 +522,15 @@ EXPECTED_ROUTES: dict[str, list[str]] = {
         "DELETE /api/v2/objects/{type_name}/{dn}",
         "DELETE /api/v2/objects/{type_name}/{dn}/lock",
         "DELETE /api/v2/snapshots/{snapshot_id}",
+        "DELETE /scim/v2/Groups/{resource_id}",
+        "DELETE /scim/v2/Users/{resource_id}",
         "PATCH /api/v1/objects/{type}/{dn}",
         "PATCH /api/v1/objects/{type}/{dn}/{tab}",
         "PATCH /api/v1/objects/{type}/{dn}/{tab}/{attribute}/values",
         "PATCH /api/v2/objects/{type_name}/_bulk",
         "PATCH /api/v2/objects/{type_name}/{dn}",
+        "PATCH /scim/v2/Groups/{resource_id}",
+        "PATCH /scim/v2/Users/{resource_id}",
         "POST /api/v1/archive/{type}/{dn}",
         "POST /api/v1/objects/{type}",
         "POST /api/v2/archive/{type_name}/{dn}",
@@ -528,8 +543,12 @@ EXPECTED_ROUTES: dict[str, list[str]] = {
         "POST /api/v2/snapshots/{snapshot_id}/restore",
         "POST /api/v2/users/{dn}/lock",
         "POST /api/v2/users/{dn}/unlock",
+        "POST /scim/v2/Groups",
+        "POST /scim/v2/Users",
         "PUT /api/v1/objects/{type}/{dn}/{tab}/{attribute}",
         "PUT /api/v1/userlock/{dn}",
+        "PUT /scim/v2/Groups/{resource_id}",
+        "PUT /scim/v2/Users/{resource_id}",
     ],
     "admin": [
         "DELETE /api/v2/admin/acl/roles/{dn}",
