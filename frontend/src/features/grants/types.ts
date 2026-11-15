@@ -54,3 +54,55 @@ export interface Requestable {
   /** Held until this date (ISO): a request extends it. */
   renews: string | null
 }
+
+export type CampaignStatus = 'open' | 'closing' | 'closed'
+export type ReviewDecision = 'keep' | 'revoke'
+
+export interface CampaignCounts {
+  items: number
+  decided: number
+  revoke: number
+  keep: number
+  failed: number
+}
+
+export interface Campaign {
+  id: string
+  name: string
+  created_by: string
+  /** Unix seconds. */
+  created_at: number
+  deadline: number
+  reviewer: 'owner' | 'manager'
+  default: ReviewDecision
+  status: CampaignStatus
+  selector: { holders: string[]; base: string }
+  closed_by: string
+  closed_at: number | null
+  report_hash: string
+  counts?: CampaignCounts
+  /** Undecided items assigned to the caller. */
+  to_review?: number
+}
+
+export interface ReviewItem {
+  id: string
+  holder: { dn: string; label: string; kind: string }
+  member: string
+  reviewer: string
+  decision: '' | ReviewDecision
+  comment: string
+  decided_by: string
+  decided_at: number | null
+  outcome: string
+  can_decide: boolean
+}
+
+export interface CampaignBody {
+  name: string
+  holders: string[]
+  base: string
+  reviewer: 'owner' | 'manager'
+  deadline: string
+  default: ReviewDecision
+}

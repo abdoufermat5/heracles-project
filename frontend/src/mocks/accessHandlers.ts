@@ -1,5 +1,5 @@
 import { http, HttpResponse, type HttpHandler } from 'msw'
-import type { AccessRequest, EndDateBody } from '@/features/grants/types'
+import type { AccessRequest, CampaignBody, EndDateBody } from '@/features/grants/types'
 import { db } from './db'
 
 const unauthenticated = () =>
@@ -114,6 +114,105 @@ export const accessHandlers: HttpHandler[] = [
     return HttpResponse.json({ request: found })
   }),
   http.get('/api/v2/access/queue', () =>
-    HttpResponse.json({ approvals: db.accessRequests.filter((r) => r.status === 'pending').length }),
+    HttpResponse.json({
+      approvals: db.accessRequests.filter((r) => r.status === 'pending').length,
+      reviews: db.reviewItems.filter((i) => i.can_decide && !i.decision).length,
+    }),
   ),
+  http.get('/api/v2/access/reviews', () => {
+    if (!db.me()) return unauthenticated()
+    const manager = db.session.user === 'admin'
+    const items = db.campaigns.map((c) => {
+      const mine = db.reviewItems.filter((i) => i.campaign === c.id)
+      return {
+        ...c,
+        to_review: mine.filter((i) => i.can_decide && !i.decision).length,
+        counts: manager
+          ? { items: mine.length, decided: mine.filter((i) => i.decision).length, keep: 0, revoke: 0, failed: 0 }
+          : undefined,
+      }
+    })
+    return HttpResponse.json({ items, can_manage: manager })
+  }),
+  http.post('/api/v2/access/reviews', async ({ request }) => {
+    if (!db.me()) return unauthenticated()
+    const body = (await request.json()) as CampaignBody
+    const campaign = {
+      id: `c${db.campaigns.length + 1}`,
+      name: body.name,
+      created_by: db.me()?.dn ?? '',
+      created_at: Date.now() / 1000,
+      deadline: Date.parse(`${body.deadline}T23:59:59Z`) / 1000,
+      reviewer: body.reviewer,
+      default: body.default,
+      status: 'open' as const,
+      selector: { holders: body.holders, base: body.base },
+      closed_by: '',
+      closed_at: null,
+      report_hash: '',
+    }
+    db.campaigns.push(campaign)
+    for (const holder of body.holders) {
+      db.reviewItems.push({
+        campaign: campaign.id,
+        id: `i${db.reviewItems.length + 1}`,
+        holder: { dn: holder, label: holder.split(',')[0]?.split('=')[1] ?? holder, kind: 'member' },
+        member: 'uid=jdoe,ou=people,dc=example,dc=org',
+        reviewer: db.me()?.dn ?? '',
+        decision: '',
+        comment: '',
+        decided_by: '',
+        decided_at: null,
+        outcome: '',
+        can_decide: true,
+      })
+    }
+    return HttpResponse.json({ campaign }, { status: 201 })
+  }),
+  http.get('/api/v2/access/reviews/:id/report', ({ params }) => {
+    if (!db.reauthFresh) {
+      return HttpResponse.json({ error: { code: 'reauth_required', message: 'Confirm your password' } }, { status: 403 })
+    }
+    return HttpResponse.json(
+      { sha256: 'ab'.repeat(32), report: { campaign: { id: params.id } } },
+      { headers: { 'Content-Disposition': `attachment; filename="access-review-${String(params.id)}.json"` } },
+    )
+  }),
+  http.get('/api/v2/access/reviews/:id', ({ params }) => {
+    const campaign = db.campaigns.find((c) => c.id === params.id)
+    if (!campaign) return HttpResponse.json({ error: { code: 'not_found', message: 'Campaign not found' } }, { status: 404 })
+    const items = db.reviewItems.filter((i) => i.campaign === campaign.id)
+    return HttpResponse.json({
+      campaign: {
+        ...campaign,
+        counts: {
+          items: items.length,
+          decided: items.filter((i) => i.decision).length,
+          keep: items.filter((i) => i.decision === 'keep').length,
+          revoke: items.filter((i) => i.decision === 'revoke').length,
+          failed: 0,
+        },
+      },
+      items,
+      can_manage: db.session.user === 'admin',
+    })
+  }),
+  http.post('/api/v2/access/reviews/:id/items/:item', async ({ params, request }) => {
+    const item = db.reviewItems.find((i) => i.id === params.item)
+    if (!item) return HttpResponse.json({ error: { code: 'not_found', message: 'Item not found' } }, { status: 404 })
+    const body = (await request.json()) as { decision: 'keep' | 'revoke' }
+    item.decision = body.decision
+    return HttpResponse.json({ item })
+  }),
+  http.post('/api/v2/access/reviews/:id/close', ({ params }) => {
+    const campaign = db.campaigns.find((c) => c.id === params.id)
+    if (!campaign) return HttpResponse.json({ error: { code: 'not_found', message: 'Campaign not found' } }, { status: 404 })
+    campaign.status = 'closed'
+    campaign.report_hash = 'ab'.repeat(32)
+    for (const i of db.reviewItems.filter((x) => x.campaign === campaign.id)) {
+      i.outcome = (i.decision || campaign.default) === 'revoke' ? 'revoked' : 'kept'
+      i.can_decide = false
+    }
+    return HttpResponse.json({ campaign, failed: [] })
+  }),
 ]

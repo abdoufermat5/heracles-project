@@ -75,3 +75,33 @@ export function useMyRequests(enabled = true) {
     enabled,
   })
 }
+
+export function useCampaigns(enabled = true) {
+  return useQuery({
+    queryKey: ['access', 'reviews'],
+    queryFn: ({ signal }) => accessApi.campaigns(signal),
+    retry: false,
+    enabled,
+  })
+}
+
+export function useCampaign(id: string) {
+  return useQuery({
+    queryKey: ['access', 'reviews', id],
+    queryFn: ({ signal }) => accessApi.campaign(id, signal),
+    retry: false,
+  })
+}
+
+export function useAccessQueue() {
+  return useQuery({
+    queryKey: ['access', 'queue'],
+    queryFn: ({ signal }) => accessApi.queue(signal),
+    retry: false,
+  })
+}
+
+/** `2027-01-31` from Unix seconds. */
+export function secondsDay(seconds: number): string {
+  return new Date(seconds * 1000).toISOString().slice(0, 10)
+}

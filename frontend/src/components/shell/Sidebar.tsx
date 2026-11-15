@@ -1,6 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import {
   ArrowLeftRight,
+  ClipboardCheck,
   ChevronDown,
   ChevronRight,
   HeartPulse,
@@ -43,6 +44,7 @@ type NavPath =
   | '/io'
   | '/activity/audit'
   | '/access/requests'
+  | '/access/reviews'
   | '/admin/access'
   | '/admin/config'
   | '/admin/health'
@@ -325,7 +327,10 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
         ? [fixed('activity:audit', '/activity/audit', t('sidebar.auditLog'), History)]
         : []),
       ...(accessEnabled
-        ? [fixed('access:requests', '/access/requests', t('grants.approvals.navLabel'), KeyRound)]
+        ? [
+            fixed('access:requests', '/access/requests', t('grants.approvals.navLabel'), KeyRound),
+            fixed('access:reviews', '/access/reviews', t('grants.reviews.navLabel'), ClipboardCheck),
+          ]
         : []),
       ...(caps?.tasks ? [fixed('admin:tasks', '/admin/tasks', t('admin.nav.tasks'), ListChecks)] : []),
       ...(caps?.config

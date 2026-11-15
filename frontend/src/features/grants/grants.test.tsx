@@ -67,3 +67,80 @@ describe('access requests', () => {
     expect(await screen.findByText('Nothing waits for your decision.')).toBeInTheDocument()
   })
 })
+
+describe('access reviews', () => {
+  beforeEach(() => db.reset())
+
+  it('starts a review, records decisions and closes it', async () => {
+    db.campaigns.push({
+      id: 'c1',
+      name: 'Q4 review',
+      created_by: 'uid=admin,dc=example,dc=org',
+      created_at: Date.now() / 1000,
+      deadline: Date.now() / 1000 + 7 * 86_400,
+      reviewer: 'owner',
+      default: 'keep',
+      status: 'open',
+      selector: { holders: [], base: '' },
+      closed_by: '',
+      closed_at: null,
+      report_hash: '',
+    })
+    db.reviewItems.push({
+      campaign: 'c1',
+      id: 'i1',
+      holder: { dn: 'cn=devs,ou=groups,dc=example,dc=org', label: 'devs', kind: 'member' },
+      member: 'uid=jdoe,ou=people,dc=example,dc=org',
+      reviewer: 'uid=admin,dc=example,dc=org',
+      decision: '',
+      comment: '',
+      decided_by: '',
+      decided_at: null,
+      outcome: '',
+      can_decide: true,
+    })
+    signIn()
+    const user = userEvent.setup()
+    renderApp('/')
+    const item = must((await screen.findByText('access grant to review')).closest('li'))
+    await user.click(within(item).getByRole('link'))
+    await user.click(await screen.findByRole('link', { name: 'Q4 review' }))
+    expect(await screen.findByRole('heading', { name: 'Q4 review', level: 1 })).toBeInTheDocument()
+    const row = await screen.findByTestId('review-item')
+    await user.click(within(row).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(db.reviewItems[0]?.decision).toBe('revoke'))
+    expect(await within(row).findByRole('button', { name: 'Remove', pressed: true })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Close review' }))
+    const confirm = await screen.findByRole('alertdialog')
+    expect(within(confirm).getByText(/1 access grants are removed now/)).toBeInTheDocument()
+    await user.click(within(confirm).getByRole('button', { name: 'Close review' }))
+    expect(await screen.findByText('Removed')).toBeInTheDocument()
+    expect(screen.getByText('ab'.repeat(32))).toBeInTheDocument()
+  })
+
+  it('asks for the password before downloading a report with an old sign-in', async () => {
+    db.campaigns.push({
+      id: 'c2',
+      name: 'Old one',
+      created_by: '',
+      created_at: 0,
+      deadline: Date.now() / 1000 + 86_400,
+      reviewer: 'owner',
+      default: 'keep',
+      status: 'closed',
+      selector: { holders: [], base: '' },
+      closed_by: '',
+      closed_at: null,
+      report_hash: 'ab'.repeat(32),
+    })
+    db.reauthFresh = false
+    signIn()
+    const user = userEvent.setup()
+    renderApp('/access/reviews/c2')
+    await user.click(await screen.findByRole('button', { name: /Report/ }))
+    await user.click(await screen.findByRole('menuitem', { name: 'JSON (with hash)' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/Downloading a review report needs a recent sign-in/)).toBeInTheDocument()
+  })
+})

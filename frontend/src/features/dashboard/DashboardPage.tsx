@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import {
   ArrowRight,
   CheckCircle2,
+  ClipboardCheck,
   Clock,
   KeyRound,
   ListChecks,
@@ -20,7 +21,7 @@ import { PageLayout } from '@/components/patterns'
 import { getRecentItems } from '@/components/shell/recent'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useApprovals } from '@/features/grants/hooks'
+import { useAccessQueue, useApprovals } from '@/features/grants/hooks'
 import { useCapabilities } from '@/features/admin/hooks'
 import { RecentActivityCard } from '@/features/audit/RecentActivityCard'
 import { useIoAccess } from '@/features/io/hooks'
@@ -114,6 +115,7 @@ export function DashboardPage() {
   const { data: caps } = useCapabilities()
   const { data: io } = useIoAccess()
   const approvalList = useApprovals()
+  const accessQueue = useAccessQueue()
   const recents = useMemo(() => getRecentItems(), [])
 
   const canCreate = (name: string) => !!types?.find((x) => x.name === name)?.can_create
@@ -127,7 +129,8 @@ export function DashboardPage() {
   const failed = data?.tasks.failed ?? 0
   const pending = data?.tasks.pending ?? 0
   const approvals = approvalList.data?.items.length ?? 0
-  const queueEmpty = !isPending && locked + expiring + failed + approvals === 0
+  const reviews = accessQueue.data?.reviews ?? 0
+  const queueEmpty = !isPending && locked + expiring + failed + approvals + reviews === 0
 
   return (
     <PageLayout
@@ -229,6 +232,23 @@ export function DashboardPage() {
                   action={
                     <Button asChild variant="outline" size="sm">
                       <Link to="/access/requests">
+                        {t('dashboard.review')}
+                        <ArrowRight />
+                      </Link>
+                    </Button>
+                  }
+                />
+              )}
+              {reviews > 0 && (
+                <QueueItem
+                  icon={ClipboardCheck}
+                  tone="warning"
+                  count={reviews}
+                  title={t('grants.reviews.queueTitle', { count: reviews })}
+                  description={t('grants.reviews.queueHelp')}
+                  action={
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/access/reviews">
                         {t('dashboard.review')}
                         <ArrowRight />
                       </Link>

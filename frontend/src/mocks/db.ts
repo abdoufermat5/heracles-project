@@ -99,6 +99,8 @@ class Db {
   /** Grant end dates (access plugin). */
   endDates: import('@/features/grants/types').Grant[] = []
   accessRequests: import('@/features/grants/types').AccessRequest[] = []
+  campaigns: import('@/features/grants/types').Campaign[] = []
+  reviewItems: (import('@/features/grants/types').ReviewItem & { campaign: string })[] = []
   csrf = 'mock-csrf-token'
   /** Default mail domain of the directory, as the configuration screen stores it. */
   mailDomain = ''
@@ -123,6 +125,8 @@ class Db {
     this.apiTokens = []
     this.endDates = []
     this.accessRequests = []
+    this.campaigns = []
+    this.reviewItems = []
     this.session = { user: null, pending: null }
     this.mailDomain = ''
     this.seed()

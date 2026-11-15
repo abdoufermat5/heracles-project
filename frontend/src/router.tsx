@@ -50,6 +50,14 @@ const PluginsPage = lazyRouteComponent(() => import('@/features/admin/PluginsPag
 const TasksPage = lazyRouteComponent(() => import('@/features/admin/TasksPage'), 'TasksPage')
 const IoPage = lazyRouteComponent(() => import('@/features/io/IoPage'), 'IoPage')
 const AuditPage = lazyRouteComponent(() => import('@/features/audit/AuditPage'), 'AuditPage')
+const AccessReviewsPage = lazyRouteComponent(
+  () => import('@/features/grants/AccessReviewsPage'),
+  'AccessReviewsPage',
+)
+const ReviewCampaignPage = lazyRouteComponent(
+  () => import('@/features/grants/ReviewCampaignPage'),
+  'ReviewCampaignPage',
+)
 const AccessRequestsPage = lazyRouteComponent(
   () => import('@/features/grants/AccessRequestsPage'),
   'AccessRequestsPage',
@@ -298,6 +306,20 @@ const accessRequestsRoute = createRoute({
   component: AccessRequestsPage,
 })
 
+const accessReviewsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/access/reviews',
+  component: AccessReviewsPage,
+})
+const accessReviewRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/access/reviews/$id',
+  component: rendering(function ReviewRoute() {
+    const { id } = accessReviewRoute.useParams()
+    return <ReviewCampaignPage key={id} id={id} />
+  }, ReviewCampaignPage),
+})
+
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
@@ -317,6 +339,8 @@ const routeTree = rootRoute.addChildren([
     ioRoute,
     auditRoute,
     accessRequestsRoute,
+    accessReviewsRoute,
+    accessReviewRoute,
     adminAccessRoute,
     adminConfigRoute,
     adminHealthRoute,
