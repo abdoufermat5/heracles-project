@@ -13,6 +13,8 @@ directories:
     # ca_file: /etc/ssl/certs/corp-ca.pem   # CA to trust when the server uses a private one
     bind_dn: cn=heracles,ou=services,dc=example,dc=org   # service account the console uses
     bind_password: CHANGE_ME        # or set HERACLES_DIRECTORY_MAIN_BIND_PASSWORD instead
+    # bind_password_file: /run/secrets/bind_password   # read it from a file instead (Docker or
+    #                                 # Kubernetes secrets); not together with bind_password
     base_dn: dc=example,dc=org
     # timeout: 10                   # seconds before an operation gives up
     # pool_size: 8                  # connections kept open to the server
@@ -88,6 +90,7 @@ plugins:
 #   starttls: true
 #   username: heracles
 #   password: CHANGE_ME
+#   # password_file: /run/secrets/smtp_password   # instead of password
 
 # --- access governance (plugin "access") ---------------------------------------------------
 # End dates on memberships, access requests and access reviews.

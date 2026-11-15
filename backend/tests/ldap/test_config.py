@@ -98,3 +98,56 @@ def test_invalid(tmp_path: Path, name: str, content: str) -> None:
 def test_missing_file(tmp_path: Path) -> None:
     with pytest.raises(ConfigError):
         load_settings(tmp_path / "absent.yaml", {})
+
+
+def test_bind_password_file(tmp_path: Path) -> None:
+    secret = tmp_path / "bind_password"
+    secret.write_text("from-file\n")
+    f = tmp_path / "c.yml"
+    f.write_text(
+        "directories:\n  - id: main\n    uri: ldap://x\n    base_dn: dc=x\n"
+        f"    bind_password_file: {secret}\n"
+    )
+    assert load_settings(f, {}).get("main").bind_password.get_secret_value() == "from-file"
+
+
+def test_bind_password_file_from_env(tmp_path: Path) -> None:
+    secret = tmp_path / "pw"
+    secret.write_text("env-file")
+    f = tmp_path / "c.yml"
+    f.write_text("directories:\n  - id: main\n    uri: ldap://x\n    base_dn: dc=x\n")
+    env = {"HERACLES_DIRECTORY_MAIN_BIND_PASSWORD_FILE": str(secret)}
+    assert load_settings(f, env).get("main").bind_password.get_secret_value() == "env-file"
+
+
+def test_bind_password_and_file_conflict(tmp_path: Path) -> None:
+    secret = tmp_path / "pw"
+    secret.write_text("x")
+    f = tmp_path / "c.yml"
+    f.write_text(
+        "directories:\n  - id: main\n    uri: ldap://x\n    base_dn: dc=x\n"
+        f"    bind_password: y\n    bind_password_file: {secret}\n"
+    )
+    with pytest.raises(ConfigError, match="not both"):
+        load_settings(f, {})
+
+
+def test_bind_password_file_missing(tmp_path: Path) -> None:
+    f = tmp_path / "c.yml"
+    f.write_text(
+        "directories:\n  - id: main\n    uri: ldap://x\n    base_dn: dc=x\n"
+        f"    bind_password_file: {tmp_path / 'nope'}\n"
+    )
+    with pytest.raises(ConfigError, match="cannot read bind password file"):
+        load_settings(f, {})
+
+
+def test_mail_password_file(tmp_path: Path) -> None:
+    from heracles.auth.mail import MailSettings
+
+    secret = tmp_path / "smtp"
+    secret.write_text("smtp-secret\r\n")
+    settings = MailSettings.model_validate({"host": "smtp.test", "password_file": str(secret)})
+    assert settings.password == "smtp-secret"
+    with pytest.raises(ValueError, match="not both"):
+        MailSettings.model_validate({"password": "a", "password_file": str(secret)})
