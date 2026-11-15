@@ -1,4 +1,4 @@
-"""The benchmark scripts (backend/scripts): dataset, regression check, a tiny end-to-end run."""
+"""The benchmark scripts (backend/bench): dataset, regression check, a tiny end-to-end run."""
 
 from __future__ import annotations
 
@@ -15,12 +15,12 @@ import structlog
 
 from heracles.ldap.ldif import parse_ldif
 
-SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+BENCH = Path(__file__).resolve().parents[2] / "bench"
 
 
 def _load(name: str) -> Any:
-    if str(SCRIPTS) not in sys.path:
-        sys.path.insert(0, str(SCRIPTS))
+    if str(BENCH) not in sys.path:
+        sys.path.insert(0, str(BENCH))
     return importlib.import_module(name)
 
 

@@ -126,19 +126,19 @@ typecheck: ## pyright (strict) + tsc
 check: lint typecheck test ## Everything CI runs (lint, types, tests; build + bundle-check: `make build bundle-check`)
 
 bench: ## Scenario benchmark on the in-memory directory: p50/p95 and LDAP operations (USERS=5000, BENCH_ARGS=...)
-	cd $(BACKEND) && uv run python scripts/bench.py --users $(or $(USERS),5000) $(BENCH_ARGS)
+	cd $(BACKEND) && uv run python bench/bench.py --users $(or $(USERS),5000) $(BENCH_ARGS)
 
 bench-ldap: ## Same on a throwaway OpenLDAP container loaded with slapadd (USERS=5000, INDEXES=default|tuned; needs Docker + python-ldap)
-	cd $(BACKEND) && uv run --extra ldap python scripts/bench_ldap.py run --users $(or $(USERS),5000) --indexes $(or $(INDEXES),default) -- $(BENCH_ARGS)
+	cd $(BACKEND) && uv run --extra ldap python bench/bench_ldap.py run --users $(or $(USERS),5000) --indexes $(or $(INDEXES),default) -- $(BENCH_ARGS)
 
-BENCH_BASELINE = scripts/bench-baseline.json
+BENCH_BASELINE = bench/bench-baseline.json
 
 bench-check: ## CI regression check: 2,000-user run compared with the committed baseline (fails beyond 2x)
-	cd $(BACKEND) && uv run python scripts/bench.py --users 2000 --repeat 3 --no-check --json $(or $(TMPDIR),/tmp)/hrc-bench-current.json
-	cd $(BACKEND) && uv run python scripts/bench_compare.py $(BENCH_BASELINE) $(or $(TMPDIR),/tmp)/hrc-bench-current.json
+	cd $(BACKEND) && uv run python bench/bench.py --users 2000 --repeat 3 --no-check --json $(or $(TMPDIR),/tmp)/hrc-bench-current.json
+	cd $(BACKEND) && uv run python bench/bench_compare.py $(BENCH_BASELINE) $(or $(TMPDIR),/tmp)/hrc-bench-current.json
 
 bench-baseline: ## Rewrite the committed baseline from a 2,000-user run (do it on purpose, commit the file)
-	cd $(BACKEND) && uv run python scripts/bench.py --users 2000 --repeat 3 --no-check --json $(BENCH_BASELINE)
+	cd $(BACKEND) && uv run python bench/bench.py --users 2000 --repeat 3 --no-check --json $(BENCH_BASELINE)
 
 # ------------------------------------------------------------ test LDAP
 

@@ -1,6 +1,6 @@
 """Compare a benchmark run with a committed baseline; exit 1 on a regression.
 
-    python scripts/bench_compare.py scripts/bench-baseline.json current.json [--factor 2]
+    python bench/bench_compare.py bench/bench-baseline.json current.json [--factor 2]
 
 A scenario regresses when, against the baseline, its median latency or one of its LDAP counters
 (operations, round trips, entries) grew by more than ``--factor``. Small baselines get a floor

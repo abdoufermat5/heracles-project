@@ -121,8 +121,8 @@ jobs:
           kubectl logs -l app.kubernetes.io/name=heracles --all-containers --tail=100 --prefix
           kubectl logs deployment/openldap --tail=60
 
-  # Scale benchmark (backend/scripts/bench.py) on 2,000 users in the in-memory directory,
-  # compared with the committed baseline (backend/scripts/bench-baseline.json): fails when the
+  # Scale benchmark (backend/bench/bench.py) on 2,000 users in the in-memory directory,
+  # compared with the committed baseline (backend/bench/bench-baseline.json): fails when the
   # median latency of a scenario (scaled by the runner's speed) or its LDAP operation counts grow
   # more than 2x. After an intended change: `make bench-baseline` and commit the file.
   benchmark:
@@ -141,9 +141,9 @@ jobs:
       - run: uv sync --locked
       - name: Run the benchmark
         run: >
-          uv run python scripts/bench.py --users 2000 --repeat 3 --no-check
+          uv run python bench/bench.py --users 2000 --repeat 3 --no-check
           --json "$RUNNER_TEMP/bench.json" --markdown "$RUNNER_TEMP/bench.md"
       - name: Compare with the baseline
         run: |
           cat "$RUNNER_TEMP/bench.md" >> "$GITHUB_STEP_SUMMARY"
-          uv run python scripts/bench_compare.py scripts/bench-baseline.json "$RUNNER_TEMP/bench.json"
+          uv run python bench/bench_compare.py bench/bench-baseline.json "$RUNNER_TEMP/bench.json"

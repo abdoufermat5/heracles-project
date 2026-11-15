@@ -16,10 +16,10 @@ Backends: ``--backend memory`` (default, the in-memory demo directory) or ``--ba
 against a server loaded by ``bench_ldap.py`` (needs python-ldap, ``--extra ldap``). The memory
 directory answers in microseconds; the operation counts predict latency on a real server.
 
-    uv run python scripts/bench.py [--users 5000] [--repeat 20] [--json out.json]
+    uv run python bench/bench.py [--users 5000] [--repeat 20] [--json out.json]
         [--markdown out.md] [--profile PATH] [--no-check]
-    uv run --extra ldap python scripts/bench.py --backend ldap --ldap-uri ldap://127.0.0.1:1389 \
-        --users 50000     # after `python scripts/bench_ldap.py up --users 50000`
+    uv run --extra ldap python bench/bench.py --backend ldap --ldap-uri ldap://127.0.0.1:1389 \
+        --users 50000     # after `python bench/bench_ldap.py up --users 50000`
 
 ``ops`` is the number of directory operations of one request, ``trips`` the number of LDAP
 requests on the wire (a paged search costs one per page of 500 entries), ``entries`` the
@@ -406,7 +406,7 @@ def make_directory(args: argparse.Namespace) -> tuple[Any, dict[str, Any]]:
     if last is None or beyond is not None:
         raise SystemExit(
             f"the directory at {args.ldap_uri} does not hold {args.users} generated users "
-            "(load it with: python scripts/bench_ldap.py up --users N)"
+            "(load it with: python bench/bench_ldap.py up --users N)"
         )
     info = {"backend": "ldap", "server": args.server, "indexes": args.indexes}
     import ldap  # type: ignore[import-not-found]

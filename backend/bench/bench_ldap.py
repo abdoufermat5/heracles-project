@@ -1,8 +1,8 @@
 """Throwaway OpenLDAP server loaded with the benchmark dataset (needs Docker).
 
-    python scripts/bench_ldap.py up --users 50000 [--indexes tuned] [--port 0]   # prints JSON
-    python scripts/bench_ldap.py down NAME
-    python scripts/bench_ldap.py run --users 50000 [--indexes tuned] [-- <bench.py options>]
+    python bench/bench_ldap.py up --users 50000 [--indexes tuned] [--port 0]   # prints JSON
+    python bench/bench_ldap.py down NAME
+    python bench/bench_ldap.py run --users 50000 [--indexes tuned] [-- <bench.py options>]
 
 ``up`` generates the LDIF of ``benchdata`` (demo tree + users + groups), starts an OpenLDAP 2.6
 container with the Heracles schema on a free loopback port (unique name ``hrc-bench-ldap-*``),
