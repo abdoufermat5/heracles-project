@@ -169,18 +169,20 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
 
     @router.get("/requestable")
     def list_requestable(  # pyright: ignore[reportUnusedFunction]
-        user: CurrentUserDep,
+        user: CurrentUserDep, domain: DomainDep, member: str = ""
     ) -> dict[str, Any]:
-        """Groups and roles the signed-in person may ask to join."""
+        """Groups and roles the signed-in person (or ``member``, see ``POST /requests``) may
+        ask to join."""
         cfg = access_config()
+        who = _request_subject(user, domain, member)
         items: list[dict[str, Any]] = []
         for entry in ap.requestable(user.directory, cfg):
             kind = ap.kind_of(entry)
             if kind is None:
                 continue
             ends = None
-            if ap.holds_membership(entry, user.dn):
-                ends = ap.current_end_date(_dated(user, entry), kind, user.dn)
+            if ap.holds_membership(entry, who):
+                ends = ap.current_end_date(_dated(user, entry), kind, who)
                 if ends is None:
                     continue  # held for good: nothing to ask for
             items.append(

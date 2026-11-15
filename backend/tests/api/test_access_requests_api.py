@@ -263,6 +263,22 @@ def test_a_manager_asks_for_their_report(
     assert any(f"member: {BMARTIN}" in e.texts("hrcAuditAttributes") for e in events)
 
 
+def test_requestable_for_the_person_asked_for(
+    client: TestClient, directory: MemoryDirectory
+) -> None:
+    make_manager(directory, DLEFEVRE, CDUPONT)  # cdupont already is in lyon-staff
+    make_manager(directory, BMARTIN, CDUPONT)
+    a = as_user(client, "cdupont")
+    assert a.get("/access/requestable").json()["items"] == []
+    items = a.get("/access/requestable", member=BMARTIN).json()["items"]
+    assert [i["dn"] for i in items] == [LYON_STAFF]
+    # the person asked for already holds it: nothing to ask for them
+    assert a.get("/access/requestable", member=DLEFEVRE).json()["items"] == []
+    # not their manager: refused
+    assert as_user(client, "asmith").get("/access/requestable", member=BMARTIN).status_code == 403
+    assert as_user(client, "admin").get("/access/requestable", member=BMARTIN).status_code == 200
+
+
 def test_the_requester_of_someone_else_may_cancel(
     client: TestClient, directory: MemoryDirectory
 ) -> None:
