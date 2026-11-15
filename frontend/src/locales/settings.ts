@@ -173,6 +173,7 @@ export const settingsEn = {
         departments: 'Checks organizational units for department structural markers.',
         duplicate_ids: 'Scans for duplicate numeric uidNumber or gidNumber identifiers across accounts.',
         plugin_data: 'Counts entries that use the schema of plugins that are switched off (their tabs are hidden in the console).',
+        audit_chain: 'Checks that the directory schema lets the audit log chain its events, so that altering or deleting one is detected.',
         transport: 'Checks that the connection to the directory is encrypted, so the bind password and the passwords sent through the console never travel in clear.',
       },
       checkFix: {
@@ -187,6 +188,7 @@ export const settingsEn = {
         departments: 'Adds the department auxiliary object class to the organizational units.',
         duplicate_ids: 'Report only. Manually reassign duplicate numeric IDs on the conflicting entries to prevent Unix permission collisions.',
         plugin_data: 'Report only. Enable the plugin again, or clean up the entries.',
+        audit_chain: 'Report only. Load deploy/ldap/schema/heracles.ldif (or heracles.schema) from this release into the directory server, then restart Heracles.',
         transport: 'Report only. Use an ldaps:// URI, or ldap:// with StartTLS, in the directory configuration.',
       },
       result: {
@@ -260,6 +262,12 @@ export const settingsEn = {
           found_other:
             'Entries use the schema of disabled plugins ({{plugins}}; {{count}} entries), which hides them in the console.',
           ok: 'No data belongs to a disabled plugin.',
+          failed: 'The check failed: {{error}}.',
+        },
+        audit_chain: {
+          missing:
+            'The directory schema predates the audit hash chain (no hrcAuditChain class): events are recorded without tamper evidence.',
+          ok: 'The audit log can be chained.',
           failed: 'The check failed: {{error}}.',
         },
       },

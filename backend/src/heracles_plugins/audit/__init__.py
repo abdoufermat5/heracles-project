@@ -80,15 +80,28 @@ class AuditTask(TaskObjectType):
                 min=0,
                 description=_("Events older than this are deleted; empty uses the default"),
             ),
+            IntAttr(
+                "hrcAuditTasksRetentionCount",
+                _("Events kept"),
+                min=0,
+                description=_("Older events beyond this number are deleted; empty keeps all"),
+            ),
             BooleanAttr(
                 "hrcAuditSyslogEnabled",
                 _("Forward events to syslog"),
                 default=False,
+                description=_(
+                    "Only without a collector in the audit configuration (which forwards "
+                    "every event itself); then logs to the heracles.audit logger"
+                ),
             ),
             StringAttr(
                 "hrcAuditSyslogPrefix",
                 _("Syslog prefix"),
-                description=_("Text put before every forwarded event"),
+                description=_(
+                    "Text put before every event this task forwards; with a collector, "
+                    "use audit.syslog.prefix"
+                ),
             ),
         )
 

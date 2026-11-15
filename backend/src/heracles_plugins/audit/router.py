@@ -6,6 +6,7 @@ import base64
 import csv
 import heapq
 import io
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -14,10 +15,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
 
-from heracles.api.deps import CurrentUserDep
-from heracles.api.domain import DomainDep
+from heracles.api.deps import CurrentUser, CurrentUserDep, StateDep
+from heracles.api.domain import Domain, DomainDep
 from heracles.api.errors import forbidden, validation
+from heracles.api.stepup import require_recent_auth
 from heracles.attributes import JSON
+from heracles.core import audit_chain as chain
 from heracles.core.audit import EVENT_CLASS, audit_container
 from heracles.core.generalized_time import parse_generalized_time
 from heracles.ldap import dn as dnlib
@@ -41,6 +44,9 @@ _EVENT_ATTRS = (
     "hrcAuditObject",
     "hrcAuditAttributes",
     "hrcAuditResult",
+    chain.SEQUENCE_ATTR,
+    chain.HASH_ATTR,
+    chain.PREVIOUS_ATTR,
 )
 
 
@@ -57,6 +63,9 @@ class Event:
     object: str
     attributes: list[str]
     result: str
+    sequence: int | None = None
+    hash: str = ""
+    previous: str = ""
 
     @property
     def sort_key(self) -> tuple[str, str]:
@@ -83,6 +92,9 @@ def parse_event(entry: Entry) -> Event | None:
         object=entry.text("hrcAuditObject") or "",
         attributes=[v.decode("utf-8", "replace") for v in entry.get("hrcAuditAttributes")],
         result=entry.text("hrcAuditResult") or "success",
+        sequence=chain.sequence_of(entry),
+        hash=entry.text(chain.HASH_ATTR) or "",
+        previous=entry.text(chain.PREVIOUS_ATTR) or "",
     )
 
 
@@ -291,6 +303,9 @@ def csv_export(events: Iterable[Event], labels: Labels) -> str:
             "object",
             "ip",
             "attributes",
+            "sequence",
+            "hash",
+            "previous_hash",
         ]
     )
     for event in events:
@@ -308,15 +323,73 @@ def csv_export(events: Iterable[Event], labels: Labels) -> str:
             obj["label"],
             event.ip,
             "; ".join(event.attributes),
+            "" if event.sequence is None else str(event.sequence),
+            event.hash,
+            event.previous,
         ]
         writer.writerow([_safe(str(c)) for c in row])
     return out.getvalue()
+
+
+def json_export(
+    events: Iterable[Event],
+    labels: Labels,
+    *,
+    directory: DirectoryClient,
+    filters: dict[str, JSON],
+    now: datetime,
+) -> str:
+    """The export document: the events with their chain values and a chain verification."""
+    verification = chain.verify_chain(directory, audit_container(directory))
+    items: list[JSON] = []
+    for event in events:
+        item = event_json(event, labels)
+        item["sequence"] = event.sequence
+        item["hash"] = event.hash
+        item["previous_hash"] = event.previous
+        items.append(item)
+    doc: dict[str, JSON] = {
+        "generated_at": now.isoformat(),
+        "directory": directory.base_dn,
+        "filters": filters,
+        "chain": verification.to_json(),  # type: ignore[dict-item]
+        "events": items,
+    }
+    return json.dumps(doc, ensure_ascii=False, indent=1)
 
 
 def build_router(ctx: PluginRouterContext) -> APIRouter:
     """Router factory (``Plugin.api_routers``)."""
     del ctx
     router = APIRouter(prefix="/audit", tags=["audit"])
+
+    def _query(
+        user: CurrentUser,
+        domain: Domain,
+        *,
+        from_: str | None,
+        to: str | None,
+        actor: str,
+        object: str,
+        action: list[str] | None,
+        type: str,
+        result: str,
+        q: str,
+    ) -> AuditQuery:
+        info = domain.registry.get("audit_event")
+        base = user.directory.base_dn
+        if not domain.evaluator(user).permissions(base, info.acl_object(info.main_tab)).read:
+            raise forbidden("You cannot read the audit log")
+        return AuditQuery(
+            start=parse_moment(from_, "from"),
+            end=parse_moment(to, "to", end=True),
+            actor=actor.strip(),
+            object=object.strip(),
+            actions=[a for a in (action or []) if a],
+            type=type.strip(),
+            result=result.strip(),
+            q=q.strip(),
+        )
 
     @router.get("")
     def list_audit(  # pyright: ignore[reportUnusedFunction]
@@ -332,37 +405,86 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         q: str = "",
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
-        format: Annotated[str, Query(pattern="^(json|csv)$")] = "json",
     ) -> Any:
         """Events newest first. Needs the read right on the audit event category."""
-        info = domain.registry.get("audit_event")
-        base = user.directory.base_dn
-        if not domain.evaluator(user).permissions(base, info.acl_object(info.main_tab)).read:
-            raise forbidden("You cannot read the audit log")
-        query = AuditQuery(
-            start=parse_moment(from_, "from"),
-            end=parse_moment(to, "to", end=True),
-            actor=actor.strip(),
-            object=object.strip(),
-            actions=[a for a in (action or []) if a],
-            type=type.strip(),
-            result=result.strip(),
-            q=q.strip(),
+        query = _query(
+            user,
+            domain,
+            from_=from_,
+            to=to,
+            actor=actor,
+            object=object,
+            action=action,
+            type=type,
+            result=result,
+            q=q,
         )
         labels = Labels(user.directory)
-        if format == "csv":
-            events, _more = page_events(user.directory, query, limit=MAX_EXPORT)
-            body = csv_export(events, labels)
-            return Response(
-                body,
-                media_type="text/csv; charset=utf-8",
-                headers={"Content-Disposition": 'attachment; filename="audit-log.csv"'},
-            )
         after = decode_cursor(cursor)
         page, more = page_events(user.directory, query, after=after, limit=limit)
         return {
             "items": [event_json(e, labels) for e in page],
             "next_cursor": encode_cursor(page[-1]) if more and page else None,
         }
+
+    @router.get("/export")
+    def export_audit(  # pyright: ignore[reportUnusedFunction]
+        user: CurrentUserDep,
+        domain: DomainDep,
+        state: StateDep,
+        from_: Annotated[str | None, Query(alias="from")] = None,
+        to: str | None = None,
+        actor: str = "",
+        object: Annotated[str, Query(description="DN; matches it and everything below")] = "",
+        action: Annotated[list[str] | None, Query()] = None,
+        type: str = "",
+        result: str = "",
+        q: str = "",
+        format: Annotated[str, Query(pattern="^(json|csv)$")] = "csv",
+    ) -> Response:
+        """Download the matching events for auditors, with their chain values.
+
+        Needs the read right on the audit log and a recent sign-in (step-up); the JSON
+        document also carries a verification of the whole chain.
+        """
+        query = _query(
+            user,
+            domain,
+            from_=from_,
+            to=to,
+            actor=actor,
+            object=object,
+            action=action,
+            type=type,
+            result=result,
+            q=q,
+        )
+        require_recent_auth(state, user.session)
+        labels = Labels(user.directory)
+        events, _more = page_events(user.directory, query, limit=MAX_EXPORT)
+        events.reverse()  # oldest first: the chain order
+        now = datetime.now(UTC)
+        stamp = now.strftime("%Y%m%d-%H%M%S")
+        if format == "csv":
+            body = csv_export(events, labels)
+            media = "text/csv; charset=utf-8"
+        else:
+            filters: dict[str, JSON] = {
+                "from": from_,
+                "to": to,
+                "actor": query.actor,
+                "object": query.object,
+                "action": list(query.actions),
+                "type": query.type,
+                "result": query.result,
+                "q": query.q,
+            }
+            body = json_export(events, labels, directory=user.directory, filters=filters, now=now)
+            media = "application/json"
+        return Response(
+            body,
+            media_type=media,
+            headers={"Content-Disposition": f'attachment; filename="audit-log-{stamp}.{format}"'},
+        )
 
     return router

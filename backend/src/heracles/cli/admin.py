@@ -143,6 +143,38 @@ def run_create_admin(args: argparse.Namespace, factory: DirectoryFactory) -> int
     return 0
 
 
+def run_audit_verify(args: argparse.Namespace, factory: DirectoryFactory) -> int:
+    """Check the audit hash chain; exit 1 at the first break."""
+    from heracles.core.audit import audit_container
+    from heracles.core.audit_chain import verify_chain
+
+    directory = _directory(args, factory)
+    if directory is None:
+        return 2
+    try:
+        result = verify_chain(directory, audit_container(directory))
+    except DirectoryError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(result.to_json(), indent=2))
+    else:
+        head = result.head.text() if result.head else "none"
+        if result.ok:
+            print(f"OK: {result.checked} chained events verified (head {head})")
+        else:
+            brk = result.first_break
+            assert brk is not None
+            where = f" ({brk.dn})" if brk.dn else ""
+            print(f"FAIL: event {brk.sequence}{where}: {brk.reason}")
+            print(f"  {result.checked} events verified before the break (head {head})")
+        if result.base.sequence:
+            print(f"  events up to {result.base.sequence} were purged by the retention policy")
+        for warning in result.warnings:
+            print(f"  warning: {warning}")
+    return 0 if result.ok else 1
+
+
 def register(sub: Any, factory: DirectoryFactory) -> None:
     """Add the commands to the sub-parsers object of the main parser."""
 
@@ -180,6 +212,19 @@ def register(sub: Any, factory: DirectoryFactory) -> None:
         help=f"read the password from this file ('-' for standard input); ${PASSWORD_ENV} also"
         " works",
     )
+
+    audit = sub.add_parser("audit", help="the audit log")
+    audit_sub = audit.add_subparsers(dest="audit_command", required=True)
+    verify = audit_sub.add_parser(
+        "verify", help="check the hash chain of the audit log (exit 1 when it is broken)"
+    )
+    common(verify)
+    verify.add_argument("--json", action="store_true", help="machine readable output")
+
+    def do_verify(a: argparse.Namespace) -> int:
+        return run_audit_verify(a, factory)
+
+    verify.set_defaults(func=do_verify)
 
     def do_create(a: argparse.Namespace) -> int:
         return run_create_admin(a, factory)

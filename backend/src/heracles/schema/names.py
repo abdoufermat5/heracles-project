@@ -212,6 +212,7 @@ PLUGIN_OBJECT_CLASSES: Final = frozenset(
         # workflow tasks
         "hrcAuditEvent",
         "hrcAuditTasks",
+        "hrcAuditChain",
         "hrcArchivedObject",
         "hrcArchiveTasks",
         "hrcTasksLifeCycle",

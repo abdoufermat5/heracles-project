@@ -188,7 +188,11 @@ def test_purge_old_events_default_and_task_retention(directory: MemoryDirectory)
     report = audit.run_audit(directory, NOW, audit.AuditSettings(retention_days=365))
     assert report.events_purged == 1
     assert report.tasks_run == 1
-    assert len(events(directory)) == 2
+    left = events(directory)
+    assert [e["hrcAuditAction"] for e in left] == [["modify"], ["modify"], ["purge"]]
+    purge = left[2]
+    assert "events purged: 1" in purge["hrcAuditAttributes"]
+    assert "retention: 365 days" in purge["hrcAuditAttributes"]
 
 
 def test_task_retention_overrides_setting_and_zero_keeps(directory: MemoryDirectory) -> None:

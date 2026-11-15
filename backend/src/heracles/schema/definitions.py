@@ -350,6 +350,13 @@ ATTRIBUTE_TYPES: tuple[AttributeType, ...] = (
     # unpublished draft. Those plugins write the external schemas their servers read
     # (see ``heracles.schema.external``), so the numbers stay unused for good:
     # never reuse them.
+    AttributeType(373, "hrcAuditSequence", S.INTEGER, single=True),
+    AttributeType(374, "hrcAuditHash", S.EXACT, single=True),
+    AttributeType(375, "hrcAuditPreviousHash", S.EXACT, single=True),
+    AttributeType(376, "hrcAuditChainHead", S.EXACT, single=True),
+    AttributeType(377, "hrcAuditChainBase", S.EXACT, single=True),
+    AttributeType(378, "hrcAuditForwarded", S.INTEGER, single=True),
+    AttributeType(379, "hrcAuditTasksRetentionCount", S.INTEGER, single=True),
 )
 
 OBJECT_CLASSES: tuple[ObjectClass, ...] = (
@@ -383,13 +390,21 @@ OBJECT_CLASSES: tuple[ObjectClass, ...] = (
             "hrcAuditObject",
             "hrcAuditAttributes",
             "hrcAuditResult",
+            "hrcAuditSequence",
+            "hrcAuditHash",
+            "hrcAuditPreviousHash",
         ),
     ),
     ObjectClass(
         6,
         "hrcAuditTasks",
         ObjectClass.AUXILIARY,
-        may=("hrcAuditTasksRetention", "hrcAuditSyslogEnabled", "hrcAuditSyslogPrefix"),
+        may=(
+            "hrcAuditTasksRetention",
+            "hrcAuditSyslogEnabled",
+            "hrcAuditSyslogPrefix",
+            "hrcAuditTasksRetentionCount",
+        ),
     ),
     ObjectClass(
         7,
@@ -1089,4 +1104,10 @@ OBJECT_CLASSES: tuple[ObjectClass, ...] = (
     # 69-74 are reserved: they defined the SMB and FTP Heracles classes in an
     # unpublished draft. Those plugins use the external schemas the servers read
     # instead; the numbers stay unused for good: never reuse them.
+    ObjectClass(
+        75,
+        "hrcAuditChain",
+        ObjectClass.AUXILIARY,
+        may=("hrcAuditChainHead", "hrcAuditChainBase", "hrcAuditForwarded"),
+    ),
 )

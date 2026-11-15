@@ -171,6 +171,7 @@ export const settingsFr: typeof settingsEn = {
         departments: 'Vérifie la présence du marqueur de département sur les unités organisationnelles.',
         duplicate_ids: 'Recherche les doublons d\'identifiants numériques uidNumber ou gidNumber.',
         plugin_data: 'Compte les entrées qui utilisent le schéma de modules désactivés (leurs onglets sont masqués dans la console).',
+        audit_chain: 'Vérifie que le schéma de l\'annuaire permet de chaîner les événements du journal d\'audit, pour détecter la modification ou la suppression de l\'un d\'eux.',
         transport: 'Vérifie que la connexion à l\'annuaire est chiffrée, pour que le mot de passe de connexion et ceux saisis dans la console ne circulent jamais en clair.',
       },
       checkFix: {
@@ -185,6 +186,7 @@ export const settingsFr: typeof settingsEn = {
         departments: 'Ajoute la classe d\'objet de département aux unités organisationnelles.',
         duplicate_ids: 'Rapport seul. Réattribuez manuellement des identifiants uniques aux entrées en conflit.',
         plugin_data: 'Rapport seul. Réactivez le module ou nettoyez les entrées.',
+        audit_chain: 'Rapport seul. Chargez deploy/ldap/schema/heracles.ldif (ou heracles.schema) de cette version dans le serveur d\'annuaire, puis redémarrez Heracles.',
         transport: 'Rapport seul. Utilisez une URI ldaps://, ou ldap:// avec StartTLS, dans la configuration de l\'annuaire.',
       },
       result: {
@@ -261,6 +263,12 @@ export const settingsFr: typeof settingsEn = {
           found_other:
             'Des entrées utilisent le schéma de modules désactivés ({{plugins}} ; {{count}} entrées), ce qui les masque dans la console.',
           ok: 'Aucune donnée n\'appartient à un module désactivé.',
+          failed: 'La vérification a échoué : {{error}}.',
+        },
+        audit_chain: {
+          missing:
+            'Le schéma de l\'annuaire est antérieur au chaînage du journal d\'audit (pas de classe hrcAuditChain) : les événements sont enregistrés sans preuve d\'intégrité.',
+          ok: 'Le journal d\'audit peut être chaîné.',
           failed: 'La vérification a échoué : {{error}}.',
         },
       },

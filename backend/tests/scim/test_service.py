@@ -211,7 +211,8 @@ def test_patch_touches_only_what_changed(env: Env) -> None:
     real = env.directory.modify
 
     def spy(target: str, changes: Any) -> None:
-        seen.extend(c.attr for c in changes)
+        if target == dn:  # not the audit log
+            seen.extend(c.attr for c in changes)
         real(target, changes)
 
     env.directory.modify = spy  # type: ignore[method-assign]
@@ -392,7 +393,8 @@ def test_group_member_patch_is_one_modify(env: Env) -> None:
     real = env.directory.modify
 
     def spy(target: str, changes: Any) -> None:
-        seen.extend((target, c.attr) for c in changes)
+        if "ou=audit," not in target:  # not the audit log
+            seen.extend((target, c.attr) for c in changes)
         real(target, changes)
 
     env.directory.modify = spy  # type: ignore[method-assign]

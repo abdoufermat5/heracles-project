@@ -5,7 +5,13 @@ export const auditFr: typeof auditEn = {
   audit: {
     title: 'Journal d’audit',
     description: 'Qui a fait quoi, quand et depuis où.',
-    exportCsv: 'Exporter en CSV',
+    export: {
+      label: 'Exporter',
+      csv: 'CSV (tableur)',
+      json: 'JSON avec vérification de la chaîne',
+      failed: 'L’export a échoué',
+      reauthBody: 'L’export du journal d’audit demande une connexion récente. Confirmez votre mot de passe pour continuer.',
+    },
     search: 'Rechercher dans le journal',
     period: 'Période',
     range: {
@@ -49,6 +55,7 @@ export const auditFr: typeof auditEn = {
       unlock: 'Déverrouillage',
       member_add: 'Membre ajouté',
       api_token: 'Jeton d’API',
+      purge: 'Journal purgé',
       member_remove: 'Membre retiré',
     },
     results: {

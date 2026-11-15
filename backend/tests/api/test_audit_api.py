@@ -364,14 +364,58 @@ def test_audit_csv_export(app_client: TestClient, directory: MemoryDirectory) ->
     )
     a = Api(app_client)
     a.login("admin")
-    r = a.get("/audit", format="csv", action="modify")
+    r = a.get("/audit/export", format="csv", action="modify")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/csv")
     assert "attachment" in r.headers["content-disposition"]
     rows = list(csv.reader(io.StringIO(r.text)))
     assert rows[0][:3] == ["time", "action", "result"]
+    assert rows[0][-3:] == ["sequence", "hash", "previous_hash"]
     assert len(rows) == 3
     assert any(cell == "'=cmd|calc" for row in rows for cell in row)
+    # oldest first, in chain order
+    sequences = [int(row[-3]) for row in rows[1:]]
+    assert sequences == sorted(sequences)
+
+
+def test_audit_json_export_carries_the_chain(
+    app_client: TestClient, directory: MemoryDirectory
+) -> None:
+    seed(directory)
+    a = Api(app_client)
+    a.login("admin")
+    r = a.get("/audit/export", format="json")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/json")
+    doc = r.json()
+    assert doc["chain"]["ok"] is True
+    assert doc["events"] and all(e["hash"] for e in doc["events"])
+    first = doc["events"][0]
+    assert {"sequence", "previous_hash", "actor", "object"} <= set(first)
+
+
+def test_audit_export_needs_a_recent_sign_in(
+    app_client: TestClient, directory: MemoryDirectory
+) -> None:
+    import time
+
+    from heracles.api.state import AppState
+
+    seed(directory)
+    a = Api(app_client)
+    a.login("admin")
+    state: AppState = app_client.app.state.heracles  # type: ignore[attr-defined]
+    state.clock = lambda: time.time() + 3600  # the login is now an hour old (per-test app)
+    r = a.get("/audit/export", format="csv")
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "reauth_required"
+    assert a.get("/audit").status_code == 200  # browsing stays allowed
+
+
+def test_audit_listing_no_longer_downloads(app_client: TestClient) -> None:
+    a = Api(app_client)
+    a.login("admin")
+    assert a.get("/audit", format="csv").headers["content-type"].startswith("application/json")
 
 
 def test_audit_requires_read_right(app_client: TestClient, directory: MemoryDirectory) -> None:

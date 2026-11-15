@@ -3,7 +3,13 @@ export const auditEn = {
   audit: {
     title: 'Audit log',
     description: 'Who did what, when and from where.',
-    exportCsv: 'Export CSV',
+    export: {
+      label: 'Export',
+      csv: 'CSV (spreadsheet)',
+      json: 'JSON with chain verification',
+      failed: 'The export failed',
+      reauthBody: 'Exporting the audit log needs a recent sign-in. Confirm your password to continue.',
+    },
     search: 'Search the log',
     period: 'Period',
     range: {
@@ -47,6 +53,7 @@ export const auditEn = {
       unlock: 'Unlocked',
       member_add: 'Member added',
       api_token: 'API token',
+      purge: 'Log purged',
       member_remove: 'Member removed',
     },
     results: {

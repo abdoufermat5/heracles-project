@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from heracles.core.generalized_time import format_generalized_time
 from heracles.ldap.client import DirectoryClient, Entry, NoSuchObjectError, Scope
+from heracles.tasks.syslog import audit_config, audit_sender
 from heracles_plugins._tasks import (
     TaskReport,
     bool_of,
     int_of,
-    purge_older_than,
     run_tasks,
     task_filter,
     time_of,
@@ -24,6 +24,7 @@ from heracles_plugins.audit.events import (
     audit_container,
     format_event,
 )
+from heracles_plugins.audit.policy import purge_events, run_policy
 
 TASK_CLASS = "hrcAuditTasks"
 TASK_FILTER = task_filter(TASK_CLASS)
@@ -37,6 +38,7 @@ class AuditReport(TaskReport):
 
     events_purged: int = 0
     events_forwarded: int = 0
+    anchors_sent: int = 0
 
 
 def _forward(directory: DirectoryClient, task: Entry, since: datetime, report: AuditReport) -> None:
@@ -61,34 +63,39 @@ def run_audit(
     now: datetime,
     settings: AuditSettings | None = None,
 ) -> AuditReport:
-    """Run every due audit task once.
+    """Run every due audit task once, then the configured policy (``audit`` section).
 
     A task purges the events older than its retention (``hrcAuditTasksRetention`` days, or
-    ``settings.retention_days``; 0 keeps everything) and, when syslog forwarding is enabled,
-    logs the events recorded since its previous execution to the ``heracles.audit`` logger.
+    ``settings.retention_days``; 0 keeps everything) and beyond its count
+    (``hrcAuditTasksRetentionCount``); when syslog forwarding is enabled on the task and no
+    collector is configured for the process, it logs the events recorded since its previous
+    execution to the ``heracles.audit`` logger (a configured collector receives every event
+    from the policy instead).
     """
     settings = settings or AuditSettings()
     now = utc(now)
     report = AuditReport()
+    sender = audit_sender()
 
     def process(task: Entry) -> bool:
-        if bool_of(task, "hrcAuditSyslogEnabled") is True:
+        if bool_of(task, "hrcAuditSyslogEnabled") is True and sender is None:
             since = (
                 time_of(task, "hrcTasksLastExec") or time_of(task, "hrcTasksCreationDate") or now
             )
             _forward(directory, task, since, report)
         days = int_of(task, "hrcAuditTasksRetention")
         days = settings.retention_days if days is None else days
-        if days > 0:
-            report.events_purged += purge_older_than(
-                directory,
-                audit_container(directory),
-                EVENT_CLASS,
-                "hrcAuditDateTime",
-                now - timedelta(days=days),
-                report.errors,
-            )
+        count = int_of(task, "hrcAuditTasksRetentionCount") or 0
+        if days > 0 or count > 0:
+            purged = purge_events(directory, now, days=days, count=count, source=f"task {task.dn}")
+            report.events_purged += purged.purged
+            if purged.errors:
+                report.errors.append(f"{purged.errors} events could not be purged")
         return True
 
     run_tasks(directory, TASK_FILTER, now, process, report)
+    policy = run_policy(directory, now, audit_config(), sender)
+    report.events_purged += policy.purged
+    report.events_forwarded += policy.forwarded
+    report.anchors_sent += int(policy.anchored)
     return report

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Download, ScrollText, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, ScrollText, X } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { typeLabel } from '@/lib/labels'
 import { rdnValue } from '@/lib/objects'
-import { auditApi } from './api'
+import { AuditExportMenu } from './AuditExportMenu'
 import { ActionBadge, ActorChip, AttributeDiff, ObjectCell, WhenCell } from './EventParts'
 import { AUDIT_TYPE, useAuditEnabled, useAuditEvents } from './hooks'
 import { AUDIT_ACTIONS, type AuditFilters } from './types'
@@ -131,12 +131,7 @@ export function AuditPage({ object: initialObject = '', actor: initialActor = ''
         title={t('audit.title')}
         description={t('audit.description')}
         actions={
-          <Button asChild variant="outline" size="sm">
-            <a href={auditApi.exportUrl(filters)} download="audit-log.csv">
-              <Download aria-hidden />
-              {t('audit.exportCsv')}
-            </a>
-          </Button>
+          <AuditExportMenu filters={filters} />
         }
       >
       <FilterBar search={search} onSearch={setSearch} placeholder={t('audit.search')}>
