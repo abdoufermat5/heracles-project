@@ -8,7 +8,12 @@ your existing LDAP server and ships its own LDAP schema (`hrc*` classes).
 * **Backend**: Python 3.12+, FastAPI, python-ldap (`backend/`)
 * **Frontend**: React 19, TypeScript, Vite, shadcn/ui, Tailwind CSS v4 (`frontend/`)
 
-Status: early development.
+Status: first release in preparation (0.1). Tested on OpenLDAP and 389 Directory Server.
+Licensed under the [GNU AGPL v3.0 or later](LICENSE).
+
+**Documentation:** the [manual](manual/README.md) (installation, configuration, upgrades,
+backups, plugins, migrating a legacy directory), the [changelog](CHANGELOG.md), the
+[security policy](SECURITY.md) and [how to contribute](CONTRIBUTING.md).
 
 ## Quick start
 
@@ -41,7 +46,9 @@ factors) lives in the application database (SQLite in the data volume by default
 Every setting is described, commented, in `deploy/production/heracles.example.yaml`.
 The configuration file is `$HERACLES_CONFIG` (or `--config`); `$HERACLES_DATA_DIR` holds
 the application database. `heracles --help` lists the commands: `serve`, `init`, `worker`,
-`check`, `fix`, `create-admin`, `schema export`, `dns`, `migrate-directory`.
+`check`, `fix`, `create-admin`, `schema export`, `dns`, `migrate-directory`, `migrate-check`,
+`backup`, `restore`, `audit verify`. The [configuration reference](manual/configuration.md)
+is generated from the example file.
 
 ## Development
 

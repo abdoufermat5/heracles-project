@@ -6,6 +6,7 @@ import argparse
 import os
 import sys
 from collections.abc import Sequence
+from typing import TextIO, cast
 from urllib.parse import urlsplit
 
 from heracles.cli import admin as admin_commands
@@ -180,10 +181,28 @@ def _schema_export(args: argparse.Namespace) -> int:
 
 def _migrate_directory(args: argparse.Namespace) -> int:
     import csv
+    import json
 
     from heracles.migrate.directory import migrate_ldif
 
-    if os.path.exists(args.target) and os.path.samefile(args.source, args.target):
+    if args.target is None and not args.dry_run:
+        print("heracles migrate-directory: give a target, or --dry-run", file=sys.stderr)
+        return 2
+    if args.dry_run:
+        with open(args.source, encoding="utf-8") as src:
+            _converted, report = migrate_ldif(src.read())
+        if args.json:
+            print(json.dumps(report.to_json(), indent=2))
+        else:
+            sys.stdout.write(report.summary())
+        if args.report:
+            with open(args.report, "w", encoding="utf-8", newline="") as out:
+                writer = csv.writer(out)
+                writer.writerow(["old", "new"])
+                writer.writerows(report.rename_table())
+        return 0 if report.clean else 1
+    target = str(args.target)
+    if os.path.exists(target) and os.path.samefile(args.source, target):
         print(
             "heracles migrate-directory: the target must not be the source export", file=sys.stderr
         )
@@ -209,7 +228,7 @@ def _migrate_directory(args: argparse.Namespace) -> int:
         print(f"{len(report.errors)} error(s): nothing written (use --force)", file=err)
         return 1
     # the export holds password hashes: readable by the owner only
-    fd = os.open(args.target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as out:
         os.fchmod(out.fileno(), 0o600)
         out.write(converted)
@@ -272,12 +291,27 @@ def _db_migrate_to_postgres(args: argparse.Namespace) -> int:
     return 0
 
 
+class _Stderr:
+    """A text stream writing to whatever ``sys.stderr`` is at the time of the write."""
+
+    def write(self, text: str) -> int:
+        return sys.stderr.write(text)
+
+    def flush(self) -> None:
+        sys.stderr.flush()
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
     directories: admin_commands.DirectoryFactory | None = None,
 ) -> int:
     """Run the Heracles CLI."""
+    import structlog
+
+    # Messages go to standard error: standard output carries the commands' results (--json).
+    # The sink looks sys.stderr up on each write, so a replaced stream is never kept.
+    structlog.configure(logger_factory=structlog.PrintLoggerFactory(cast(TextIO, _Stderr())))
     parser = argparse.ArgumentParser(prog="heracles", description="Heracles directory console")
     from heracles import __version__
 
@@ -338,7 +372,17 @@ def main(
         help="convert an LDIF export from the legacy layout to the Heracles schema",
     )
     migrate.add_argument("source", help="LDIF export of the existing directory")
-    migrate.add_argument("target", help="converted LDIF to import into the new server")
+    migrate.add_argument(
+        "target",
+        nargs="?",
+        help="converted LDIF to import into the new server (not with --dry-run)",
+    )
+    migrate.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="write nothing: report what the conversion would do (exit 1 when not clean)",
+    )
+    migrate.add_argument("--json", action="store_true", help="--dry-run report as JSON")
     migrate.add_argument("--report", help="CSV file listing every renamed name (old,new)")
     migrate.add_argument(
         "--force", action="store_true", help="write the result even when errors were found"

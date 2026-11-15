@@ -175,6 +175,45 @@ def run_audit_verify(args: argparse.Namespace, factory: DirectoryFactory) -> int
     return 0 if result.ok else 1
 
 
+def run_migrate_check(args: argparse.Namespace, factory: DirectoryFactory) -> int:
+    """Post-migration checks; exit 1 when one fails."""
+    from pathlib import Path
+
+    from heracles.migrate import check
+
+    if args.ldif:
+        try:
+            directory: DirectoryClient | None = check.load_ldif(
+                Path(args.ldif).read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+    else:
+        directory = select_directory(args, factory)
+    if directory is None:
+        return 2
+    try:
+        if args.export_rights:
+            pairs, out = args.export_rights
+            count = check.export_rights(directory, check.read_csv(Path(pairs)), Path(out))
+            print(f"wrote the rights of {count} triples to {out}")
+            return 0
+        report = check.CheckReport(health=check.health(directory))
+        if args.logins:
+            report.logins = check.logins(directory, check.read_csv(Path(args.logins)))
+        if args.rights:
+            report.rights = check.compare_rights(directory, check.read_csv(Path(args.rights)))
+    except (OSError, DirectoryError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(report.to_json(), indent=2))
+    else:
+        sys.stdout.write(report.summary())
+    return 0 if report.ok else 1
+
+
 def register(sub: Any, factory: DirectoryFactory) -> None:
     """Add the commands to the sub-parsers object of the main parser."""
 
@@ -212,6 +251,29 @@ def register(sub: Any, factory: DirectoryFactory) -> None:
         help=f"read the password from this file ('-' for standard input); ${PASSWORD_ENV} also"
         " works",
     )
+
+    mcheck = sub.add_parser(
+        "migrate-check",
+        help="check a migrated directory: health, sample logins, ACL rights (exit 1 on failure)",
+    )
+    common(mcheck)
+    mcheck.add_argument("--ldif", help="check this converted LDIF in memory instead of the server")
+    mcheck.add_argument("--logins", help="CSV of uid,password (or dn,password) that must sign in")
+    mcheck.add_argument(
+        "--rights", help="CSV of subject,object,key,expected rights (e.g. from --export-rights)"
+    )
+    mcheck.add_argument(
+        "--export-rights",
+        nargs=2,
+        metavar=("TRIPLES", "OUT"),
+        help="write the current rights of each subject,object,key row of TRIPLES to OUT",
+    )
+    mcheck.add_argument("--json", action="store_true", help="machine readable output")
+
+    def do_mcheck(a: argparse.Namespace) -> int:
+        return run_migrate_check(a, factory)
+
+    mcheck.set_defaults(func=do_mcheck)
 
     audit = sub.add_parser("audit", help="the audit log")
     audit_sub = audit.add_subparsers(dest="audit_command", required=True)
