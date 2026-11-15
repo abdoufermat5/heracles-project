@@ -28,6 +28,36 @@ python-ldap integration tests, the backend end-to-end tests and the browser test
   A password-policy overlay or plugin is optional; the `ppolicy` plugin reads and edits the
   policies.
 
+## Indexes
+
+Heracles does not create indexes; above a few thousand entries the server needs **equality
+indexes on the attributes it searches by value**:
+
+| Attribute | Used by |
+| --- | --- |
+| `uid` | every sign-in (the login is looked up before the bind) |
+| `member`, `memberUid` | group memberships of the user being shown or edited, group counters |
+| `roleOccupant` | the roles of the user being shown or edited, ACL resolution |
+| `hrcObjectDn` | edit locks |
+
+Without the `uid` index a sign-in scans the users: measured at 157 ms with 50,000 users and
+265 ms with 100,000 on OpenLDAP 2.6, against 70–77 ms with it. Searches in the console filter
+on `cn`, `sn`, `givenName`, `mail` and `ou` with substrings, which also want `sub` indexes.
+
+OpenLDAP (`cn=config`; the database entry is often `{1}mdb` or `{2}mdb`, and a running server
+builds an index added this way without `slapindex`):
+
+```ldif
+dn: olcDatabase={2}mdb,cn=config
+changetype: modify
+add: olcDbIndex
+olcDbIndex: uid,memberUid,member,roleOccupant,hrcObjectDn eq
+```
+
+389 Directory Server indexes several of these by default: list them with
+`dsconf <instance> backend index list <backend>` and add the missing ones with
+`dsconf <instance> backend index add --attr <name> --index-type eq --reindex <backend>`.
+
 ## OpenLDAP
 
 ```sh
