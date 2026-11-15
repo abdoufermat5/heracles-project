@@ -68,3 +68,70 @@ test('an access request flows from the portal to the owner and into the director
     await api.dispose()
   }
 })
+
+test('owners, end dates and a review campaign in the console', async ({ page, baseURL }) => {
+  const url = baseURL ?? 'http://localhost:8420'
+  const { api, csrf } = await adminApi(url)
+  const name = unique('e2e-review')
+  const created = await api.post('/api/v2/objects/group', {
+    data: { base: '', tabs: { main: { values: { cn: name, member: [person(ADMIN.login), person(EMPLOYEE.login)] } } } },
+    headers: { 'X-CSRF-Token': await csrf() },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const group = ((await created.json()) as { dn: string }).dn
+
+  try {
+    await signIn(page, ADMIN.login, ADMIN.password)
+    await expect(page).not.toHaveURL(/\/login/)
+    await page.goto(`/types/group/${encodeURIComponent(group)}`)
+
+    // the group can be given owners (who approve requests and review it)
+    await page.getByRole('tab', { name: 'Properties' }).click()
+    await expect(page.getByText('Owners').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Edit' }).click()
+    await expect(page.getByText('People responsible for the group', { exact: false })).toBeVisible()
+    await page.getByRole('button', { name: 'Cancel' }).click()
+
+    // an end date on one membership, shown in the members table
+    await page.getByRole('tab', { name: 'Members' }).click()
+    await page.getByRole('button', { name: /^Set end date for .*Durand|^Set end date for bob/ }).first().click()
+    const dialog = page.getByRole('dialog')
+    const until = new Date(Date.now() + 15 * 86_400_000).toISOString().slice(0, 10)
+    await dialog.getByLabel('Last day of access').fill(until)
+    await dialog.getByRole('button', { name: 'Save' }).click()
+    await expect(page.getByText(`Until ${until}`)).toBeVisible()
+
+    // a review campaign over the group: remove bob, alice goes by the default (remove)
+    await page.goto('/access/reviews')
+    await page.getByRole('button', { name: 'New review' }).click()
+    const form = page.getByRole('dialog')
+    await form.getByLabel('Name').fill(name)
+    await form.getByRole('combobox', { name: 'Groups and roles' }).click()
+    await page.getByLabel('Search…').fill(name)
+    await page.getByRole('option', { name: new RegExp(name) }).click()
+    await form.getByLabel('Undecided at close').selectOption('revoke')
+    await form.getByLabel('Deadline').fill(new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10))
+    await form.getByRole('button', { name: 'Start review' }).click()
+    await page.getByRole('link', { name }).click()
+    const bobRow = page.getByTestId('review-item').filter({ hasText: person(EMPLOYEE.login) })
+    await bobRow.getByRole('button', { name: 'Remove' }).click()
+    await expect(bobRow.getByRole('button', { name: 'Remove', pressed: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Close review' }).click()
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Close review' }).click()
+    await expect(page.getByText('Removed')).toBeVisible()
+    await expect(page.getByText('Kept: last member of the group')).toBeVisible()
+
+    // the report downloads (the sign-in is fresh, so no password prompt)
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: /Report/ }).click()
+    await page.getByRole('menuitem', { name: 'JSON (with hash)' }).click()
+    expect((await download).suggestedFilename()).toMatch(/^access-review-.*\.json$/)
+
+    // the console page for requests answers too
+    await page.goto('/access/requests')
+    await expect(page.getByRole('heading', { name: 'Access requests', level: 1 })).toBeVisible()
+  } finally {
+    await api.delete(`/api/v2/objects/group/${encodeURIComponent(group)}`, { headers: { 'X-CSRF-Token': await csrf() } })
+    await api.dispose()
+  }
+})

@@ -75,6 +75,7 @@ import {
   type FormValues,
 } from '@/lib/objects'
 import { typeLabelPlural } from '@/lib/labels'
+import { rdnValue } from '@/lib/objects'
 import { useTechnicalDetails } from '@/lib/preferences'
 import { initials } from '@/lib/utils'
 import { makeResolver } from '@/lib/validation'
@@ -145,6 +146,12 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
 
   const mainValues = (detail?.tabs.main?.values ?? {}) as Record<string, unknown>
   const groupName = String(mainValues.cn ?? dn)
+  const rawOwners = mainValues.owner
+  const ownerDns: string[] = Array.isArray(rawOwners)
+    ? (rawOwners as string[])
+    : typeof rawOwners === 'string' && rawOwners
+      ? [rawOwners]
+      : []
   const groupDesc = mainValues.description ? String(mainValues.description) : null
 
   // Extract raw members array
@@ -604,6 +611,10 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
                   { label: t('peopleUI.text.description'), value: groupDesc ?? '—' },
                   { label: t('peopleUI.text.department'), value: <OrgPath dn={detail.dn} /> },
                   { label: t('peopleUI.text.memberCount'), value: t('peopleUI.text.members', { count: memberDns.length }) },
+                  {
+                    label: t('grants.owners'),
+                    value: ownerDns.length ? ownerDns.map((o) => rdnValue(o)).join(', ') : '—',
+                  },
                 ]}
               />
             )}

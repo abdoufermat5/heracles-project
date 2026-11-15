@@ -6,6 +6,7 @@ export const grantsFr: typeof grantsEn = {
     until: 'Jusqu’au {{day}}',
     untilColumn: 'Fin de l’accès',
     permanent: 'Sans date de fin',
+    owners: 'Propriétaires',
     request: {
       open: 'Demander un accès',
       title: 'Demander un accès',

@@ -4,6 +4,7 @@ export const grantsEn = {
     until: 'Until {{day}}',
     untilColumn: 'Access ends',
     permanent: 'No end date',
+    owners: 'Owners',
     request: {
       open: 'Request access',
       title: 'Request access',
