@@ -151,6 +151,10 @@ def _errors_of(report: object) -> list[str]:
 class TaskStore:
     """Lease and run reports in the application database (component ``tasks``)."""
 
+    @property
+    def database(self) -> Database:
+        return self._db
+
     def __init__(
         self,
         database: Database,
@@ -381,6 +385,8 @@ class Scheduler:
             mailer=self.mailer,
             registry=registry,
             base_url=self.base_url,
+            database=self.store.database,
+            directory_id=dir_id,
         )
         try:
             report = runner.run(ctx)

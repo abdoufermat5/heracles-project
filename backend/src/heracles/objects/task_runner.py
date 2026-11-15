@@ -27,6 +27,11 @@ class TaskRunContext:
     registry: TypeRegistry
     #: Public address of the console, for links in e-mails.
     base_url: str = ""
+    #: The application database (lease and run reports live there too); runners keep their
+    #: own state in it (``None`` in unit tests that do not need one).
+    database: Any = None
+    #: Id of the directory being processed (``directories`` key of the configuration).
+    directory_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
