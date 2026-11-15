@@ -559,10 +559,15 @@ def bulk_edit(
     type_name: str, body: BulkBody, user: CurrentUserDep, domain: DomainDep
 ) -> dict[str, JSON]:
     """Apply the same change to several objects; failures do not abort the others."""
-    locks = domain.locks(user.directory_id, user.directory)
+    # One read of the lock table for the whole batch, not two searches per object. A lock
+    # taken while the batch runs is not seen, as one taken between check and write never was.
+    held = {
+        dnlib.normalize(lock.object_dn): lock
+        for lock in domain.locks(user.directory_id, user.directory).list_all()
+    }
 
     def is_locked(dn: str) -> bool:
-        lock = locks.get(dn)
+        lock = held.get(dnlib.normalize(dn))
         return lock is not None and dnlib.normalize(lock.user_dn) != dnlib.normalize(user.dn)
 
     with object_errors():

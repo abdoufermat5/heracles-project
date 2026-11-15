@@ -153,7 +153,7 @@ def bulk_update(
                 if values:
                     payload[tab_name] = {"values": values}
             if payload:
-                service.update(type_name, dn, payload)
+                service.update(type_name, dn, payload, state=state)
             results.append(BulkResult(dn, True))
         except ObjectValidationError as exc:
             results.append(

@@ -309,3 +309,48 @@ def test_snapshot_settings_from_the_directory(app_client: TestClient) -> None:
         == 200
     )
     assert admin.post(f"/objects/user/{q(target)}/snapshots", {}).status_code == 201
+
+
+def test_bulk_edit_reads_each_object_once_and_the_locks_once(
+    app_client: TestClient, admin: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The directory work of a bulk edit: locks read once, each object loaded once to edit it
+    and once more after the write (hooks and the audit chain aside)."""
+    from typing import cast
+
+    from fastapi import FastAPI
+
+    from heracles.api.state import AppState
+    from heracles.ldap.memory import MemoryDirectory
+
+    # another user holds a lock on one of the objects: that one is refused, the others pass
+    with TestClient(app_client.app) as other_client:
+        assert (
+            Api(other_client).login("cdupont").post(f"/objects/user/{q(DLEFEVRE)}/lock").status_code
+            == 200
+        )
+    state = cast("AppState", cast("FastAPI", app_client.app).state.heracles)
+    directory = cast("MemoryDirectory", state.directories["main"])
+    calls: list[tuple[str, str]] = []
+    for name in ("get", "search"):
+        original = getattr(directory, name)
+
+        def counted(*args: Any, _name: str = name, _original: Any = original, **kw: Any) -> Any:
+            calls.append((_name, str(args[0])))
+            return _original(*args, **kw)
+
+        monkeypatch.setattr(directory, name, counted)
+    dns = [ASMITH, BMARTIN, CDUPONT, DLEFEVRE]
+    r = admin.patch(
+        "/objects/user/_bulk",
+        {"dns": dns, "changes": {"main": {"l": {"op": "set", "value": "Bulk"}}}},
+    )
+    monkeypatch.undo()
+    results = {x["dn"]: x for x in r.json()["results"]}
+    assert results[DLEFEVRE]["code"] == "locked"
+    assert all(results[dn]["ok"] for dn in (ASMITH, BMARTIN, CDUPONT))
+    lock_reads = [c for c in calls if c[1].lower().startswith("ou=locks,")]
+    assert len(lock_reads) == 1, lock_reads
+    for dn in (ASMITH, BMARTIN, CDUPONT):
+        # one read to edit it, one after the write (the state the audit event records)
+        assert calls.count(("get", dn)) <= 4, [c for c in calls if c[1] == dn]

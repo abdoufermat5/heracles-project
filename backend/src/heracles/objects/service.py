@@ -614,12 +614,24 @@ class ObjectService:
 
     # ---------------------------------------------------------------- update
 
-    def update(self, type_name: str, dn: str, tabs_json: Mapping[str, Any]) -> ObjectState:
-        """Apply a PATCH-like change; one ``modify`` plus an optional rename."""
+    def update(
+        self,
+        type_name: str,
+        dn: str,
+        tabs_json: Mapping[str, Any],
+        *,
+        state: ObjectState | None = None,
+    ) -> ObjectState:
+        """Apply a PATCH-like change; one ``modify`` plus an optional rename.
+
+        ``state`` is the object as :meth:`load` just returned it, when the caller has it
+        (a bulk edit reads each object to compute its change): it is not read again.
+        """
         info = self.registry.get(type_name)
         if not info.type.editable:
             raise PermissionDeniedError(f"{type_name} objects cannot be modified")
-        state = self.load(type_name, dn)
+        if state is None or dnlib.normalize(state.dn) != dnlib.normalize(dn):
+            state = self.load(type_name, dn)
         errors: dict[str, str] = {}
         new, touched = self._apply(info, state.tabs, tabs_json, errors, creating=False)
         current_base = department_of(dn, info.type.rdn)
