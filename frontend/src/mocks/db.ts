@@ -96,6 +96,8 @@ class Db {
   apiTokens: ApiTokenInfo[] = []
   /** False once the mock session needs a password confirmation for key changes. */
   reauthFresh = true
+  /** Grant end dates (access plugin). */
+  endDates: import('@/features/access/types').Grant[] = []
   csrf = 'mock-csrf-token'
   /** Default mail domain of the directory, as the configuration screen stores it. */
   mailDomain = ''
@@ -118,6 +120,7 @@ class Db {
     this.reauthFresh = true
     this.sessions = []
     this.apiTokens = []
+    this.endDates = []
     this.session = { user: null, pending: null }
     this.mailDomain = ''
     this.seed()

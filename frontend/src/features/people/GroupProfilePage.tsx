@@ -1,6 +1,7 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Building2,
+  CalendarClock,
   Check,
   ChevronRight,
   Copy,
@@ -55,6 +56,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { EndDateDialog } from '@/features/access/EndDateDialog'
+import { endDay, useEndDates } from '@/features/access/hooks'
 import { FieldRow } from '@/features/editor/FieldRow'
 import { useLdifAvailable } from '@/features/editor/api'
 import { LdifDialog } from '@/features/editor/LdifDialog'
@@ -103,6 +106,8 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
   const [memberSearch, setMemberSearch] = useState('')
   const [addMembersOpen, setAddMembersOpen] = useState(false)
   const [memberToRemove, setMemberToRemove] = useState<{ dn: string; name: string } | null>(null)
+  const [datingMember, setDatingMember] = useState<{ dn: string; name: string } | null>(null)
+  const endDates = useEndDates(dn, 'member')
   const [deleteGroupOpen, setDeleteGroupOpen] = useState(false)
   const [ldifOpen, setLdifOpen] = useState(false)
   const [reviewDiffs, setReviewDiffs] = useState<FieldDiff[] | null>(null)
@@ -460,6 +465,9 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
                     <th className="px-4 py-2.5 font-medium">{t('peopleUI.text.person')}</th>
                     <th className="hidden px-4 py-2.5 font-medium sm:table-cell">{t('peopleUI.text.login')}</th>
                     <th className="hidden px-4 py-2.5 font-medium md:table-cell">{t('peopleUI.text.department')}</th>
+                    {endDates.available ? (
+                      <th className="hidden px-4 py-2.5 font-medium lg:table-cell">{t('grants.untilColumn')}</th>
+                    ) : null}
                     <th className="w-16 px-4 py-2.5 text-right font-medium"><span className="sr-only">{t('peopleUI.text.actions')}</span></th>
                   </tr>
                 </thead>
@@ -499,7 +507,31 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
                         <td className="hidden px-4 py-2.5 md:table-cell">
                           <OrgPath dn={deptDn} />
                         </td>
-                        <td className="px-4 py-2.5 text-right">
+                        {endDates.available ? (
+                          <td className="hidden px-4 py-2.5 text-small lg:table-cell">
+                            {endDates.byMember.get(mDn.toLowerCase()) ? (
+                              <span className="text-foreground">
+                                {t('grants.until', { day: endDay(endDates.byMember.get(mDn.toLowerCase())?.until ?? '') })}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">{t('grants.permanent')}</span>
+                            )}
+                          </td>
+                        ) : null}
+                        <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                          {endDates.available ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              className="text-muted-foreground"
+                              onClick={() => setDatingMember({ dn: mDn, name })}
+                              title={t('grants.endDate.open', { name })}
+                              aria-label={t('grants.endDate.open', { name })}
+                            >
+                              <CalendarClock className="size-3.5" />
+                            </Button>
+                          ) : null}
                           <Button
                             type="button"
                             variant="ghost"
@@ -519,6 +551,18 @@ export function GroupProfilePage({ dn }: GroupProfilePageProps) {
             </div>
           )}
         </TabsContent>
+        {datingMember ? (
+          <EndDateDialog
+            key={datingMember.dn}
+            open
+            onOpenChange={(o) => !o && setDatingMember(null)}
+            holder={dn}
+            kind="member"
+            member={datingMember.dn}
+            memberName={datingMember.name}
+            current={endDates.byMember.get(datingMember.dn.toLowerCase())}
+          />
+        ) : null}
 
         {/* Tab 2: Properties */}
         <TabsContent value="properties" className="space-y-6">

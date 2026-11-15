@@ -10,6 +10,7 @@ import { safetyEn } from './safety'
 import { adminEn } from '@/features/admin/locale-en'
 import { setupEn } from '@/features/setup/locale-en'
 import { onboardingEn } from '@/features/onboarding/locale-en'
+import { grantsEn } from '@/features/access/locale-en'
 import { auditEn } from '@/features/audit/locale-en'
 import { meEn } from '@/features/me/locale-en'
 import { publicFormsEn } from '@/features/public/locale-en'
@@ -432,6 +433,7 @@ const en = {
   },
   // --- P3 admin ---
   ...adminEn,
+  ...grantsEn,
   ...auditEn,
   ...setupEn,
   ...onboardingEn,

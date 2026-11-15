@@ -3,6 +3,7 @@ import type { ApiTokenInfo, ErrorCode, ObjectListItem, TabState } from '@/api/ty
 import { APP_VERSION } from '@/lib/appVersion'
 import { BASE_DN, db } from './db'
 import { adminHandlers } from './adminHandlers'
+import { accessHandlers } from './accessHandlers'
 import { auditHandlers } from './auditHandlers'
 import { ioHandlers } from './io'
 import { publicHandlers } from './publicHandlers'
@@ -867,6 +868,7 @@ export const handlers: HttpHandler[] = [
 
   // --- P3 admin ---
   ...adminHandlers,
+  ...accessHandlers,
   ...auditHandlers,
   // --- P3 compat ---
   ...ioHandlers,

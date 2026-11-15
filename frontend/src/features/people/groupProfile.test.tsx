@@ -58,4 +58,24 @@ describe('Group profile page', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
+
+  it('gives a member an end date and removes it again', async () => {
+    signIn()
+    const user = userEvent.setup()
+    const target = must(db.all('group')[0])
+    renderApp(`/types/group/${encodeURIComponent(target.dn)}`)
+    const buttons = await screen.findAllByRole('button', { name: /^Set end date for / })
+    await user.click(buttons[0]!)
+    const dialog = await screen.findByRole('dialog')
+    const next = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10)
+    await user.type(within(dialog).getByLabelText('Last day of access'), next)
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText(`Until ${next}`)).toBeInTheDocument()
+    expect(db.endDates).toHaveLength(1)
+
+    await user.click((await screen.findAllByRole('button', { name: /^Set end date for / }))[0]!)
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove end date' }))
+    await waitFor(() => expect(screen.queryByText(`Until ${next}`)).not.toBeInTheDocument())
+    expect(db.endDates).toHaveLength(0)
+  })
 })
