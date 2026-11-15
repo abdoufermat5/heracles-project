@@ -46,6 +46,16 @@ api:
   #   max_lifetime_days: 365
   #   max_per_owner: 20
 
+  # SCIM 2.0 provisioning at /scim/v2 (identity providers, HR systems). API tokens only:
+  # create a token with the write scope on the account page of the provisioning account.
+  # scim:
+  #   enabled: true
+  #   user_base: ""        # department DN for new users (default: the directory base)
+  #   group_base: ""       # department DN for new groups
+  #   max_results: 200     # largest page of a list request
+  #   user_attributes:     # extra SCIM path -> LDAP attribute mappings (plain strings)
+  #     "title": "description"
+
   # Built console to serve. The container image finds /app/static by itself.
   # static_dir: /app/static
 

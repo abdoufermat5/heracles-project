@@ -307,3 +307,23 @@ def test_changes_are_audited_with_the_token(admin: tuple[str, Scim], state: AppS
     assert create[0].text("hrcAuditAuthorDN") == ADMIN_DN
     assert create[0].texts("hrcAuditAttributes")[0] == f"via: api token {token_id}"
     assert created["id"]
+
+
+def test_delete_with_a_write_token_still_archives(admin: tuple[str, Scim], state: AppState) -> None:
+    from heracles_plugins.archive.service import find_archives
+
+    _, scim = admin
+    rid = _create(scim, "scim.archived")["id"]
+    assert scim.call("DELETE", f"/Users/{rid}").status_code == 204
+    assert find_archives(state.directories["main"], "user", {"uid": "scim.archived"})
+
+
+def test_own_password_cannot_be_changed_with_a_token(admin: tuple[str, Scim]) -> None:
+    _, scim = admin
+    me = scim.call("GET", "/Users?filter=" + quote('userName eq "admin"')).json()["Resources"][0]
+    r = scim.call(
+        "PATCH",
+        f"/Users/{me['id']}",
+        _patch({"op": "replace", "path": "password", "value": "Another-pass-1"}),
+    )
+    assert r.status_code == 403 and ERROR_SCHEMA in r.json()["schemas"]
