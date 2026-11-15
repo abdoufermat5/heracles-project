@@ -11,6 +11,7 @@ from heracles.api.hosts import DEFAULT_ALLOWED_HOSTS
 from heracles.auth.recovery import RecoveryConfig
 from heracles.auth.sso import SsoSettings
 from heracles.auth.webauthn import WebAuthnSettings
+from heracles.scim.settings import ScimSettings
 
 
 class SessionSettings(BaseModel):
@@ -143,6 +144,7 @@ class ApiSettings(BaseModel):
     login: LoginSettings = Field(default_factory=LoginSettings)
     recovery: RecoverySettings = Field(default_factory=RecoverySettings)
     api_tokens: ApiTokenSettings = Field(default_factory=ApiTokenSettings)
+    scim: ScimSettings = Field(default_factory=ScimSettings)
     password: PasswordSettings = Field(default_factory=PasswordSettings)
     webauthn: WebAuthnSettings = Field(default_factory=WebAuthnSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)

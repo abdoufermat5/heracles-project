@@ -15,7 +15,9 @@ Entries added without their RDN value get it added automatically.
 from __future__ import annotations
 
 import threading
+import uuid
 from collections.abc import Iterable, Iterator, Mapping, Sequence
+from datetime import UTC, datetime
 
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import (
@@ -89,6 +91,15 @@ def _rdn_pair(rdn: str) -> tuple[str, str]:
     return attr.strip(), dnlib.unescape_rdn_value(dnlib.strip_rdn(value))
 
 
+#: Operational attributes the server maintains: returned only when asked for by name (or
+#: ``+``), never by ``*``; usable in search filters; kept across renames.
+OPERATIONAL_ATTRS = ("entryUUID", "createTimestamp", "modifyTimestamp")
+
+
+def _now_generalized() -> bytes:
+    return datetime.now(UTC).strftime("%Y%m%d%H%M%SZ").encode()
+
+
 class MemoryDirectory:
     """Thread-safe in-memory directory implementing ``DirectoryClient``."""
 
@@ -106,6 +117,8 @@ class MemoryDirectory:
         }
         self._schema: set[str] = {c.lower() for c in (object_classes or _DEFAULT_SCHEMA)}
         self._lock = threading.RLock()
+        #: Operational attributes per normalised DN (see :data:`OPERATIONAL_ATTRS`).
+        self._ops: dict[str, dict[str, list[bytes]]] = {}
 
     # -- construction helpers -------------------------------------------------
 
@@ -179,17 +192,20 @@ class MemoryDirectory:
                 raise NoSuchObjectError(base)
             results: list[Entry] = []
             for key, entry in self._entries.items():
-                if not self._in_scope(key, nbase, scope) or not matches(entry, flt):
+                if not self._in_scope(key, nbase, scope):
+                    continue
+                if not matches(self._with_ops(key, entry), flt):
                     continue
                 if size_limit and len(results) >= size_limit:
                     raise SizeLimitExceededError(f"more than {size_limit} entries")
-                results.append(self._project(entry, attrs))
+                results.append(self._project(entry, attrs, self._ops.get(key)))
         return iter(results)
 
     def get(self, dn: str, attrs: Sequence[str] | None = None) -> Entry | None:
         with self._lock:
-            entry = self._entries.get(dnlib.normalize(dn))
-            return self._project(entry, attrs) if entry is not None else None
+            key = dnlib.normalize(dn)
+            entry = self._entries.get(key)
+            return self._project(entry, attrs, self._ops.get(key)) if entry is not None else None
 
     def add(self, dn: str, attrs: Mapping[str, Sequence[bytes]]) -> None:
         key = dnlib.normalize(dn)
@@ -207,6 +223,12 @@ class MemoryDirectory:
             new_attrs = _copy_attrs(attrs)
             self._ensure_rdn_value(new_attrs, parts[0])
             self._entries[key] = Entry(dn=dn, attrs=new_attrs)
+            stamp = _now_generalized()
+            self._ops[key] = {
+                "entryUUID": [str(uuid.uuid4()).encode()],
+                "createTimestamp": [stamp],
+                "modifyTimestamp": [stamp],
+            }
 
     def modify(self, dn: str, changes: Sequence[Modification]) -> None:
         key = dnlib.normalize(dn)
@@ -225,6 +247,8 @@ class MemoryDirectory:
             ):
                 raise DirectoryError("modification would remove the RDN value")
             entry.attrs = work
+            if key in self._ops:
+                self._ops[key]["modifyTimestamp"] = [_now_generalized()]
 
     def delete(self, dn: str, *, recursive: bool = False) -> None:
         key = dnlib.normalize(dn)
@@ -236,7 +260,9 @@ class MemoryDirectory:
                 raise DirectoryError(f"{dn} has subordinate entries")
             for k in below:
                 del self._entries[k]
+                self._ops.pop(k, None)
             del self._entries[key]
+            self._ops.pop(key, None)
             self._passwords.pop(key, None)
 
     def rename(self, dn: str, new_rdn: str, new_superior: str | None = None) -> str:
@@ -273,16 +299,25 @@ class MemoryDirectory:
 
             suffix = "," + key
             rebuilt: dict[str, Entry] = {}
+            ops: dict[str, dict[str, list[bytes]]] = {}
             for k, e in self._entries.items():
                 if k == key:
                     rebuilt[new_key] = Entry(new_dn, attrs)
+                    moved = new_key
                 elif k.endswith(suffix):
                     relative = dnlib.split(e.dn)[: dnlib.depth(e.dn) - dnlib.depth(dn)]
                     child_dn = dnlib.join(",".join(relative), new_dn)
-                    rebuilt[dnlib.normalize(child_dn)] = Entry(child_dn, e.attrs)
+                    moved = dnlib.normalize(child_dn)
+                    rebuilt[moved] = Entry(child_dn, e.attrs)
                 else:
                     rebuilt[k] = e
+                    moved = k
+                if k in self._ops:
+                    ops[moved] = self._ops[k]
+            if new_key in ops:
+                ops[new_key]["modifyTimestamp"] = [_now_generalized()]
             self._entries = rebuilt
+            self._ops = ops
             if key in self._passwords:
                 self._passwords[new_key] = self._passwords.pop(key)
             return new_dn
@@ -319,15 +354,32 @@ class MemoryDirectory:
             return key.endswith("," + nbase) and dnlib.depth(key) == dnlib.depth(nbase) + 1
         return key == nbase or key.endswith("," + nbase)
 
+    def _with_ops(self, key: str, entry: Entry) -> Entry:
+        """The entry with its operational attributes, for filter matching."""
+        ops = self._ops.get(key)
+        if not ops:
+            return entry
+        return Entry(entry.dn, {**entry.attrs, **ops})
+
     @staticmethod
-    def _project(entry: Entry, attrs: Sequence[str] | None) -> Entry:
+    def _project(
+        entry: Entry,
+        attrs: Sequence[str] | None,
+        ops: Mapping[str, list[bytes]] | None = None,
+    ) -> Entry:
+        wanted = {a.lower() for a in attrs or ()}
         if attrs is None or "*" in attrs:
-            return Entry(entry.dn, _copy_attrs(entry.attrs))
-        wanted = {a.lower() for a in attrs}
-        return Entry(
-            entry.dn,
-            {k: [bytes(v) for v in vals] for k, vals in entry.attrs.items() if k.lower() in wanted},
-        )
+            out = _copy_attrs(entry.attrs)
+        else:
+            out = {
+                k: [bytes(v) for v in vals]
+                for k, vals in entry.attrs.items()
+                if k.lower() in wanted
+            }
+        for name, vals in (ops or {}).items():
+            if "+" in wanted or name.lower() in wanted:
+                out[name] = [bytes(v) for v in vals]
+        return Entry(entry.dn, out)
 
     @staticmethod
     def _ensure_rdn_value(attrs: Attributes, rdn: str) -> None:
