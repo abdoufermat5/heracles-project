@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { db } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { typeSummaries } from '@/mocks/typeDefs'
@@ -22,10 +22,10 @@ describe('audit format helpers', () => {
   })
 
   it('builds the export link from the filters, without the page size', () => {
-    const url = auditApi.exportUrl({ action: ['login', 'delete'], actor: 'uid=a', limit: 50 })
-    expect(url).toContain('/api/v2/audit?')
+    const url = auditApi.exportUrl({ action: ['login', 'delete'], actor: 'uid=a', limit: 50 }, 'json')
+    expect(url).toContain('/api/v2/audit/export?')
     expect(url).toContain('action=login&action=delete')
-    expect(url).toContain('format=csv')
+    expect(url).toContain('format=json')
     expect(url).not.toContain('limit')
   })
 })
@@ -45,10 +45,30 @@ describe('audit log page', () => {
     expect(within(rows[0] as HTMLElement).getByText('5 minutes ago')).toBeInTheDocument()
     // an event of a user shows its DN under the label
     expect(screen.getAllByText(/^uid=.*,ou=people/).length).toBeGreaterThan(0)
-    expect(screen.getByRole('link', { name: /Export CSV/ })).toHaveAttribute(
-      'href',
-      expect.stringContaining('format=csv'),
-    )
+    expect(screen.getByRole('button', { name: /Export/ })).toBeInTheDocument()
+  })
+
+  it('exports after confirming the password when the sign-in is old', async () => {
+    signIn()
+    db.reauthFresh = false
+    const saved: string[] = []
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      saved.push(this.download)
+    })
+    const user = userEvent.setup()
+    renderApp('/activity/audit')
+    await screen.findAllByTestId('audit-row')
+    await user.click(screen.getByRole('button', { name: /Export/ }))
+    await user.click(await screen.findByRole('menuitem', { name: 'JSON with chain verification' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/Exporting the audit log needs a recent sign-in/)).toBeInTheDocument()
+    await user.type(within(dialog).getByLabelText(/password/i), 'secret')
+    await user.click(within(dialog).getByRole('button', { name: /Confirm/ }))
+    await waitFor(() => expect(saved).toEqual(['audit-log-mock.json']))
+    create.mockRestore()
+    click.mockRestore()
   })
 
   it('expands the changed attributes of an event', async () => {

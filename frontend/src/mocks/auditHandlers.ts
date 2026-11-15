@@ -86,33 +86,77 @@ function matches(e: AuditEvent, p: URLSearchParams): boolean {
 
 const csvCell = (v: string) => `"${(/^[=+\-@]/.test(v) ? `'${v}` : v).replace(/"/g, '""')}"`
 
+function refuse(): HttpResponse<{ error: { code: string; message: string } }> | null {
+  if (!db.me()) {
+    return HttpResponse.json(
+      { error: { code: 'unauthenticated', message: 'Authentication required' } },
+      { status: 401 },
+    )
+  }
+  if (db.session.user === 'employee' || db.session.user === 'viewer') {
+    return HttpResponse.json(
+      { error: { code: 'forbidden', message: 'You cannot read the audit log' } },
+      { status: 403 },
+    )
+  }
+  return null
+}
+
 export const auditHandlers: HttpHandler[] = [
-  http.get('/api/v2/audit', ({ request }) => {
-    if (!db.me()) {
+  http.get('/api/v2/audit/export', ({ request }) => {
+    const refused = refuse()
+    if (refused) return refused
+    if (!db.reauthFresh) {
       return HttpResponse.json(
-        { error: { code: 'unauthenticated', message: 'Authentication required' } },
-        { status: 401 },
-      )
-    }
-    if (db.session.user === 'employee' || db.session.user === 'viewer') {
-      return HttpResponse.json(
-        { error: { code: 'forbidden', message: 'You cannot read the audit log' } },
+        { error: { code: 'reauth_required', message: 'Confirm your password to continue' } },
         { status: 403 },
       )
     }
     const p = new URL(request.url).searchParams
-    const found = seedAuditEvents().filter((e) => matches(e, p))
-    if (p.get('format') === 'csv') {
-      const lines = [
-        'time,action,result,actor_dn,actor,object_type,object_dn,object,ip,attributes',
-        ...found.map((e) =>
-          [e.time, e.action, e.result, e.actor.dn, e.actor.label, e.object.type, e.object.dn, e.object.label, e.ip, e.attributes.join('; ')]
-            .map(csvCell)
-            .join(','),
-        ),
-      ]
-      return new HttpResponse(lines.join('\n'), { headers: { 'Content-Type': 'text/csv; charset=utf-8' } })
+    const found = seedAuditEvents()
+      .filter((e) => matches(e, p))
+      .reverse()
+      .map((e, i) => ({ ...e, sequence: i + 1, hash: 'ab'.repeat(32), previous_hash: '0'.repeat(64) }))
+    if (p.get('format') === 'json') {
+      const doc = { generated_at: new Date().toISOString(), chain: { ok: true }, events: found }
+      return HttpResponse.json(doc, {
+        headers: { 'Content-Disposition': 'attachment; filename="audit-log-mock.json"' },
+      })
     }
+    const lines = [
+      'time,action,result,actor_dn,actor,object_type,object_dn,object,ip,attributes,sequence,hash,previous_hash',
+      ...found.map((e) =>
+        [
+          e.time,
+          e.action,
+          e.result,
+          e.actor.dn,
+          e.actor.label,
+          e.object.type,
+          e.object.dn,
+          e.object.label,
+          e.ip,
+          e.attributes.join('; '),
+          String(e.sequence),
+          e.hash,
+          e.previous_hash,
+        ]
+          .map(csvCell)
+          .join(','),
+      ),
+    ]
+    return new HttpResponse(lines.join('\n'), {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="audit-log-mock.csv"',
+      },
+    })
+  }),
+  http.get('/api/v2/audit', ({ request }) => {
+    const refused = refuse()
+    if (refused) return refused
+    const p = new URL(request.url).searchParams
+    const found = seedAuditEvents().filter((e) => matches(e, p))
     const limit = Number(p.get('limit') ?? 50)
     const offset = Number(p.get('cursor') ?? 0)
     const items = found.slice(offset, offset + limit)

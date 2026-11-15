@@ -1,5 +1,8 @@
-import { API_BASE, request } from '@/api/client'
+import { API_BASE, ApiError, request } from '@/api/client'
+import type { ApiErrorBody } from '@/api/types'
 import type { AuditFilters, AuditPageData } from './types'
+
+export type AuditExportFormat = 'csv' | 'json'
 
 function params(f: AuditFilters): URLSearchParams {
   const p = new URLSearchParams()
@@ -22,10 +25,29 @@ export const auditApi = {
     const qs = p.toString()
     return request<AuditPageData>(`/audit${qs ? `?${qs}` : ''}`, { signal })
   },
-  /** Same-origin link: the session cookie authorises the download. */
-  exportUrl: (filters: AuditFilters): string => {
+  exportUrl: (filters: AuditFilters, format: AuditExportFormat): string => {
     const p = params({ ...filters, limit: undefined })
-    p.set('format', 'csv')
-    return `${API_BASE}/audit?${p.toString()}`
+    p.set('format', format)
+    return `${API_BASE}/audit/export?${p.toString()}`
+  },
+  /**
+   * Fetch an export (needs a recent sign-in: 403 `reauth_required` otherwise). Errors come back
+   * as an `ApiError` instead of an error document saved as the download.
+   */
+  export: async (filters: AuditFilters, format: AuditExportFormat): Promise<{ blob: Blob; name: string }> => {
+    const res = await fetch(auditApi.exportUrl(filters, format), { credentials: 'include' })
+    if (!res.ok) {
+      let body: ApiErrorBody['error']
+      try {
+        const json = (await res.json()) as Partial<ApiErrorBody>
+        body = json.error ?? { code: 'internal', message: res.statusText }
+      } catch {
+        body = { code: 'internal', message: res.statusText || `HTTP ${res.status}` }
+      }
+      throw new ApiError(res.status, body, res.headers.get('X-Request-ID') ?? undefined)
+    }
+    const disposition = res.headers.get('Content-Disposition') ?? ''
+    const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `audit-log.${format}`
+    return { blob: await res.blob(), name }
   },
 }
