@@ -176,6 +176,16 @@ DEFAULT_MAILS: Mapping[str, tuple[str, str]] = {
         "Your access request for {target} was {status}",
         "Your request to join {target} was {status} by {decided_by}.\n\n{comment}\n",
     ),
+    "request_for_member": (
+        "Access request for you: {target}",
+        "{requester} asked for you to join {target}.\n\nReason: {reason}\n"
+        "End date: {until}\n\nYou will be told when it is decided. Your access: {url}\n",
+    ),
+    "grant_expiring": (
+        "Your access to {target} ends on {until}",
+        "Your access to {target} ends on {until}.\n\n"
+        "To keep it, ask for it again before then: {url}\n",
+    ),
     "review_assigned": (
         "Access review: {campaign}",
         "You are asked to review {count} access grants in “{campaign}” before {deadline}."

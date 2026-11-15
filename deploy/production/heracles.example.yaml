@@ -95,10 +95,14 @@ plugins:
 #   approvers: ["cn=access-approvers,ou=groups,dc=example,dc=org"]  # approve any request
 #   requestable: "(owner=*)"     # groups and roles people may ask for
 #   max_days: 365                # longest end date (0: permanent grants allowed)
+#   remind_days: 7               # worker: mail a person this many days before a grant ends (0: off)
+#   auto_close: true             # worker: close review campaigns once their deadline has passed
 #   mail:                        # mail_template names; empty: built-in wording
 #     request_submitted: ""
 #     request_decided: ""
+#     request_for_member: ""     # a request filed for someone else, mailed to that person
 #     review_assigned: ""
+#     grant_expiring: ""         # the reminder before an end date
 
 # --- audit ---------------------------------------------------------------------------------
 # Retention of the audit log, chain anchors and forwarding to a log collector. Every event is

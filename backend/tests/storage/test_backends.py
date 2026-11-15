@@ -282,6 +282,52 @@ def test_access_request_store(make_db: MakeDb) -> None:
     assert other.list("main", member_dn=DN)[0].until == "2030-01-01T23:59:59+00:00"
 
 
+def test_access_request_for_someone_else_and_orphan_cancel(make_db: MakeDb) -> None:
+    from heracles_plugins.access.requests import CANCELLED, PENDING, AccessRequestStore
+
+    store = AccessRequestStore(make_db(), clock=lambda: 1000.0)
+    boss = "uid=boss,ou=people,dc=example,dc=com"
+    created = store.add(
+        directory_id="main",
+        requester_dn=boss,
+        member_dn=DN,
+        target_dn="cn=devs,dc=example,dc=com",
+        target_kind="member",
+        target_label="devs",
+        reason="joins",
+        until=None,
+    )
+    other = AccessRequestStore(make_db())
+    # both the person and the one who asked find it; nobody else
+    assert [r.id for r in other.list("main", involving=DN.upper())] == [created.id]
+    assert [r.id for r in other.list("main", involving=boss)] == [created.id]
+    assert other.list("main", involving="uid=x,dc=example,dc=com") == []
+    assert other.list("main", member_dn=boss) == []
+    # the scheduler cancels it when the target is gone (no author)
+    done = other.decide(created, CANCELLED, by="", comment="the group or role no longer exists")
+    assert done is not None and done.status == CANCELLED and done.decided_by == ""
+    assert store.list("main", status=PENDING) == []
+    assert store.get(created.id) == done
+
+
+def test_access_reminders_are_claimed_once(make_db: MakeDb) -> None:
+    from heracles_plugins.access.requests import AccessRequestStore
+
+    first = "main|cn=devs,dc=example,dc=com|member|uid=ann|20300101000000Z"
+    second = "main|cn=devs,dc=example,dc=com|member|uid=ann|20300201000000Z"
+    one = AccessRequestStore(make_db(), clock=lambda: 1000.0)
+    two = AccessRequestStore(make_db(), clock=lambda: 2000.0)  # a second replica
+    assert one.claim_reminder(first)
+    assert not two.claim_reminder(first)
+    assert two.claim_reminder(second)
+    assert one.reminder_keys() == [first, second]
+    # old rows are purged; a mail that could not be sent is released and claimed again
+    assert one.purge_reminders(1500.0) == 1 and one.reminder_keys() == [second]
+    assert one.claim_reminder(first)
+    one.release_reminder(first)
+    assert two.claim_reminder(first) and not one.claim_reminder(first)
+
+
 def test_access_review_store(make_db: MakeDb) -> None:
     from heracles_plugins.access import reviews as rv
 

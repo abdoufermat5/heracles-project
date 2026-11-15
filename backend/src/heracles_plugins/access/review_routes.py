@@ -54,15 +54,31 @@ class DecisionBody(BaseModel):
     comment: str = ""
 
 
+def app_database(request: Request, state: AppState) -> Database:
+    """The application database the stores live in.
+
+    Without a configured database (demo, tests) the scheduler's in-memory one is shared, so
+    the in-process worker sees the same requests and campaigns as the API; failing that, one
+    per process.
+    """
+    if state.database is not None:
+        return state.database
+    app_state = request.app.state
+    scheduler_store = getattr(app_state, "task_store", None)
+    database: Database | None = getattr(scheduler_store, "database", None)
+    if database is None:
+        database = getattr(app_state, "access_memory_db", None)
+        if database is None:
+            database = Database(MEMORY)
+            app_state.access_memory_db = database
+    return database
+
+
 def review_store(request: Request, state: AppState) -> rv.ReviewStore:
     app_state = request.app.state
     store: rv.ReviewStore | None = getattr(app_state, "access_reviews", None)
     if store is None:
-        database = state.database or getattr(app_state, "access_memory_db", None)
-        if database is None:
-            database = Database(MEMORY)
-            app_state.access_memory_db = database
-        store = rv.ReviewStore(database, clock=state.clock)
+        store = rv.ReviewStore(app_database(request, state), clock=state.clock)
         app_state.access_reviews = store
     return store
 
@@ -335,4 +351,4 @@ def _may_decide(
     return manager
 
 
-__all__ = ["add_review_routes", "can_manage", "review_store"]
+__all__ = ["add_review_routes", "app_database", "can_manage", "remover", "review_store"]

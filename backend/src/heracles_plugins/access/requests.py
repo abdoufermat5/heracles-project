@@ -38,6 +38,13 @@ MIGRATIONS: tuple[str, ...] = (
     CREATE INDEX access_requests_status ON access_requests (directory_id, status);
     CREATE INDEX access_requests_member ON access_requests (member_key);
     """,
+    # reminders already sent (one per grant end date)
+    """
+    CREATE TABLE access_reminders (
+        key TEXT PRIMARY KEY,
+        sent_at REAL NOT NULL
+    );
+    """,
 )
 
 PENDING = "pending"
@@ -183,8 +190,11 @@ class AccessRequestStore:
         *,
         status: str | None = None,
         member_dn: str | None = None,
+        involving: str | None = None,
         limit: int = 500,
     ) -> list[AccessRequest]:
+        """``member_dn``: asked for that person; ``involving``: that person is the member or
+        the one who asked."""
         sql = _SELECT + " WHERE directory_id = ?"
         params: list[Any] = [directory_id]
         if status:
@@ -193,6 +203,9 @@ class AccessRequestStore:
         if member_dn:
             sql += " AND member_key = ?"
             params.append(dnlib.normalize(member_dn))
+        if involving:
+            sql += " AND (member_key = ? OR requester_dn = ?)"
+            params.extend((dnlib.normalize(involving), involving))
         sql += " ORDER BY created_at DESC, id LIMIT ?"
         params.append(limit)
         with self._db.connection() as conn:
@@ -234,6 +247,33 @@ class AccessRequestStore:
                 (FAILED, error, request.id),
             )
         return replace(request, status=FAILED, error=error)
+
+    # -- reminders --------------------------------------------------------------------------
+
+    def claim_reminder(self, key: str) -> bool:
+        """Note that the reminder ``key`` is being sent; ``False`` when it already was."""
+        with self._db.transaction() as conn:
+            cur = conn.execute(
+                "INSERT INTO access_reminders (key, sent_at) VALUES (?, ?)"
+                " ON CONFLICT (key) DO NOTHING",
+                (key, self._clock()),
+            )
+            return bool(cur.rowcount or 0)
+
+    def release_reminder(self, key: str) -> None:
+        """Forget a claimed reminder whose mail could not be sent (the next pass retries)."""
+        with self._db.transaction() as conn:
+            conn.execute("DELETE FROM access_reminders WHERE key = ?", (key,))
+
+    def purge_reminders(self, older_than: float) -> int:
+        with self._db.transaction() as conn:
+            cur = conn.execute("DELETE FROM access_reminders WHERE sent_at < ?", (older_than,))
+            return int(cur.rowcount or 0)
+
+    def reminder_keys(self) -> list[str]:
+        with self._db.connection() as conn:
+            rows = conn.execute("SELECT key FROM access_reminders ORDER BY key").fetchall()
+        return [r["key"] for r in rows]
 
 
 __all__ = [
