@@ -1,0 +1,25 @@
+# Optional, NOT part of kustomization.yaml: add it to `resources` if you use an ingress
+# controller. TLS terminates at the controller: list its pod network under
+# api.login.trusted_proxies in the ConfigMap.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: heracles
+  labels:
+    app.kubernetes.io/name: heracles
+spec:
+  # ingressClassName: nginx
+  tls:
+    - secretName: heracles-tls
+      hosts: [heracles.example.org]
+  rules:
+    - host: heracles.example.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: heracles
+                port:
+                  name: http

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from email.message import EmailMessage
 from typing import Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class Mailer(Protocol):
@@ -91,9 +91,22 @@ class MailSettings(BaseModel):
     sender: str = "heracles@localhost"
     username: str | None = None
     password: str | None = None
+    #: File holding the password (a mounted secret); read at startup, trailing newline removed.
+    password_file: str | None = None
     starttls: bool = False
     use_ssl: bool = False
     timeout: float = 10.0
+
+    @model_validator(mode="after")
+    def _read_password_file(self) -> MailSettings:
+        if self.password_file:
+            if self.password:
+                raise ValueError("set mail.password or mail.password_file, not both")
+            from heracles.ldap.config import read_secret_value
+
+            self.password = read_secret_value(self.password_file, "mail password")
+            self.password_file = None
+        return self
 
     def build(self) -> SmtpMailer | None:
         if not self.host:

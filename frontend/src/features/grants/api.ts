@@ -22,11 +22,12 @@ export const accessApi = {
   setEndDate: (body: EndDateBody) =>
     request<{ grant: Grant | null }>('/access/grants', { method: 'PUT', body }),
 
-  requestable: (signal?: AbortSignal) =>
-    request<{ items: Requestable[]; max_days: number }>('/access/requestable', { signal }),
+  /** What can be requested; for `member` (a person the caller may ask for) instead of the caller. */
+  requestable: (member?: string, signal?: AbortSignal) =>
+    request<{ items: Requestable[]; max_days: number }>('/access/requestable', { query: { member }, signal }),
   requests: (view: 'mine' | 'to_approve' | 'all', signal?: AbortSignal) =>
     request<{ items: AccessRequest[] }>('/access/requests', { query: { view }, signal }),
-  createRequest: (body: { target: string; reason: string; until: string | null }) =>
+  createRequest: (body: { target: string; reason: string; until: string | null; member?: string }) =>
     request<{ request: AccessRequest }>('/access/requests', { method: 'POST', body }),
   approve: (id: string, comment: string) =>
     request<{ request: AccessRequest }>(`/access/requests/${id}/approve`, { method: 'POST', body: { comment } }),

@@ -23,11 +23,15 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
+import structlog
+
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Entry, NoSuchObjectError, Scope
 from heracles.storage import Database
 from heracles_plugins.access import approvals as ap
 from heracles_plugins.access import grants as g
+
+log = structlog.get_logger(__name__)
 
 COMPONENT = "access_reviews"
 
@@ -437,6 +441,77 @@ def revoke_one(
     return REVOKED
 
 
+@dataclass(slots=True)
+class CloseResult:
+    campaign: Campaign
+    items: list[Item]
+    failed: list[Item]
+    digest: str = ""
+
+
+class CloseConflictError(Exception):
+    """The campaign is closed, or another close got there first."""
+
+
+def close_campaign(
+    store: ReviewStore,
+    campaign: Campaign,
+    directory: DirectoryClient,
+    remove: Callable[[Entry, str, list[str]], None],
+    closer: str,
+) -> CloseResult:
+    """Apply the revocations and close (``closer`` is ``""`` for the scheduler).
+
+    Resumable: items already applied are left alone. With failures the campaign stays
+    ``closing``; otherwise it is ``closed`` with the hash of its report.
+    """
+    if campaign.status == CLOSED:
+        raise CloseConflictError("the campaign is closed")
+    if campaign.status == OPEN:
+        moved = store.move(campaign, OPEN, CLOSING)
+        if moved is None:
+            raise CloseConflictError("the campaign is being closed")
+        campaign = moved
+    for item in store.items(campaign.id):
+        if item.outcome and item.outcome != FAILED:
+            continue  # applied by an earlier close
+        if effective_decision(item, campaign) == KEEP:
+            store.set_outcome(item, KEPT)
+            continue
+        try:
+            outcome = revoke_one(directory, item, remove)
+        except Exception as exc:  # recorded per item; the close can be run again
+            log.warning("review_revoke_failed", item=item.item_id, error=str(exc))
+            outcome = FAILED
+        store.set_outcome(item, outcome)
+    items = store.items(campaign.id)
+    failed = [i for i in items if i.outcome == FAILED]
+    if failed:
+        return CloseResult(campaign, items, failed)
+    now = store.clock()
+    doc = report(replace(campaign, closed_by=closer, closed_at=now), items)
+    digest = report_hash(doc)
+    closed = store.move(
+        campaign, CLOSING, CLOSED, closed_by=closer, closed_at=now, report_hash=digest
+    )
+    if closed is None:
+        raise CloseConflictError("the campaign was closed meanwhile")
+    return CloseResult(closed, items, [], digest)
+
+
+def close_audit_lines(result: CloseResult) -> list[str]:
+    outcomes: dict[str, int] = {}
+    for item in result.items:
+        outcomes[item.outcome] = outcomes.get(item.outcome, 0) + 1
+    return [
+        f"campaign: {result.campaign.id}",
+        f"name: {result.campaign.name}",
+        "status: closed",
+        f"report sha256: {result.digest}",
+        *(f"{name}: {count}" for name, count in sorted(outcomes.items())),
+    ]
+
+
 # -- report ------------------------------------------------------------------------------------
 
 
@@ -508,9 +583,13 @@ __all__ = [
     "REVIEWER_RULES",
     "REVOKE",
     "Campaign",
+    "CloseConflictError",
+    "CloseResult",
     "Item",
     "ReviewStore",
     "build_items",
+    "close_audit_lines",
+    "close_campaign",
     "effective_decision",
     "new_campaign",
     "report",

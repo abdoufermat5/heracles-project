@@ -1,0 +1,26 @@
+# heracles.yaml, mounted at /etc/heracles/heracles.yaml. Keep secrets out of it: the *_file keys
+# read the files of the `heracles-secrets` Secret (mounted in /etc/heracles/secrets). See
+# deploy/production/heracles.example.yaml for every option.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: heracles-config
+  labels:
+    app.kubernetes.io/name: heracles
+data:
+  heracles.yaml: |
+    directories:
+      - id: main
+        label: Main directory
+        uri: ldaps://ldap.example.org
+        bind_dn: cn=heracles,ou=services,dc=example,dc=org
+        bind_password_file: /etc/heracles/secrets/bind_password
+        base_dn: dc=example,dc=org
+    api:
+      admin_dns:
+        - uid=admin,ou=people,dc=example,dc=org
+      allowed_hosts: ["heracles.example.org"]
+      session:
+        cookie_secure: true
+    plugins:
+      enabled: [posix, ssh, sudo, mail, audit, acl_admin, ppolicy]

@@ -22,6 +22,11 @@ example ``HERACLES_DIRECTORY_MAIN_BIND_PASSWORD``. Without a config file, a
 single directory called ``default`` can be defined purely through
 ``HERACLES_LDAP_URI``, ``HERACLES_LDAP_BASE_DN``, ``HERACLES_LDAP_BIND_DN``,
 ``HERACLES_LDAP_BIND_PASSWORD`` and friends.
+
+Secrets from a file: ``bind_password_file: /run/secrets/bind_password`` (or
+``HERACLES_DIRECTORY_<ID>_BIND_PASSWORD_FILE``) reads the password from that file, without its
+trailing newline: Kubernetes and Docker secrets are mounted that way. Setting both
+``bind_password`` and ``bind_password_file`` is an error.
 """
 
 from __future__ import annotations
@@ -44,6 +49,7 @@ _FIELDS = (
     "read_uris",
     "bind_dn",
     "bind_password",
+    "bind_password_file",
     "base_dn",
     "starttls",
     "ca_file",
@@ -137,6 +143,28 @@ def _read_file(path: Path) -> dict[str, Any]:
     return cast("dict[str, Any]", data)
 
 
+def read_secret_value(path: str | os.PathLike[str], what: str) -> str:
+    """The content of the secret file ``path`` without its trailing newline."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        reason = exc.strerror if isinstance(exc, OSError) else str(exc)
+        raise ConfigError(f"cannot read {what} file {path}: {reason or exc}") from exc
+    return text.rstrip("\r\n")
+
+
+def _read_secret_files(items: list[dict[str, Any]]) -> None:
+    for item in items:
+        path = item.pop("bind_password_file", None)
+        if not path:
+            continue
+        if item.get("bind_password"):
+            raise ConfigError(
+                f"directory {item.get('id')!r}: set bind_password or bind_password_file, not both"
+            )
+        item["bind_password"] = read_secret_value(str(path), "bind password")
+
+
 def _env_key(directory_id: str) -> str:
     return directory_id.upper().replace("-", "_").replace(".", "_")
 
@@ -177,6 +205,7 @@ def load_settings(
                 single[field] = value
         items.append(single)
     _apply_env(items, env)
+    _read_secret_files(items)
     ids = [str(i.get("id")) for i in items]
     if len(set(ids)) != len(ids):
         raise ConfigError("duplicate directory ids")

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 
 from heracles import demo
 from heracles.api.settings import ApiSettings, PluginsSettings
@@ -14,6 +16,7 @@ from heracles.auth.mail import MemoryMailer
 from heracles.core.access_config import configure_access
 from heracles.ldap.memory import MemoryDirectory
 from heracles.server import create_full_app
+from heracles.storage import Database
 from heracles_plugins.access import grants as g
 from tests.api.test_audit_api import Api
 
@@ -23,6 +26,7 @@ ADMINS = f"cn=admins,ou=groups,{BASE}"
 ASMITH = f"uid=asmith,ou=people,ou=paris,{BASE}"
 CDUPONT = f"uid=cdupont,ou=people,ou=lyon,{BASE}"
 BMARTIN = f"uid=bmartin,ou=people,ou=paris,{BASE}"
+DLEFEVRE = f"uid=dlefevre,ou=people,ou=lyon,{BASE}"
 
 
 @pytest.fixture(autouse=True)
@@ -205,3 +209,158 @@ def test_a_dated_membership_can_be_extended(client: TestClient, directory: Memor
     (grant,) = g.grants_of(entry)
     assert grant.until.date().isoformat() == soon(60)
     assert entry.texts("member").count(ASMITH) == 1
+
+
+# -- requests for others ---------------------------------------------------------------------
+
+
+def make_manager(directory: MemoryDirectory, person: str, manager: str) -> None:
+    directory.modify(person, [g.Modification("add", "manager", [manager.encode()])])
+
+
+def ask_for(client: TestClient, uid: str, member: str, **body: object) -> Response:
+    return as_user(client, uid).post(
+        "/access/requests",
+        {"target": LYON_STAFF, "reason": "Joins the team", "until": soon(), "member": member}
+        | body,
+    )
+
+
+def test_a_manager_asks_for_their_report(
+    client: TestClient, directory: MemoryDirectory, mailer: MemoryMailer
+) -> None:
+    make_manager(directory, BMARTIN, ASMITH)
+    r = ask_for(client, "asmith", BMARTIN)
+    assert r.status_code == 201, r.text
+    created = r.json()["request"]
+    assert created["member"] == BMARTIN and created["requester"] == ASMITH
+    # approvers are mailed, and so is the person the request is for
+    recipients = {m.to: m.subject for m in mailer.outbox}
+    assert "Access request: lyon-staff" in recipients["cdupont@heracles.test"]
+    assert "Access request for you" in recipients["bmartin@heracles.test"]
+    assert "asmith@heracles.test" not in recipients
+    # both parties see it, and the one who asked may cancel it
+    for uid in ("asmith", "bmartin"):
+        mine = as_user(client, uid).get("/access/requests").json()["items"]
+        assert [i["id"] for i in mine] == [created["id"]]
+    # neither the person nor the one who asked may approve it; the owner does
+    assert (
+        as_user(client, "asmith").post(f"/access/requests/{created['id']}/approve", {}).status_code
+        == 403
+    )
+    assert (
+        as_user(client, "bmartin").post(f"/access/requests/{created['id']}/approve", {}).status_code
+        == 403
+    )
+    mailer.outbox.clear()
+    done = as_user(client, "cdupont").post(f"/access/requests/{created['id']}/approve", {})
+    assert done.json()["request"]["status"] == "approved"
+    entry = directory.get(LYON_STAFF)
+    assert entry is not None and BMARTIN in entry.texts("member")
+    assert ASMITH not in entry.texts("member")
+    assert {m.to for m in mailer.outbox} == {"asmith@heracles.test", "bmartin@heracles.test"}
+    events = list(directory.search(f"ou=audit,{BASE}", "(hrcAuditAction=access_request)"))
+    assert any(f"member: {BMARTIN}" in e.texts("hrcAuditAttributes") for e in events)
+
+
+def test_requestable_for_the_person_asked_for(
+    client: TestClient, directory: MemoryDirectory
+) -> None:
+    make_manager(directory, DLEFEVRE, CDUPONT)  # cdupont already is in lyon-staff
+    make_manager(directory, BMARTIN, CDUPONT)
+    a = as_user(client, "cdupont")
+    assert a.get("/access/requestable").json()["items"] == []
+    items = a.get("/access/requestable", member=BMARTIN).json()["items"]
+    assert [i["dn"] for i in items] == [LYON_STAFF]
+    # the person asked for already holds it: nothing to ask for them
+    assert a.get("/access/requestable", member=DLEFEVRE).json()["items"] == []
+    # not their manager: refused
+    assert as_user(client, "asmith").get("/access/requestable", member=BMARTIN).status_code == 403
+    assert as_user(client, "admin").get("/access/requestable", member=BMARTIN).status_code == 200
+
+
+def test_the_requester_of_someone_else_may_cancel(
+    client: TestClient, directory: MemoryDirectory
+) -> None:
+    make_manager(directory, BMARTIN, ASMITH)
+    created = ask_for(client, "asmith", BMARTIN).json()["request"]
+    r = as_user(client, "asmith").post(f"/access/requests/{created['id']}/cancel")
+    assert r.json()["request"]["status"] == "cancelled"
+
+
+def test_whoever_manages_access_asks_for_anyone(
+    client: TestClient, directory: MemoryDirectory
+) -> None:
+    r = ask_for(client, "admin", BMARTIN)
+    assert r.status_code == 201, r.text
+    assert r.json()["request"]["member"] == BMARTIN
+    # an ACL role granting assignment writes is enough too: not tested here, the check is
+    # ``can_manage`` as for review campaigns
+    assert ask_for(client, "admin", f"uid=nobody,ou=people,{BASE}").status_code == 422
+
+
+def test_nobody_else_asks_for_others(client: TestClient, directory: MemoryDirectory) -> None:
+    make_manager(directory, BMARTIN, CDUPONT)  # cdupont manages bmartin, not asmith
+    r = ask_for(client, "asmith", BMARTIN)
+    assert r.status_code == 403
+    assert ask_for(client, "asmith", f"uid=nobody,ou=people,{BASE}").status_code == 403
+    # nothing was filed
+    assert as_user(client, "bmartin").get("/access/requests").json()["items"] == []
+
+
+def test_asking_for_oneself_by_dn_is_the_plain_request(client: TestClient) -> None:
+    r = ask_for(client, "asmith", ASMITH.upper())
+    assert r.status_code == 201
+    assert r.json()["request"]["member"] == ASMITH
+
+
+def test_rules_apply_to_the_person_asked_for(
+    client: TestClient, directory: MemoryDirectory
+) -> None:
+    make_manager(directory, DLEFEVRE, ASMITH)
+    # dlefevre already is a (permanent) member
+    assert ask_for(client, "asmith", DLEFEVRE).status_code == 422
+    make_manager(directory, BMARTIN, ASMITH)
+    assert ask_for(client, "asmith", BMARTIN).status_code == 201
+    assert ask_for(client, "asmith", BMARTIN).status_code == 422  # one pending per person
+    # while asmith may still ask for themselves
+    assert ask_for(client, "asmith", ASMITH).status_code == 201
+
+
+def test_the_person_asked_for_is_never_an_approver_of_it(
+    client: TestClient, directory: MemoryDirectory
+) -> None:
+    approvers = f"cn=approvers,ou=groups,{BASE}"
+    directory.add(
+        approvers,
+        {
+            "objectClass": [b"groupOfNames"],
+            "cn": [b"approvers"],
+            "member": [BMARTIN.encode(), DLEFEVRE.encode()],
+        },
+    )
+    configure_access({"max_days": 90, "approvers": [approvers]})
+    make_manager(directory, BMARTIN, ASMITH)
+    created = ask_for(client, "asmith", BMARTIN).json()["request"]
+    # bmartin approves any request, but not the one for themselves; nor does the requester
+    assert (
+        as_user(client, "bmartin").post(f"/access/requests/{created['id']}/approve", {}).status_code
+        == 403
+    )
+    assert (
+        as_user(client, "asmith").post(f"/access/requests/{created['id']}/approve", {}).status_code
+        == 403
+    )
+    done = as_user(client, "dlefevre").post(f"/access/requests/{created['id']}/approve", {})
+    assert done.json()["request"]["status"] == "approved"
+
+
+def test_requests_live_in_the_schedulers_database(client: TestClient) -> None:
+    from heracles.tasks.wiring import attach_scheduler
+    from heracles_plugins.access.requests import AccessRequestStore
+
+    # the in-process worker of the demo: its database is the one the API stores use
+    attach_scheduler(client.app, start=False)  # type: ignore[arg-type]
+    submit(client)
+    database = cast(Database, client.app.state.task_store.database)  # type: ignore[attr-defined]
+    assert [r.requester_dn for r in AccessRequestStore(database).list("main")] == [ASMITH]

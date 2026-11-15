@@ -139,7 +139,7 @@ def apply(user: CurrentUser, domain: Domain, request: AccessRequest, now: dateti
     if until is not None and until <= now:
         raise ApplyError("the requested end date has passed")
     kind = request.target_kind
-    found = holder_types(domain, entry, kind)
+    found = holder_types(domain.registry, entry, kind)
     if not found:
         raise ApplyError(f"no type edits {kind} on this entry")
     info, tab = found[0]
@@ -175,6 +175,16 @@ DEFAULT_MAILS: Mapping[str, tuple[str, str]] = {
     "request_decided": (
         "Your access request for {target} was {status}",
         "Your request to join {target} was {status} by {decided_by}.\n\n{comment}\n",
+    ),
+    "request_for_member": (
+        "Access request for you: {target}",
+        "{requester} asked for you to join {target}.\n\nReason: {reason}\n"
+        "End date: {until}\n\nYou will be told when it is decided. Your access: {url}\n",
+    ),
+    "grant_expiring": (
+        "Your access to {target} ends on {until}",
+        "Your access to {target} ends on {until}.\n\n"
+        "To keep it, ask for it again before then: {url}\n",
     ),
     "review_assigned": (
         "Access review: {campaign}",

@@ -1,5 +1,5 @@
 import { http, HttpResponse, type HttpHandler } from 'msw'
-import type { AccessRequest, CampaignBody, EndDateBody } from '@/features/grants/types'
+import type { AccessRequest, CampaignBody, EndDateBody, Grant } from '@/features/grants/types'
 import { db } from './db'
 
 const unauthenticated = () =>
@@ -26,10 +26,12 @@ export const accessHandlers: HttpHandler[] = [
   http.put('/api/v2/access/grants', async ({ request }) => {
     if (!db.me()) return unauthenticated()
     const body = (await request.json()) as EndDateBody
-    const same = (g: { holder: string; kind: string; member: string }) =>
+    const same = (g: Grant) =>
       g.holder.toLowerCase() === body.holder.toLowerCase() &&
       g.kind === body.kind &&
-      g.member.toLowerCase() === body.member.toLowerCase()
+      g.member.toLowerCase() === body.member.toLowerCase() &&
+      (g.acl_scope ?? '') === (body.acl_scope ?? '') &&
+      (g.acl_role ?? '').toLowerCase() === (body.acl_role ?? '').toLowerCase()
     db.endDates = db.endDates.filter((g) => !same(g))
     if (!body.until) return HttpResponse.json({ grant: null })
     if (body.until < new Date().toISOString().slice(0, 10)) {
@@ -38,18 +40,26 @@ export const accessHandlers: HttpHandler[] = [
         { status: 422 },
       )
     }
-    const grant = { holder: body.holder, kind: body.kind, member: body.member, until: `${body.until}T23:59:59+00:00` }
+    const grant: Grant = {
+      holder: body.holder,
+      kind: body.kind,
+      member: body.member,
+      until: `${body.until}T23:59:59+00:00`,
+      ...(body.kind === 'acl' ? { acl_scope: body.acl_scope, acl_role: body.acl_role } : {}),
+    }
     db.endDates.push(grant)
     return HttpResponse.json({ grant })
   }),
-  http.get('/api/v2/access/requestable', () => {
+  http.get('/api/v2/access/requestable', ({ request }) => {
     const me = db.me()
     if (!me) return unauthenticated()
+    // for someone else: what that person could still ask for
+    const who = (new URL(request.url).searchParams.get('member') ?? me.dn).toLowerCase()
     const items = db
       .all('group')
       .filter((g) => {
         const members = (g.tabs.main?.values.member as string[] | undefined) ?? []
-        return !members.some((m) => m.toLowerCase() === me.dn.toLowerCase())
+        return !members.some((m) => m.toLowerCase() === who)
       })
       .map((g) => ({
         dn: g.dn,
@@ -64,7 +74,8 @@ export const accessHandlers: HttpHandler[] = [
     const me = db.me()
     if (!me) return unauthenticated()
     const view = new URL(request.url).searchParams.get('view') ?? 'mine'
-    const mine = (r: AccessRequest) => r.member.toLowerCase() === me.dn.toLowerCase()
+    const mine = (r: AccessRequest) =>
+      r.member.toLowerCase() === me.dn.toLowerCase() || r.requester.toLowerCase() === me.dn.toLowerCase()
     const items =
       view === 'mine'
         ? db.accessRequests.filter(mine)
@@ -76,12 +87,25 @@ export const accessHandlers: HttpHandler[] = [
   http.post('/api/v2/access/requests', async ({ request }) => {
     const me = db.me()
     if (!me) return unauthenticated()
-    const body = (await request.json()) as { target: string; reason: string; until: string | null }
+    const body = (await request.json()) as { target: string; reason: string; until: string | null; member?: string }
+    // for someone else: console users, or the person's manager (the `manager` attribute names the caller)
+    const forOther = body.member && body.member.toLowerCase() !== me.dn.toLowerCase() ? body.member : null
+    if (forOther) {
+      const person = db.all('user').find((u) => u.dn.toLowerCase() === forOther.toLowerCase())
+      const manager = String(person?.tabs.main?.values.manager ?? '').toLowerCase()
+      if (!person)
+        return HttpResponse.json(
+          { error: { code: 'validation', message: 'Invalid member', fields: { member: 'No such person' } } },
+          { status: 422 },
+        )
+      if (db.session.user === 'employee' && manager !== me.dn.toLowerCase())
+        return HttpResponse.json({ error: { code: 'forbidden', message: 'You cannot request for this person' } }, { status: 403 })
+    }
     const target = db.all('group').find((g) => g.dn === body.target)
     const created: AccessRequest = {
       id: `r${db.accessRequests.length + 1}`,
       requester: me.dn,
-      member: me.dn,
+      member: forOther ?? me.dn,
       target: { dn: body.target, kind: 'member', label: String(target?.tabs.main?.values.cn ?? body.target) },
       reason: body.reason,
       until: body.until ? `${body.until}T23:59:59+00:00` : null,

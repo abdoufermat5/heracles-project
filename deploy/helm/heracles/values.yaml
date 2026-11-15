@@ -1,0 +1,115 @@
+# Heracles chart values. Nothing here is a real secret: passwords and the database URL come
+# from Kubernetes Secrets you create yourself (see `secrets`).
+
+image:
+  repository: heracles
+  # Empty: the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# The console: `heracles serve` without the in-process scheduler. Stateless; every replica uses
+# the PostgreSQL database for its state, so any number of replicas is safe.
+web:
+  replicas: 2
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # Extra environment variables of the container (list of Kubernetes EnvVar).
+  extraEnv: []
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# The scheduled tasks (reminders, expirations, audit purge, ...): `heracles worker`. One
+# replica is enough, and more are safe: a lease in the database serialises the passes.
+worker:
+  enabled: true
+  replicas: 1
+  # Seconds between scheduler passes.
+  interval: 60
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 256Mi}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+
+# Secrets you create yourself (`kubectl create secret generic ...`); the chart never stores one.
+secrets:
+  # Secret mounted read-only as files in /etc/heracles/secrets: one file per key. The key
+  # `bind_password` holds the service account password of the directory; reference any other
+  # key from the configuration (for example `mail.password_file`). Required.
+  existingSecret: ""
+  # The PostgreSQL URL (postgresql://user:password@host:5432/db), passed as
+  # $HERACLES_DATABASE_URL. Required: the replicas and the worker share their state through it.
+  databaseUrl:
+    # Empty: the Secret named above.
+    existingSecret: ""
+    key: database_url
+
+# The content of heracles.yaml (see deploy/production/heracles.example.yaml). Secret values do
+# not belong here: use bind_password_file and the other *_file keys, which read the files of
+# the mounted secret.
+config:
+  directories:
+    - id: main
+      label: Main directory
+      uri: ldaps://ldap.example.org
+      bind_dn: cn=heracles,ou=services,dc=example,dc=org
+      bind_password_file: /etc/heracles/secrets/bind_password
+      base_dn: dc=example,dc=org
+  api:
+    admin_dns:
+      - uid=admin,ou=people,dc=example,dc=org
+    allowed_hosts: ["heracles.example.org"]
+    session:
+      cookie_secure: true
+  plugins:
+    enabled: [posix, ssh, sudo, mail, audit, acl_admin, ppolicy]
+
+service:
+  type: ClusterIP
+  port: 8420
+
+# Optional: expose the console through an ingress controller (TLS terminates there: list the
+# controller's pod network under config.api.login.trusted_proxies).
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: heracles.example.org
+      path: /
+      pathType: Prefix
+  tls: []
+  #  - secretName: heracles-tls
+  #    hosts: [heracles.example.org]
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# The image's unprivileged user (see deploy/Dockerfile).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 999
+  runAsGroup: 999
+  fsGroup: 999
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]

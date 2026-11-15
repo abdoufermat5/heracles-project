@@ -1,0 +1,13 @@
+{{- if and .Values.web.podDisruptionBudget.enabled (gt (int .Values.web.replicas) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "heracles.fullname" . }}-web
+  labels:
+    {{- include "heracles.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.web.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "heracles.selectorLabels" (dict "root" . "component" "web") | nindent 6 }}
+{{- end }}

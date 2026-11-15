@@ -7,14 +7,14 @@ from heracles.api.domain import Domain
 from heracles.api.v2.admin import ASSIGNMENT_KEY, rights_of
 from heracles.ldap.client import Entry
 from heracles.ldap.filter import matches as filter_matches
-from heracles.objects.registry import TypeInfo
+from heracles.objects.registry import TypeInfo, TypeRegistry
 from heracles_plugins.access.grants import ACL_KIND
 
 
-def holder_types(domain: Domain, entry: Entry, attr: str) -> list[tuple[TypeInfo, str]]:
+def holder_types(registry: TypeRegistry, entry: Entry, attr: str) -> list[tuple[TypeInfo, str]]:
     """``(type, tab name)`` of the registered types of ``entry`` that edit ``attr``."""
     out: list[tuple[TypeInfo, str]] = []
-    for info in domain.registry.list():
+    for info in registry.list():
         try:
             if not filter_matches(entry, info.type.filter):
                 continue
@@ -32,7 +32,7 @@ def can_read_grants(user: CurrentUser, domain: Domain, entry: Entry, kind: str) 
         return True
     if kind == ACL_KIND:
         return rights_of(user, domain, ASSIGNMENT_KEY, entry.dn).read
-    for info, tab in holder_types(domain, entry, kind):
+    for info, tab in holder_types(domain.registry, entry, kind):
         _service, policy = domain.service(user, info.name)
         if policy.can_read(entry.dn, tab, kind):
             return True
@@ -45,7 +45,7 @@ def can_change_grants(user: CurrentUser, domain: Domain, entry: Entry, kind: str
         return True
     if kind == ACL_KIND:
         return rights_of(user, domain, ASSIGNMENT_KEY, entry.dn).write
-    for info, tab in holder_types(domain, entry, kind):
+    for info, tab in holder_types(domain.registry, entry, kind):
         _service, policy = domain.service(user, info.name)
         if policy.can_write(entry.dn, tab, kind):
             return True

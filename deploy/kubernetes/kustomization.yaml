@@ -1,0 +1,9 @@
+# kubectl apply -k deploy/kubernetes   (after creating the heracles-secrets Secret, see
+# secret.example.yaml). Pick the image with `kustomize edit set image heracles=REGISTRY/heracles:TAG`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - configmap.yaml
+  - deployment-web.yaml
+  - deployment-worker.yaml
+  - service.yaml

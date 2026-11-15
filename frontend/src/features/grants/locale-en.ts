@@ -23,6 +23,12 @@ export const grantsEn = {
       pickTarget: 'Choose what you need',
       needReason: 'Say why you need this access',
       needUntil: 'Pick an end date (at most {{days}} days)',
+      for: 'For',
+      forPick: 'Someone else…',
+      forClear: 'Request for myself',
+      forHint: 'Leave empty to ask for yourself. You can ask for people you manage.',
+      sentFor: 'Request sent for {{name}}',
+      notForThem: 'You cannot request access for this person',
     },
     mine: {
       title: 'Access requests',
@@ -145,6 +151,15 @@ export const grantsEn = {
       saved: 'Access ends after {{day}}',
       cleared: 'The membership is permanent again',
       failed: 'The end date could not be saved',
+      aclDescription: 'The person loses this access automatically after this day (UTC).',
+    },
+    occupants: {
+      tab: 'Access ends',
+      title: 'Occupants and end dates',
+      help: 'Give an occupant an end date: the role is removed from them automatically after that day. Occupants are added or removed in the properties.',
+      empty: 'This role has no occupant.',
+      person: 'Occupant',
+      actions: 'Actions',
     },
   },
 }

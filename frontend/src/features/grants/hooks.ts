@@ -1,5 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { isApiError } from '@/api/client'
+import { api } from '@/api/endpoints'
+import { useMe } from '@/api/hooks'
+import type { TabState } from '@/api/types'
+import { useCapabilities } from '@/features/admin/hooks'
 import { accessApi } from './api'
 import type { Grant } from './types'
 
@@ -12,6 +16,12 @@ export function useAccessAvailable(): boolean {
     staleTime: 5 * 60_000,
   })
   return q.isSuccess
+}
+
+/** Drop the cached end dates: call after a change that can remove members (the matrix saving assignments). */
+export function useRefreshGrants() {
+  const qc = useQueryClient()
+  return () => void qc.invalidateQueries({ queryKey: ['access', 'grants'] })
 }
 
 /** End dates of the grants one person holds, keyed by lower-cased holder DN. */
@@ -54,6 +64,57 @@ export function useEndDates(holder: string, kind = 'member') {
   const byMember = new Map<string, Grant>()
   for (const g of q.data?.items ?? []) if (g.kind === kind) byMember.set(g.member.toLowerCase(), g)
   return { ...q, byMember, available: q.isSuccess }
+}
+
+/** End dates of the members of the ACL assignments held on one entry (`acl` grants). */
+export function useAclEndDates(holder: string) {
+  const plugin = useAccessAvailable()
+  const q = useQuery({
+    queryKey: ['access', 'grants', holder],
+    queryFn: ({ signal }) => accessApi.grantsOf(holder, signal),
+    retry: false,
+    enabled: plugin && Boolean(holder),
+  })
+  const grants = (q.data?.items ?? []).filter((g) => g.kind === 'acl')
+  return {
+    available: q.isSuccess,
+    /** The grant dating `member` in the assignment `(scope, role)`, if any. */
+    find: (scope: string, role: string, member: string): Grant | undefined =>
+      grants.find(
+        (g) =>
+          g.acl_scope === scope &&
+          (g.acl_role ?? '').toLowerCase() === role.toLowerCase() &&
+          g.member.toLowerCase() === member.toLowerCase(),
+      ),
+  }
+}
+
+/**
+ * Whether the caller may ask for access on behalf of someone else: console users, and
+ * people who manage others (some user entry names them as `manager`). The server decides in the end.
+ */
+export function useCanRequestForOthers(enabled = true): boolean {
+  const { data: me } = useMe()
+  const { data: caps } = useCapabilities()
+  const console = caps?.console === true
+  const reports = useQuery({
+    queryKey: ['access', 'reports', me?.dn ?? ''],
+    queryFn: ({ signal }) => api.listObjects('user', { filter: `(manager=${me?.dn ?? ''})`, limit: 1 }, signal),
+    retry: false,
+    staleTime: 5 * 60_000,
+    enabled: enabled && Boolean(me) && caps !== undefined && !console,
+  })
+  return console || (reports.data?.items.length ?? 0) > 0
+}
+
+/** The occupants a role entry holds (`roleOccupant`, whichever tab carries it). */
+export function occupantsOf(tabs: Record<string, TabState>): string[] {
+  const out: string[] = []
+  for (const tab of Object.values(tabs)) {
+    const value = tab.values.roleOccupant
+    for (const v of Array.isArray(value) ? value : value ? [value] : []) if (typeof v === 'string') out.push(v)
+  }
+  return out
 }
 
 /** `2027-01-31` for an end date (the day it ends, UTC). */

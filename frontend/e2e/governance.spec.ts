@@ -135,3 +135,152 @@ test('owners, end dates and a review campaign in the console', async ({ page, ba
     await api.dispose()
   }
 })
+
+test('role occupants get end dates from the role’s “Access ends” tab', async ({ page, baseURL }) => {
+  const url = baseURL ?? 'http://localhost:8420'
+  const { api, csrf } = await adminApi(url)
+  const name = unique('e2e-occupants')
+  const created = await api.post('/api/v2/objects/role', {
+    data: { base: '', tabs: { main: { values: { cn: name, roleOccupant: [person(EMPLOYEE.login)] } } } },
+    headers: { 'X-CSRF-Token': await csrf() },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const role = ((await created.json()) as { dn: string }).dn
+
+  try {
+    await signIn(page, ADMIN.login, ADMIN.password)
+    await expect(page).not.toHaveURL(/\/login/)
+    await page.goto(`/types/role/${encodeURIComponent(role)}`)
+    await page.getByRole('tab', { name: 'Access ends' }).click()
+    const row = page.locator('tr', { hasText: EMPLOYEE.login })
+    await expect(row.getByText('No end date')).toBeVisible()
+
+    await row.getByRole('button', { name: `Set end date for ${EMPLOYEE.login}` }).click()
+    const dialog = page.getByRole('dialog')
+    const until = new Date(Date.now() + 12 * 86_400_000).toISOString().slice(0, 10)
+    await dialog.getByLabel('Last day of access').fill(until)
+    await dialog.getByRole('button', { name: 'Save' }).click()
+    await expect(row.getByText(`Until ${until}`)).toBeVisible()
+
+    // stored on the role entry, kind roleOccupant
+    const grants = await api.get(`/api/v2/access/grants?holder=${encodeURIComponent(role)}`)
+    const items = ((await grants.json()) as { items: { kind: string; member: string; until: string }[] }).items
+    expect(items.map((i) => [i.kind, i.member.toLowerCase(), i.until.slice(0, 10)])).toEqual([
+      ['roleOccupant', person(EMPLOYEE.login), until],
+    ])
+
+    // and it can be made permanent again
+    await row.getByRole('button', { name: `Set end date for ${EMPLOYEE.login}` }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Remove end date' }).click()
+    await expect(row.getByText('No end date')).toBeVisible()
+  } finally {
+    await api.delete(`/api/v2/objects/role/${encodeURIComponent(role)}`, { headers: { 'X-CSRF-Token': await csrf() } })
+    await api.dispose()
+  }
+})
+
+test('an ACL assignment member gets an end date in “Who has access”', async ({ page, baseURL }) => {
+  const url = baseURL ?? 'http://localhost:8420'
+  const { api, csrf } = await adminApi(url)
+  const name = unique('e2e-acl')
+  const group = await api.post('/api/v2/objects/group', {
+    data: { base: '', tabs: { main: { values: { cn: name, member: [person(ADMIN.login)] } } } },
+    headers: { 'X-CSRF-Token': await csrf() },
+  })
+  expect(group.ok(), await group.text()).toBeTruthy()
+  const holder = ((await group.json()) as { dn: string }).dn
+  const aclRole = await api.post('/api/v2/admin/acl/roles', {
+    data: {
+      cn: name,
+      description: 'Created by the browser tests',
+      templates: [{ index: 0, blocks: [{ object: 'user', rights: 'r', attributes: [] }] }],
+    },
+    headers: { 'X-CSRF-Token': await csrf() },
+  })
+  expect(aclRole.ok(), await aclRole.text()).toBeTruthy()
+  const roleDn = ((await aclRole.json()) as { dn: string }).dn
+  const assigned = await api.put(`/api/v2/admin/acl/assignments/${encodeURIComponent(holder)}`, {
+    data: { assignments: [{ index: 0, scope: 'subtree', role: roleDn, members: [{ dn: person(EMPLOYEE.login), kind: 'user' }] }] },
+    headers: { 'X-CSRF-Token': await csrf() },
+  })
+  expect(assigned.ok(), await assigned.text()).toBeTruthy()
+
+  try {
+    await signIn(page, ADMIN.login, ADMIN.password)
+    await expect(page).not.toHaveURL(/\/login/)
+    await page.goto('/admin/access')
+    await page.getByRole('tab', { name: 'Who has access' }).click()
+    const row = page.getByRole('listitem').filter({ hasText: name }).filter({ hasText: EMPLOYEE.login })
+    await expect(row).toBeVisible()
+
+    await row.getByRole('button', { name: `Set end date for ${EMPLOYEE.login}` }).click()
+    const dialog = page.getByRole('dialog')
+    const until = new Date(Date.now() + 25 * 86_400_000).toISOString().slice(0, 10)
+    await dialog.getByLabel('Last day of access').fill(until)
+    await dialog.getByRole('button', { name: 'Save' }).click()
+    await expect(row.getByText(`Until ${until}`)).toBeVisible()
+
+    const grants = await api.get(`/api/v2/access/grants?holder=${encodeURIComponent(holder)}`)
+    const items = (
+      (await grants.json()) as { items: { kind: string; member: string; until: string; acl_scope?: string; acl_role?: string }[] }
+    ).items
+    expect(items.map((i) => [i.kind, i.member.toLowerCase(), i.acl_scope, i.acl_role?.toLowerCase(), i.until.slice(0, 10)])).toEqual([
+      ['acl', person(EMPLOYEE.login), 'subtree', roleDn.toLowerCase(), until],
+    ])
+
+    // it survives a reload (read back from the directory)
+    await page.reload()
+    await page.getByRole('tab', { name: 'Who has access' }).click()
+    await expect(row.getByText(`Until ${until}`)).toBeVisible()
+  } finally {
+    await api.delete(`/api/v2/objects/group/${encodeURIComponent(holder)}`, { headers: { 'X-CSRF-Token': await csrf() } })
+    await api.delete(`/api/v2/admin/acl/roles/${encodeURIComponent(roleDn)}`, { headers: { 'X-CSRF-Token': await csrf() } })
+    await api.dispose()
+  }
+})
+
+test('a console user requests access for someone else', async ({ page, baseURL }) => {
+  const url = baseURL ?? 'http://localhost:8420'
+  const { api, csrf } = await adminApi(url)
+  const name = unique('e2e-for')
+  const created = await api.post('/api/v2/objects/group', {
+    data: { base: '', tabs: { main: { values: { cn: name, member: [person(EMPLOYEE_2FA.login)], owner: [person(ADMIN.login)] } } } },
+    headers: { 'X-CSRF-Token': await csrf() },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const group = ((await created.json()) as { dn: string }).dn
+
+  try {
+    await signIn(page, ADMIN.login, ADMIN.password)
+    await expect(page).not.toHaveURL(/\/login/)
+    await page.goto('/access/requests')
+    await page.getByRole('button', { name: 'Request access' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('combobox', { name: 'For' }).click()
+    await page.getByLabel('Search…').fill(EMPLOYEE.login)
+    await page.getByRole('option', { name: new RegExp(person(EMPLOYEE.login)) }).click()
+    await expect(dialog.getByTestId('req-member-chosen')).toHaveText(EMPLOYEE.login)
+    await dialog.getByLabel('Group or role').selectOption({ label: name })
+    await dialog.getByLabel('Why do you need it?').fill('Asked by their lead')
+    await dialog.getByLabel('Until').fill(new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10))
+    await dialog.getByRole('button', { name: 'Send request' }).click()
+    await expect(dialog).toBeHidden()
+
+    // the request names the person it is for and the one who asked
+    const listed = await api.get('/api/v2/access/requests?view=mine')
+    const items = (
+      (await listed.json()) as {
+        items: { id: string; member: string; requester: string; status: string; target: { dn: string } }[]
+      }
+    ).items.filter((r) => r.target.dn.toLowerCase() === group.toLowerCase())
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ status: 'pending' })
+    expect(items[0]?.member.toLowerCase()).toBe(person(EMPLOYEE.login))
+    expect(items[0]?.requester.toLowerCase()).toBe(person(ADMIN.login))
+    const cancelled = await api.post(`/api/v2/access/requests/${items[0]?.id}/cancel`, { headers: { 'X-CSRF-Token': await csrf() } })
+    expect(cancelled.ok(), await cancelled.text()).toBeTruthy()
+  } finally {
+    await api.delete(`/api/v2/objects/group/${encodeURIComponent(group)}`, { headers: { 'X-CSRF-Token': await csrf() } })
+    await api.dispose()
+  }
+})

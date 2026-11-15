@@ -1,0 +1,100 @@
+# The console: `heracles serve` without the in-process scheduler (the worker Deployment runs the
+# scheduled tasks). Stateless: all state is in PostgreSQL, so replicas can be scaled freely.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: heracles-web
+  labels:
+    app.kubernetes.io/name: heracles
+    app.kubernetes.io/component: web
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: heracles
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: heracles
+        app.kubernetes.io/component: web
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999 # the image's `heracles` user
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      # SIGTERM turns /readyz into 503, then uvicorn finishes the requests in flight.
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: heracles
+          image: heracles:latest # set your registry and a release tag
+          imagePullPolicy: IfNotPresent
+          command: ["heracles", "serve", "--host", "0.0.0.0", "--port", "8420"]
+          ports:
+            - name: http
+              containerPort: 8420
+          env:
+            - name: HERACLES_CONFIG
+              value: /etc/heracles/heracles.yaml
+            - name: HERACLES_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: heracles-secrets
+                  key: database_url
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Liveness does not depend on the directory or the database: a directory outage must
+          # make the pod unready, not restart it.
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/heracles/heracles.yaml
+              subPath: heracles.yaml
+              readOnly: true
+            - name: secrets
+              mountPath: /etc/heracles/secrets
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/heracles
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: heracles-config
+        - name: secrets
+          secret:
+            secretName: heracles-secrets
+            defaultMode: 0440
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

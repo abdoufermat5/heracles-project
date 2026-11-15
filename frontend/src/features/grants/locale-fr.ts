@@ -25,6 +25,12 @@ export const grantsFr: typeof grantsEn = {
       pickTarget: 'Choisissez ce dont vous avez besoin',
       needReason: 'Expliquez pourquoi vous avez besoin de cet accès',
       needUntil: 'Choisissez une date de fin ({{days}} jours au plus)',
+      for: 'Pour',
+      forPick: 'Quelqu’un d’autre…',
+      forClear: 'Demander pour moi',
+      forHint: 'Laissez vide pour demander pour vous-même. Vous pouvez demander pour les personnes que vous encadrez.',
+      sentFor: 'Demande envoyée pour {{name}}',
+      notForThem: 'Vous ne pouvez pas demander un accès pour cette personne',
     },
     mine: {
       title: 'Demandes d’accès',
@@ -147,6 +153,15 @@ export const grantsFr: typeof grantsEn = {
       saved: 'L’accès prend fin après le {{day}}',
       cleared: 'L’appartenance est de nouveau permanente',
       failed: 'La date de fin n’a pas pu être enregistrée',
+      aclDescription: 'La personne perd cet accès automatiquement après ce jour (UTC).',
+    },
+    occupants: {
+      tab: 'Fin d’accès',
+      title: 'Occupants et dates de fin',
+      help: 'Donnez une date de fin à un occupant : le rôle lui est retiré automatiquement après ce jour. Les occupants s’ajoutent et se retirent dans les propriétés.',
+      empty: 'Ce rôle n’a aucun occupant.',
+      person: 'Occupant',
+      actions: 'Actions',
     },
   },
 }

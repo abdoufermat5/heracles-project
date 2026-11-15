@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from dataclasses import replace
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -28,6 +28,7 @@ from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Entry
 from heracles.objects import ObjectService
 from heracles.objects.policy import AllowAll
+from heracles.objects.registry import TypeRegistry
 from heracles.storage import Database
 from heracles.storage.database import MEMORY
 from heracles_plugins.access import approvals as ap
@@ -53,15 +54,31 @@ class DecisionBody(BaseModel):
     comment: str = ""
 
 
+def app_database(request: Request, state: AppState) -> Database:
+    """The application database the stores live in.
+
+    Without a configured database (demo, tests) the scheduler's in-memory one is shared, so
+    the in-process worker sees the same requests and campaigns as the API; failing that, one
+    per process.
+    """
+    if state.database is not None:
+        return state.database
+    app_state = request.app.state
+    scheduler_store = getattr(app_state, "task_store", None)
+    database: Database | None = getattr(scheduler_store, "database", None)
+    if database is None:
+        database = getattr(app_state, "access_memory_db", None)
+        if database is None:
+            database = Database(MEMORY)
+            app_state.access_memory_db = database
+    return database
+
+
 def review_store(request: Request, state: AppState) -> rv.ReviewStore:
     app_state = request.app.state
     store: rv.ReviewStore | None = getattr(app_state, "access_reviews", None)
     if store is None:
-        database = state.database or getattr(app_state, "access_memory_db", None)
-        if database is None:
-            database = Database(MEMORY)
-            app_state.access_memory_db = database
-        store = rv.ReviewStore(database, clock=state.clock)
+        store = rv.ReviewStore(app_database(request, state), clock=state.clock)
         app_state.access_reviews = store
     return store
 
@@ -232,67 +249,29 @@ def add_review_routes(router: APIRouter) -> None:
             raise forbidden("You cannot close access reviews")
         store = review_store(request, state)
         campaign = _campaign_or_404(store, user, campaign_id)
-        if campaign.status == rv.CLOSED:
-            raise ApiError(409, "conflict", "The campaign is closed")
-        if campaign.status == rv.OPEN:
-            moved = store.move(campaign, rv.OPEN, rv.CLOSING)
-            if moved is None:
-                raise ApiError(409, "conflict", "The campaign is being closed")
-            campaign = moved
         service = ObjectService(
             user.directory, domain.registry, policy=AllowAll(), events=domain.events(user)
         )
-
-        def remove(entry: Entry, kind: str, kept: list[str]) -> None:
-            found = holder_types(domain, entry, kind)
-            if not found:
-                raise RuntimeError(f"no type edits {kind} on {entry.dn}")
-            info, tab = found[0]
-            service.update(info.name, entry.dn, {tab: {"values": {kind: kept}}})
-
-        items = store.items(campaign.id)
-        for item in items:
-            if item.outcome and item.outcome != rv.FAILED:
-                continue  # applied by an earlier close
-            if rv.effective_decision(item, campaign) == rv.KEEP:
-                store.set_outcome(item, rv.KEPT)
-                continue
-            try:
-                outcome = rv.revoke_one(user.directory, item, remove)
-            except Exception as exc:  # recorded per item; the close can be run again
-                log.warning("review_revoke_failed", item=item.item_id, error=str(exc))
-                outcome = rv.FAILED
-            store.set_outcome(item, outcome)
-        items = store.items(campaign.id)
-        failed = [i for i in items if i.outcome == rv.FAILED]
-        if failed:
+        try:
+            result = rv.close_campaign(
+                store, campaign, user.directory, remover(domain.registry, service), user.dn
+            )
+        except rv.CloseConflictError as exc:
+            raise ApiError(409, "conflict", str(exc).capitalize()) from None
+        counts = _counts(result.items, result.campaign)
+        if result.failed:
             return {
-                "campaign": campaign.to_json() | {"counts": _counts(items, campaign)},
-                "failed": [i.to_json() for i in failed],
+                "campaign": result.campaign.to_json() | {"counts": counts},
+                "failed": [i.to_json() for i in result.failed],
             }
-        now = store.clock()
-        doc = rv.report(replace(campaign, closed_by=user.dn, closed_at=now), items)
-        digest = rv.report_hash(doc)
-        closed = store.move(
-            campaign, rv.CLOSING, rv.CLOSED, closed_by=user.dn, closed_at=now, report_hash=digest
-        )
-        if closed is None:
-            raise ApiError(409, "conflict", "The campaign was closed meanwhile")
-        outcomes = Counter(i.outcome for i in items)
         domain.audit.record_by(
             user,
             "access_review",
             object_type="access_review",
             object_dn=user.directory.base_dn,
-            attributes=[
-                f"campaign: {closed.id}",
-                f"name: {closed.name}",
-                "status: closed",
-                f"report sha256: {digest}",
-                *(f"{name}: {count}" for name, count in sorted(outcomes.items())),
-            ],
+            attributes=rv.close_audit_lines(result),
         )
-        return {"campaign": closed.to_json() | {"counts": _counts(items, closed)}, "failed": []}
+        return {"campaign": result.campaign.to_json() | {"counts": counts}, "failed": []}
 
     @router.get("/reviews/{campaign_id}/report")
     def campaign_report(  # pyright: ignore[reportUnusedFunction]
@@ -338,6 +317,21 @@ def add_review_routes(router: APIRouter) -> None:
         )
 
 
+def remover(
+    registry: TypeRegistry, service: ObjectService
+) -> Callable[[Entry, str, list[str]], None]:
+    """Remove a membership through the object service of the entry's type."""
+
+    def remove(entry: Entry, kind: str, kept: list[str]) -> None:
+        found = holder_types(registry, entry, kind)
+        if not found:
+            raise RuntimeError(f"no type edits {kind} on {entry.dn}")
+        info, tab = found[0]
+        service.update(info.name, entry.dn, {tab: {"values": {kind: kept}}})
+
+    return remove
+
+
 def _campaign_or_404(store: rv.ReviewStore, user: CurrentUser, campaign_id: str) -> rv.Campaign:
     campaign = store.get(campaign_id)
     if campaign is None or campaign.directory_id != user.directory_id:
@@ -357,4 +351,4 @@ def _may_decide(
     return manager
 
 
-__all__ = ["add_review_routes", "can_manage", "review_store"]
+__all__ = ["add_review_routes", "app_database", "can_manage", "remover", "review_store"]
