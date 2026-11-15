@@ -279,6 +279,9 @@ def main(
 ) -> int:
     """Run the Heracles CLI."""
     parser = argparse.ArgumentParser(prog="heracles", description="Heracles directory console")
+    from heracles import __version__
+
+    parser.add_argument("--version", action="version", version=f"heracles {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     serve = sub.add_parser("serve", help="run the web server")

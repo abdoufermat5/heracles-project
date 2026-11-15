@@ -21,7 +21,7 @@ VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(BACKEND)/pyproject.toml
 .PHONY: bundle-check help install install-backend install-frontend \
         dev dev-demo dev-down dev-mock dhcp-test backend frontend demo build docker-build serve dns-demo \
         test test-backend test-frontend lint lint-backend lint-frontend \
-        format typecheck check bench bench-ldap bench-check bench-baseline ldap-up ldap-down ldap-logs test-integration e2e e2e-replicas e2e-ui e2e-down schema third-party-schema clean
+        format typecheck check bench bench-ldap bench-check bench-baseline ldap-up ldap-down ldap-logs test-integration e2e e2e-replicas e2e-ui e2e-down schema changelog third-party-schema clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "; printf "\nUsage: make \033[36m<target>\033[0m\n\n"} \
@@ -175,6 +175,9 @@ e2e-ui: ## Browser end-to-end tests only, against the running stack (make dev or
 
 e2e-down: ## Stop the end-to-end stack and drop its LDAP data
 	$(COMPOSE) --profile e2e down -v
+
+changelog: ## Regenerate CHANGELOG.md from the conventional commits and tags
+	python3 scripts/changelog.py -o CHANGELOG.md
 
 schema: ## Regenerate the Heracles LDAP schema files (deploy/ldap/schema/heracles.{ldif,schema})
 	cd backend && uv run heracles schema export --format ldif -o ../deploy/ldap/schema/heracles.ldif
