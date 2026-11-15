@@ -46,6 +46,7 @@ plugins:
       sudo,
       mail,
       audit,
+      access,
       acl_admin,
       ppolicy,
       dns,

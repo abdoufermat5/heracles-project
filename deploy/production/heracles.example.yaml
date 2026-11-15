@@ -89,6 +89,17 @@ plugins:
 #   username: heracles
 #   password: CHANGE_ME
 
+# --- access governance (plugin "access") ---------------------------------------------------
+# End dates on memberships, access requests and access reviews.
+# access:
+#   approvers: ["cn=access-approvers,ou=groups,dc=example,dc=org"]  # approve any request
+#   requestable: "(owner=*)"     # groups and roles people may ask for
+#   max_days: 365                # longest end date (0: permanent grants allowed)
+#   mail:                        # mail_template names; empty: built-in wording
+#     request_submitted: ""
+#     request_decided: ""
+#     review_assigned: ""
+
 # --- audit ---------------------------------------------------------------------------------
 # Retention of the audit log, chain anchors and forwarding to a log collector. Every event is
 # hash-chained to the previous one; `heracles audit verify` checks the chain.

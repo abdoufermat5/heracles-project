@@ -256,3 +256,57 @@ def test_api_tokens_are_shared_between_replicas(make_db: MakeDb) -> None:
     assert one.delete(new.token.id) and not two.delete(new.token.id)
     one.add(old.token)
     assert two.delete_for_owner(DN) == 1 and one.list_all() == []
+
+
+def test_access_request_store(make_db: MakeDb) -> None:
+    from heracles_plugins.access.requests import APPROVED, PENDING, AccessRequestStore
+
+    store = AccessRequestStore(make_db(), clock=lambda: 1000.0)
+    created = store.add(
+        directory_id="main",
+        requester_dn=DN,
+        member_dn=DN,
+        target_dn="cn=devs,dc=example,dc=com",
+        target_kind="member",
+        target_label="devs",
+        reason="needed",
+        until="2030-01-01T23:59:59+00:00",
+    )
+    other = AccessRequestStore(make_db())  # a second replica sees it
+    assert other.pending_for("main", DN.upper(), "CN=devs,dc=example,dc=com") == created
+    assert [r.id for r in other.list("main", status=PENDING)] == [created.id]
+    done = store.decide(created, APPROVED, by="uid=boss,dc=example,dc=com", comment="ok")
+    assert done is not None and done.status == APPROVED
+    assert store.decide(created, APPROVED, by="x") is None  # decided once
+    assert other.get(created.id) == done
+    assert other.list("main", member_dn=DN)[0].until == "2030-01-01T23:59:59+00:00"
+
+
+def test_access_review_store(make_db: MakeDb) -> None:
+    from heracles_plugins.access import reviews as rv
+
+    store = rv.ReviewStore(make_db(), clock=lambda: 1000.0)
+    campaign = rv.new_campaign(
+        directory_id="main",
+        name="Q4",
+        creator=DN,
+        deadline=2000.0,
+        rule="owner",
+        default=rv.KEEP,
+        selector={"holders": ["cn=devs"], "base": ""},
+        now=1000.0,
+    )
+    item = rv.Item(campaign.id, "i1", "cn=devs", "devs", "member", "uid=ann", reviewer_dn=DN)
+    store.create(campaign, [item])
+    other = rv.ReviewStore(make_db())
+    assert other.get(campaign.id) == campaign
+    assert [i.item_id for i in other.items_for_reviewer(DN.upper())] == ["i1"]
+    store.decide(item, rv.REVOKE, "gone", DN)
+    store.set_outcome(item, "revoked")
+    assert other.items(campaign.id)[0].outcome == "revoked"
+    closing = store.move(campaign, rv.OPEN, rv.CLOSING)
+    assert closing is not None and store.move(campaign, rv.OPEN, rv.CLOSING) is None
+    closed = store.move(
+        closing, rv.CLOSING, rv.CLOSED, closed_by=DN, closed_at=1500.0, report_hash="ab"
+    )
+    assert closed is not None and other.get(campaign.id) == closed
