@@ -18,18 +18,32 @@ __all__ = ["component_migrations", "copy_sqlite_to_postgres"]
 
 def component_migrations() -> dict[str, Sequence[str | Migration]]:
     """Every component that keeps tables in the application database."""
-    from heracles.auth import ratelimit_db, recovery_db, second_factor_db, sessions_db
+    from heracles.auth import (
+        api_tokens_db,
+        ratelimit_db,
+        recovery_db,
+        second_factor_db,
+        sessions_db,
+    )
     from heracles.objects import activation, listing_epochs
     from heracles.tasks import scheduler
+    from heracles_plugins.access import requests, reviews
+    from heracles_plugins.posix import ids
+    from heracles_plugins.public_forms import shared
 
     return {
         sessions_db.COMPONENT: sessions_db.MIGRATIONS,
         ratelimit_db.COMPONENT: ratelimit_db.MIGRATIONS,
         recovery_db.COMPONENT: recovery_db.MIGRATIONS,
         second_factor_db.COMPONENT: second_factor_db.MIGRATIONS,
+        api_tokens_db.COMPONENT: api_tokens_db.MIGRATIONS,
         "tasks": scheduler.TASKS_MIGRATIONS,
         activation.COMPONENT: activation.MIGRATIONS,
         listing_epochs.COMPONENT: listing_epochs.MIGRATIONS,
+        requests.COMPONENT: requests.MIGRATIONS,
+        reviews.COMPONENT: reviews.MIGRATIONS,
+        ids.COMPONENT: ids.MIGRATIONS,
+        shared.COMPONENT: shared.MIGRATIONS,
     }
 
 
