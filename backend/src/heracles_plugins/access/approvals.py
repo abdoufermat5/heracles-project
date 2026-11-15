@@ -111,29 +111,57 @@ def can_approve(
     return dnlib.normalize(user.dn) in approvers_of(user.directory, cfg, target)
 
 
-def apply(user: CurrentUser, domain: Domain, request: AccessRequest) -> None:
-    """Add the membership with the approver as author, then date it. Raises on failure."""
+class ApplyError(Exception):
+    """The approved request cannot be applied (the reason is shown to the approver)."""
+
+
+def current_end_date(entry: Entry, kind: str, member: str) -> datetime | None:
+    wanted = dnlib.normalize(member)
+    for grant in g.grants_of(entry):
+        if grant.kind == kind and dnlib.normalize(grant.member) == wanted:
+            return grant.until
+    return None
+
+
+def apply(user: CurrentUser, domain: Domain, request: AccessRequest, now: datetime) -> None:
+    """Add (or extend) the membership with the approver as author, then date it.
+
+    Everything is read from a write server. When dating fails after the membership was
+    added, the addition is undone, so an approval never leaves access broader than asked.
+    """
     directory = user.directory
-    entry = directory.get(request.target_dn)
+    entry = g.read_primary(directory, request.target_dn)
     if entry is None:
-        raise DirectoryError("the requested entry no longer exists")
+        raise ApplyError("the requested group or role no longer exists")
+    if g.read_primary(directory, request.member_dn, ["objectClass"]) is None:
+        raise ApplyError("the person no longer exists")
+    until = datetime.fromisoformat(request.until) if request.until else None
+    if until is not None and until <= now:
+        raise ApplyError("the requested end date has passed")
     kind = request.target_kind
     found = holder_types(domain, entry, kind)
     if not found:
-        raise DirectoryError(f"no type edits {kind} on this entry")
+        raise ApplyError(f"no type edits {kind} on this entry")
     info, tab = found[0]
     current = entry.texts(kind)
-    if not any(dnlib.normalize(v) == dnlib.normalize(request.member_dn) for v in current):
-        service = ObjectService(
-            directory, domain.registry, policy=AllowAll(), events=domain.events(user)
-        )
+    present = any(dnlib.normalize(v) == dnlib.normalize(request.member_dn) for v in current)
+    service = ObjectService(
+        directory, domain.registry, policy=AllowAll(), events=domain.events(user)
+    )
+    if not present:
         service.update(
             info.name, entry.dn, {tab: {"values": {kind: [*current, request.member_dn]}}}
         )
-    if request.until:
-        g.set_end_date(
-            directory, entry.dn, kind, request.member_dn, datetime.fromisoformat(request.until)
-        )
+    try:
+        if until is not None or current_end_date(entry, kind, request.member_dn) is not None:
+            g.set_end_date(directory, entry.dn, kind, request.member_dn, until)
+    except Exception:
+        if not present:
+            try:
+                service.update(info.name, entry.dn, {tab: {"values": {kind: current}}})
+            except Exception as exc:  # pragma: no cover - reported in the log
+                log.error("access_apply_rollback_failed", dn=entry.dn, error=str(exc))
+        raise
 
 
 # -- mail --------------------------------------------------------------------------------------
@@ -218,9 +246,11 @@ def send_mail(
 
 __all__ = [
     "KINDS",
+    "ApplyError",
     "apply",
     "approvers_of",
     "can_approve",
+    "current_end_date",
     "holds_membership",
     "kind_of",
     "label_of",

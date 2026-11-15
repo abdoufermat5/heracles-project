@@ -7,6 +7,7 @@ const unauthenticated = () =>
 
 /** `/api/v2/access`: grant end dates kept in memory. */
 export const accessHandlers: HttpHandler[] = [
+  http.get('/api/v2/access/status', () => HttpResponse.json({ enabled: true })),
   http.get('/api/v2/access/me', () => {
     const me = db.me()
     if (!me) return unauthenticated()
@@ -50,7 +51,13 @@ export const accessHandlers: HttpHandler[] = [
         const members = (g.tabs.main?.values.member as string[] | undefined) ?? []
         return !members.some((m) => m.toLowerCase() === me.dn.toLowerCase())
       })
-      .map((g) => ({ dn: g.dn, kind: 'member', label: String(g.tabs.main?.values.cn ?? g.dn), description: '' }))
+      .map((g) => ({
+        dn: g.dn,
+        kind: 'member',
+        label: String(g.tabs.main?.values.cn ?? g.dn),
+        description: '',
+        renews: null,
+      }))
     return HttpResponse.json({ items, max_days: 90 })
   }),
   http.get('/api/v2/access/requests', ({ request }) => {

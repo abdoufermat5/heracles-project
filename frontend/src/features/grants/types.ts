@@ -51,4 +51,6 @@ export interface Requestable {
   kind: string
   label: string
   description: string
+  /** Held until this date (ISO): a request extends it. */
+  renews: string | null
 }

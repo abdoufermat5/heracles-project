@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
@@ -15,8 +16,7 @@ from heracles.api.state import AppState
 from heracles.core.access_config import AccessConfig, access_config
 from heracles.core.audit import AuditSink
 from heracles.ldap import dn as dnlib
-from heracles.ldap.client import DirectoryError
-from heracles.objects import ObjectValidationError, PermissionDeniedError
+from heracles.ldap.client import Entry
 from heracles.objects.registry import PluginRouterContext
 from heracles.storage import Database
 from heracles.storage.database import MEMORY
@@ -74,6 +74,9 @@ def check_until(until: datetime | None, *, now: datetime | None = None) -> None:
         raise validation("Invalid date", {"until": f"At most {limit} days from now"})
 
 
+log = structlog.get_logger(__name__)
+
+
 def build_router(ctx: PluginRouterContext) -> APIRouter:
     del ctx
     router = APIRouter(prefix="/access", tags=["access"])
@@ -106,6 +109,11 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         else:
             raise validation("Missing filter", {"holder": "Give holder or member"})
         return {"items": [x.to_json() for x in items]}
+
+    @router.get("/status")
+    def status() -> dict[str, bool]:  # pyright: ignore[reportUnusedFunction]
+        """Cheap probe: the access plugin is on (404 otherwise)."""
+        return {"enabled": True}
 
     @router.get("/me")
     def my_end_dates(user: CurrentUserDep) -> dict[str, Any]:  # pyright: ignore[reportUnusedFunction]
@@ -163,14 +171,21 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         items: list[dict[str, Any]] = []
         for entry in ap.requestable(user.directory, cfg):
             kind = ap.kind_of(entry)
-            if kind is None or ap.holds_membership(entry, user.dn):
+            if kind is None:
                 continue
+            ends = None
+            if ap.holds_membership(entry, user.dn):
+                ends = ap.current_end_date(_dated(user, entry), kind, user.dn)
+                if ends is None:
+                    continue  # held for good: nothing to ask for
             items.append(
                 {
                     "dn": entry.dn,
                     "kind": kind,
                     "label": ap.label_of(entry),
                     "description": entry.text("description") or "",
+                    # held until this date: a request extends it
+                    "renews": ends.isoformat() if ends else None,
                 }
             )
         items.sort(key=lambda i: str(i["label"]).lower())
@@ -191,7 +206,9 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             raise validation("Not requestable", {"target": "This access cannot be requested"})
         kind = ap.kind_of(target)
         assert kind is not None
-        if ap.holds_membership(target, user.dn):
+        if ap.holds_membership(target, user.dn) and (
+            ap.current_end_date(_dated(user, target), kind, user.dn) is None
+        ):
             raise validation("Already granted", {"target": "You already have this access"})
         reason = body.reason.strip()
         if not reason:
@@ -329,6 +346,12 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
     return router
 
 
+def _dated(user: CurrentUser, entry: Entry) -> Entry:
+    """``entry`` with its end dates (the requestable search does not read them)."""
+    full = user.directory.get(entry.dn, ["objectClass", g.GRANT_ATTR, "member", "roleOccupant"])
+    return full or entry
+
+
 class RequestBody(BaseModel):
     target: str
     reason: str
@@ -373,6 +396,14 @@ def _decide(
     if not _may_decide(user, domain, cfg, found):
         raise forbidden("You cannot decide this request")
     comment = comment.strip()[:1000]
+    if (
+        status == APPROVED
+        and found.until
+        and datetime.fromisoformat(found.until) <= datetime.now(UTC)
+    ):
+        raise validation(
+            "End date passed", {"comment": "The requested end date has passed: reject it"}
+        )
     if status == REJECTED and not comment:
         raise validation("Comment required", {"comment": "Say why the request is rejected"})
     done = store.decide(found, status, by=user.dn, comment=comment)
@@ -380,9 +411,10 @@ def _decide(
         raise ApiError(409, "conflict", "The request was already decided")
     if status == APPROVED:
         try:
-            ap.apply(user, domain, done)
-        except (DirectoryError, ObjectValidationError, PermissionDeniedError, g.GrantError) as exc:
-            done = store.fail(done, str(exc)[:500])
+            ap.apply(user, domain, done, datetime.now(UTC))
+        except Exception as exc:  # whatever went wrong, the request must not stay "approved"
+            log.warning("access_apply_failed", request=done.id, error=str(exc))
+            done = store.fail(done, str(exc)[:500] or type(exc).__name__)
     domain.audit.record_by(
         user,
         "access_request",

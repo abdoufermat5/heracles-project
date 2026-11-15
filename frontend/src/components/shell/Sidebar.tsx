@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useTranslation } from 'react-i18next'
 import { usePrefetch, useTypes } from '@/api/hooks'
 import { NAV_GROUPS, type NavGroup, type TypeSummary } from '@/api/types'
-import { useMyEndDates } from '@/features/grants/hooks'
+import { useAccessAvailable } from '@/features/grants/hooks'
 import { useCapabilities } from '@/features/admin/hooks'
 import { useIoAccess } from '@/features/io/hooks'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -260,7 +260,7 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useTranslation()
   const { data: types, isPending, isError, refetch, isFetching } = useTypes()
   const { data: caps } = useCapabilities()
-  const accessEnabled = useMyEndDates().enabled
+  const accessEnabled = useAccessAvailable()
   const { data: io } = useIoAccess()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const [favorites, toggleFavorite] = usePersistedSet(FAVORITES_KEY)

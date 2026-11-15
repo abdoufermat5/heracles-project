@@ -187,3 +187,37 @@ def test_runner_expires_through_the_auditing_directory(directory: MemoryDirector
     events = list(directory.search(f"ou=audit,{BASE}", "(hrcAuditAction=modify)"))
     lines = [line for e in events for line in e.texts("hrcAuditAttributes")]
     assert f"delete member: {ANN}" in lines and "source: task access" in lines
+
+
+def test_last_member_of_a_group_is_kept_and_reported(directory: MemoryDirectory) -> None:
+    directory.modify(GROUP, [g.Modification("delete", "member", [BOB.encode()])])
+    g.set_end_date(directory, GROUP, "member", ANN, NOW - timedelta(minutes=1))
+    g.set_end_date(directory, ROLE, "roleOccupant", ANN, NOW - timedelta(minutes=1))
+    report = g.expire_grants(directory, NOW)
+    # the role (no mandatory occupant) still expires
+    assert report.expired == 1 and len(report.errors) == 1
+    assert "last member" in report.errors[0]
+    group = directory.get(GROUP)
+    assert group is not None and group.texts("member") == [ANN]
+    assert dates(directory, GROUP) != []  # kept, retried at the next pass
+
+
+def test_one_refused_change_does_not_hold_back_the_others(directory: MemoryDirectory) -> None:
+    g.set_end_date(directory, GROUP, "member", ANN, NOW - timedelta(minutes=1))
+    g.set_end_date(directory, GROUP, "member", BOB, NOW - timedelta(minutes=1))
+    real = directory.modify
+    calls = {"n": 0}
+
+    def flaky(dn: str, changes: object) -> None:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise g.DirectoryError("busy")
+        real(dn, changes)  # type: ignore[arg-type]
+
+    directory.modify = flaky  # type: ignore[method-assign]
+    report = g.expire_grants(directory, NOW)
+    directory.modify = real  # type: ignore[method-assign]
+    assert report.expired == 1 and len(report.errors) == 1
+    # the refused one is still due and goes at the next pass; the last member stays then
+    again = g.expire_grants(directory, NOW)
+    assert again.expired == 0 and "last member" in again.errors[0]

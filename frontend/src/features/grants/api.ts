@@ -2,6 +2,7 @@ import { request } from '@/api/client'
 import type { AccessRequest, EndDateBody, Grant, GrantList, Requestable } from './types'
 
 export const accessApi = {
+  status: (signal?: AbortSignal) => request<{ enabled: boolean }>('/access/status', { signal }),
   me: (signal?: AbortSignal) => request<GrantList>('/access/me', { signal }),
   grantsOf: (holder: string, signal?: AbortSignal) =>
     request<GrantList>('/access/grants', { query: { holder }, signal }),

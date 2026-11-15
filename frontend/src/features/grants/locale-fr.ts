@@ -12,6 +12,7 @@ export const grantsFr: typeof grantsEn = {
       description: 'Demandez à rejoindre un groupe ou un rôle. Son propriétaire ou un approbateur décide.',
       target: 'Groupe ou rôle',
       choose: 'Choisir…',
+      renewOption: '{{label}} (prolonger : fin le {{day}})',
       reason: 'Pourquoi en avez-vous besoin ?',
       until: 'Jusqu’au',
       untilHint: 'Laissez vide pour un accès sans date de fin.',

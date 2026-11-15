@@ -19,7 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { rdnValue } from '@/lib/objects'
 import { accessApi } from './api'
-import { endDay, useApprovals, useMyEndDates, useMyRequests } from './hooks'
+import { endDay, useAccessAvailable, useApprovals, useMyRequests } from './hooks'
 import { RequestAccessDialog } from './RequestAccessDialog'
 import type { AccessRequest } from './types'
 
@@ -30,7 +30,7 @@ function day(seconds: number): string {
 /** The signed-in person's requests, and a way to ask for more access (portal and Me page). */
 export function MyRequestsSection() {
   const { t } = useTranslation()
-  const available = useMyEndDates().enabled
+  const available = useAccessAvailable()
   const mine = useMyRequests(available)
   const qc = useQueryClient()
   const [asking, setAsking] = useState(false)

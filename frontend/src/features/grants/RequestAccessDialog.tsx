@@ -102,7 +102,11 @@ export function RequestAccessDialog({ open, onOpenChange }: { open: boolean; onO
                 <option value="">{t('grants.request.choose')}</option>
                 {items.map((i) => (
                   <option key={i.dn} value={i.dn}>
-                    {i.description ? `${i.label} — ${i.description}` : i.label}
+                    {i.renews
+                      ? t('grants.request.renewOption', { label: i.label, day: i.renews.slice(0, 10) })
+                      : i.description
+                        ? `${i.label} — ${i.description}`
+                        : i.label}
                   </option>
                 ))}
               </select>

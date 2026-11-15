@@ -170,3 +170,38 @@ def test_configured_approver_group(client: TestClient) -> None:
     configure_access({"max_days": 90, "approvers": [LYON_STAFF]})
     r = as_user(client, "dlefevre").post(f"/access/requests/{created['id']}/approve", {})
     assert r.json()["request"]["status"] == "approved"
+
+
+def test_failed_dating_undoes_the_membership(
+    client: TestClient, directory: MemoryDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = submit(client)
+
+    def boom(*_a: object, **_k: object) -> None:
+        raise RuntimeError("dating refused")
+
+    monkeypatch.setattr(g, "set_end_date", boom)
+    r = as_user(client, "cdupont").post(f"/access/requests/{created['id']}/approve", {})
+    assert r.status_code == 200
+    done = r.json()["request"]
+    assert done["status"] == "failed" and "dating refused" in done["error"]
+    entry = directory.get(LYON_STAFF)
+    assert entry is not None and ASMITH not in entry.texts("member")
+
+
+def test_a_dated_membership_can_be_extended(client: TestClient, directory: MemoryDirectory) -> None:
+    created = submit(client)
+    as_user(client, "cdupont").post(f"/access/requests/{created['id']}/approve", {})
+    a = as_user(client, "asmith")
+    (item,) = a.get("/access/requestable").json()["items"]
+    assert item["dn"] == LYON_STAFF and item["renews"] is not None
+    r = a.post(
+        "/access/requests", {"target": LYON_STAFF, "reason": "still on call", "until": soon(60)}
+    )
+    assert r.status_code == 201, r.text
+    as_user(client, "cdupont").post(f"/access/requests/{r.json()['request']['id']}/approve", {})
+    entry = directory.get(LYON_STAFF)
+    assert entry is not None
+    (grant,) = g.grants_of(entry)
+    assert grant.until.date().isoformat() == soon(60)
+    assert entry.texts("member").count(ASMITH) == 1

@@ -27,6 +27,7 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
+import { endDay, usePersonEndDates } from '@/features/grants/hooks'
 import { api } from '@/api/endpoints'
 import {
   useAccountLock,
@@ -212,6 +213,8 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
       .filter((r) => r.type === 'group')
       .map((r) => ({ dn: r.dn, name: r.label || r.dn }))
   }, [references])
+
+  const groupEndDates = usePersonEndDates(dn)
 
   const userRoles = useMemo(() => {
     return references
@@ -739,6 +742,11 @@ export function UserProfilePage({ dn }: UserProfilePageProps) {
                         >
                           {g.name}
                         </Link>
+                        {groupEndDates.get(g.dn.toLowerCase()) ? (
+                          <span className="shrink-0 text-small text-muted-foreground">
+                            {t('grants.until', { day: endDay(groupEndDates.get(g.dn.toLowerCase())?.until ?? '') })}
+                          </span>
+                        ) : null}
                       </div>
                       <Button
                         type="button"

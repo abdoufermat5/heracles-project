@@ -46,6 +46,30 @@ MEMBER_ATTRS = ("member", "uniqueMember", "roleOccupant")
 ACL_KIND = "acl"
 
 
+#: Structural class -> membership attribute it requires: the last value is never removed.
+MANDATORY: dict[str, str] = {"groupofnames": "member", "groupofuniquenames": "uniquemember"}
+
+
+def read_primary(
+    directory: DirectoryClient, dn: str, attrs: Sequence[str] | None = None
+) -> Entry | None:
+    """``get`` from a server accepting writes when the client knows one (replicas lag)."""
+    wanted = list(attrs) if attrs is not None else None
+    primary = getattr(directory, "get_primary", None)
+    if callable(primary):
+        found = primary(dn, wanted)
+        return found if isinstance(found, Entry) else None
+    return directory.get(dn, wanted)
+
+
+def is_last_mandatory(entry: Entry, attr: str) -> bool:
+    """Whether removing one value of ``attr`` would empty an attribute the entry must have."""
+    required = {
+        MANDATORY[oc.lower()] for oc in entry.texts("objectClass") if oc.lower() in MANDATORY
+    }
+    return attr.lower() in required and len(entry.get(attr)) <= 1
+
+
 class GrantError(ValueError):
     """The grant does not exist, or the request is malformed."""
 
@@ -213,8 +237,10 @@ def set_end_date(
         raise GrantError(f"unknown kind {kind!r}")
     if canonical == ACL_KIND and not (acl_scope and acl_role):
         raise GrantError("an ACL grant needs its scope and role")
-    entry = directory.get(
-        holder, ["objectClass", GRANT_ATTR, canonical if canonical != ACL_KIND else ACL_ATTR]
+    entry = read_primary(
+        directory,
+        holder,
+        ["objectClass", GRANT_ATTR, canonical if canonical != ACL_KIND else ACL_ATTR],
     )
     if entry is None:
         raise GrantError("no such entry")
@@ -311,38 +337,48 @@ def find_dated(directory: DirectoryClient, base: str | None = None) -> list[Entr
 
 
 def expire_grants(directory: DirectoryClient, now: datetime) -> ExpiryReport:
-    """Remove every grant whose end date has passed (and dates left without a grant)."""
+    """Remove every grant whose end date has passed (and dates left without a grant).
+
+    One modify per grant, so a refused change does not hold back the others. The last value
+    of a mandatory membership (``member`` of a ``groupOfNames``) is kept with its date: the
+    run reports it as an error at every pass until someone removes it or adds a member.
+    """
     report = ExpiryReport()
     now = now.astimezone(UTC)
-    for entry in find_dated(directory):
-        changes: list[Modification] = []
-        old_dates: list[bytes] = []
-        for raw in entry.texts(GRANT_ATTR):
+    for found in find_dated(directory):
+        orphans: list[bytes] = []
+        for raw in found.texts(GRANT_ATTR):
+            entry = read_primary(directory, found.dn, _attrs_needed()) or found
             grant = parse_grant(entry.dn, raw)
-            if grant is None:
+            if grant is None or raw not in entry.texts(GRANT_ATTR):
                 continue
             if not holds(entry, grant):
-                old_dates.append(raw.encode())
-                report.dropped += 1
+                orphans.append(raw.encode())
                 continue
             if grant.until > now:
+                continue
+            if grant.kind != ACL_KIND and is_last_mandatory(entry, grant.kind):
+                report.errors.append(f"{entry.dn}: {grant.member} is the last {grant.kind}, kept")
+                log.warning("grant_expiry_last_member", dn=entry.dn, member=grant.member)
                 continue
             revoke = _revoke_changes(entry, grant)
             if not revoke:
                 continue
-            changes.extend(revoke)
-            old_dates.append(raw.encode())
+            changes = _merge([*revoke, Modification("delete", GRANT_ATTR, [raw.encode()])])
+            try:
+                directory.modify(entry.dn, changes)
+            except DirectoryError as exc:
+                report.errors.append(f"{entry.dn}: {grant.member}: {type(exc).__name__}")
+                log.warning("grant_expiry_failed", dn=entry.dn, error=str(exc))
+                continue
             report.expired += 1
             report.expired_grants.append(grant)
-        if not changes and not old_dates:
-            continue
-        if old_dates:
-            changes.append(Modification("delete", GRANT_ATTR, old_dates))
-        try:
-            directory.modify(entry.dn, _merge(changes))
-        except DirectoryError as exc:
-            report.errors.append(f"{entry.dn}: {type(exc).__name__}")
-            log.warning("grant_expiry_failed", dn=entry.dn, error=str(exc))
+        if orphans:
+            try:
+                directory.modify(found.dn, [Modification("delete", GRANT_ATTR, orphans)])
+                report.dropped += len(orphans)
+            except DirectoryError as exc:
+                report.errors.append(f"{found.dn}: {type(exc).__name__}")
     return report
 
 

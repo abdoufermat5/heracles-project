@@ -10,6 +10,7 @@ export const grantsEn = {
       description: 'Ask to join a group or role. Its owner or an approver decides.',
       target: 'Group or role',
       choose: 'Choose…',
+      renewOption: '{{label}} (extend: ends {{day}})',
       reason: 'Why do you need it?',
       until: 'Until',
       untilHint: 'Leave empty for access without an end date.',

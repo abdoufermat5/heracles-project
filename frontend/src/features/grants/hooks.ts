@@ -3,6 +3,30 @@ import { isApiError } from '@/api/client'
 import { accessApi } from './api'
 import type { Grant } from './types'
 
+/** Whether the access plugin answers (a cheap probe: 404 without it). */
+export function useAccessAvailable(): boolean {
+  const q = useQuery({
+    queryKey: ['access', 'status'],
+    queryFn: ({ signal }) => accessApi.status(signal),
+    retry: false,
+    staleTime: 5 * 60_000,
+  })
+  return q.isSuccess
+}
+
+/** End dates of the grants one person holds, keyed by lower-cased holder DN. */
+export function usePersonEndDates(member: string) {
+  const q = useQuery({
+    queryKey: ['access', 'grants', 'member', member],
+    queryFn: ({ signal }) => accessApi.grantsFor(member, signal),
+    retry: false,
+    enabled: Boolean(member),
+  })
+  const byHolder = new Map<string, Grant>()
+  for (const g of q.data?.items ?? []) byHolder.set(g.holder.toLowerCase(), g)
+  return byHolder
+}
+
 /** End dates of the signed-in person's own access; `enabled` is false without the access plugin. */
 export function useMyEndDates() {
   const q = useQuery({
