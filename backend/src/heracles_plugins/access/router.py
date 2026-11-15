@@ -18,8 +18,6 @@ from heracles.core.audit import AuditSink
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Entry
 from heracles.objects.registry import PluginRouterContext
-from heracles.storage import Database
-from heracles.storage.database import MEMORY
 from heracles_plugins.access import approvals as ap
 from heracles_plugins.access import grants as g
 from heracles_plugins.access.requests import (
@@ -31,7 +29,12 @@ from heracles_plugins.access.requests import (
     AccessRequest,
     AccessRequestStore,
 )
-from heracles_plugins.access.review_routes import add_review_routes, can_manage, review_store
+from heracles_plugins.access.review_routes import (
+    add_review_routes,
+    app_database,
+    can_manage,
+    review_store,
+)
 from heracles_plugins.access.rights import can_change_grants, can_read_grants
 
 
@@ -201,29 +204,39 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         domain: DomainDep,
         state: StateDep,
     ) -> dict[str, Any]:
-        """Ask to join a requestable group or role (for oneself)."""
+        """Ask to join a requestable group or role, for oneself or (``member``) for a person
+        whose manager the caller is (or when the caller manages access)."""
         cfg = access_config()
+        member_dn = _request_subject(user, domain, body.member)
         target = ap.requestable_entry(user.directory, cfg, body.target)
         if target is None:
             raise validation("Not requestable", {"target": "This access cannot be requested"})
         kind = ap.kind_of(target)
         assert kind is not None
-        if ap.holds_membership(target, user.dn) and (
-            ap.current_end_date(_dated(user, target), kind, user.dn) is None
+        own = dnlib.normalize(member_dn) == dnlib.normalize(user.dn)
+        if ap.holds_membership(target, member_dn) and (
+            ap.current_end_date(_dated(user, target), kind, member_dn) is None
         ):
-            raise validation("Already granted", {"target": "You already have this access"})
+            raise validation(
+                "Already granted",
+                {
+                    "target": "You already have this access"
+                    if own
+                    else "They already have this access"
+                },
+            )
         reason = body.reason.strip()
         if not reason:
             raise validation("Reason required", {"reason": "Say why you need this access"})
         until = parse_until(body.until)
         check_until(until)
         store = _store(request, state)
-        if store.pending_for(user.directory_id, user.dn, target.dn) is not None:
+        if store.pending_for(user.directory_id, member_dn, target.dn) is not None:
             raise validation("Already requested", {"target": "A request is already waiting"})
         created = store.add(
             directory_id=user.directory_id,
             requester_dn=user.dn,
-            member_dn=user.dn,
+            member_dn=member_dn,
             target_dn=target.dn,
             target_kind=kind,
             target_label=ap.label_of(target),
@@ -235,8 +248,21 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             "access_request",
             object_type="access_request",
             object_dn=target.dn,
-            attributes=[f"request: {created.id}", "status: pending", f"reason: {created.reason}"],
+            attributes=[
+                f"request: {created.id}",
+                "status: pending",
+                *([] if own else [f"member: {member_dn}"]),
+                f"reason: {created.reason}",
+            ],
         )
+        values = {
+            "requester": user.dn,
+            "member": member_dn,
+            "target": created.target_label,
+            "reason": created.reason,
+            "until": created.until or "none",
+        }
+        base_url = state.settings.recovery.base_url.rstrip("/")
         approvers = sorted(ap.approvers_of(user.directory, cfg, target))
         ap.send_mail(
             state.mailer,
@@ -244,15 +270,17 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             cfg,
             "request_submitted",
             ap.mail_addresses(user.directory, approvers),
-            {
-                "requester": user.dn,
-                "member": user.dn,
-                "target": created.target_label,
-                "reason": created.reason,
-                "until": created.until or "none",
-                "url": state.settings.recovery.base_url.rstrip("/") + "/access/requests",
-            },
+            {**values, "url": base_url + "/access/requests"},
         )
+        if not own:
+            ap.send_mail(
+                state.mailer,
+                user.directory,
+                cfg,
+                "request_for_member",
+                ap.mail_addresses(user.directory, [member_dn]),
+                {**values, "url": base_url + "/me"},
+            )
         return {"request": created.to_json()}
 
     @router.get("/requests")
@@ -269,7 +297,7 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         store = _store(request, state)
         cfg = access_config()
         if view == "mine":
-            items = store.list(user.directory_id, member_dn=user.dn, status=status or None)
+            items = store.list(user.directory_id, involving=user.dn, status=status or None)
             return {"items": [r.to_json() for r in items]}
         if view not in ("to_approve", "all"):
             raise validation("Invalid view", {"view": "mine, to_approve or all"})
@@ -373,6 +401,8 @@ class RequestBody(BaseModel):
     target: str
     reason: str
     until: str | None = None
+    #: Ask for someone else (DN): their manager, or whoever manages access, may.
+    member: str | None = None
 
 
 class DecisionBody(BaseModel):
@@ -383,10 +413,28 @@ def _store(request: Request, state: AppState) -> AccessRequestStore:
     app_state = request.app.state
     store: AccessRequestStore | None = getattr(app_state, "access_requests", None)
     if store is None:
-        database = state.database or Database(MEMORY)  # demo and tests: per process
-        store = AccessRequestStore(database, clock=state.clock)
+        store = AccessRequestStore(app_database(request, state), clock=state.clock)
         app_state.access_requests = store
     return store
+
+
+def _request_subject(user: CurrentUser, domain: Domain, member: str | None) -> str:
+    """The person a request is for: the caller, or someone they may ask for."""
+    if not member or dnlib.normalize(member) == dnlib.normalize(user.dn):
+        return user.dn
+    entry = user.directory.get(member, ["objectClass", "manager"])
+    manages = can_manage(user, domain)
+    is_manager = entry is not None and any(
+        dnlib.normalize(v) == dnlib.normalize(user.dn) for v in entry.texts("manager")
+    )
+    if not (manages or is_manager):
+        raise forbidden("You cannot ask for this person")
+    if entry is None or not {c.lower() for c in entry.texts("objectClass")} & _PEOPLE:
+        raise validation("Not a person", {"member": "This person does not exist"})
+    return entry.dn
+
+
+_PEOPLE = {"person", "inetorgperson"}
 
 
 def _may_decide(user: CurrentUser, domain: Domain, cfg: AccessConfig, r: AccessRequest) -> bool:
@@ -451,7 +499,7 @@ def _decide(
         user.directory,
         cfg,
         "request_decided",
-        ap.mail_addresses(user.directory, [done.requester_dn]),
+        ap.mail_addresses(user.directory, [done.requester_dn, done.member_dn]),
         {
             "target": done.target_label,
             "status": done.status,
