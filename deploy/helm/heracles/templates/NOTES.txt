@@ -1,0 +1,8 @@
+Heracles {{ .Chart.AppVersion }} is installed as {{ include "heracles.fullname" . }}.
+
+Reach the console from your machine:
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "heracles.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  then open http://localhost:{{ .Values.service.port }} (set config.api.session.cookie_secure to false for plain http).
+{{- if .Values.ingress.enabled }}
+Or through the ingress: {{ range .Values.ingress.hosts }}https://{{ .host }}{{ .path }} {{ end }}
+{{- end }}

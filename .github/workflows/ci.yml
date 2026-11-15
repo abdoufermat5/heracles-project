@@ -65,3 +65,58 @@ jobs:
       # `build` type-checks (tsc -b) before bundling
       - run: pnpm build
       - run: pnpm check:bundle
+
+  # The Helm chart and the plain manifests (deploy/helm, deploy/kubernetes) on a throwaway kind
+  # cluster: PostgreSQL and a seeded OpenLDAP run in the cluster, the image is built here.
+  kubernetes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CHART: deploy/helm/heracles
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+        with:
+          version: v0.25.0
+          node_image: kindest/node:v1.31.2
+          cluster_name: heracles
+      - name: Lint and render the manifests
+        run: |
+          helm lint "$CHART" -f "$CHART/ci/test-values.yaml"
+          helm template heracles "$CHART" -f "$CHART/ci/test-values.yaml" \
+            --set ingress.enabled=true | kubectl apply --dry-run=client -f -
+          kubectl apply --dry-run=client -k deploy/kubernetes
+      - name: Build the image and load it into the cluster
+        run: |
+          docker build -f deploy/Dockerfile -t heracles:ci .
+          kind load docker-image heracles:ci --name heracles
+      - name: PostgreSQL and OpenLDAP (seeded from deploy/ldap)
+        run: |
+          kubectl create configmap ldap-seed --from-file=deploy/ldap/seed.ldif
+          kubectl create configmap ldap-schema \
+            $(printf -- '--from-file=%s ' deploy/ldap/schema/*.ldif)
+          kubectl apply -f "$CHART/ci/backing-services.yaml"
+          kubectl rollout status deployment/postgres deployment/openldap --timeout=300s
+      - name: Install the chart
+        run: |
+          kubectl create secret generic heracles-secrets \
+            --from-literal=bind_password=admin \
+            --from-literal=database_url=postgresql://heracles:heracles@postgres:5432/heracles
+          helm install heracles "$CHART" -f "$CHART/ci/kind-values.yaml" --wait --timeout 5m
+          kubectl rollout status deployment/heracles-web deployment/heracles-worker --timeout=300s
+      - name: /readyz answers 200
+        run: |
+          kubectl port-forward svc/heracles 8420:8420 &
+          sleep 3
+          curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 2 \
+            http://127.0.0.1:8420/readyz | tee readyz.json
+          grep -q '"status":"ok"' readyz.json
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl get pods,svc -o wide
+          kubectl describe pods -l app.kubernetes.io/name=heracles
+          kubectl logs -l app.kubernetes.io/name=heracles --all-containers --tail=100 --prefix
+          kubectl logs deployment/openldap --tail=60

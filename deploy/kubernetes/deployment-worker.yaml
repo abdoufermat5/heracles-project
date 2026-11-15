@@ -1,0 +1,76 @@
+# The scheduled tasks (reminders, expirations, audit purge, ...). One replica is enough; more are
+# safe, a lease in the database serialises the passes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: heracles-worker
+  labels:
+    app.kubernetes.io/name: heracles
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: heracles
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: heracles
+        app.kubernetes.io/component: worker
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      # SIGTERM lets the running task finish.
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: heracles-worker
+          image: heracles:latest # same image and tag as heracles-web
+          imagePullPolicy: IfNotPresent
+          command: ["heracles", "worker", "--interval", "60"]
+          env:
+            - name: HERACLES_CONFIG
+              value: /etc/heracles/heracles.yaml
+            - name: HERACLES_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: heracles-secrets
+                  key: database_url
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/heracles/heracles.yaml
+              subPath: heracles.yaml
+              readOnly: true
+            - name: secrets
+              mountPath: /etc/heracles/secrets
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/heracles
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: heracles-config
+        - name: secrets
+          secret:
+            secretName: heracles-secrets
+            defaultMode: 0440
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

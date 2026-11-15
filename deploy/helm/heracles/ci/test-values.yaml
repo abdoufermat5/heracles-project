@@ -1,0 +1,4 @@
+# Values used by `helm lint` / `helm template` in CI and by the kind job (secrets created
+# beforehand by the job).
+secrets:
+  existingSecret: heracles-secrets

@@ -1,0 +1,99 @@
+# PostgreSQL and OpenLDAP for the kind job of .github/workflows/ci.yml (throwaway credentials,
+# never use them elsewhere). The job first creates the ConfigMaps `ldap-seed` (deploy/ldap/seed.ldif)
+# and `ldap-schema` (deploy/ldap/schema/*.ldif), the way deploy/docker-compose.yml mounts them.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector: {app: postgres}
+  ports:
+    - port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: postgres}
+  template:
+    metadata:
+      labels: {app: postgres}
+    spec:
+      # A Service called postgres would otherwise inject POSTGRES_PORT=tcp://... into the container.
+      enableServiceLinks: false
+      containers:
+        - name: postgres
+          image: postgres:16
+          env:
+            - {name: POSTGRES_USER, value: heracles}
+            - {name: POSTGRES_PASSWORD, value: heracles}
+            - {name: POSTGRES_DB, value: heracles}
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "heracles", "-d", "heracles"]
+            periodSeconds: 3
+            failureThreshold: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openldap
+spec:
+  selector: {app: openldap}
+  ports:
+    - port: 1389
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openldap
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: openldap}
+  template:
+    metadata:
+      labels: {app: openldap}
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 1001
+      containers:
+        - name: openldap
+          # Same image and settings as the compose test directory.
+          image: bitnamilegacy/openldap:2.6
+          env:
+            - {name: LDAP_ROOT, value: "dc=heracles,dc=test"}
+            - {name: LDAP_ADMIN_USERNAME, value: admin}
+            - {name: LDAP_ADMIN_PASSWORD, value: admin}
+            - {name: LDAP_CUSTOM_LDIF_DIR, value: /ldifs}
+            - {name: LDAP_CUSTOM_SCHEMA_DIR, value: /schemas}
+            - {name: LDAP_SKIP_DEFAULT_TREE, value: "yes"}
+            - {name: LDAP_EXTRA_SCHEMAS, value: "cosine,inetorgperson,nis"}
+          ports:
+            - containerPort: 1389
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - ldapsearch -x -H ldap://localhost:1389 -b dc=heracles,dc=test -D cn=admin,dc=heracles,dc=test -w admin -s base dn
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          volumeMounts:
+            - {name: seed, mountPath: /ldifs, readOnly: true}
+            - {name: schema, mountPath: /schemas, readOnly: true}
+            - {name: data, mountPath: /bitnami/openldap}
+      volumes:
+        - name: seed
+          configMap: {name: ldap-seed}
+        - name: schema
+          configMap: {name: ldap-schema}
+        - name: data
+          emptyDir: {}

@@ -1,0 +1,20 @@
+# Values of the kind job: the image is built and loaded in the job, the backing services come
+# from backing-services.yaml, the secrets from `kubectl create secret generic heracles-secrets`.
+image:
+  repository: heracles
+  tag: ci
+  pullPolicy: Never
+secrets:
+  existingSecret: heracles-secrets
+config:
+  directories:
+    - id: main
+      label: Test directory
+      uri: ldap://openldap:1389
+      bind_dn: cn=admin,dc=heracles,dc=test
+      bind_password_file: /etc/heracles/secrets/bind_password
+      base_dn: dc=heracles,dc=test
+  api:
+    admin_dns: ["uid=alice,ou=people,dc=heracles,dc=test"]
+    session:
+      cookie_secure: false
