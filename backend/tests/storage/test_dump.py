@@ -172,22 +172,28 @@ def test_unknown_table_and_hostile_names_are_refused(tmp_path: Path) -> None:
 def test_an_older_archive_is_loaded_at_its_schema_then_upgraded(
     backend: str, new_target: NewTarget, tmp_path: Path
 ) -> None:
-    """The archive predates the second ``plugins`` migration (a legacy id renamed by it)."""
-    migrations = component_migrations()["plugins"]
+    """The archive predates the later ``tasks`` migrations (columns added to ``task_runs``)."""
+    migrations = component_migrations()["tasks"]
     src = Database(new_target(backend))
-    src.migrate("plugins", migrations[:1])
+    src.migrate("tasks", migrations[:1])
     with src.transaction() as conn:
-        conn.execute("INSERT INTO plugin_overrides (name, enabled) VALUES ('cyrus', 0)")
+        conn.execute(
+            "INSERT INTO task_runs (directory, runner, kind, started_at, finished_at, status,"
+            " counts, errors) VALUES ('main', 'access', '', 'a', 'b', 'ok', '{}', '[]')"
+        )
     dump = dump_database(src, tmp_path / "dump")
     src.close()
-    assert dump.components == {"plugins": 1}
+    assert dump.components == {"tasks": 1}
+    assert "reason" not in (tmp_path / "dump" / "task_runs.jsonl").read_text("utf-8")
 
     dst = Database(new_target(backend))
     try:
         result = load_database(dst, tmp_path / "dump", dump.components, dump.tables)
-        assert "plugins" in result.upgraded
-        assert PluginOverrideStore(dst).load() == {"mail_store": False}
-        assert versions(dst)["plugins"] == len(migrations)
+        assert result.upgraded == ["tasks"]
+        assert versions(dst)["tasks"] == len(migrations)
+        with dst.connection() as conn:
+            row = conn.execute("SELECT runner, reason, reason_key FROM task_runs").fetchone()
+        assert (row["runner"], row["reason"], row["reason_key"]) == ("access", None, None)
     finally:
         dst.close()
 
