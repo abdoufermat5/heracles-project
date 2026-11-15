@@ -64,6 +64,8 @@ import { SnapshotsPanel } from './SnapshotsPanel'
 import { useUndoableSave } from './undo'
 import { ObjectHistory } from '@/features/audit/ObjectHistory'
 import { useAuditEnabled } from '@/features/audit/hooks'
+import { OccupantEndDates } from '@/features/grants/OccupantEndDates'
+import { occupantsOf, useAccessAvailable } from '@/features/grants/hooks'
 import { TemplateFillForm } from './TemplateFillForm'
 import { TemplatePicker } from './TemplatePicker'
 
@@ -73,6 +75,7 @@ const REFERENCES_TAB = '@references'
 const SNAPSHOTS_TAB = '@snapshots'
 const SECOND_FACTORS_TAB = '@secondFactors'
 const HISTORY_TAB = '@history'
+const END_DATES_TAB = '@endDates'
 
 interface Props {
   type: string
@@ -284,6 +287,9 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
   // Only users have second factors, and only those allowed to see them get the tab (a 403 hides it).
   const secondFactors = useSecondFactors(type === 'user' && detail ? detail.dn : null)
   const showSecondFactors = secondFactors.isSuccess
+  // Roles: an "Access ends" tab for the occupants' end dates (only with the access plugin).
+  const accessAvailable = useAccessAvailable()
+  const showOccupantDates = type === 'role' && accessAvailable && !isCreate
 
   const readOnlyMode = !editing
   const objectRights = detail?.acl[desc.tabs[0]?.name ?? 'main']?.object ?? 'rwcdm'
@@ -531,7 +537,8 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
     tab === REFERENCES_TAB ||
     tab === SNAPSHOTS_TAB ||
     (tab === SECOND_FACTORS_TAB && showSecondFactors) ||
-    (tab === HISTORY_TAB && showHistory)
+    (tab === HISTORY_TAB && showHistory) ||
+    (tab === END_DATES_TAB && showOccupantDates)
       ? tab
       : null
   const extras = isCreate
@@ -541,6 +548,7 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
         { name: SNAPSHOTS_TAB, label: t('snapshots.tab') },
         ...(showHistory ? [{ name: HISTORY_TAB, label: t('audit.history.tab') }] : []),
         ...(showSecondFactors ? [{ name: SECOND_FACTORS_TAB, label: t('secondFactors.tab') }] : []),
+        ...(showOccupantDates ? [{ name: END_DATES_TAB, label: t('grants.occupants.tab') }] : []),
       ]
   const currentTabObj = extraPanel ? undefined : (desc.tabs.find((tb) => tb.name === tab) ?? desc.tabs[0])
   const isCurrentTabActive = currentTabObj ? (active[currentTabObj.name] ?? false) : false
@@ -628,6 +636,9 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
             <SnapshotsPanel type={type} dn={detail.dn} onRestored={() => void reloadAfterRestore()} />
           )}
           {extraPanel === SECOND_FACTORS_TAB && detail && <SecondFactorsPanel dn={detail.dn} />}
+          {extraPanel === END_DATES_TAB && detail && (
+            <OccupantEndDates dn={detail.dn} occupants={occupantsOf(detail.tabs)} />
+          )}
           {extraPanel === HISTORY_TAB && detail && <ObjectHistory dn={detail.dn} limit={50} />}
 
           {currentTabObj?.optional && (

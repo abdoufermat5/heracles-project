@@ -1,8 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
+import { ObjectRefPicker } from '@/components/fields/RefFields'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,21 +17,27 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { rdnValue } from '@/lib/objects'
 import { accessApi } from './api'
+import { useCanRequestForOthers } from './hooks'
 
 const SELECT =
   'h-9 w-full rounded-md border border-input bg-card px-2.5 text-body outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40'
 
-type Field = 'target' | 'reason' | 'until'
+type Field = 'target' | 'reason' | 'until' | 'member'
 
-/** Ask to join a group or role: what, why, and until when. */
+/** Ask to join a group or role: for whom (managers and console users), what, why, and until when. */
 export function RequestAccessDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const canAskForOthers = useCanRequestForOthers(open)
+  // the person the access is for; empty: the requester
+  const [member, setMember] = useState('')
   const options = useQuery({
-    queryKey: ['access', 'requestable'],
-    queryFn: ({ signal }) => accessApi.requestable(signal),
+    queryKey: ['access', 'requestable', member],
+    queryFn: ({ signal }) => accessApi.requestable(member || undefined, signal),
     enabled: open,
+    placeholderData: keepPreviousData,
   })
   const [target, setTarget] = useState('')
   const [reason, setReason] = useState('')
@@ -42,14 +50,21 @@ export function RequestAccessDialog({ open, onOpenChange }: { open: boolean; onO
   const latest = maxDays ? new Date(opened + maxDays * 86_400_000).toISOString().slice(0, 10) : undefined
 
   const submit = useMutation({
-    mutationFn: () => accessApi.createRequest({ target, reason: reason.trim(), until: until || null }),
+    mutationFn: () =>
+      accessApi.createRequest({
+        target,
+        reason: reason.trim(),
+        until: until || null,
+        ...(canAskForOthers && member ? { member } : {}),
+      }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['access'] })
-      toast.success(t('grants.request.sent'))
+      toast.success(member ? t('grants.request.sentFor', { name: rdnValue(member) }) : t('grants.request.sent'))
       onOpenChange(false)
     },
     onError: (e) => {
       if (isApiError(e) && Object.keys(e.fields).length) setErrors(e.fields as Partial<Record<Field, string>>)
+      else if (isApiError(e) && e.status === 403 && member) setErrors({ member: t('grants.request.notForThem') })
       else toast.error(isApiError(e) ? e.message : t('grants.request.failed'))
     },
   })
@@ -78,7 +93,7 @@ export function RequestAccessDialog({ open, onOpenChange }: { open: boolean; onO
           <DialogTitle>{t('grants.request.title')}</DialogTitle>
           <DialogDescription>{t('grants.request.description')}</DialogDescription>
         </DialogHeader>
-        {options.isSuccess && items.length === 0 ? (
+        {options.isSuccess && items.length === 0 && !canAskForOthers ? (
           <p className="text-small text-muted-foreground">{t('grants.request.nothing')}</p>
         ) : (
           <form
@@ -89,6 +104,45 @@ export function RequestAccessDialog({ open, onOpenChange }: { open: boolean; onO
               if (validate()) submit.mutate()
             }}
           >
+            {canAskForOthers ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="req-member">{t('grants.request.for')}</Label>
+                {member ? (
+                  <div className="flex items-center gap-1 self-start rounded-md border bg-muted/40 px-2 py-1 text-small">
+                    <span title={member} data-testid="req-member-chosen">
+                      {rdnValue(member)}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label={t('grants.request.forClear')}
+                      onClick={() => {
+                        setMember('')
+                        setTarget('')
+                      }}
+                    >
+                      <X className="size-3" aria-hidden />
+                    </button>
+                  </div>
+                ) : (
+                  <ObjectRefPicker
+                    id="req-member"
+                    refType="user"
+                    label={t('grants.request.forPick')}
+                    selected={[]}
+                    invalid={Boolean(errors.member)}
+                    onPick={(dn) => {
+                      setMember(dn)
+                      setTarget('')
+                      setErrors((e) => ({ ...e, member: undefined }))
+                    }}
+                  />
+                )}
+                {fieldError('member') ?? (
+                  <p className="text-small text-muted-foreground">{t('grants.request.forHint')}</p>
+                )}
+              </div>
+            ) : null}
             <div className="space-y-1.5">
               <Label htmlFor="req-target">{t('grants.request.target')}</Label>
               <select
@@ -110,7 +164,10 @@ export function RequestAccessDialog({ open, onOpenChange }: { open: boolean; onO
                   </option>
                 ))}
               </select>
-              {fieldError('target')}
+              {fieldError('target') ??
+                (options.isSuccess && items.length === 0 ? (
+                  <p className="text-small text-muted-foreground">{t('grants.request.nothing')}</p>
+                ) : null)}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="req-reason">{t('grants.request.reason')}</Label>

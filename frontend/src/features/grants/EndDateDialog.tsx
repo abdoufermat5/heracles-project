@@ -18,7 +18,7 @@ import { accessApi } from './api'
 import { endDay } from './hooks'
 import type { Grant } from './types'
 
-/** Give one membership an end date, change it, or make it permanent again. */
+/** Give one membership (or one member of an ACL assignment) an end date, change it, or make it permanent again. */
 export function EndDateDialog({
   open,
   onOpenChange,
@@ -27,6 +27,8 @@ export function EndDateDialog({
   member,
   memberName,
   current,
+  aclScope,
+  aclRole,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -35,6 +37,9 @@ export function EndDateDialog({
   member: string
   memberName: string
   current: Grant | undefined
+  /** Kind `acl`: the assignment's scope (`subtree` or `base`) and role DN identify the member's grant. */
+  aclScope?: string
+  aclRole?: string
 }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -43,7 +48,14 @@ export function EndDateDialog({
   const today = new Date().toISOString().slice(0, 10)
 
   const save = useMutation({
-    mutationFn: (until: string | null) => accessApi.setEndDate({ holder, kind, member, until }),
+    mutationFn: (until: string | null) =>
+      accessApi.setEndDate({
+        holder,
+        kind,
+        member,
+        until,
+        ...(kind === 'acl' ? { acl_scope: aclScope ?? '', acl_role: aclRole ?? '' } : {}),
+      }),
     onSuccess: (_r, until) => {
       void qc.invalidateQueries({ queryKey: ['access'] })
       toast.success(until ? t('grants.endDate.saved', { day: until }) : t('grants.endDate.cleared'))
@@ -57,13 +69,17 @@ export function EndDateDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('grants.endDate.title', { name: memberName })}</DialogTitle>
-          <DialogDescription>{t('grants.endDate.description')}</DialogDescription>
+          <DialogDescription>
+            {kind === 'acl' ? t('grants.endDate.aclDescription') : t('grants.endDate.description')}
+          </DialogDescription>
         </DialogHeader>
         <form
           id="end-date-form"
           className="space-y-2"
           onSubmit={(e) => {
             e.preventDefault()
+            // the dialog renders in a portal: its submit must not reach a form around the caller (the object editor's)
+            e.stopPropagation()
             setError(null)
             if (!day) {
               setError(t('grants.endDate.required'))

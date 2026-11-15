@@ -16,6 +16,8 @@ import type { Assignment, AssignmentMember } from '@/features/admin/types'
 import { orgPath } from '@/lib/dn'
 import { rdnValue } from '@/lib/objects'
 import { useTechnicalDetails } from '@/lib/preferences'
+import { AclMemberEndDate } from '@/features/grants/AclMemberEndDate'
+import { useRefreshGrants } from '@/features/grants/hooks'
 import { AssignmentDialog } from './AssignmentDialog'
 import { memberLabel, normaliseMembers } from './peopleModel'
 
@@ -39,6 +41,7 @@ export function WhoHasAccessPanel() {
   const { data, isPending, isError, error, refetch } = useAllAssignments()
   const { data: roles } = useRoles()
   const save = useSaveEntryAssignments()
+  const refreshGrants = useRefreshGrants()
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string[]>([])
   const [departmentFilter, setDepartmentFilter] = useState<string[]>([])
@@ -137,6 +140,7 @@ export function WhoHasAccessPanel() {
         ]),
       })
       toast.success(t('accessUI.people.added'))
+      refreshGrants()
       setAdding(false)
     } catch (e) {
       const mapped: Record<string, string> = {}
@@ -165,6 +169,7 @@ export function WhoHasAccessPanel() {
     try {
       await save.mutateAsync({ dn: removing.entryDn, items: renumber(next) })
       toast.success(t('accessUI.people.removed'))
+      refreshGrants()
       setRemoving(null)
     } catch (e) {
       toast.error(isApiError(e) ? e.message : t('common.error'))
@@ -292,6 +297,15 @@ export function WhoHasAccessPanel() {
                   </div>
 
                   <div className="flex justify-end">
+                    {row.member.kind !== 'everyone' && row.member.kind !== 'missing' && row.assignment.role ? (
+                      <AclMemberEndDate
+                        holder={row.entryDn}
+                        scope={row.assignment.scope ?? 'subtree'}
+                        role={row.assignment.role}
+                        member={row.member.dn}
+                        name={name}
+                      />
+                    ) : null}
                     <Button
                       type="button"
                       variant="ghost"

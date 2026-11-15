@@ -1,10 +1,12 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
+import { adminMock } from '@/mocks/adminHandlers'
 import { db } from '@/mocks/db'
 import { server } from '@/mocks/server'
 import { must, renderApp, signIn } from '@/test/utils'
+import { accessApi } from './api'
 
 describe('access requests', () => {
   beforeEach(() => db.reset())
@@ -170,5 +172,219 @@ describe('without the access plugin', () => {
     expect(screen.queryByRole('link', { name: 'Access requests' })).not.toBeInTheDocument()
     server.events.removeListener('request:start', listen)
     expect(new Set(calls)).toEqual(new Set(['/api/v2/access/status']))
+  })
+})
+
+describe('requests for someone else', () => {
+  beforeEach(() => db.reset())
+
+  const futureDay = () => new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10)
+
+  async function fillRequest(dialog: HTMLElement, user: ReturnType<typeof userEvent.setup>) {
+    const select = within(dialog).getByLabelText('Group or role') as HTMLSelectElement
+    await user.selectOptions(select, must(Array.from(select.options).find((o) => o.value)).value)
+    await user.type(within(dialog).getByLabelText('Why do you need it?'), 'Joins the project')
+    await user.type(within(dialog).getByLabelText('Until'), futureDay())
+  }
+
+  async function pickPerson(
+    dialog: HTMLElement,
+    user: ReturnType<typeof userEvent.setup>,
+    person: ReturnType<typeof db.all>[number],
+  ) {
+    await user.click(await within(dialog).findByRole('combobox', { name: 'For' }))
+    await user.type(await screen.findByRole('textbox', { name: 'Search…' }), String(person.tabs.main?.values.uid))
+    await user.click(await screen.findByText(person.dn))
+  }
+
+  it('lets a console user pick the person the access is for', async () => {
+    signIn()
+    const person = must(db.all('user')[3])
+    const requestable = vi.spyOn(accessApi, 'requestable')
+    const user = userEvent.setup()
+    renderApp('/access/requests')
+    await user.click(await screen.findByRole('button', { name: 'Request access' }))
+    const dialog = await screen.findByRole('dialog')
+    await pickPerson(dialog, user, person)
+    expect(within(dialog).getByTestId('req-member-chosen')).toHaveTextContent(String(person.tabs.main?.values.uid))
+    // the choices are those of the person, not of the caller
+    await waitFor(() => expect(requestable).toHaveBeenCalledWith(person.dn, expect.anything()))
+    await fillRequest(dialog, user)
+    await user.click(within(dialog).getByRole('button', { name: 'Send request' }))
+    await waitFor(() => expect(db.accessRequests).toHaveLength(1))
+    expect(db.accessRequests[0]?.member).toBe(person.dn)
+    expect(db.accessRequests[0]?.requester).toBe(must(db.me()).dn)
+  })
+
+  it('asks for oneself when nobody is picked, and sends no member', async () => {
+    signIn()
+    const user = userEvent.setup()
+    renderApp('/access/requests')
+    await user.click(await screen.findByRole('button', { name: 'Request access' }))
+    const dialog = await screen.findByRole('dialog')
+    await fillRequest(dialog, user)
+    await user.click(within(dialog).getByRole('button', { name: 'Send request' }))
+    await waitFor(() => expect(db.accessRequests).toHaveLength(1))
+    expect(db.accessRequests[0]?.member).toBe(must(db.me()).dn)
+  })
+
+  it('offers no picker to an employee who manages nobody', async () => {
+    signIn('employee')
+    const answered = new Promise<void>((resolve) => {
+      const done = ({ request }: { request: Request }) => {
+        if (new URL(request.url).searchParams.get('filter')?.startsWith('(manager=')) {
+          server.events.removeListener('response:mocked', done)
+          resolve()
+        }
+      }
+      server.events.on('response:mocked', done)
+    })
+    const user = userEvent.setup()
+    renderApp('/me')
+    await screen.findByText('You have not requested any access.')
+    await user.click(screen.getByRole('button', { name: 'Request access' }))
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByLabelText('Group or role')
+    await answered // the check "does this person manage anyone" came back empty
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(within(dialog).queryByRole('combobox', { name: 'For' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByText('Someone else…')).not.toBeInTheDocument()
+  })
+
+  it('offers the picker to a manager, and shows the refusal for someone else’s report', async () => {
+    signIn('employee')
+    const employeeDn = must(db.me()).dn
+    const report = must(db.all('user')[0])
+    must(report.tabs.main).values.manager = employeeDn
+    const stranger = must(db.all('user')[1])
+    const user = userEvent.setup()
+    renderApp('/me')
+    await screen.findByText('You have not requested any access.')
+    await user.click(screen.getByRole('button', { name: 'Request access' }))
+    const dialog = await screen.findByRole('dialog')
+    await pickPerson(dialog, user, stranger)
+    await fillRequest(dialog, user)
+    await user.click(within(dialog).getByRole('button', { name: 'Send request' }))
+    expect(await within(dialog).findByText('You cannot request access for this person')).toBeInTheDocument()
+    expect(db.accessRequests).toHaveLength(0)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Request for myself' }))
+    await pickPerson(dialog, user, report)
+    // the choices follow the person: pick the group again
+    const select = within(dialog).getByLabelText('Group or role') as HTMLSelectElement
+    await waitFor(() => expect(select.options.length).toBeGreaterThan(1))
+    await user.selectOptions(select, must(Array.from(select.options).find((o) => o.value)).value)
+    await user.click(within(dialog).getByRole('button', { name: 'Send request' }))
+    await waitFor(() => expect(db.accessRequests).toHaveLength(1))
+    expect(db.accessRequests[0]?.member).toBe(report.dn)
+  })
+})
+
+describe('end dates of role occupants', () => {
+  beforeEach(() => {
+    db.reset()
+    adminMock.reset()
+  })
+
+  it('dates an occupant from the role’s “Access ends” tab without saving the role', async () => {
+    signIn()
+    const role = must(db.all('role')[0])
+    const occupant = must((role.tabs.main?.values.roleOccupant as string[])[0])
+    const name = occupant.split(',')[0]?.split('=')[1] ?? occupant
+    const writes: string[] = []
+    const listen = ({ request }: { request: Request }) => {
+      if (request.method === 'PATCH' && new URL(request.url).pathname.startsWith('/api/v2/objects/')) writes.push(request.method)
+    }
+    server.events.on('request:start', listen)
+    const user = userEvent.setup()
+    renderApp(`/types/role/${encodeURIComponent(role.dn)}`)
+    // an edit in progress: a submit reaching the editor's form would open its review dialog
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    await user.type(await screen.findByLabelText('Description'), ' (updated)')
+    await user.click(await screen.findByRole('tab', { name: 'Access ends' }))
+    const row = must((await screen.findByText(name)).closest('tr'))
+    expect(within(row).getByText('No end date')).toBeInTheDocument()
+
+    await user.click(within(row).getByRole('button', { name: `Set end date for ${name}` }))
+    const dialog = await screen.findByRole('dialog')
+    const day = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10)
+    await user.type(within(dialog).getByLabelText('Last day of access'), day)
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(db.endDates).toHaveLength(1))
+    expect(db.endDates[0]).toMatchObject({ holder: role.dn, kind: 'roleOccupant', member: occupant })
+    expect(await within(row).findByText(`Until ${day}`)).toBeInTheDocument()
+    // the dialog's submit must not reach the role form behind it
+    expect(writes).toEqual([])
+    expect(screen.queryByText('Review changes before saving')).not.toBeInTheDocument()
+
+    await user.click(within(row).getByRole('button', { name: `Set end date for ${name}` }))
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Remove end date' }))
+    await waitFor(() => expect(db.endDates).toHaveLength(0))
+    expect(await within(row).findByText('No end date')).toBeInTheDocument()
+    server.events.removeListener('request:start', listen)
+  })
+
+  it('has no such tab without the access plugin', async () => {
+    server.use(
+      http.get('/api/v2/access/status', () =>
+        HttpResponse.json({ error: { code: 'not_found', message: 'Not found' } }, { status: 404 }),
+      ),
+    )
+    signIn()
+    const role = must(db.all('role')[0])
+    renderApp(`/types/role/${encodeURIComponent(role.dn)}`)
+    await screen.findByRole('tab', { name: 'References' })
+    expect(screen.queryByRole('tab', { name: 'Access ends' })).not.toBeInTheDocument()
+  })
+})
+
+describe('end dates of ACL assignments', () => {
+  beforeEach(() => {
+    db.reset()
+    adminMock.reset()
+  })
+
+  it('dates one member of an assignment from “Who has access”', async () => {
+    signIn()
+    const entry = must(Object.entries(adminMock.assignments)[0])
+    const assignment = must(entry[1][0])
+    const user = userEvent.setup()
+    renderApp('/admin/access')
+    await user.click(await screen.findByRole('tab', { name: 'Who has access' }))
+    const row = must((await screen.findByText('admins')).closest('li'))
+    // nobody is dated yet; the wildcard row has no date button
+    expect(within(row).queryByText(/^Until /)).not.toBeInTheDocument()
+    expect(within(must(screen.getByText('Every user').closest('li'))).queryByRole('button', { name: /^Set end date/ })).toBeNull()
+
+    await user.click(within(row).getByRole('button', { name: 'Set end date for admins' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/loses this access automatically/)).toBeInTheDocument()
+    const day = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)
+    await user.type(within(dialog).getByLabelText('Last day of access'), day)
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(db.endDates).toHaveLength(1))
+    expect(db.endDates[0]).toMatchObject({
+      holder: entry[0],
+      kind: 'acl',
+      acl_scope: assignment.scope,
+      acl_role: assignment.role,
+    })
+    expect(await within(row).findByText(`Until ${day}`)).toBeInTheDocument()
+    // the matrix saved nothing: dating is its own call
+    expect(adminMock.requests.filter((r) => r.method === 'PUT')).toHaveLength(0)
+  })
+
+  it('shows no date control without the access plugin', async () => {
+    server.use(
+      http.get('/api/v2/access/status', () =>
+        HttpResponse.json({ error: { code: 'not_found', message: 'Not found' } }, { status: 404 }),
+      ),
+    )
+    signIn()
+    const user = userEvent.setup()
+    renderApp('/admin/access')
+    await user.click(await screen.findByRole('tab', { name: 'Who has access' }))
+    await screen.findByText('admins')
+    expect(screen.queryByRole('button', { name: /^Set end date for / })).not.toBeInTheDocument()
   })
 })
