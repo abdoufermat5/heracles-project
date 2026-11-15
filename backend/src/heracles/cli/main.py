@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from urllib.parse import urlsplit
 
 from heracles.cli import admin as admin_commands
+from heracles.cli import backup as backup_commands
 from heracles.cli import init as init_command
 from heracles.cli.secrets import SecretError, read_secret_file
 from heracles.setup import service as setup_service
@@ -362,6 +363,9 @@ def main(
 
     # --- P3 admin ---
     admin_commands.register(sub, directories or admin_commands.load_directories)
+
+    # --- R8 operations ---
+    backup_commands.register(sub, directories or admin_commands.load_directories)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

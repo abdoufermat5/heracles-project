@@ -30,7 +30,7 @@ def load_directories(args: argparse.Namespace) -> Mapping[str, DirectoryClient]:
     return {cfg.id: PyLdapDirectory(cfg) for cfg in settings.directories}
 
 
-def _directory(args: argparse.Namespace, factory: DirectoryFactory) -> DirectoryClient | None:
+def select_directory(args: argparse.Namespace, factory: DirectoryFactory) -> DirectoryClient | None:
     directories = factory(args)
     if not directories:
         print("error: no directory is configured", file=sys.stderr)
@@ -48,7 +48,7 @@ _ICON = {"ok": "OK  ", "warning": "WARN", "error": "FAIL"}
 
 
 def run_check(args: argparse.Namespace, factory: DirectoryFactory) -> int:
-    directory = _directory(args, factory)
+    directory = select_directory(args, factory)
     if directory is None:
         return 2
     results = setup_checks.run_checks(setup_checks.context_for(directory))
@@ -67,7 +67,7 @@ def run_check(args: argparse.Namespace, factory: DirectoryFactory) -> int:
 
 
 def run_fix(args: argparse.Namespace, factory: DirectoryFactory) -> int:
-    directory = _directory(args, factory)
+    directory = select_directory(args, factory)
     if directory is None:
         return 2
     options: dict[str, str] = {}
@@ -122,7 +122,7 @@ def _password(args: argparse.Namespace) -> str | None:
 
 
 def run_create_admin(args: argparse.Namespace, factory: DirectoryFactory) -> int:
-    directory = _directory(args, factory)
+    directory = select_directory(args, factory)
     if directory is None:
         return 2
     password = _password(args)
@@ -148,7 +148,7 @@ def run_audit_verify(args: argparse.Namespace, factory: DirectoryFactory) -> int
     from heracles.core.audit import audit_container
     from heracles.core.audit_chain import verify_chain
 
-    directory = _directory(args, factory)
+    directory = select_directory(args, factory)
     if directory is None:
         return 2
     try:
