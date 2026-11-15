@@ -559,18 +559,18 @@ def bulk_edit(
     type_name: str, body: BulkBody, user: CurrentUserDep, domain: DomainDep
 ) -> dict[str, JSON]:
     """Apply the same change to several objects; failures do not abort the others."""
-    # One read of the lock table for the whole batch, not two searches per object. A lock
-    # taken while the batch runs is not seen, as one taken between check and write never was.
-    held = {
-        dnlib.normalize(lock.object_dn): lock
-        for lock in domain.locks(user.directory_id, user.directory).list_all()
-    }
-
-    def is_locked(dn: str) -> bool:
-        lock = held.get(dnlib.normalize(dn))
-        return lock is not None and dnlib.normalize(lock.user_dn) != dnlib.normalize(user.dn)
-
     with object_errors():
+        # One read of the lock table for the whole batch, not two searches per object. A lock
+        # taken while the batch runs is not seen, as one taken between check and write never was.
+        held = {
+            dnlib.normalize(lock.object_dn): lock
+            for lock in domain.locks(user.directory_id, user.directory).list_all()
+        }
+
+        def is_locked(dn: str) -> bool:
+            lock = held.get(dnlib.normalize(dn))
+            return lock is not None and dnlib.normalize(lock.user_dn) != dnlib.normalize(user.dn)
+
         service, _policy = domain.service(user, type_name)
         results = bulk.bulk_update(service, type_name, body.dns, body.changes, is_locked=is_locked)
     return {"results": [r.to_json() for r in results]}
