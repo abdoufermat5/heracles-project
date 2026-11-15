@@ -18,6 +18,7 @@ import structlog
 
 from heracles.acl.model import AclAssignment
 from heracles.acl.parser import parse_assignment, serialise_assignment
+from heracles.core.audit import AUDIT_RDN
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Entry, Modification, Scope
 from heracles.objects import filters
@@ -123,6 +124,13 @@ def _modifications(
     return mods
 
 
+def _is_audit_history(directory: DirectoryClient, dn: str) -> bool:
+    """Entries of the audit log (``ou=audit`` below the base), never rewritten."""
+    container = dnlib.normalize(dnlib.join(AUDIT_RDN, directory.base_dn))
+    normalized = dnlib.normalize(dn)
+    return normalized == container or normalized.endswith("," + container)
+
+
 def _apply(
     directory: DirectoryClient,
     holders: Sequence[Entry],
@@ -130,6 +138,8 @@ def _apply(
     mapping: Mapping[str, str],
 ) -> None:
     for holder in holders:
+        if _is_audit_history(directory, holder.dn):
+            continue  # the audit log records the DN of the time; its hash chain forbids edits
         mods = _modifications(holder, attrs, mapping)
         if not mods:
             continue

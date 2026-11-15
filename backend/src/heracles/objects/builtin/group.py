@@ -56,6 +56,15 @@ class Group(ObjectType):
                 ObjectRefAttr("member", _("Member"), ref_type="user"),
                 required=True,
             ),
+            ListAttr(
+                "owner",
+                _("Owners"),
+                ObjectRefAttr("owner", _("Owner"), ref_type="user"),
+                description=_(
+                    "People responsible for the group: they approve access requests and "
+                    "review its members"
+                ),
+            ),
         )
 
 

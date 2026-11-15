@@ -432,3 +432,30 @@ def test_audit_endpoint_absent_without_plugin() -> None:
         a.login("admin")
         assert "items" not in a.get("/audit").text
         assert "audit_event" not in {t["name"] for t in a.get("/types").json()}
+
+
+def test_renames_and_deletes_leave_the_audit_log_intact(
+    app_client: TestClient, directory: MemoryDirectory
+) -> None:
+    """References in audit events record the DN of the time: rewriting them would break the
+    hash chain (and history)."""
+    from heracles.core.audit_chain import verify_chain
+
+    Api(app_client).login("asmith")  # an event authored by asmith
+    app_client.cookies.clear()
+    Api(app_client).login("bmartin")
+    app_client.cookies.clear()
+    a = Api(app_client)
+    a.login("admin")
+    renamed = a.client.patch(
+        f"/api/v2/objects/user/{q(ASMITH)}",
+        json={"tabs": {"main": {"values": {"uid": "asmith2"}}}},
+        headers=a.headers,
+    )
+    assert renamed.status_code == 200, renamed.text
+    bmartin = f"uid=bmartin,ou=people,ou=paris,{BASE}"
+    assert a.delete(f"/objects/user/{q(bmartin)}").status_code in (200, 204)
+    authors = {e["hrcAuditAuthorDN"][0] for e in events(directory) if "hrcAuditAuthorDN" in e}
+    assert ASMITH in authors and bmartin in authors
+    result = verify_chain(directory, AUDIT)
+    assert result.ok, result.first_break
