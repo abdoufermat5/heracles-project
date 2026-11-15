@@ -13,6 +13,9 @@ api:
   enable_docs: true
   session:
     cookie_secure: false
+  # SCIM provisioning at /scim/v2 (opt-in; on for the dev and e2e stacks)
+  scim:
+    enabled: true
   # The browser reaches the container through the Docker network gateway (the Vite dev server
   # proxy, a published port): believe X-Forwarded-For from that gateway (Docker bridge networks
   # live in 172.16.0.0/12) so the audit log and the sessions list show the real client address

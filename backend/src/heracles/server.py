@@ -276,4 +276,5 @@ def build_demo_app(static_dir: str | os.PathLike[str] | None = None) -> FastAPI:
         plugins=PluginsSettings(enabled=["*"]),  # the demo shows every extension
     )
     settings.session.cookie_secure = False
+    settings.scim.enabled = True  # the demo shows SCIM too
     return create_full_app(settings, {"main": demo.build_demo_directory()})

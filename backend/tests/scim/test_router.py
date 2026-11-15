@@ -639,3 +639,15 @@ def test_scim_is_not_under_the_api_router(h: Harness, tok: str) -> None:
     r = h.request("POST", "/Users", tok, body={"userName": "x"})
     assert r.status_code == 201
     assert h.client.get("/api/v2/Users").status_code in (404, 401)
+
+
+def test_scim_is_opt_in() -> None:
+    from heracles.api.settings import ApiSettings
+    from heracles.server import create_full_app
+    from tests.auth.fakes import FakeDirectory
+
+    assert ApiSettings().scim.enabled is False
+    app = create_full_app(ApiSettings(), {"main": FakeDirectory()})
+    with TestClient(app) as client:
+        r = client.get("/scim/v2/ServiceProviderConfig", headers={"Authorization": "Bearer hrc_x"})
+    assert r.status_code == 404

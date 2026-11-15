@@ -23,7 +23,8 @@ DEFAULT_USER_ATTRIBUTES: dict[str, str] = {
 
 
 class ScimSettings(BaseModel):
-    enabled: bool = True
+    #: Off unless the configuration turns it on (``api.scim.enabled: true``).
+    enabled: bool = False
     #: Department DN where new users are created (empty: the directory base).
     user_base: str = ""
     #: Department DN where new groups are created (empty: the directory base).

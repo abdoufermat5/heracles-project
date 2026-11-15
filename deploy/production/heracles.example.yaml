@@ -46,8 +46,9 @@ api:
   #   max_lifetime_days: 365
   #   max_per_owner: 20
 
-  # SCIM 2.0 provisioning at /scim/v2 (identity providers, HR systems). API tokens only:
-  # create a token with the write scope on the account page of the provisioning account.
+  # SCIM 2.0 provisioning at /scim/v2 (identity providers, HR systems). Off unless enabled
+  # here. API tokens only: create a token with the write scope on the account page of the
+  # provisioning account.
   # scim:
   #   enabled: true
   #   user_base: ""        # department DN for new users (default: the directory base)
