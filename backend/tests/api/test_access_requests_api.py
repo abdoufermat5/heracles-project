@@ -98,7 +98,7 @@ def test_request_flows_to_the_owner_and_into_the_directory(
     owner = as_user(client, "cdupont")
     queue = owner.get("/access/requests", view="to_approve").json()["items"]
     assert [r["id"] for r in queue] == [created["id"]]
-    assert owner.get("/access/queue").json() == {"approvals": 1}
+    assert owner.get("/access/queue").json() == {"approvals": 1, "reviews": 0}
     r = owner.post(f"/access/requests/{created['id']}/approve", {"comment": "ok"})
     assert r.status_code == 200, r.text
     assert r.json()["request"]["status"] == "approved"

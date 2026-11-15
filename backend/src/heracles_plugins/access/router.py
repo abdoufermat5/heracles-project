@@ -112,8 +112,9 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         return {"items": [x.to_json() for x in items]}
 
     @router.get("/status")
-    def status() -> dict[str, bool]:  # pyright: ignore[reportUnusedFunction]
-        """Cheap probe: the access plugin is on (404 otherwise)."""
+    def status(user: CurrentUserDep) -> dict[str, bool]:  # pyright: ignore[reportUnusedFunction]
+        """Cheap probe for signed-in people: the access plugin is on (404 otherwise)."""
+        del user
         return {"enabled": True}
 
     @router.get("/me")

@@ -116,3 +116,10 @@ def test_removing_a_member_drops_its_date(client: TestClient, directory: MemoryD
     assert r.status_code == 200, r.text
     entry = directory.get(LYON_STAFF)
     assert entry is not None and entry.texts(g.GRANT_ATTR) == []
+
+
+def test_status_probe_needs_a_session(client: TestClient) -> None:
+    a = Api(client)
+    assert a.get("/access/status").status_code == 401
+    a.login("asmith")
+    assert a.get("/access/status").json() == {"enabled": True}
