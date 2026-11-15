@@ -36,6 +36,7 @@ from heracles.objects import (
     TypeInfo,
     UnknownTypeError,
     bulk,
+    filters,
     templates,
     transfer,
 )
@@ -389,8 +390,8 @@ def _flag_passwords(body: dict[str, JSON], passwordless: set[str]) -> None:
 def _count_members(user: CurrentUserDep, domain: DomainDep, body: dict[str, JSON]) -> None:
     """Fill ``members_count`` on group rows: the number of ``member`` values of each group.
 
-    One read per row of the page (bounded by the page size). A row whose ``member``
-    attribute the caller may not read gets no count.
+    One search bounded by the page (an equality on the RDN of each row), matched back by
+    DN. A row whose ``member`` attribute the caller may not read gets no count.
     """
     raw = body.get("items")
     if not isinstance(raw, list):
@@ -398,13 +399,29 @@ def _count_members(user: CurrentUserDep, domain: DomainDep, body: dict[str, JSON
     info = domain.registry.get("group")
     acl_object = info.acl_object(info.main_tab)
     evaluator = domain.evaluator(user)
+    rows: dict[str, dict[str, JSON]] = {}
     for item in (cast(dict[str, JSON], i) for i in raw if isinstance(i, dict)):
         dn = item.get("dn")
-        if not isinstance(dn, str) or not evaluator.permissions(dn, acl_object, "member").read:
-            continue
-        entry = user.directory.get(dn, ["member"])
-        if entry is not None:
-            item["members_count"] = len(entry.texts("member"))
+        if isinstance(dn, str) and evaluator.permissions(dn, acl_object, "member").read:
+            rows[dnlib.normalize(dn)] = item
+    if not rows:
+        return
+    page = filters.or_([_rdn_filter(str(item["dn"])) for item in rows.values()])
+    for group in user.directory.search(
+        user.directory.base_dn,
+        filters.and_(info.type.filter, page),
+        Scope.SUBTREE,
+        ["member"],
+    ):
+        row = rows.get(dnlib.normalize(group.dn))
+        if row is not None:
+            row["members_count"] = len(group.texts("member"))
+
+
+def _rdn_filter(dn: str) -> str:
+    """``(attr=value)`` for the (single-valued) RDN of ``dn``."""
+    attr, _, value = dnlib.rdn(dn).partition("=")
+    return filters.equals(attr.strip(), dnlib.unescape_rdn_value(dnlib.strip_rdn(value)))
 
 
 def _count_groups(user: CurrentUserDep, domain: DomainDep, body: dict[str, JSON]) -> None:

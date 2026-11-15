@@ -606,6 +606,45 @@ def test_user_list_counts_only_groups_the_caller_may_read() -> None:
     assert helpdesk_view and all(n == 0 for n in helpdesk_view.values())
 
 
+def test_group_list_counts_members_with_one_search_per_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = build_demo_app()
+    client = TestClient(app, base_url="http://testserver")
+    state = cast("AppState", app.state.heracles)
+    directory = cast("MemoryDirectory", state.directories["main"])
+    expected = {
+        e.dn: len(e.texts("member"))
+        for e in directory.search(BASE, "(objectClass=groupOfNames)", attrs=["member"])
+    }
+    assert len(expected) > 1 and any(expected.values())
+    Api(client).login("admin")
+    params = {"base": BASE, "scope": "sub", "limit": 500}
+    client.get("/api/v2/objects/group", params=params)  # sessions, ACL resolution, caches
+
+    calls: list[str] = []
+    for name in ("get", "search"):
+        original = getattr(directory, name)
+
+        def counted(*args: Any, _name: str = name, _original: Any = original, **kw: Any) -> Any:
+            calls.append(_name)
+            return _original(*args, **kw)
+
+        monkeypatch.setattr(directory, name, counted)
+    page = client.get("/api/v2/objects/group", params=params).json()
+    monkeypatch.undo()
+    assert {i["dn"]: i["members_count"] for i in page["items"]} == expected
+    # the listing search and one search for the counters, whatever the size of the page
+    assert calls.count("get") == 0, calls
+    assert calls.count("search") <= 3, calls
+
+    # helpdesk reads users but no groups: no counter reveals the memberships
+    other = TestClient(build_demo_app(), base_url="http://testserver")
+    Api(other).login("helpdesk")
+    rows = other.get("/api/v2/objects/group", params=params).json()["items"]
+    assert all("members_count" not in i for i in rows)
+
+
 def test_run_task_checks_the_rights_of_its_own_kind(
     client: TestClient, admin: Api, monkeypatch: pytest.MonkeyPatch
 ) -> None:
