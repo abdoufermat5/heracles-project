@@ -433,3 +433,58 @@ def test_group_search(env: Env) -> None:
     desk = env.service(HELPDESK).groups
     assert desk.search(None).total_results == 0  # no group right
     assert err(desk.get, page.resources[0]["id"]).status == 404
+
+
+# ---------------------------------------------------------------- rights on related entries
+
+
+def test_own_password_is_refused_through_scim(env: Env) -> None:
+    users = env.service(ADMIN_DN).users
+    me = users.search(Compare("userName", "eq", "admin")).resources[0]["id"]
+    assert err(users.patch, me, [PatchOp("replace", "password", "Another-pass-1")]).status == 403
+    other = users.create(user_body("pwtarget"))["id"]
+    users.patch(other, [PatchOp("replace", "password", "Another-pass-1")])
+
+
+def test_members_the_caller_cannot_see_are_hidden_and_kept(env: Env) -> None:
+    lyon_staff = f"cn=lyon-staff,ou=groups,ou=lyon,{BASE}"
+    env.directory.modify(lyon_staff, [Modification("add", "member", [ASMITH.encode()])])
+    manager = env.service(LYON_MANAGER)
+    (group,) = manager.groups.search(Compare("displayName", "eq", "lyon-staff")).resources
+    full = manager.groups.get(group["id"])
+    shown = {m["display"] for m in full["members"]}
+    assert "asmith" not in shown and "cdupont" in shown
+    dlefevre = next(m["value"] for m in full["members"] if m["display"] == "dlefevre")
+    manager.groups.patch(group["id"], [PatchOp("remove", f'members[value eq "{dlefevre}"]')])
+    entry = env.directory.get(lyon_staff, ["member"])
+    assert entry is not None
+    members = {m.lower() for m in entry.texts("member")}
+    assert ASMITH.lower() in members  # hidden member kept
+    assert not any("dlefevre" in m for m in members)
+
+
+def test_ids_of_unreadable_users_are_unknown(env: Env) -> None:
+    admin = env.service(ADMIN_DN)
+    paris = admin.users.search(Compare("userName", "eq", "asmith")).resources[0]["id"]
+    manager = env.service(LYON_MANAGER)
+    (group,) = manager.groups.search(Compare("displayName", "eq", "lyon-staff")).resources
+    add = [PatchOp("add", "members", [{"value": paris}])]
+    assert err(manager.groups.patch, group["id"], add).status == 400
+    lyon = manager.users.search(Compare("userName", "eq", "dlefevre")).resources[0]["id"]
+    boss = [PatchOp("replace", f"{ENTERPRISE_USER_SCHEMA}:manager", {"value": paris})]
+    assert err(manager.users.patch, lyon, boss).status == 400
+
+
+def test_common_email_filters(env: Env) -> None:
+    users = env.service().users
+    users.create(user_body("mailfilter"))
+    for text in (
+        'emails.value eq "mailfilter@example.test"',
+        'emails[type eq "work"].value eq "mailfilter@example.test"',
+        'emails[value eq "mailfilter@example.test"]',
+    ):
+        try:
+            found = users.search(parse(text)).resources
+        except ScimError as exc:
+            pytest.fail(f"{text}: {exc.detail}")
+        assert [r["userName"] for r in found] == ["mailfilter"], text

@@ -56,7 +56,7 @@ from heracles.scim.errors import (
     bad_request,
     not_found,
 )
-from heracles.scim.filter import Filter, attributes_of, to_ldap
+from heracles.scim.filter import And, Compare, Filter, Not, Or, ValuePath, attributes_of, to_ldap
 from heracles.scim.patch import PatchOp, apply_patch
 from heracles.scim.schemas import ENTERPRISE_USER_SCHEMA, GROUP_SCHEMA, USER_SCHEMA
 from heracles.scim.settings import ScimSettings
@@ -128,11 +128,19 @@ class _Shared:
         self.dn_by_id.clear()
         self.id_by_dn.clear()
 
+    def readable_user(self, dn: str) -> bool:
+        """Whether the caller may read the user entry ``dn`` (its main tab)."""
+        info = self.domain.registry.get("user")
+        rights = self.domain.evaluator(self.user).permissions(dn, info.acl_object(info.main_tab))
+        return bool(rights.read)
+
     def id_of(self, dn: str) -> str | None:
-        """Id of the user entry ``dn`` (``None`` when it is not a user)."""
+        """Id of the user entry ``dn`` (``None`` when it is not a user the caller may read)."""
         key = dnlib.normalize(dn)
         if key in self.id_by_dn:
             return self.id_by_dn[key]
+        if not self.readable_user(dn):
+            return None
         entry = self.directory.get(dn, [self.settings.id_attribute, "objectClass"])
         if entry is None or not entry.has_object_class("inetOrgPerson"):
             return None
@@ -142,7 +150,11 @@ class _Shared:
         return rid or None
 
     def dns_of(self, info: TypeInfo, ids: list[str]) -> dict[str, str]:
-        """DNs of the entries of type ``info`` with these ids (lower-cased id -> DN)."""
+        """DNs of the entries of type ``info`` with these ids (lower-cased id -> DN).
+
+        Only entries the caller may read are found: an id of an entry hidden by the ACL is
+        as unknown as a wrong one.
+        """
         out: dict[str, str] = {}
         todo: list[str] = []
         for rid in dict.fromkeys(i.lower() for i in ids):
@@ -165,6 +177,8 @@ class _Shared:
                 found = []
             for entry in found:
                 rid = entry.text(attr)
+                if info.name == "user" and not self.readable_user(entry.dn):
+                    continue
                 if rid:
                     out[rid.lower()] = entry.dn
                     if info.name == "user":
@@ -221,6 +235,10 @@ class _Ops:
     # ---- hooks of the subclasses
     def resolve(self, path: str) -> str | None:
         raise NotImplementedError
+
+    def rewrite(self, flt: Filter) -> Filter:
+        """Turn tests the directory cannot answer into ones it can (default: none)."""
+        return flt
 
     def render(self, dn: str, state_entry: Entry | None, *, full: bool) -> dict[str, Any]:
         raise NotImplementedError
@@ -321,6 +339,7 @@ class _Ops:
         extra = ""
         checks: list[tuple[str, str]] = []
         if flt is not None:
+            flt = self.rewrite(flt)
             extra = to_ldap(flt, self.resolve)
             attrs = {
                 a for a in attributes_of(flt, self.resolve) if a.lower() != self.id_attr.lower()
@@ -453,6 +472,11 @@ class _Users(_Ops):
         if path in ("emails", "emails.value"):
             return "mail"
         return self.map.get(path)
+
+    def rewrite(self, flt: Filter) -> Filter:
+        """The one email (``mail``) has type ``work``: ``type eq "work"`` means "has an email",
+        any other type matches nothing. Clients commonly send ``emails[type eq "work"]...``."""
+        return _email_types(flt, inside=False)
 
     def base(self) -> str:
         return self.s.settings.user_base or self.s.directory.base_dn
@@ -673,6 +697,14 @@ class _Users(_Ops):
         active: bool | None,
         only: Mapping[str, str | None] | None,
     ) -> dict[str, Any]:
+        if password is not None and dnlib.normalize(dn) == dnlib.normalize(self.s.user.dn):
+            # same rule as the console and API v1/v2: a token never changes its owner's password
+            raise ScimError(403, "Changing your own password needs an interactive sign-in")
+        if "manager" in attrs and attrs["manager"] is None:
+            current = self.service.load(self.type_name, dn).tabs["main"].values.get("manager")
+            if isinstance(current, str) and current and self.s.id_of(current) is None:
+                # a manager the caller cannot see is not cleared by omission
+                attrs = {k: v for k, v in attrs.items() if k != "manager"}
         current_active: bool | None = None
         if active is not None:
             if not self.can_write_lock(dn):
@@ -687,6 +719,33 @@ class _Users(_Ops):
         if active is not None and active != current_active:
             set_account_lock(self.s.user, self.s.domain, dn, not active)
         return self.render(dn, None, full=True)
+
+
+def _email_type(cmp: Compare, value_path: str) -> Filter:
+    present = Compare(value_path, "pr")
+    if cmp.op == "pr":
+        return present
+    if cmp.op == "eq" and isinstance(cmp.value, str):
+        return present if cmp.value.lower() == "work" else Not(present)
+    raise bad_request("emails.type supports eq and pr only", INVALID_FILTER)
+
+
+def _email_types(flt: Filter, *, inside: bool) -> Filter:
+    if isinstance(flt, And):
+        return And(_email_types(flt.left, inside=inside), _email_types(flt.right, inside=inside))
+    if isinstance(flt, Or):
+        return Or(_email_types(flt.left, inside=inside), _email_types(flt.right, inside=inside))
+    if isinstance(flt, Not):
+        return Not(_email_types(flt.inner, inside=inside))
+    if isinstance(flt, ValuePath):
+        if flt.path.lower() == "emails":
+            return ValuePath(flt.path, _email_types(flt.filter, inside=True))
+        return flt
+    if inside and flt.path.lower() == "type":
+        return _email_type(flt, "value")
+    if not inside and flt.path.lower() == "emails.type":
+        return _email_type(flt, "emails")
+    return flt
 
 
 class _Groups(_Ops):
@@ -759,13 +818,30 @@ class _Groups(_Ops):
             ids.append(value)
         return name, list(dict.fromkeys(ids))
 
-    def member_dns(self, ids: list[str]) -> list[str]:
+    def member_dns(self, ids: list[str], dn: str | None = None) -> list[str]:
+        """Member DNs for these ids, plus (for an existing group ``dn``) the members SCIM does
+        not show: entries that are not users, or users the caller may not read. A client
+        cannot remove what it cannot see."""
         found = self.s.dns_of(self.users, ids)
         missing = [i for i in ids if i.lower() not in found]
         if missing:
             shown = ", ".join(missing[:5])
             raise bad_request(f"Unknown or non-user members: {shown}", INVALID_VALUE)
-        return [found[i.lower()] for i in ids]
+        out = [found[i.lower()] for i in ids]
+        if dn is not None:
+            current = mapping.arr(
+                self.service.load(self.type_name, dn).tabs["main"].values.get("member")
+            )
+            kept = {dnlib.normalize(d) for d in out}
+            for member in current or []:
+                if (
+                    isinstance(member, str)
+                    and dnlib.normalize(member) not in kept
+                    and self.s.id_of(member) is None
+                ):
+                    out.append(member)
+                    kept.add(dnlib.normalize(member))
+        return out
 
     def create(self, resource: dict[str, Any]) -> dict[str, Any]:
         self.s.reset()
@@ -790,7 +866,7 @@ class _Groups(_Ops):
                 raise bad_request("A group needs at least one member", INVALID_VALUE)
             if not name:
                 raise bad_request("displayName is required", INVALID_VALUE)
-            return self.write(dn, {"cn": name, "member": self.member_dns(ids)})
+            return self.write(dn, {"cn": name, "member": self.member_dns(ids, dn)})
 
     def patch(self, resource_id: str, ops: list[PatchOp]) -> dict[str, Any]:
         current = self.get(resource_id)
@@ -813,7 +889,7 @@ class _Groups(_Ops):
             if {i.lower() for i in ids} != {i.lower() for i in old_ids or []}:
                 if not ids:
                     raise bad_request("A group needs at least one member", INVALID_VALUE)
-                changes["member"] = self.member_dns(ids)
+                changes["member"] = self.member_dns(ids, dn)
             return self.write(dn, changes)
 
     def write(self, dn: str, values: dict[str, Any]) -> dict[str, Any]:
