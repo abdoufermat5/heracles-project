@@ -21,7 +21,7 @@ VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(BACKEND)/pyproject.toml
 .PHONY: bundle-check help install install-backend install-frontend \
         dev dev-demo dev-down dev-mock dhcp-test backend frontend demo build docker-build serve dns-demo \
         test test-backend test-frontend lint lint-backend lint-frontend \
-        format typecheck check bench ldap-up ldap-down ldap-logs test-integration e2e e2e-replicas e2e-ui e2e-down schema third-party-schema clean
+        format typecheck check bench bench-ldap bench-check bench-baseline ldap-up ldap-down ldap-logs test-integration e2e e2e-replicas e2e-ui e2e-down schema third-party-schema clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "; printf "\nUsage: make \033[36m<target>\033[0m\n\n"} \
@@ -125,8 +125,20 @@ typecheck: ## pyright (strict) + tsc
 
 check: lint typecheck test ## Everything CI runs (lint, types, tests; build + bundle-check: `make build bundle-check`)
 
-bench: ## API latency and LDAP round trips per endpoint on a large demo directory (USERS=5000)
-	cd $(BACKEND) && uv run python scripts/bench.py --users $(or $(USERS),5000)
+bench: ## Scenario benchmark on the in-memory directory: p50/p95 and LDAP operations (USERS=5000, BENCH_ARGS=...)
+	cd $(BACKEND) && uv run python scripts/bench.py --users $(or $(USERS),5000) $(BENCH_ARGS)
+
+bench-ldap: ## Same on a throwaway OpenLDAP container loaded with slapadd (USERS=5000, INDEXES=default|tuned; needs Docker + python-ldap)
+	cd $(BACKEND) && uv run --extra ldap python scripts/bench_ldap.py run --users $(or $(USERS),5000) --indexes $(or $(INDEXES),default) -- $(BENCH_ARGS)
+
+BENCH_BASELINE = scripts/bench-baseline.json
+
+bench-check: ## CI regression check: 2,000-user run compared with the committed baseline (fails beyond 2x)
+	cd $(BACKEND) && uv run python scripts/bench.py --users 2000 --repeat 3 --no-check --json $(or $(TMPDIR),/tmp)/hrc-bench-current.json
+	cd $(BACKEND) && uv run python scripts/bench_compare.py $(BENCH_BASELINE) $(or $(TMPDIR),/tmp)/hrc-bench-current.json
+
+bench-baseline: ## Rewrite the committed baseline from a 2,000-user run (do it on purpose, commit the file)
+	cd $(BACKEND) && uv run python scripts/bench.py --users 2000 --repeat 3 --no-check --json $(BENCH_BASELINE)
 
 # ------------------------------------------------------------ test LDAP
 
