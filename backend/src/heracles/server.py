@@ -47,6 +47,7 @@ from heracles.objects import TypeRegistry
 from heracles.objects.activation import LOCKED_PLUGINS, PluginManager, PluginOverrideStore
 from heracles.objects.builtin import register_builtin_types
 from heracles.objects.registry import PluginRouterContext, discover_plugins
+from heracles.scim import router as scim_router
 from heracles.setup.mode import status_router
 from heracles.setup.service import default_static_dir
 from heracles.storage import Database
@@ -110,7 +111,8 @@ def create_full_app(
         ]
     else:
         public, plugin_api = _plugin_routers(manager, directories)
-    public = [*public, status_router(config_path)]
+    # SCIM sits at the root, outside the CSRF-protected API: API tokens only
+    public = [*public, status_router(config_path), scim_router.build_router()]
     app = create_app(
         settings,
         directories,
