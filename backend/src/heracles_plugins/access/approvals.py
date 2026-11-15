@@ -77,7 +77,7 @@ def holds_membership(entry: Entry, member: str) -> bool:
     return kind is not None and any(dnlib.normalize(v) == wanted for v in entry.texts(kind))
 
 
-def _expand(directory: DirectoryClient, dns: Iterable[str]) -> set[str]:
+def expand_members(directory: DirectoryClient, dns: Iterable[str]) -> set[str]:
     """Normalised user DNs: a group or role stands for its members (one level)."""
     out: set[str] = set()
     for dn in dns:
@@ -95,7 +95,7 @@ def _expand(directory: DirectoryClient, dns: Iterable[str]) -> set[str]:
 
 
 def approvers_of(directory: DirectoryClient, cfg: AccessConfig, target: Entry) -> set[str]:
-    return _expand(directory, [*target.texts("owner"), *cfg.approvers])
+    return expand_members(directory, [*target.texts("owner"), *cfg.approvers])
 
 
 def can_approve(
@@ -251,6 +251,7 @@ __all__ = [
     "approvers_of",
     "can_approve",
     "current_end_date",
+    "expand_members",
     "holds_membership",
     "kind_of",
     "label_of",

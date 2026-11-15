@@ -31,6 +31,7 @@ from heracles_plugins.access.requests import (
     AccessRequest,
     AccessRequestStore,
 )
+from heracles_plugins.access.review_routes import add_review_routes, review_store
 from heracles_plugins.access.rights import can_change_grants, can_read_grants
 
 
@@ -341,8 +342,23 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             for r in store.list(user.directory_id, status=PENDING)
             if _may_decide(user, domain, cfg, r)
         )
-        return {"approvals": approvals}
+        reviews = review_store(request, state)
+        now = reviews.clock()
+        open_ids = {
+            c.id
+            for c in reviews.campaigns(user.directory_id)
+            if c.status == "open" and now <= c.deadline
+        }
+        to_review = sum(
+            1
+            for i in reviews.items_for_reviewer(user.dn)
+            if i.campaign_id in open_ids
+            and not i.decision
+            and dnlib.normalize(i.member_dn) != dnlib.normalize(user.dn)
+        )
+        return {"approvals": approvals, "reviews": to_review}
 
+    add_review_routes(router)
     return router
 
 
