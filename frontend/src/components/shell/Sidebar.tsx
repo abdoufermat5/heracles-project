@@ -5,6 +5,7 @@ import {
   ChevronRight,
   HeartPulse,
   History,
+  KeyRound,
   LayoutDashboard,
   ListChecks,
   Puzzle,
@@ -19,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useTranslation } from 'react-i18next'
 import { usePrefetch, useTypes } from '@/api/hooks'
 import { NAV_GROUPS, type NavGroup, type TypeSummary } from '@/api/types'
+import { useMyEndDates } from '@/features/grants/hooks'
 import { useCapabilities } from '@/features/admin/hooks'
 import { useIoAccess } from '@/features/io/hooks'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -40,6 +42,7 @@ type NavPath =
   | '/types/$type'
   | '/io'
   | '/activity/audit'
+  | '/access/requests'
   | '/admin/access'
   | '/admin/config'
   | '/admin/health'
@@ -257,6 +260,7 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useTranslation()
   const { data: types, isPending, isError, refetch, isFetching } = useTypes()
   const { data: caps } = useCapabilities()
+  const accessEnabled = useMyEndDates().enabled
   const { data: io } = useIoAccess()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const [favorites, toggleFavorite] = usePersistedSet(FAVORITES_KEY)
@@ -320,6 +324,9 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
       ...(hasType('audit_event')
         ? [fixed('activity:audit', '/activity/audit', t('sidebar.auditLog'), History)]
         : []),
+      ...(accessEnabled
+        ? [fixed('access:requests', '/access/requests', t('grants.approvals.navLabel'), KeyRound)]
+        : []),
       ...(caps?.tasks ? [fixed('admin:tasks', '/admin/tasks', t('admin.nav.tasks'), ListChecks)] : []),
       ...(caps?.config
         ? [fixed('admin:config', '/admin/config', t('admin.nav.config'), SlidersHorizontal)]
@@ -331,7 +338,7 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
         : []),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [all, caps, io, t],
+    [all, caps, io, accessEnabled, t],
   )
 
   const favoriteItems = useMemo(

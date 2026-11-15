@@ -33,3 +33,21 @@ export function useEndDates(holder: string, kind = 'member') {
 export function endDay(iso: string): string {
   return iso.slice(0, 10)
 }
+
+/** Requests waiting for the caller's decision (empty without the access plugin). */
+export function useApprovals() {
+  return useQuery({
+    queryKey: ['access', 'requests', 'to_approve'],
+    queryFn: ({ signal }) => accessApi.requests('to_approve', signal),
+    retry: false,
+  })
+}
+
+export function useMyRequests(enabled = true) {
+  return useQuery({
+    queryKey: ['access', 'requests', 'mine'],
+    queryFn: ({ signal }) => accessApi.requests('mine', signal),
+    retry: false,
+    enabled,
+  })
+}

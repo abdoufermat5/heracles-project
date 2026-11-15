@@ -20,6 +20,7 @@ import { PageLayout } from '@/components/patterns'
 import { getRecentItems } from '@/components/shell/recent'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useApprovals } from '@/features/grants/hooks'
 import { useCapabilities } from '@/features/admin/hooks'
 import { RecentActivityCard } from '@/features/audit/RecentActivityCard'
 import { useIoAccess } from '@/features/io/hooks'
@@ -112,6 +113,7 @@ export function DashboardPage() {
   const { data: types } = useTypes()
   const { data: caps } = useCapabilities()
   const { data: io } = useIoAccess()
+  const approvalList = useApprovals()
   const recents = useMemo(() => getRecentItems(), [])
 
   const canCreate = (name: string) => !!types?.find((x) => x.name === name)?.can_create
@@ -124,7 +126,8 @@ export function DashboardPage() {
   const expiring = data?.expiring_passwords ?? 0
   const failed = data?.tasks.failed ?? 0
   const pending = data?.tasks.pending ?? 0
-  const queueEmpty = !isPending && locked + expiring + failed === 0
+  const approvals = approvalList.data?.items.length ?? 0
+  const queueEmpty = !isPending && locked + expiring + failed + approvals === 0
 
   return (
     <PageLayout
@@ -209,6 +212,23 @@ export function DashboardPage() {
                   action={
                     <Button asChild variant="outline" size="sm">
                       <Link to="/types/$type" params={{ type: 'user' }} search={{ filter: 'expiring' }}>
+                        {t('dashboard.review')}
+                        <ArrowRight />
+                      </Link>
+                    </Button>
+                  }
+                />
+              )}
+              {approvals > 0 && (
+                <QueueItem
+                  icon={KeyRound}
+                  tone="warning"
+                  count={approvals}
+                  title={t('grants.approvals.queueTitle', { count: approvals })}
+                  description={t('grants.approvals.queueHelp')}
+                  action={
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/access/requests">
                         {t('dashboard.review')}
                         <ArrowRight />
                       </Link>

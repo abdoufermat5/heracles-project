@@ -6,7 +6,7 @@ import { SectionCard } from '@/components/patterns/SectionCard'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { endDay, useMyEndDates } from '@/features/access/hooks'
+import { endDay, useMyEndDates } from '@/features/grants/hooks'
 
 export function GroupsSection() {
   const { t } = useTranslation()

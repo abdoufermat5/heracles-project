@@ -50,6 +50,10 @@ const PluginsPage = lazyRouteComponent(() => import('@/features/admin/PluginsPag
 const TasksPage = lazyRouteComponent(() => import('@/features/admin/TasksPage'), 'TasksPage')
 const IoPage = lazyRouteComponent(() => import('@/features/io/IoPage'), 'IoPage')
 const AuditPage = lazyRouteComponent(() => import('@/features/audit/AuditPage'), 'AuditPage')
+const AccessRequestsPage = lazyRouteComponent(
+  () => import('@/features/grants/AccessRequestsPage'),
+  'AccessRequestsPage',
+)
 
 /** A route component that renders lazy `pages`: preloading it preloads them. */
 function rendering(
@@ -287,6 +291,13 @@ const auditRoute = createRoute({
   }, AuditPage),
 })
 
+// --- access requests ---
+const accessRequestsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/access/requests',
+  component: AccessRequestsPage,
+})
+
 const routeTree = rootRoute.addChildren([
   setupRoute,
   loginRoute,
@@ -305,6 +316,7 @@ const routeTree = rootRoute.addChildren([
     editRoute,
     ioRoute,
     auditRoute,
+    accessRequestsRoute,
     adminAccessRoute,
     adminConfigRoute,
     adminHealthRoute,
