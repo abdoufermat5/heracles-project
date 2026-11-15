@@ -13,8 +13,6 @@ from fastapi.testclient import TestClient
 
 from heracles.api.state import AppState
 from heracles.scim import filter as scim_filter
-from heracles.scim import patch as scim_patch
-from heracles.scim import projection as scim_projection
 from heracles.scim import router as scim_router
 from heracles.scim.errors import MUTABILITY, UNIQUENESS, ScimError, not_found
 from heracles.scim.filter import Compare, Filter
@@ -127,28 +125,6 @@ class FakeService:
         self.groups = FakeOps("Group", GROUP_SCHEMA)
 
 
-def _fake_parse(text: str) -> Filter:
-    left, op, right = text.split(" ", 2)
-    return Compare(left, op, json.loads(right))
-
-
-def _fake_parse_patch(body: Mapping[str, Any]) -> list[PatchOp]:
-    if PATCH_OP not in body.get("schemas", []):
-        raise ScimError(400, "bad patch", "invalidSyntax")
-    return [PatchOp(o["op"].lower(), o.get("path"), o.get("value")) for o in body["Operations"]]
-
-
-def _fake_project(
-    resource: Mapping[str, Any],
-    attributes: Any = (),
-    excluded: Any = (),
-    always: Any = ("id", "schemas"),
-) -> dict[str, Any]:
-    if attributes:
-        return {k: v for k, v in resource.items() if k in (*attributes, *always)}
-    return {k: v for k, v in resource.items() if k not in excluded}
-
-
 # -- harness --------------------------------------------------------------------------------------
 class Harness:
     def __init__(self, app: FastAPI, service: FakeService) -> None:
@@ -210,9 +186,6 @@ def h(monkeypatch: pytest.MonkeyPatch) -> Iterator[Harness]:
     app = build_demo_app()
     service = FakeService()
     app.dependency_overrides[scim_router.get_scim_service] = lambda: service
-    monkeypatch.setattr(scim_filter, "parse", _fake_parse)
-    monkeypatch.setattr(scim_patch, "parse_patch", _fake_parse_patch)
-    monkeypatch.setattr(scim_projection, "project", _fake_project)
     with TestClient(app):
         yield Harness(app, service)
 
