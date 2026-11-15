@@ -145,6 +145,8 @@ CHECK_MESSAGE_PARAMS: Final[Mapping[str, tuple[str, ...]]] = {
     "duplicate_ids.ok": (),
     "plugin_data.found": ("plugins", "count"),
     "plugin_data.ok": (),
+    "audit_chain.missing": (),
+    "audit_chain.ok": (),
 }
 """Parameters of every message key produced by :data:`CHECKS` (``<check id>.failed`` takes
 ``error``)."""
@@ -913,6 +915,25 @@ def check_plugin_data(ctx: CheckContext) -> CheckResult:
     )
 
 
+def check_audit_chain(ctx: CheckContext) -> CheckResult:
+    """The server knows the classes that make the audit log tamper-evident."""
+    classes = {c.lower() for c in ctx.directory.schema_object_classes()}
+    if "hrcauditevent" in classes and "hrcauditchain" not in classes:
+        return CheckResult(
+            "audit_chain",
+            "warning",
+            "The directory schema predates the audit hash chain (no hrcAuditChain class): "
+            "events are recorded without tamper evidence. Load the current Heracles schema.",
+            message_key="audit_chain.missing",
+        )
+    return CheckResult(
+        "audit_chain",
+        "ok",
+        "The audit log can be chained.",
+        message_key="audit_chain.ok",
+    )
+
+
 type CheckFn = Callable[[CheckContext], CheckResult]
 type FixFn = Callable[[CheckContext, Sequence[str], Mapping[str, str]], FixResult]
 
@@ -943,6 +964,7 @@ CHECKS: Final[tuple[tuple[str, CheckFn, FixFn | None], ...]] = (
     ("departments", check_departments, fix_departments),
     ("duplicate_ids", check_duplicate_ids, None),
     ("plugin_data", check_plugin_data, None),
+    ("audit_chain", check_audit_chain, None),
 )
 CHECK_IDS: Final = tuple(c[0] for c in CHECKS)
 

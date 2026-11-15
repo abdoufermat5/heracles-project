@@ -382,6 +382,7 @@ export const adminFr: typeof adminEn = {
       departments: 'Départements',
       duplicate_ids: 'Identifiants en double',
       plugin_data: 'Données de modules désactivés',
+      audit_chain: 'Intégrité du journal d’audit',
       transport: 'Sécurité de la connexion',
     },
     affected: 'Entrées concernées',

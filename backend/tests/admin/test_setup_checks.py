@@ -32,6 +32,7 @@ REQUIRED_PARAMS: dict[str, set[str]] = {
     "departments.ok": set(),
     "duplicate_ids.ok": set(),
     "plugin_data.ok": set(),
+    "audit_chain.ok": set(),
 }
 
 

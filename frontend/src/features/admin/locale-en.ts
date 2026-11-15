@@ -370,6 +370,7 @@ export const adminEn = {
       departments: 'Departments',
       duplicate_ids: 'Duplicate identifiers',
       plugin_data: 'Data of disabled plugins',
+      audit_chain: 'Audit log integrity',
       transport: 'Connection security',
     },
     affected: 'Affected entries',

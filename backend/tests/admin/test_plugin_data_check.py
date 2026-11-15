@@ -45,3 +45,13 @@ def test_ok_without_disabled_plugins(directory: MemoryDirectory) -> None:
 def test_is_part_of_the_report(directory: MemoryDirectory) -> None:
     assert "plugin_data" in sc.CHECK_IDS
     assert {r.id for r in sc.run_checks(sc.context_for(directory))} == set(sc.CHECK_IDS)
+
+
+def test_audit_chain_needs_the_chain_class(directory: MemoryDirectory) -> None:
+    classes = [c for c in directory.schema_object_classes() if c.lower() != "hrcauditchain"]
+    directory.set_schema_object_classes([*classes, "hrcAuditEvent"])
+    result = sc.check_audit_chain(sc.context_for(directory))
+    assert result.status == "warning" and result.message_key == "audit_chain.missing"
+    directory.set_schema_object_classes([*classes, "hrcAuditEvent", "hrcAuditChain"])
+    assert sc.check_audit_chain(sc.context_for(directory)).status == "ok"
+    assert "audit_chain" in sc.CHECK_IDS

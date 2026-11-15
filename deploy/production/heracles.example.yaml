@@ -90,8 +90,18 @@ plugins:
 #   password: CHANGE_ME
 
 # --- audit ---------------------------------------------------------------------------------
-# Forward the recorded audit events to syslog.
+# Retention of the audit log, chain anchors and forwarding to a log collector. Every event is
+# hash-chained to the previous one; `heracles audit verify` checks the chain.
 # audit:
+#   retention:
+#     days: 365                # purge events older than this (0: keep)
+#     count: 0                 # keep at most this many events (0: no limit)
+#   anchor_minutes: 60         # send the chain head to the collector this often
 #   syslog:
-#     address: "logs.example.org:514"   # or a socket path such as /dev/log
+#     address: "logs.example.org:6514"   # or a socket path such as /dev/log
+#     transport: tls           # udp (default), tcp or tls
+#     format: json             # text (default), json or cef
+#     framing: octet-counting  # tcp/tls: octet-counting (default) or newline
 #     facility: local0
+#     ca_file: /etc/heracles/log-ca.pem  # tls: trusted authorities (default: the system ones)
+#     # cert_file / key_file: client certificate, when the collector asks for one
