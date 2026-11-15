@@ -1,0 +1,170 @@
+name: release
+
+# A pushed version tag (v1.2.3, v1.3.0-rc.1) publishes, without manual steps:
+# * the container image ghcr.io/<owner>/heracles:<version> (linux/amd64 + linux/arm64), with an
+#   SBOM and a provenance attestation attached by the build, signed with cosign (keyless);
+# * the Python wheel, with a CycloneDX SBOM of its locked dependencies and a build provenance
+#   attestation;
+# * a GitHub release whose notes are generated from the conventional commits since the
+#   previous tag (scripts/changelog.py), with the wheel, the SBOM and CHANGELOG.md attached.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    # The tag must name the version the packages carry, and the gates must pass.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Tag matches the package versions
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          py=$(sed -n 's/^version = "\(.*\)"/\1/p' backend/pyproject.toml | head -1)
+          js=$(sed -n 's/^  "version": "\(.*\)",/\1/p' frontend/package.json | head -1)
+          echo "tag=$tag backend=$py frontend=$js"
+          test "$tag" = "$py" && test "$tag" = "$js"
+      - name: System libraries for python-ldap
+        run: sudo apt-get update && sudo apt-get install -y libldap2-dev libsasl2-dev
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - name: Backend gates
+        working-directory: backend
+        run: |
+          uv sync --locked --extra ldap
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pyright
+          uv run pytest -q
+
+  image:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io
+      id-token: write # keyless signing and attestations
+      attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/heracles
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: HERACLES_BUILD_ID=${{ github.ref_name }}
+          sbom: true
+          provenance: mode=max
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+      - name: Sign the image (keyless)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/heracles
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/heracles
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  wheel:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - name: Build the wheel and its SBOM
+        working-directory: backend
+        run: |
+          uv build --wheel -o ../dist
+          uv export --locked --no-dev --extra ldap --extra dns --extra postgres \
+            --format cyclonedx1.5 -o "../dist/heracles-${GITHUB_REF_NAME#v}.cdx.json"
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/*.whl
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wheel
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: [image, wheel]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the release
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # the changelog walks the tags
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: wheel
+          path: dist
+      - name: Release notes and changelog
+        env:
+          DIGEST: ${{ needs.image.outputs.digest }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/heracles
+        run: |
+          python3 scripts/changelog.py --release "$GITHUB_REF_NAME" > notes.md
+          python3 scripts/changelog.py -o dist/CHANGELOG.md
+          {
+            echo
+            echo "### Image"
+            echo
+            echo "\`${IMAGE}:${GITHUB_REF_NAME#v}\` (\`${DIGEST}\`), signed with cosign;"
+            echo "verify with \`cosign verify ${IMAGE}@${DIGEST} --certificate-identity-regexp"
+            echo "'^https://github.com/${GITHUB_REPOSITORY}/' --certificate-oidc-issuer"
+            echo "https://token.actions.githubusercontent.com\`."
+            echo
+            echo "Upgrading: see manual/upgrade.md."
+          } >> notes.md
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" $prerelease --title "Heracles ${GITHUB_REF_NAME}" \
+            --notes-file notes.md dist/*

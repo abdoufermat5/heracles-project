@@ -2,6 +2,8 @@
 name = "heracles"
 version = "0.1.0"
 description = "Heracles — web console for LDAP directory management"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.162.5",

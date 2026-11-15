@@ -21,7 +21,7 @@ VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(BACKEND)/pyproject.toml
 .PHONY: bundle-check help install install-backend install-frontend \
         dev dev-demo dev-down dev-mock dhcp-test backend frontend demo build docker-build serve dns-demo \
         test test-backend test-frontend lint lint-backend lint-frontend \
-        format typecheck check bench bench-ldap bench-check bench-baseline ldap-up ldap-down ldap-logs test-integration e2e e2e-replicas e2e-ui e2e-down schema third-party-schema clean
+        format typecheck check bench bench-ldap bench-check bench-baseline ldap-up ldap-down ldap-logs test-integration e2e e2e-replicas e2e-ui e2e-down e2e-ds e2e-ds-down schema changelog third-party-schema clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "; printf "\nUsage: make \033[36m<target>\033[0m\n\n"} \
@@ -173,8 +173,24 @@ e2e-replicas: ## Browser e2e tests against two replicas behind a load balancer (
 e2e-ui: ## Browser end-to-end tests only, against the running stack (make dev or make e2e)
 	cd $(FRONTEND) && HERACLES_E2E_URL=http://localhost:$(PORT) pnpm exec playwright test
 
+e2e-ds: ## End-to-end tests against 389 Directory Server (containers heracles-ds*, ports 3391/8431)
+	docker build -q -f deploy/Dockerfile -t heracles-ds .
+	docker build -q -f deploy/Dockerfile --target test -t heracles-ds-test .
+	deploy/ds/setup.sh heracles-ds 3391
+	IMAGE=heracles-ds deploy/ds/heracles.sh 3391 8431 heracles-ds-app
+	docker run --rm --network host -e HERACLES_TEST_LDAP_URI=ldap://127.0.0.1:3391 \
+	  -e "HERACLES_TEST_LDAP_BIND_DN=cn=Directory Manager" -e HERACLES_TEST_LDAP_BIND_PASSWORD=admin heracles-ds-test
+	cd $(BACKEND) && HERACLES_E2E_URL=http://127.0.0.1:8431 uv run pytest -q -m e2e tests/e2e
+	cd $(FRONTEND) && HERACLES_E2E_URL=http://127.0.0.1:8431 pnpm exec playwright test
+
+e2e-ds-down: ## Remove the 389 Directory Server test containers
+	docker rm -f heracles-ds-app heracles-ds
+
 e2e-down: ## Stop the end-to-end stack and drop its LDAP data
 	$(COMPOSE) --profile e2e down -v
+
+changelog: ## Regenerate CHANGELOG.md from the conventional commits and tags
+	python3 scripts/changelog.py -o CHANGELOG.md
 
 schema: ## Regenerate the Heracles LDAP schema files (deploy/ldap/schema/heracles.{ldif,schema})
 	cd backend && uv run heracles schema export --format ldif -o ../deploy/ldap/schema/heracles.ldif

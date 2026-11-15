@@ -71,6 +71,23 @@ _FILTER_VALUES = frozenset({"memberurl", "labeleduri"})
 _TRANSIENT_CLASSES = frozenset({schema.OC.LOCK.lower()})
 
 
+#: Sample DNs kept per unknown name in the report.
+SAMPLES = 5
+
+
+@dataclass
+class Unknown:
+    """A legacy name the rename table does not know."""
+
+    kind: str  # objectClass, attribute or field (a name stored inside a value)
+    name: str
+    count: int = 0
+    samples: list[str] = field(default_factory=lambda: list[str]())
+
+    def to_json(self) -> dict[str, object]:
+        return {"kind": self.kind, "name": self.name, "count": self.count, "samples": self.samples}
+
+
 @dataclass
 class Report:
     """What the migration did; ``errors`` must be empty before importing."""
@@ -80,6 +97,75 @@ class Report:
     dropped_entries: list[str] = field(default_factory=lambda: list[str]())
     dropped_values: list[str] = field(default_factory=lambda: list[str]())
     errors: list[str] = field(default_factory=lambda: list[str]())
+    entries_total: int = 0
+    entries_converted: int = 0  # changed by the migration
+    entries_untouched: int = 0  # copied as they were
+    unknown: dict[str, Unknown] = field(default_factory=lambda: dict[str, Unknown]())
+    acl_errors: list[str] = field(default_factory=lambda: list[str]())
+
+    def unknown_name(self, kind: str, name: str, where: str) -> None:
+        key = f"{kind}:{name.lower()}"
+        found = self.unknown.setdefault(key, Unknown(kind, name))
+        found.count += 1
+        dn = where.split(" ", 1)[0]
+        if len(found.samples) < SAMPLES and dn not in found.samples:
+            found.samples.append(dn)
+
+    @property
+    def clean(self) -> bool:
+        """Nothing unexplained: no unknown legacy name, no unreadable value."""
+        return not self.errors
+
+    def to_json(self) -> dict[str, object]:
+        unknown = sorted(self.unknown.values(), key=lambda u: (u.kind, -u.count, u.name.lower()))
+        return {
+            "entries": {
+                "total": self.entries_total,
+                "converted": self.entries_converted,
+                "untouched": self.entries_untouched,
+                "dropped": len(self.dropped_entries),
+            },
+            "renamed": [
+                {"old": old, "new": new, "count": self.renamed[f"{old} -> {new}"]}
+                for old, new in self.rename_table()
+            ],
+            "added_classes": dict(sorted(self.added_classes.items())),
+            "unknown": [u.to_json() for u in unknown],
+            "acl_errors": list(self.acl_errors),
+            "dropped_entries": list(self.dropped_entries),
+            "dropped_values": list(self.dropped_values),
+            "errors": list(self.errors),
+            "clean": self.clean,
+        }
+
+    def summary(self) -> str:
+        """Human-readable report."""
+        lines = [
+            f"entries: {self.entries_total} read, {self.entries_converted} converted, "
+            f"{self.entries_untouched} untouched, {len(self.dropped_entries)} dropped",
+            f"names renamed: {len(self.renamed)} distinct, {sum(self.renamed.values())} uses",
+        ]
+        if self.added_classes:
+            added = ", ".join(f"{k} ({v})" for k, v in sorted(self.added_classes.items()))
+            lines.append(f"auxiliary classes added: {added}")
+        if self.unknown:
+            lines.append("unknown legacy names (not in the rename table):")
+            for u in sorted(
+                self.unknown.values(), key=lambda u: (u.kind, -u.count, u.name.lower())
+            ):
+                lines.append(f"  {u.kind} {u.name}: {u.count} (e.g. {'; '.join(u.samples)})")
+        if self.acl_errors:
+            lines.append(f"unreadable ACL values: {len(self.acl_errors)}")
+            lines.extend(f"  {e}" for e in self.acl_errors[:20])
+        other = [e for e in self.errors if e not in self.acl_errors and "unknown legacy" not in e]
+        if other:
+            lines.append(f"other errors: {len(other)}")
+            lines.extend(f"  {e}" for e in other[:20])
+        if self.dropped_values:
+            lines.append(f"values dropped (invalid for their syntax): {len(self.dropped_values)}")
+            lines.extend(f"  {e}" for e in self.dropped_values[:20])
+        lines.append("result: clean" if self.clean else "result: NOT clean (fix the errors above)")
+        return "\n".join(lines) + "\n"
 
     def rename_table(self) -> list[tuple[str, str]]:
         """``(old, new)`` pairs that occurred, for API v1 script authors."""
@@ -128,13 +214,16 @@ def _field_name(name: str, report: Report, where: str) -> str:
         return new
     if legacy_map.LEGACY_NAME_RE.match(name):
         report.errors.append(f"{where}: unknown legacy name {name!r}")
+        report.unknown_name("field", name, where)
     return name
 
 
 def _acl_template(value: str, report: Report, where: str) -> str:
     parsed = parse_role_value(value)
     if isinstance(parsed, Ignored):
-        report.errors.append(f"{where}: unreadable ACL role value {value!r}")
+        message = f"{where}: unreadable ACL role value {value!r}"
+        report.errors.append(message)
+        report.acl_errors.append(message)
         return value
     blocks = tuple(
         AclBlock(
@@ -150,7 +239,9 @@ def _acl_template(value: str, report: Report, where: str) -> str:
 def _acl_entry(value: str, report: Report, where: str) -> str:
     parsed = parse_assignment(value)
     if isinstance(parsed, Ignored):
-        report.errors.append(f"{where}: unreadable ACL assignment {value!r}")
+        message = f"{where}: unreadable ACL assignment {value!r}"
+        report.errors.append(message)
+        report.acl_errors.append(message)
         return value
 
     def flt(text: str | None) -> str | None:
@@ -201,6 +292,7 @@ class _Migrator:
             new = _rename(cls, _CLASSES, self.report)
             if new is None:
                 self.report.errors.append(f"{where}: unknown legacy objectClass {cls!r}")
+                self.report.unknown_name("objectClass", cls, where)
                 new = cls
             new_classes.append(new)
         out.attrs["objectClass"] = [c.encode() for c in new_classes]
@@ -210,6 +302,7 @@ class _Migrator:
             new_name = _rename(name, _ATTRS, self.report)
             if new_name is None:
                 self.report.errors.append(f"{where}: unknown legacy attribute {name!r}")
+                self.report.unknown_name("attribute", name, where)
                 new_name = name
             converted = self._values(new_name, values, f"{where} {new_name}")
             if converted:
@@ -337,11 +430,29 @@ class _Migrator:
         entry.attrs["objectClass"] = [c.encode() for c in classes]
 
 
+def _same(a: Entry, b: Entry) -> bool:
+    if a.dn != b.dn:
+        return False
+    left = {k.lower(): sorted(v) for k, v in a.attrs.items()}
+    right = {k.lower(): sorted(v) for k, v in b.attrs.items()}
+    return left == right
+
+
 def migrate_entries(entries: Iterable[Entry]) -> tuple[list[Entry], Report]:
     """Migrate ``entries``; returns the converted entries and the report."""
     report = Report()
     migrator = _Migrator(report)
-    out = [e for e in (migrator.entry(e) for e in entries) if e is not None]
+    out: list[Entry] = []
+    for entry in entries:
+        report.entries_total += 1
+        converted = migrator.entry(entry)
+        if converted is None:
+            continue
+        if _same(entry, converted):
+            report.entries_untouched += 1
+        else:
+            report.entries_converted += 1
+        out.append(converted)
     return out, report
 
 

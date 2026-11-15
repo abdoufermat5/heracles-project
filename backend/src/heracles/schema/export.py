@@ -84,3 +84,30 @@ def render_ldif() -> str:
     for cls in OBJECT_CLASSES:
         lines.extend(_fold(f"olcObjectClasses: {object_class_definition(cls)}"))
     return "\n".join(lines) + "\n"
+
+
+def render_ds() -> str:
+    """Schema file for 389 Directory Server (``schema/99heracles.ldif`` of the instance).
+
+    Copy it into the instance's schema directory and restart the server, or load it online with
+    ``ldapmodify`` (each definition as an ``add: attributeTypes`` / ``objectClasses`` change).
+    """
+    lines = [f"# {line}" for line in _HEADER]
+    lines.extend(
+        [
+            "dn: cn=schema",
+            "objectClass: top",
+            "objectClass: ldapSubentry",
+            "objectClass: subschema",
+            "cn: schema",
+        ]
+    )
+    for attr in ATTRIBUTE_TYPES:
+        lines.extend(
+            _fold(f"attributeTypes: {attribute_definition(attr)[:-1]}X-ORIGIN '{SCHEMA_NAME}' )")
+        )
+    for cls in OBJECT_CLASSES:
+        lines.extend(
+            _fold(f"objectClasses: {object_class_definition(cls)[:-1]}X-ORIGIN '{SCHEMA_NAME}' )")
+        )
+    return "\n".join(lines) + "\n"

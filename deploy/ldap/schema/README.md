@@ -16,17 +16,24 @@
   (git-ignored). Copy their `cn=config` LDIF files into this directory, or convert
   `.schema` files with `make third-party-schema SCHEMAS="/path/sudo.schema ..."`.
   Prefix them with a number so they load before `heracles.ldif`.
+  `../fetch-third-party.sh` fetches the sudo and SSH key schemas at pinned upstream commits
+  (checked by SHA-256), as CI does.
+* 389 Directory Server: `heracles schema export --format ds` gives its schema file;
+  `../ldif2ds.py` turns these `cn=config` files into an online update (`deploy/ds/setup.sh`).
 
 The test server (`deploy/docker-compose.yml`) loads every `*.ldif` of this directory
 at the first start of its data volume: run `make e2e-down` after changing them.
 
 ## Migrating an existing directory
 
+The full procedure, with the post-migration checks, is in `manual/migration.md`.
+
 Directories written by the older management tool use a different schema. Convert
 them offline:
 
 1. Export the directory: `slapcat -b <base> > old.ldif`.
-2. Convert it: `heracles migrate-directory old.ldif new.ldif --report renames.csv`.
+2. Rehearse with `heracles migrate-directory old.ldif --dry-run`, then convert it:
+   `heracles migrate-directory old.ldif new.ldif --report renames.csv`.
    Fix any reported error (unknown legacy names) and run it again; `--force` writes
    the output anyway.
 3. On a fresh server, load the third-party schemas and `heracles.ldif`, then import:
