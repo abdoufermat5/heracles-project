@@ -33,14 +33,13 @@ FORWARD_BATCH = 5000
 PURGE_INTERVAL = 3600.0
 PURGE_ACTION = "purge"
 
-_PURGE_ATTRS = ("cn", "hrcAuditDateTime", chain.SEQUENCE_ATTR, chain.HASH_ATTR)
-
 
 @dataclass(slots=True)
 class PurgeResult:
     purged: int = 0
     through: int = 0  # newest purged sequence number (0: none)
     errors: int = 0
+    held: int = 0  # sequence of a break the purge stopped before (0: none)
 
 
 def _time(entry: Entry) -> datetime | None:
@@ -86,7 +85,7 @@ def purge_events(
     cutoff = now - timedelta(days=days) if days > 0 else None
     chained: list[tuple[int, Entry]] = []
     legacy: list[Entry] = []
-    for event in _events(directory, container, _PURGE_ATTRS):
+    for event in _events(directory, container, chain.EVENT_ATTRS):
         seq = chain.sequence_of(event)
         if seq is None:
             legacy.append(event)
@@ -103,6 +102,18 @@ def purge_events(
                 through = max(through, seq)
     if count > 0 and len(live) > count:
         through = max(through, live[len(live) - count - 1][0])
+    # never purge a break away: the evidence stays until someone looks at it
+    held = 0
+    if through:
+        check = chain.verify_events(
+            [e for s, e in live if s <= through], base=base, check_head=False
+        )
+        brk = check.first_break
+        if brk is not None and brk.sequence <= through:
+            held = brk.sequence
+            through = brk.sequence - 1 if brk.sequence - 1 > base.sequence else 0
+            log.warning("audit_purge_held", sequence=held, reason=brk.reason)
+    result.held = held
     victims = [e for s, e in chained if s <= max(through, base.sequence)]
     if through:
         newest = next(e for s, e in live if s == through)
@@ -141,6 +152,8 @@ def purge_events(
         lines = [f"events purged: {result.purged}", f"retention: {', '.join(policy)}"]
         if through:
             lines.append(f"through sequence: {through}")
+        if held:
+            lines.append(f"kept from sequence {held}: the chain is broken there")
         lines.append(f"source: {source}")
         try:
             write_event(
@@ -281,6 +294,9 @@ def run_policy(
                 throttle.done("anchor", key, now)
     except DirectoryError as exc:
         log.warning("audit_policy_failed", error=type(exc).__name__)
+    finally:
+        if sender is not None:
+            sender.close()  # one connection per pass (see heracles.tasks.syslog)
     return report
 
 

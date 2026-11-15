@@ -416,6 +416,16 @@ class PyLdapDirectory:
         except NoSuchObjectError:
             return None
 
+    def search_primary(
+        self,
+        base: str,
+        filterstr: str = "(objectClass=*)",
+        scope: Scope = Scope.SUBTREE,
+        attrs: Sequence[str] | None = None,
+    ) -> Iterator[Entry]:
+        """:meth:`search` on a server accepting writes (never a lagging replica)."""
+        return self.search(base, filterstr, scope, attrs, primary=True)
+
     def get_primary(self, dn: str, attrs: Sequence[str] | None = None) -> Entry | None:
         """:meth:`get` from a server accepting writes (never a lagging replica).
 

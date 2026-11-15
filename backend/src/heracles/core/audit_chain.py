@@ -61,6 +61,8 @@ CANONICAL_VERSION = 1
 #: Attempts at taking a sequence number before giving up (then the event is written
 #: without chaining, and a warning is logged).
 MAX_ATTEMPTS = 64
+#: First attribute line of the event written right after a lost head was restored.
+RESUMED_NOTE = "chain: head missing, resumed after sequence "
 #: Digits of the event RDN (``cn=0000000042``): RDNs sort like sequence numbers.
 CN_DIGITS = 10
 
@@ -181,6 +183,30 @@ def _reader(directory: DirectoryClient) -> Callable[[str, Sequence[str]], Entry 
     return directory.get
 
 
+def _events_primary(
+    directory: DirectoryClient, container: str, attrs: Sequence[str]
+) -> list[Entry]:
+    """Every event of ``container`` from a write server when the client knows one."""
+    search = getattr(directory, "search_primary", None)
+    flt = f"(objectClass={EVENT_CLASS})"
+    try:
+        if callable(search):
+            return list(search(container, flt, Scope.ONE, list(attrs)))  # type: ignore[misc]
+        return list(directory.search(container, flt, Scope.ONE, list(attrs)))
+    except NoSuchObjectError:
+        return []
+
+
+def find_tail(directory: DirectoryClient, container: str) -> Link:
+    """The newest chained event, found by reading them all (recovery path only)."""
+    best = START
+    for entry in _events_primary(directory, container, [SEQUENCE_ATTR, HASH_ATTR]):
+        seq = sequence_of(entry)
+        if seq is not None and seq > best.sequence:
+            best = Link(seq, entry.text(HASH_ATTR) or "")
+    return best
+
+
 def read_container(directory: DirectoryClient, container: str) -> Entry | None:
     return _reader(directory)(container, list(CONTAINER_ATTRS))
 
@@ -193,21 +219,35 @@ def base_of(entry: Entry | None) -> Link:
     return (Link.parse(entry.text(BASE_ATTR)) if entry is not None else None) or START
 
 
-def _start_chain(directory: DirectoryClient, container: str) -> None:
-    """Give the container the chain class and an empty head (once; races are harmless)."""
+def _start_chain(directory: DirectoryClient, container: str) -> Link | None:
+    """Give the container the chain class and an empty head (once; races are harmless).
+
+    A container that has the class but lost its head (deleted by hand) gets the head of
+    its newest event back, and the resumed position is returned: the next event records
+    it, which :func:`verify_events` reports as a break.
+    """
     entry = read_container(directory, container)
     if entry is None:
         raise NoSuchObjectError(container)
     if head_of(entry) is not None:
-        return
-    changes = [Modification("add", HEAD_ATTR, [START.text().encode()])]
-    if not entry.has_object_class(CHAIN_CLASS):
-        changes.insert(0, Modification("add", "objectClass", [CHAIN_CLASS.encode()]))
+        return None
+    resumed: Link | None = None
+    if entry.has_object_class(CHAIN_CLASS):
+        resumed = find_tail(directory, container)
+        changes = [Modification("add", HEAD_ATTR, [resumed.text().encode()])]
+        log.warning("audit_chain_head_missing", resumed_after=resumed.sequence)
+    else:
+        changes = [
+            Modification("add", "objectClass", [CHAIN_CLASS.encode()]),
+            Modification("add", HEAD_ATTR, [START.text().encode()]),
+        ]
     try:
         directory.modify(container, changes)
     except DirectoryError:
         if head_of(read_container(directory, container)) is None:
             raise
+        return None  # another writer repaired or started it
+    return resumed
 
 
 def _move_head(directory: DirectoryClient, container: str, seen: Link, new: Link) -> None:
@@ -247,18 +287,30 @@ def append(
     the event without chaining.
     """
     try:
-        _start_chain(directory, container)
+        resumed = _start_chain(directory, container)
         head = head_of(read_container(directory, container))
     except DirectoryError as exc:
         raise ChainError(f"chain unavailable: {exc}") from exc
     if head is None:
         raise ChainError("chain head missing")
+    base_attrs: dict[str, list[bytes]] = {k: list(v) for k, v in attrs.items()}
+    if resumed is not None:
+        note = f"{RESUMED_NOTE}{resumed.sequence}".encode()
+        base_attrs["hrcAuditAttributes"] = [note, *base_attrs.get("hrcAuditAttributes", [])]
     previous = head
     read = _reader(directory)
-    for attempt in range(MAX_ATTEMPTS):
+    missing = 0
+    for attempt in range(2 * MAX_ATTEMPTS):
+        if attempt == MAX_ATTEMPTS:  # far behind (head rolled back): jump to the tail
+            try:
+                tail = find_tail(directory, container)
+            except DirectoryError as exc:
+                raise ChainError(f"chain unavailable: {exc}") from exc
+            if tail.sequence > previous.sequence:
+                previous = tail
         sequence = previous.sequence + 1
         cn = event_cn(sequence)
-        full: dict[str, list[bytes]] = {k: list(v) for k, v in attrs.items()}
+        full: dict[str, list[bytes]] = {k: list(v) for k, v in base_attrs.items()}
         full["cn"] = [cn.encode()]
         full[SEQUENCE_ATTR] = [str(sequence).encode()]
         full[PREVIOUS_ATTR] = [previous.hash.encode()]
@@ -273,8 +325,11 @@ def append(
                 previous = Link(sequence, digest)
             elif taken is not None:
                 raise ChainError(f"event {sequence} carries no hash") from None
-            else:  # deleted under us, or not visible yet
-                sleep(0.01 * (attempt + 1))
+            else:  # deleted under us
+                missing += 1
+                if missing > 3:
+                    raise ChainError(f"event {sequence} exists but cannot be read") from None
+                sleep(0.01 * missing)
             continue
         except DirectoryError as exc:
             raise ChainError(f"event refused: {exc}") from exc
@@ -379,7 +434,11 @@ def sequence_of(entry: Entry) -> int | None:
 
 
 def verify_events(
-    events: Iterable[Entry], *, base: Link = START, head: Link | None = None
+    events: Iterable[Entry],
+    *,
+    base: Link = START,
+    head: Link | None = None,
+    check_head: bool = True,
 ) -> Verification:
     """Check a set of event entries against the chain rules.
 
@@ -419,9 +478,16 @@ def verify_events(
         if event_hash(entry.attrs, seq, stored_prev) != digest:
             result.first_break = Break(seq, entry.dn, "content altered (hash mismatch)")
             return result
+        if any(v.startswith(RESUMED_NOTE.encode()) for v in entry.get("hrcAuditAttributes")):
+            result.first_break = Break(
+                seq, entry.dn, "the chain head was deleted before this event"
+            )
+            return result
         previous = Link(seq, digest)
         result.checked += 1
     result.last = previous if chained else None
+    if not check_head:
+        return result
     if head is None:
         if chained:
             result.first_break = Break(previous.sequence, "", "chain head missing")
@@ -451,14 +517,9 @@ def verify_chain(directory: DirectoryClient, container: str) -> Verification:
     entry = read_container(directory, container)
     if entry is None:
         return Verification()
-    try:
-        events = list(
-            directory.search(
-                container, f"(objectClass={EVENT_CLASS})", Scope.ONE, list(EVENT_ATTRS)
-            )
-        )
-    except NoSuchObjectError:
-        events = []
+    # head and events from the same (write) server: a lagging replica would look like
+    # deleted events
+    events = _events_primary(directory, container, EVENT_ATTRS)
     return verify_events(events, base=base_of(entry), head=head_of(entry))
 
 

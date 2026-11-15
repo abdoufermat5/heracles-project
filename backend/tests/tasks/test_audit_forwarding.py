@@ -78,6 +78,9 @@ class FakeSender:
             raise OSError("collector down")
         self.records.append(dict(record))
 
+    def close(self) -> None:
+        self.closed = True
+
 
 # -- formats ---------------------------------------------------------------------------------
 
@@ -116,7 +119,11 @@ def test_cef_format_escapes_values() -> None:
 
 
 def test_text_format_and_anchor() -> None:
-    assert format_record(EVENT, "text", "[h] ").startswith("[h] 2030-06-15T08:00:00+00:00 modify")
+    text = format_record(EVENT, "text", "[h] ")
+    assert text == (
+        "[h] 2030-06-15T08:00:00+00:00 modify user uid=ann,dc=test by uid=admin,dc=test "
+        "success sequence=7"
+    )
     anchor = {"kind": "anchor", "sequence": 9, "hash": "ff"}
     assert format_record(anchor, "text") == "anchor sequence=9 hash=ff"
     assert "|anchor|Audit chain anchor|" in format_record(anchor, "cef")
@@ -374,3 +381,26 @@ def test_policy_purge_is_throttled(directory: MemoryDirectory) -> None:
     assert run_policy(directory, NOW + timedelta(minutes=5), config, None).purged == 0
     assert run_policy(directory, NOW + timedelta(hours=2), config, None).purged == 4
     assert chain.verify_chain(directory, audit_container(directory)).ok
+
+
+def test_purge_never_removes_a_break(directory: MemoryDirectory) -> None:
+    from heracles.ldap.client import Modification
+
+    record(directory, 5, days_ago=40)
+    record(directory, 2, days_ago=1)
+    container = audit_container(directory)
+    directory.modify(
+        f"cn={chain.event_cn(3)},{container}", [Modification("replace", "hrcAuditResult", [b"x"])]
+    )
+    result = purge_events(directory, NOW, days=30)
+    assert result.held == 3 and result.through == 2 and result.purged == 2
+    verification = chain.verify_chain(directory, container)
+    assert verification.first_break is not None and verification.first_break.sequence == 3
+    purge = next(iter(directory.search(container, "(hrcAuditAction=purge)")))
+    assert "kept from sequence 3: the chain is broken there" in purge.texts("hrcAuditAttributes")
+
+
+def test_policy_closes_the_connection_after_a_pass(directory: MemoryDirectory) -> None:
+    sender = FakeSender()
+    run_policy(directory, NOW, AuditConfig(), sender)
+    assert getattr(sender, "closed", False)

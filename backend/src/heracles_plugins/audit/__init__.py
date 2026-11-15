@@ -90,11 +90,18 @@ class AuditTask(TaskObjectType):
                 "hrcAuditSyslogEnabled",
                 _("Forward events to syslog"),
                 default=False,
+                description=_(
+                    "Only without a collector in the audit configuration (which forwards "
+                    "every event itself); then logs to the heracles.audit logger"
+                ),
             ),
             StringAttr(
                 "hrcAuditSyslogPrefix",
                 _("Syslog prefix"),
-                description=_("Text put before every forwarded event"),
+                description=_(
+                    "Text put before every event this task forwards; with a collector, "
+                    "use audit.syslog.prefix"
+                ),
             ),
         )
 

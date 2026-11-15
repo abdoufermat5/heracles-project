@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 
 import pytest
 
 from heracles.core import audit_chain as chain
 from heracles.core.audit import audit_container, write_event
-from heracles.ldap.client import DirectoryError, Modification
+from heracles.ldap.client import DirectoryError, Entry, Modification, Scope
 from heracles.ldap.memory import MemoryDirectory
 
 BASE = "dc=test"
@@ -221,3 +222,70 @@ def test_old_schema_falls_back_to_unchained_events() -> None:
     assert entry is not None
     assert entry.text("hrcAuditAction") == "modify"
     assert chain.sequence_of(entry) is None
+
+
+def test_deleted_head_stays_evident_after_more_writes(directory: MemoryDirectory) -> None:
+    record(directory, 70)
+    directory.modify(AUDIT, [Modification("delete", chain.HEAD_ATTR)])
+    dns = record(directory, 2)
+    assert dns[0] == f"cn={71:010d},{AUDIT}"  # chained, not written outside the chain
+    entry = directory.get(dns[0])
+    assert entry is not None
+    assert entry.texts("hrcAuditAttributes")[0] == f"{chain.RESUMED_NOTE}70"
+    result = verify(directory)
+    assert result.unchained == 0
+    assert result.first_break == chain.Break(
+        71, dns[0], "the chain head was deleted before this event"
+    )
+
+
+def test_rolled_back_head_does_not_stop_chaining(directory: MemoryDirectory) -> None:
+    record(directory, 70)
+    first = directory.get(f"cn={1:010d},{AUDIT}")
+    assert first is not None
+    directory.modify(
+        AUDIT,
+        [Modification("replace", chain.HEAD_ATTR, [f"1 {first.text(chain.HASH_ATTR)}".encode()])],
+    )
+    (dn,) = record(directory)
+    assert dn == f"cn={71:010d},{AUDIT}"
+    result = verify(directory)
+    assert result.ok and result.checked == 71 and result.unchained == 0
+
+
+class _LaggingReplica(MemoryDirectory):
+    """Plain searches miss the newest event; the write server has it."""
+
+    def search(
+        self,
+        base: str,
+        filterstr: str = "(objectClass=*)",
+        scope: Scope = Scope.SUBTREE,
+        attrs: Sequence[str] | None = None,
+        *,
+        size_limit: int = 0,
+        page_size: int = 500,
+    ) -> Iterator[Entry]:
+        found = list(
+            super().search(
+                base, filterstr, scope, attrs, size_limit=size_limit, page_size=page_size
+            )
+        )
+        newest = max((chain.sequence_of(e) or 0) for e in found) if found else 0
+        return iter([e for e in found if not newest or chain.sequence_of(e) != newest])
+
+    def search_primary(
+        self,
+        base: str,
+        filterstr: str = "(objectClass=*)",
+        scope: Scope = Scope.SUBTREE,
+        attrs: Sequence[str] | None = None,
+    ) -> Iterator[Entry]:
+        return MemoryDirectory.search(self, base, filterstr, scope, attrs)
+
+
+def test_verify_reads_events_from_the_write_server() -> None:
+    d = _LaggingReplica(BASE)
+    d.add(BASE, {"objectClass": [b"domain"], "dc": [b"test"]})
+    record(d, 3)
+    assert chain.verify_chain(d, AUDIT).ok

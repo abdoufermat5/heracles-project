@@ -18,10 +18,14 @@ Configuration (top level of the configuration file)::
         key_file: ""
         verify: true         # tls: check the collector certificate and name
         timeout: 5           # seconds, for connecting and sending
+        prefix: ""           # text format: put before every message
 
 Each message is an RFC 5424 syslog line (``<PRI>1 TIME HOST heracles - - - MSG``); the
 scheduler sends the events in chain order and keeps its position on the audit container
-(``hrcAuditForwarded``), so a collector that was down receives the backlog later.
+(``hrcAuditForwarded``), so a collector that was down receives the backlog later. A pass
+opens one connection and closes it at the end: a connection dropped by the collector or a
+middlebox between passes cannot swallow the first event of the next pass. Delivery is what
+the transport reports (UDP has no acknowledgement).
 """
 
 from __future__ import annotations
@@ -74,6 +78,8 @@ class SyslogSettings(BaseModel):
     key_file: str = ""
     verify: bool = True
     timeout: float = 5.0
+    #: Text put before every message of the ``text`` format.
+    prefix: str = ""
 
 
 class AuditConfig(BaseModel):
@@ -145,14 +151,17 @@ def format_record(record: Mapping[str, Any], fmt: str, prefix: str = "") -> str:
         )
     if record.get("kind") == "anchor":
         return f"{prefix}anchor sequence={record.get('sequence')} hash={record.get('hash')}"
-    attributes = "; ".join(record.get("attributes") or [])
-    text = (
-        f"{record.get('time', '')} {record.get('action', '')} {record.get('type', '')} "
-        f"{record.get('object', '')} by={record.get('author') or '-'} "
-        f"ip={record.get('ip') or '-'} result={record.get('result', '')} "
-        f"sequence={record.get('sequence', '')}"
-    )
-    return f"{prefix}{text}" + (f" [{attributes}]" if attributes else "")
+    # the layout the audit task forwarded before R7, then the chain position
+    parts = [
+        str(record.get("time", "")),
+        str(record.get("action", "")),
+        str(record.get("type", "")),
+        str(record.get("object", "")),
+        f"by {record.get('author') or '?'}",
+        str(record.get("result", "")),
+        f"sequence={record.get('sequence', '')}",
+    ]
+    return prefix + " ".join(p for p in parts if p)
 
 
 # -- transport ---------------------------------------------------------------------------------
@@ -171,6 +180,8 @@ class RecordSender(Protocol):
     """What the forwarding needs: :meth:`SyslogSender.send_record`."""
 
     def send_record(self, record: Mapping[str, Any], prefix: str = "") -> None: ...
+
+    def close(self) -> None: ...
 
 
 class SyslogSender:
@@ -262,7 +273,8 @@ class SyslogSender:
 
     def send_record(self, record: Mapping[str, Any], prefix: str = "") -> None:
         severity = 5 if record.get("result") == "failure" else 6
-        self.send(format_record(record, self.settings.format, prefix), severity=severity)
+        text = format_record(record, self.settings.format, prefix or self.settings.prefix)
+        self.send(text, severity=severity)
 
     def _close(self) -> None:
         sock, self._sock = self._sock, None
