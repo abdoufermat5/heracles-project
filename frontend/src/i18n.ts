@@ -1,5 +1,4 @@
-import i18n, { type BackendModule, type ResourceKey } from 'i18next'
-import LanguageDetector from 'i18next-browser-languagedetector'
+import i18n, { type BackendModule, type LanguageDetectorModule, type ResourceKey } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import en from './locales/en'
 
@@ -23,12 +22,36 @@ const lazyBackend: BackendModule = {
   },
 }
 
+const LANG_KEY = 'heracles.lang'
+
+/** The language picked earlier on this browser, else the browser's preferred languages. */
+const detector: LanguageDetectorModule = {
+  type: 'languageDetector',
+  init() {},
+  detect() {
+    try {
+      const saved = localStorage.getItem(LANG_KEY)
+      if (saved) return saved
+    } catch {
+      // storage blocked: fall through to the browser languages
+    }
+    return navigator.languages.length > 0 ? [...navigator.languages] : navigator.language
+  },
+  cacheUserLanguage(language) {
+    try {
+      localStorage.setItem(LANG_KEY, language)
+    } catch {
+      // storage blocked: the choice lasts for this page only
+    }
+  },
+}
+
 /**
  * Settles once the detected language is usable. A failed chunk load leaves the app on the
  * English fallback rather than blocking the first render.
  */
 export const i18nReady: Promise<void> = i18n
-  .use(LanguageDetector)
+  .use(detector)
   .use(lazyBackend)
   .use(initReactI18next)
   .init({
@@ -38,7 +61,6 @@ export const i18nReady: Promise<void> = i18n
     supportedLngs: ['en', 'fr'],
     nonExplicitSupportedLngs: true,
     interpolation: { escapeValue: false },
-    detection: { order: ['localStorage', 'navigator'], lookupLocalStorage: 'heracles.lang', caches: ['localStorage'] },
   })
   .then(
     () => undefined,

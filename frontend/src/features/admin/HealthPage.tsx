@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils'
 import { checkFormat } from '@/lib/formats'
 import { useCapabilities, useChecks, useFix } from './hooks'
 import type { CheckStatus, HealthCheck } from './types'
+import '@/locales/settings.register'
 
 const STATUS_STYLE: Record<
   CheckStatus,

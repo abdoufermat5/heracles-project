@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { attributeLabel } from '@/lib/labels'
 import { BlockedHint, FieldError, useLiveForm, type FieldErrors } from '@/lib/liveForm'
 import { validateAttribute } from '@/lib/validation'
+import '@/locales/settings.register'
 
 /**
  * Personal details an employee looks at or keeps up to date, in this order. Only

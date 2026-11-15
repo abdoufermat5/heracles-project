@@ -17,6 +17,7 @@ import { useCsvFields, useCsvImport, useCsvParse, useTemplates } from './hooks'
 import { guessMapping } from './mapping'
 import { FormField, NATIVE_SELECT, Notice, readFileText, WizardStepper } from './parts'
 import { checkFixedRow, checkMapping, type FixedRow } from './rules'
+import '@/locales/settings.register'
 
 const SEPARATORS = [
   { value: ',', key: 'comma' },

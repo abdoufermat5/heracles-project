@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { endDay, useMyEndDates } from '@/features/grants/hooks'
+import '@/locales/settings.register'
 
 export function GroupsSection() {
   const { t } = useTranslation()

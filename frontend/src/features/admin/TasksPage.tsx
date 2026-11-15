@@ -42,6 +42,7 @@ import {
 import { formatDateTime } from './format'
 import { useTaskActions, useTaskRuns, useTasks } from './hooks'
 import type { TaskReport, TaskRow, TaskRun } from './types'
+import '@/locales/settings.register'
 
 const ALL = '__all__'
 const KNOWN_STATUSES = ['Activated', 'Deactivated']

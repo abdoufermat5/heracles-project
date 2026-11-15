@@ -14,6 +14,7 @@ import type { LdifAction, LdifImportResponse } from './api'
 import { useLdifImport } from './hooks'
 import { FormField, Notice, readFileText, WizardStepper } from './parts'
 import { checkLdif } from './rules'
+import '@/locales/settings.register'
 
 const TONE: Record<LdifAction, 'success' | 'primary' | 'neutral' | 'warning' | 'destructive'> = {
   add: 'success',

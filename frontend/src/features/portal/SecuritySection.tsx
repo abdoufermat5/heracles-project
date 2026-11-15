@@ -2,6 +2,7 @@ import { ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { SecurityKeysPanel } from '@/features/me/SecurityKeysPanel'
 import { TwoFactorPanel } from '@/features/me/TwoFactorPanel'
+import '@/locales/settings.register'
 export function SecuritySection() {
   const { t } = useTranslation()
 

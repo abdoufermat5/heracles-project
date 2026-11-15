@@ -64,6 +64,7 @@ import {
 import { HooksSection } from './HooksSection'
 import { useConfig, useSaveConfig } from './hooks'
 import type { ConfigField, ConfigValue, ConfigView } from './types'
+import '@/locales/settings.register'
 
 const UNSET = '__unset__'
 

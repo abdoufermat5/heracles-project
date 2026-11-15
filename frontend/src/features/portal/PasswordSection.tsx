@@ -13,6 +13,7 @@ import { ReauthDialog } from '@/features/me/ReauthDialog'
 import { FieldError, useLiveForm, type FieldErrors } from '@/lib/liveForm'
 import { generatePassword, passwordStrength } from '@/lib/password'
 import { cn } from '@/lib/utils'
+import '@/locales/settings.register'
 
 const STRENGTH_COLORS = ['bg-muted', 'bg-destructive', 'bg-warning', 'bg-primary', 'bg-success']
 const STRENGTH_KEYS = [

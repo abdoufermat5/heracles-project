@@ -1,6 +1,7 @@
 import i18n from 'i18next'
 import { checkFormat, matchesFormat } from '@/lib/formats'
 import type { ConfigField, ConfigValue } from './types'
+import '@/locales/settings.register'
 
 export type ConfigGroupId =
   | 'general'

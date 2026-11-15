@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useCapabilities, usePlugins, useTogglePlugin } from './hooks'
 import type { PluginInfo } from './types'
+import '@/locales/settings.register'
 
 type Group = 'enabled' | 'available' | 'unavailable'
 

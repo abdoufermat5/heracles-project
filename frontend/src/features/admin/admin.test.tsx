@@ -9,7 +9,8 @@ import { createElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { qk } from '@/api/hooks'
 import i18n from '@/i18n'
-import en from '@/locales/en'
+import enBase from '@/locales/en'
+import { settingsEn } from '@/locales/settings'
 import fr from '@/locales/fr'
 import { adminMock } from '@/mocks/adminHandlers'
 import { BASE_DN } from '@/mocks/db'
@@ -26,6 +27,8 @@ import { useTogglePlugin } from './hooks'
 import { checkHook, MAX_COMMAND_LENGTH } from './hookRules'
 import { toggleRight } from './rights'
 import type { ConfigField } from './types'
+
+const en = { ...enBase, ...settingsEn }
 
 beforeEach(() => adminMock.reset())
 

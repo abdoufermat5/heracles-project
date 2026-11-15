@@ -1,6 +1,5 @@
 import { peopleEn } from './people'
 import { accessEn } from './access'
-import { settingsEn } from './settings'
 import { objectsEn } from './objects'
 import { labelsEn } from './labels'
 import { sidebarEn } from './sidebar'
@@ -39,7 +38,6 @@ const en = {
   ...labelsEn,
   ...peopleEn,
   ...accessEn,
-  ...settingsEn,
   ...sidebarEn,
   ...shellEn,
   ...resilienceEn,

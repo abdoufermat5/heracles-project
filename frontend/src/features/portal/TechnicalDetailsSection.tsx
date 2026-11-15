@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { Me } from '@/api/types'
 import { FactList, SectionCard } from '@/components/patterns/SectionCard'
 import { Badge } from '@/components/ui/badge'
+import '@/locales/settings.register'
 
 export function TechnicalDetailsSection({ me }: { me: Me }) {
   const { t } = useTranslation()

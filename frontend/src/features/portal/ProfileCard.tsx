@@ -5,6 +5,7 @@ import { OrgPath } from '@/components/patterns/OrgPath'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import '@/locales/settings.register'
 
 export function ProfileCard({
   me,
