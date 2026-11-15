@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 
 from heracles.auth.mail import Mailer, MailSettings
+from heracles.core.access_config import configure_access
 from heracles.storage import Database
 from heracles.storage.database import MEMORY
 from heracles.tasks.scheduler import Scheduler, SchedulerThread, TaskStore
@@ -74,6 +75,7 @@ def build_worker(config_path: str | os.PathLike[str] | None = None) -> Scheduler
 
     raw, api_settings, directories = load_config(config_path)
     configure_audit_syslog(raw.get("audit"))
+    configure_access(raw.get("access"))
     database = Database(api_settings.database.target or MEMORY)
     registry: TypeRegistry | Callable[[], TypeRegistry]
     if directories:

@@ -357,6 +357,7 @@ ATTRIBUTE_TYPES: tuple[AttributeType, ...] = (
     AttributeType(377, "hrcAuditChainBase", S.EXACT, single=True),
     AttributeType(378, "hrcAuditForwarded", S.INTEGER, single=True),
     AttributeType(379, "hrcAuditTasksRetentionCount", S.INTEGER, single=True),
+    AttributeType(380, "hrcGrantExpiry", S.EXACT),
 )
 
 OBJECT_CLASSES: tuple[ObjectClass, ...] = (
@@ -1110,4 +1111,5 @@ OBJECT_CLASSES: tuple[ObjectClass, ...] = (
         ObjectClass.AUXILIARY,
         may=("hrcAuditChainHead", "hrcAuditChainBase", "hrcAuditForwarded"),
     ),
+    ObjectClass(76, "hrcGrantExpiries", ObjectClass.AUXILIARY, may=("hrcGrantExpiry",)),
 )

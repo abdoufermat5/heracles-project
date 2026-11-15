@@ -153,3 +153,28 @@ def test_listing_sort_ignores_non_columns(service: ObjectService, directory: Fak
         )
     page = service.list("user", BASE, sort="userPassword", extra_attrs=["userPassword"])
     assert [row.values["uid"] for row in page.items] == ["a", "b"]
+
+
+def test_rename_keeps_grant_end_dates(
+    service: ObjectService, directory: FakeDirectory, refs: str
+) -> None:
+    import base64
+
+    acl_kind = f"acl:subtree:{base64.b64encode(ROLE_DN.encode()).decode()}"
+    directory.entries[dnlib.normalize(GROUP)].attrs["hrcGrantExpiry"] = [
+        f"20300101000000Z member {refs}".encode(),
+        f"20300101000000Z member {MANAGED}".encode(),
+    ]
+    directory.entries[dnlib.normalize(BASE)].attrs["hrcGrantExpiry"] = [
+        f"20300101000000Z {acl_kind} {refs}".encode()
+    ]
+    service.update("user", refs, {"main": {"values": {"uid": "jdupont"}}})
+    new = f"uid=jdupont,{PEOPLE}"
+    dates = directory.entries[dnlib.normalize(GROUP)].attrs["hrcGrantExpiry"]
+    assert dates == [
+        f"20300101000000Z member {new}".encode(),
+        f"20300101000000Z member {MANAGED}".encode(),
+    ]
+    assert directory.entries[dnlib.normalize(BASE)].attrs["hrcGrantExpiry"] == [
+        f"20300101000000Z {acl_kind} {new}".encode()
+    ]
