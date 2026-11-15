@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-import logging.handlers
 from collections.abc import Iterator
 from typing import Any
 from urllib.parse import quote
@@ -17,7 +15,7 @@ from heracles.server import build_demo_app
 from heracles.storage import Database
 from heracles.tasks import wiring
 from heracles.tasks.scheduler import RunRecord, Scheduler, TaskStore
-from heracles.tasks.syslog import AUDIT_LOGGER, configure_audit_syslog, syslog_configured
+from heracles.tasks.syslog import audit_sender, configure_audit_syslog, syslog_configured
 from heracles.tasks.wiring import attach_scheduler
 
 
@@ -27,15 +25,15 @@ def clean_audit_logger() -> Iterator[None]:
     configure_audit_syslog(None)
 
 
-def test_syslog_handler_is_bound_and_removed() -> None:
+def test_syslog_sender_is_configured_and_replaced() -> None:
     assert not syslog_configured()
     assert configure_audit_syslog({"syslog": {"address": "127.0.0.1:5514", "facility": "local3"}})
     assert syslog_configured()
-    handlers = logging.getLogger(AUDIT_LOGGER).handlers
-    assert sum(isinstance(h, logging.handlers.SysLogHandler) for h in handlers) == 1
-    # configuring again replaces the handler instead of stacking another one
+    first = audit_sender()
+    assert first is not None and first.settings.facility == "local3"
+    # configuring again replaces the sender
     assert configure_audit_syslog({"syslog": {"address": "127.0.0.1:5514"}})
-    assert len(logging.getLogger(AUDIT_LOGGER).handlers) == len(handlers)
+    assert audit_sender() is not first
     assert not configure_audit_syslog({})
     assert not syslog_configured()
 

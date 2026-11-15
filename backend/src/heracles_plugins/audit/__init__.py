@@ -80,6 +80,12 @@ class AuditTask(TaskObjectType):
                 min=0,
                 description=_("Events older than this are deleted; empty uses the default"),
             ),
+            IntAttr(
+                "hrcAuditTasksRetentionCount",
+                _("Events kept"),
+                min=0,
+                description=_("Older events beyond this number are deleted; empty keeps all"),
+            ),
             BooleanAttr(
                 "hrcAuditSyslogEnabled",
                 _("Forward events to syslog"),
