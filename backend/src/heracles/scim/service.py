@@ -809,9 +809,8 @@ class _Groups(_Ops):
                 if not name:
                     raise bad_request("displayName is required", INVALID_VALUE)
                 changes["cn"] = name
-            if ids is not None and set(i.lower() for i in ids) != {
-                i.lower() for i in old_ids or []
-            }:
+            ids = ids or []  # removing every member drops the attribute from the resource
+            if {i.lower() for i in ids} != {i.lower() for i in old_ids or []}:
                 if not ids:
                     raise bad_request("A group needs at least one member", INVALID_VALUE)
                 changes["member"] = self.member_dns(ids)
