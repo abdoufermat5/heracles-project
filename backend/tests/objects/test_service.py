@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 import pytest
@@ -506,6 +506,94 @@ def test_list_basic(service: ObjectService, directory: FakeDirectory) -> None:
         "values": {"uid": "u0", "cn": "User 0", "mail": "u0@x.org"},
         "locked": False,
     }
+
+
+class _Spy:
+    """Records the searches (filter, requested attributes) and reads of a directory."""
+
+    def __init__(self, directory: FakeDirectory, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.searches: list[tuple[str, list[str]]] = []
+        self.reads: list[tuple[str, list[str]]] = []
+        search, get = directory.search, directory.get
+
+        def spy_search(
+            base: str,
+            filterstr: str = "(objectClass=*)",
+            scope: Scope = Scope.SUBTREE,
+            attrs: Sequence[str] | None = None,
+            **kw: Any,
+        ) -> Iterator[Any]:
+            self.searches.append((filterstr, [a.lower() for a in attrs or []]))
+            return search(base, filterstr, scope, attrs, **kw)
+
+        def spy_get(dn: str, attrs: Sequence[str] | None = None) -> Any:
+            self.reads.append((dn, [a.lower() for a in attrs or []]))
+            return get(dn, attrs)
+
+        monkeypatch.setattr(directory, "search", spy_search)
+        monkeypatch.setattr(directory, "get", spy_get)
+
+    def clear(self) -> None:
+        self.searches.clear()
+        self.reads.clear()
+
+
+def test_list_reads_a_small_set_in_one_search(
+    service: ObjectService, directory: FakeDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_users(directory)
+    spy = _Spy(directory, monkeypatch)
+    page = service.list("user", BASE, limit=2)
+    assert [i.values["uid"] for i in page.items] == ["u0", "u1"]
+    assert len(spy.searches) == 1 and not spy.reads
+    assert {"uid", "cn", "mail"} <= set(spy.searches[0][1])
+
+
+def test_list_reads_a_large_set_light_and_the_page_rows_in_full(
+    directory: FakeDirectory, registry: TypeRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Once a listing is known to be large, the set is read with what orders it only."""
+    from heracles.objects import service as service_module
+    from heracles.objects.listing_cache import ListingCache, ListingScope
+
+    monkeypatch.setattr(service_module, "LIGHT_LISTING_MIN", 5)
+    seed_users(directory)
+    service = ObjectService(
+        directory, registry, listings=ListingScope(ListingCache(), "owner", object())
+    )
+    spy = _Spy(directory, monkeypatch)
+    service.list("user", BASE, limit=2)  # the first read learns the size: read in full
+    assert len(spy.searches) == 1 and not spy.reads
+
+    spy.clear()
+    page = service.list("user", BASE, limit=2, descending=True)
+    assert [i.values for i in page.items] == [
+        {"uid": "u4", "cn": "User 4", "mail": "u4@x.org"},
+        {"uid": "u3", "cn": "User 3", "mail": "u3@x.org"},
+    ]
+    assert page.total == 5
+    assert spy.searches == [("(objectClass=inetOrgPerson)", ["uid"])]
+    assert [dn for dn, _ in spy.reads] == [f"uid=u4,{PEOPLE}", f"uid=u3,{PEOPLE}"]
+    assert all({"uid", "cn", "mail"} <= set(attrs) for _, attrs in spy.reads)
+
+    spy.clear()  # the next page comes from the light snapshot: its rows only
+    second = service.list("user", BASE, limit=2, cursor=page.next_cursor, descending=True)
+    assert [i.values["uid"] for i in second.items] == ["u2", "u1"]
+    assert not spy.searches and [dn for dn, _ in spy.reads] == [
+        f"uid=u2,{PEOPLE}",
+        f"uid=u1,{PEOPLE}",
+    ]
+
+    spy.clear()  # a query is read in full whatever the size
+    service.list("user", BASE, query="user")
+    assert len(spy.searches) == 1 and not spy.reads
+
+    spy.clear()
+    service.list("user", BASE, sort="department")
+    assert spy.searches[0][1] == ["1.1"]  # the department comes from the DN
+    spy.clear()
+    service.list("user", BASE, sort="status", extra_attrs=["userPassword"])
+    assert spy.searches[0][1] == ["userpassword"]
 
 
 def test_list_paging_and_sort(service: ObjectService, directory: FakeDirectory) -> None:

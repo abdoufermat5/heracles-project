@@ -34,6 +34,8 @@ from heracles.ldap.client import Entry, Scope
 LISTING_TTL = 30.0
 #: Snapshots kept in total (all owners); bounds the memory used.
 MAX_SNAPSHOTS = 64
+#: Listings (type, base, scope) whose last matching-set size is remembered.
+MAX_SIZES = 256
 
 
 class ListingKey(NamedTuple):
@@ -60,6 +62,16 @@ class _Snapshot:
     version: object
     #: The session's change counter when the snapshot was made.
     epoch: int = 0
+    #: The entries hold the attributes that order them only; rows are read per page.
+    light: bool = False
+
+
+class SizeKey(NamedTuple):
+    """A listing regardless of who reads it, its query and its order."""
+
+    type_name: str
+    base: str
+    scope: Scope
 
 
 class ListingCache:
@@ -77,9 +89,17 @@ class ListingCache:
         self._clock = clock
         self._lock = threading.Lock()
         self._items: OrderedDict[ListingKey, _Snapshot] = OrderedDict()
+        self._sizes: OrderedDict[SizeKey, int] = OrderedDict()
 
     def get(self, key: ListingKey, version: object, epoch: int = 0) -> Sequence[Entry] | None:
         """The fresh snapshot of ``key`` made under ``version``, if any."""
+        found = self.fetch(key, version, epoch)
+        return found[0] if found is not None else None
+
+    def fetch(
+        self, key: ListingKey, version: object, epoch: int = 0
+    ) -> tuple[Sequence[Entry], bool] | None:
+        """Like :meth:`get`, with whether the entries are light (rows read per page)."""
         with self._lock:
             snap = self._items.get(key)
             if snap is None:
@@ -88,19 +108,37 @@ class ListingCache:
                 del self._items[key]
                 return None
             self._items.move_to_end(key)
-            return snap.entries
+            return snap.entries, snap.light
 
     def put(
-        self, key: ListingKey, version: object, entries: Sequence[Entry], epoch: int = 0
+        self,
+        key: ListingKey,
+        version: object,
+        entries: Sequence[Entry],
+        epoch: int = 0,
+        *,
+        light: bool = False,
     ) -> None:
         with self._lock:
             now = self._clock()
-            self._items[key] = _Snapshot(tuple(entries), now + self._ttl, version, epoch)
+            self._items[key] = _Snapshot(tuple(entries), now + self._ttl, version, epoch, light)
             self._items.move_to_end(key)
             for stale in [k for k, s in self._items.items() if s.expires <= now]:
                 del self._items[stale]
             while len(self._items) > self._max:
                 self._items.popitem(last=False)
+
+    def size(self, key: SizeKey) -> int | None:
+        """How many entries the directory returned the last time this listing was read."""
+        with self._lock:
+            return self._sizes.get(key)
+
+    def remember_size(self, key: SizeKey, size: int) -> None:
+        with self._lock:
+            self._sizes[key] = size
+            self._sizes.move_to_end(key)
+            while len(self._sizes) > MAX_SIZES:
+                self._sizes.popitem(last=False)
 
     def invalidate(self, owner: str) -> None:
         """Forget every snapshot of one owner."""
@@ -161,14 +199,25 @@ class ListingScope:
     def get(self, key: ListingKey) -> Sequence[Entry] | None:
         return self.cache.get(key, self.version, self.epoch)
 
-    def put(self, key: ListingKey, entries: Sequence[Entry]) -> None:
-        self.cache.put(key, self.version, entries, self.epoch)
+    def fetch(self, key: ListingKey) -> tuple[Sequence[Entry], bool] | None:
+        return self.cache.fetch(key, self.version, self.epoch)
+
+    def put(self, key: ListingKey, entries: Sequence[Entry], *, light: bool = False) -> None:
+        self.cache.put(key, self.version, entries, self.epoch, light=light)
+
+    def size(self, key: ListingKey) -> int | None:
+        return self.cache.size(SizeKey(key.type_name, key.base, key.scope))
+
+    def remember_size(self, key: ListingKey, size: int) -> None:
+        self.cache.remember_size(SizeKey(key.type_name, key.base, key.scope), size)
 
 
 __all__ = [
     "LISTING_TTL",
+    "MAX_SIZES",
     "MAX_SNAPSHOTS",
     "ListingCache",
     "ListingKey",
     "ListingScope",
+    "SizeKey",
 ]

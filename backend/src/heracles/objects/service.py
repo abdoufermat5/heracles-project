@@ -158,6 +158,14 @@ def _written_acl_entry(
     return None
 
 
+#: A listing whose matching set held this many entries the last time it was read is read
+#: light: the set with only what orders it, then the page's rows one base read each. Measured
+#: on OpenLDAP 2.6 over loopback: the 50 row reads cost about 45 ms a page, the light set
+#: saves about 20 ms per 1,000 entries (crossover near 2,500); the margin covers a server
+#: further away on the network (spec 16).
+LIGHT_LISTING_MIN = 10_000
+
+
 class ObjectService:
     """CRUD on typed objects, enforcing validation, the access policy and hooks."""
 
@@ -270,6 +278,10 @@ class ObjectService:
         directory and refreshes it, later pages reuse it while it is fresh. ``total``
         and ``next_cursor`` come from the snapshot. Changes made by other sessions
         show up once the snapshot expires or page one is loaded again.
+
+        A large listing (its last read returned :data:`LIGHT_LISTING_MIN` entries or more,
+        no query, no extra filter) reads the matching set with only what orders it (the DN
+        and the sort attribute), then the rows of the page in full, one base read each.
         """
         info = self.registry.get(type_name)
         base = base or self.directory.base_dn
@@ -277,6 +289,7 @@ class ObjectService:
         offset = _decode_cursor(cursor)
         limit = max(1, limit)
         entries: Sequence[Entry] | None = None
+        light = False
         listings = self.listings
         key: ListingKey | None = None
         if listings is not None:
@@ -290,10 +303,19 @@ class ObjectService:
                 extra_attrs,
                 extra_filter,
             )
-            if offset > 0:
-                entries = listings.get(key)
+            if offset > 0 and (found := listings.fetch(key)) is not None:
+                entries, light = found
         if entries is None:
-            entries = self._search_listing(
+            # Read the set light only where it pays (see LIGHT_LISTING_MIN); the first read
+            # of a listing after a start-up has no size to go by and reads it in full.
+            light = (
+                listings is not None
+                and key is not None
+                and not query
+                and not extra_filter
+                and (listings.size(key) or 0) >= LIGHT_LISTING_MIN
+            )
+            entries, raw = self._search_listing(
                 info,
                 base,
                 scope,
@@ -303,11 +325,16 @@ class ObjectService:
                 extra_attrs,
                 extra_filter,
                 filter_checks,
+                light=light,
             )
             if listings is not None and key is not None:
-                listings.put(key, entries)
+                listings.put(key, entries, light=light)
+                if not query and not extra_filter:
+                    listings.remember_size(key, raw)
 
         window = entries[offset : offset + limit]
+        if light:
+            window = self._full_rows(info, window, extra_attrs)
         more = offset + limit < len(entries)
         return ListPage(
             items=[self._row(info, e, locked) for e in window],
@@ -326,36 +353,36 @@ class ObjectService:
         extra_attrs: Sequence[str],
         extra_filter: str = "",
         filter_checks: Sequence[tuple[str, str]] = (),
-    ) -> list[Entry]:
-        """Readable entries of a listing, sorted (one directory search)."""
-        if scope == Scope.SUBTREE:
-            search_base, ldap_scope = base, Scope.SUBTREE
-        else:
-            search_base, ldap_scope = dnlib.join(info.type.rdn, base), Scope.ONE
+        *,
+        light: bool = False,
+    ) -> tuple[list[Entry], int]:
+        """Readable entries of a listing, sorted (one directory search), and how many
+        entries the directory returned before the ACL filtering.
+
+        ``light`` entries hold the attributes that order them only (see
+        :meth:`_order_attrs`); :meth:`_full_rows` then reads the rows of a page.
+        """
+        search_base, ldap_scope = self._listing_scope(info, base, scope)
         search_attrs = self._search_attrs(info)
         if query:
             search_attrs = self._readable_search_attrs(info, base, search_attrs)
             if not search_attrs:
                 # the caller cannot read any searched attribute: matching nothing keeps
                 # the query from revealing the values of hidden attributes
-                return []
+                return [], 0
         flt = filters.and_(
             info.type.filter, extra_filter, filters.text_query(search_attrs, query or "")
         )
-        wanted = list(
-            dict.fromkeys(
-                [*info.type.columns, info.type.main_attr, info.type.name_attr, *extra_attrs]
-            )
-        )
+        attrs = self._order_attrs(info, sort_key) if light else self._row_attrs(info, extra_attrs)
+        entries: list[Entry] = []
+        raw = 0
         try:
-            entries = [
-                e
-                for e in self.directory.search(
-                    search_base, flt, ldap_scope, [a for a in wanted if a]
-                )
-                if self.policy.can_read(e.dn, info.main_tab.name, info.type.main_attr)
-                and all(self.policy.can_read(e.dn, t, a) for t, a in filter_checks)
-            ]
+            for e in self.directory.search(search_base, flt, ldap_scope, attrs):
+                raw += 1
+                if self.policy.can_read(e.dn, info.main_tab.name, info.type.main_attr) and all(
+                    self.policy.can_read(e.dn, t, a) for t, a in filter_checks
+                ):
+                    entries.append(e)
         except NoSuchObjectError:
             entries = []
 
@@ -363,7 +390,42 @@ class ObjectService:
             return self._sort_text(info, e, sort_key).lower(), dnlib.normalize(e.dn)
 
         entries.sort(key=order, reverse=descending)
-        return entries
+        return entries, raw
+
+    @staticmethod
+    def _listing_scope(info: TypeInfo, base: str, scope: Scope) -> tuple[str, Scope]:
+        """Search base and scope of a listing (``ONE``: the type's container of ``base``)."""
+        if scope == Scope.SUBTREE:
+            return base, Scope.SUBTREE
+        return dnlib.join(info.type.rdn, base), Scope.ONE
+
+    @staticmethod
+    def _order_attrs(info: TypeInfo, sort_key: str) -> list[str]:
+        """Attributes the whole matching set is read with: what :meth:`_sort_text` uses."""
+        key = sort_key.lower()
+        if info.name == "user" and key == "department":
+            return ["1.1"]  # from the DN
+        if info.name == "user" and key == "status":
+            return ["userPassword"]
+        return [sort_key]
+
+    def _full_rows(
+        self, info: TypeInfo, window: Sequence[Entry], extra_attrs: Sequence[str]
+    ) -> list[Entry]:
+        """The entries of a page with every attribute of a row, in the order of ``window``.
+
+        One base read per row: the server finds an entry by its DN without any index, where
+        a search on the RDN values of the page scans the tree when they are not indexed. A
+        row deleted since the set was read is left out.
+        """
+        wanted = self._row_attrs(info, extra_attrs)
+        return [full for e in window if (full := self.directory.get(e.dn, wanted)) is not None]
+
+    @staticmethod
+    def _row_attrs(info: TypeInfo, extra_attrs: Sequence[str]) -> list[str]:
+        """Attributes a listing row is built from (with those ``locked`` needs)."""
+        names = [*info.type.columns, info.type.main_attr, info.type.name_attr, *extra_attrs]
+        return [a for a in dict.fromkeys(names) if a]
 
     def _sort_text(self, info: TypeInfo, entry: Entry, sort_key: str) -> str:
         """Text that orders one entry for ``sort_key`` (empty when it must not decide)."""
