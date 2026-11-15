@@ -19,6 +19,7 @@ import subprocess
 import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 
 HEADER = re.compile(r"^(?P<type>[a-z]+)(?:\((?P<scope>[^)]*)\))?(?P<bang>!)?: (?P<subject>.+)$")
 TAG = re.compile(r"^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
@@ -34,6 +35,17 @@ SECTIONS: tuple[tuple[str, str], ...] = (
     ("ci", "Continuous integration"),
 )
 SKIPPED = {"merge", "chore", "style", "revert-revert"}
+#: The changelog starts after this commit (``.changelog-base``): the initial development before
+#: it is summarised by :data:`BASELINE_NOTE` in the first section instead of commit by commit.
+BASE_FILE = Path(__file__).resolve().parents[1] / ".changelog-base"
+BASELINE_NOTE = (
+    "First public release. It brings the web console and the self-service portal for LDAP "
+    "directories (users, groups, roles, departments, delegated administration with roles and "
+    "ACLs), the Heracles LDAP schema, the plugins listed in manual/plugins.md, API v2 and API "
+    "v1 compatibility, SCIM 2.0 provisioning, scoped API tokens, the tamper-evident audit log, "
+    "access requests, time-bound grants and access reviews, backup and restore, and the "
+    "Kubernetes chart. Changes are listed commit by commit from the next release on."
+)
 SEP = "\x1e"
 FIELD = "\x1f"
 
@@ -94,10 +106,20 @@ def tags() -> list[tuple[str, str]]:
     return [(name, date) for name, date in pairs if TAG.match(name)]
 
 
+def base() -> str:
+    """The baseline commit, or ``""`` (whole history)."""
+    try:
+        return BASE_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return ""
+
+
 def releases(*, unreleased: bool = True) -> list[Release]:
     out: list[Release] = []
-    previous = ""
+    previous = base()
     for name, date in tags():
+        if previous and _is_ancestor(name, previous):
+            continue  # a tag at or before the baseline
         span = f"{previous}..{name}" if previous else name
         out.append(Release(name, date, commits(span)))
         previous = name
@@ -109,16 +131,23 @@ def releases(*, unreleased: bool = True) -> list[Release]:
     return list(reversed(out))
 
 
+def _is_ancestor(rev: str, of: str) -> bool:
+    run = subprocess.run(["git", "merge-base", "--is-ancestor", rev, of], check=False)  # noqa: S603, S607
+    return run.returncode == 0
+
+
 def _line(c: Commit) -> str:
     scope = f"**{c.scope}:** " if c.scope else ""
     return f"- {scope}{c.subject} ({c.sha})"
 
 
-def render(release: Release, *, heading: bool = True) -> str:
+def render(release: Release, *, heading: bool = True, first: bool = False) -> str:
     lines: list[str] = []
     if heading:
         title = release.name if not release.date else f"{release.name} — {release.date}"
         lines += [f"## {title}", ""]
+    if first and base():
+        lines += [BASELINE_NOTE, ""]
     breaking = [c for c in release.commits if c.breaking]
     if breaking:
         lines += ["### Breaking changes", ""]
@@ -146,7 +175,8 @@ def document(items: Iterable[Release]) -> str:
         "([Conventional Commits](https://www.conventionalcommits.org/)); versions follow the "
         "[versioning policy](manual/versioning.md).\n\n"
     )
-    return head + "\n".join(render(r) for r in items)
+    ordered = list(items)
+    return head + "\n".join(render(r, first=(i == len(ordered) - 1)) for i, r in enumerate(ordered))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -161,10 +191,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not found:
             print(f"changelog: no tag {args.release}", file=sys.stderr)
             return 2
-        text = render(found[0], heading=False)
+        oldest = releases(unreleased=False)[-1].name
+        text = render(found[0], heading=False, first=found[0].name == oldest)
     elif args.unreleased:
         pending = [r for r in releases() if r.name == "Unreleased"]
-        text = render(pending[0], heading=False) if pending else "No unreleased changes.\n"
+        first = not tags()
+        text = (
+            render(pending[0], heading=False, first=first)
+            if pending
+            else "No unreleased changes.\n"
+        )
     else:
         text = document(releases())
     if args.output:

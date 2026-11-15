@@ -2,9 +2,9 @@
 
 # Configuration reference
 
-The configuration file is `$HERACLES_CONFIG` (or `--config PATH`). Every setting is shown
-below with its comment, as in [`deploy/production/heracles.example.yaml`](../deploy/production/heracles.example.yaml); commented lines are optional settings with
-their default or an example value.
+The configuration file is `$HERACLES_CONFIG` (or `--config PATH`). Every setting is
+shown below with its comment, as in [`deploy/production/heracles.example.yaml`](../deploy/production/heracles.example.yaml); commented lines are optional settings
+with their default or an example value.
 
 Heracles configuration, fully commented. The setup wizard (or `heracles init`) writes a file like this one; write it by hand only if you prefer. Keep it readable by the Heracles user only: it holds the service account password. Nothing here is a real secret. Path: $HERACLES_CONFIG or `heracles serve --config PATH`.
 

@@ -41,10 +41,10 @@ def configuration() -> str:
     out = [
         NOTICE,
         "# Configuration reference\n\n",
-        "The configuration file is `$HERACLES_CONFIG` (or `--config PATH`). Every setting is shown\n",
-        "below with its comment, as in [`deploy/production/heracles.example.yaml`]",
-        "(../deploy/production/heracles.example.yaml); commented lines are optional settings with\n",
-        "their default or an example value.\n\n",
+        "The configuration file is `$HERACLES_CONFIG` (or `--config PATH`). Every setting is\n",
+        "shown below with its comment, as in [`deploy/production/heracles.example.yaml`]",
+        "(../deploy/production/heracles.example.yaml); commented lines are optional settings\n",
+        "with their default or an example value.\n\n",
     ]
     intro = [p.lstrip("# ").rstrip() for p in preamble if p.startswith("#")]
     if intro:
