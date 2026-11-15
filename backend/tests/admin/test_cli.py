@@ -211,3 +211,26 @@ def test_migrate_to_postgres_needs_a_destination(
 ) -> None:
     assert main(["db", "migrate-to-postgres", "--from", str(tmp_path / "h.db")]) == 2
     assert "HERACLES_DATABASE_URL" in capsys.readouterr().err
+
+
+def test_audit_verify_reports_the_first_break(
+    directory: MemoryDirectory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from heracles.core.audit import write_event
+    from heracles.ldap.client import Modification
+
+    dns = [
+        write_event(directory, action="login", object_type="user", object_dn=f"x{i}", author_dn="")
+        for i in range(3)
+    ]
+    assert run(directory, "audit", "verify") == 0
+    assert "OK: 3 chained events verified" in capsys.readouterr().out
+
+    directory.modify(dns[1], [Modification("replace", "hrcAuditAction", [b"logout"])])
+    assert run(directory, "audit", "verify") == 1
+    out = capsys.readouterr().out
+    assert f"FAIL: event 2 ({dns[1]}): content altered" in out
+
+    assert run(directory, "audit", "verify", "--json") == 1
+    data = json.loads(capsys.readouterr().out)
+    assert data["ok"] is False and data["first_break"]["sequence"] == 2

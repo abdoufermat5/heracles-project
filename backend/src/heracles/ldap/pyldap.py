@@ -372,6 +372,7 @@ class PyLdapDirectory:
         *,
         size_limit: int = 0,
         page_size: int = 500,
+        primary: bool = False,
     ) -> Iterator[Entry]:
         ldap = self._ldap
         ldap_scope = {
@@ -407,11 +408,22 @@ class PyLdapDirectory:
                     return results
                 paged.cookie = cookie
 
-        return iter(self._run(op, name="search"))
+        return iter(self._run(op, write=primary, name="search"))
 
     def get(self, dn: str, attrs: Sequence[str] | None = None) -> Entry | None:
         try:
             return next(self.search(dn, scope=Scope.BASE, attrs=attrs), None)
+        except NoSuchObjectError:
+            return None
+
+    def get_primary(self, dn: str, attrs: Sequence[str] | None = None) -> Entry | None:
+        """:meth:`get` from a server accepting writes (never a lagging replica).
+
+        For read-then-write sequences that must see the latest state, such as the head of
+        the audit hash chain.
+        """
+        try:
+            return next(self.search(dn, scope=Scope.BASE, attrs=attrs, primary=True), None)
         except NoSuchObjectError:
             return None
 

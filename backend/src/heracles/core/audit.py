@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import structlog
 
+from heracles.core import audit_chain
 from heracles.core.containers import ensure_container
 from heracles.core.generalized_time import format_generalized_time
 from heracles.ldap import dn as dnlib
@@ -54,6 +55,7 @@ EXTRA_ACTIONS = (
     "import",
     "task",
     "api_token",
+    "purge",
 )
 ACTIONS = (*OBJECT_ACTIONS, *EXTRA_ACTIONS)
 #: Attribute values longer than this are cut in the log.
@@ -90,15 +92,19 @@ def write_event(
     attributes: Sequence[str] = (),
     result: str = "success",
     now: datetime | None = None,
+    chained: bool = True,
 ) -> str:
-    """Create one event entry and return its DN (``author_dn`` may be empty: unknown author)."""
+    """Create one event entry and return its DN (``author_dn`` may be empty: unknown author).
+
+    The event is appended to the hash chain (:mod:`heracles.core.audit_chain`); ``chained``
+    false writes it outside (tests of the unchained layout written by older versions).
+    """
     moment = (now or datetime.now(UTC)).astimezone(UTC)
     container = audit_container(directory)
     ensure_container(directory, container)
     cn = f"{moment.strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
     attrs: dict[str, list[bytes]] = {
         "objectClass": [EVENT_CLASS.encode()],
-        "cn": [cn.encode()],
         "hrcAuditDateTime": [format_generalized_time(moment).encode()],
         "hrcAuditAction": [action.encode()],
         "hrcAuditObjectType": [object_type.encode()],
@@ -114,6 +120,14 @@ def write_event(
     lines = [f"via: {via}", *attributes] if via else list(attributes)
     if lines:
         attrs["hrcAuditAttributes"] = [a.encode() for a in lines[:MAX_ATTRIBUTES]]
+    if chained:
+        try:
+            return audit_chain.append(directory, container, attrs)
+        except audit_chain.ChainError as exc:
+            # the event must not be lost: write it outside the chain, which `audit verify`
+            # reports (old schema on the server, or constant contention)
+            log.warning("audit_chain_unavailable", action=action, error=str(exc))
+    attrs["cn"] = [cn.encode()]
     dn = f"cn={cn},{container}"
     directory.add(dn, attrs)
     return dn
