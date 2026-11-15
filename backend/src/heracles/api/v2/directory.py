@@ -2,34 +2,29 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
-from typing import cast
-
 import structlog
 from fastapi import APIRouter, Request, Response
 from webauthn import base64url_to_bytes
 from webauthn.helpers import bytes_to_base64url
 
+from heracles.api.accounts import USER_LOCK_ACL, set_account_lock
 from heracles.api.deps import CurrentUserDep, StateDep
 from heracles.api.domain import DomainDep
-from heracles.api.errors import forbidden, not_found, validation
+from heracles.api.errors import forbidden, not_found
 from heracles.api.etag import json_with_etag
 from heracles.api.stepup import require_recent_auth
 from heracles.attributes import JSON
-from heracles.auth.passwords import is_locked, lock, unlock
+from heracles.auth.passwords import is_locked
 from heracles.auth.second_factor import SecondFactorSummary
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Modification, NoSuchObjectError, Scope
-from heracles.objects import ObjectValidationError, UnknownTypeError
+from heracles.objects import UnknownTypeError
 from heracles.objects.policy import EventContext
 from heracles.schema.names import OC
 
 router = APIRouter(tags=["directory"])
 log = structlog.get_logger(__name__)
 
-#: ACL attribute protecting the account lock action (compatibility key).
-USER_LOCK_ACL = "userLock"
 #: ACL attribute protecting the administrators' view and reset of second factors.
 SECOND_FACTOR_ACL = "secondFactor"
 
@@ -111,63 +106,14 @@ def _kind(rdn: str) -> str:
 # ----------------------------------------------------------- account lock
 
 
-@contextmanager  # pyright: ignore[reportDeprecated]
-def _trigger_errors() -> Iterator[None]:
-    """A failing ``pre*`` trigger aborts the operation with its output."""
-    try:
-        yield
-    except ObjectValidationError as exc:
-        raise validation("The change was refused", exc.fields) from exc
-
-
-def _set_account_lock(
-    user: CurrentUserDep, domain: DomainDep, dn: str, locked: bool
-) -> dict[str, JSON]:
-    info = domain.registry.get("user")
-    evaluator = domain.evaluator(user)
-    if not evaluator.can_write_attr(dn, info.acl_object(info.main_tab), USER_LOCK_ACL):
-        raise forbidden("You cannot lock or unlock this account")
-    entry = user.directory.get(dn)
-    if entry is None or not entry.has_object_class("inetOrgPerson"):
-        raise not_found("User not found")
-    stored = entry.text("userPassword") or ""
-    new = lock(stored) if locked else unlock(stored)
-    changes: list[Modification] = []
-    if new != stored:
-        if new:
-            changes.append(Modification("replace", "userPassword", [new.encode()]))
-        else:
-            changes.append(Modification("delete", "userPassword"))
-    for hook in domain.registry.account_lock_hooks:
-        changes.extend(hook(entry, locked))
-    service, _policy = domain.service(user, "user")
-    events = domain.events(user)
-    before = service.load("user", dn)
-    pre = EventContext(type_name="user", dn=dn, before=before, after=before, changes=changes)
-    with _trigger_errors():
-        (events.pre_lock if locked else events.pre_unlock)(pre)
-    if changes:
-        user.directory.modify(dn, changes)
-    after = service.load("user", dn)
-    post = EventContext(type_name="user", dn=dn, before=before, after=after, changes=changes)
-    (events.post_lock if locked else events.post_unlock)(post)
-    warnings, messages = domain.collected(user)
-    result: dict[str, JSON] = {"dn": dn, "locked": is_locked(new)}
-    if warnings:
-        result["warnings"] = cast(JSON, warnings)
-    if messages:
-        result["messages"] = cast(JSON, messages)
-    return result
-
-
 @router.post("/users/{dn:path}/lock")
 def lock_account(dn: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
-    return _set_account_lock(user, domain, dn, True)
+    return set_account_lock(user, domain, dn, True)
 
 
 @router.post("/users/{dn:path}/unlock")
 def unlock_account(dn: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
-    return _set_account_lock(user, domain, dn, False)
+    return set_account_lock(user, domain, dn, False)
 
 
 # ---------------------------------------------------------- second factors
