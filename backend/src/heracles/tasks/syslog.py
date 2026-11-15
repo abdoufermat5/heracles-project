@@ -265,10 +265,19 @@ class SyslogSender:
         self.send(format_record(record, self.settings.format, prefix), severity=severity)
 
     def _close(self) -> None:
-        if self._sock is not None:
-            with contextlib.suppress(OSError):
-                self._sock.close()
-            self._sock = None
+        sock, self._sock = self._sock, None
+        if sock is None:
+            return
+        if self.stream:
+            # Half-close, then read what the collector sent (TLS session tickets): closing
+            # with unread data resets the connection, and the collector drops the last lines.
+            with contextlib.suppress(OSError, ValueError):
+                sock.settimeout(min(self.settings.timeout, 1.0))
+                sock.shutdown(socket.SHUT_WR)
+                while sock.recv(4096):
+                    pass
+        with contextlib.suppress(OSError):
+            sock.close()
 
     def close(self) -> None:
         with self._lock:

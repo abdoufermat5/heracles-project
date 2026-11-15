@@ -240,16 +240,17 @@ def test_tls_delivery_checks_the_collector(tmp_path: Path) -> None:
     cert, key = _certificate(tmp_path)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(cert, key)
-    server = _StreamServer(context, count=1)
+    server = _StreamServer(context, count=3)
     sender = SyslogSender(
         SyslogSettings(
             address=f"localhost:{server.port}", transport="tls", format="json", ca_file=str(cert)
         )
     )
-    sender.send_record(EVENT)
+    for _ in range(3):
+        sender.send_record(EVENT)
+    sender.close()  # the last lines must survive the close
     frames = server.join()
-    sender.close()
-    assert len(frames) == 1 and b'"sequence":7' in frames[0]
+    assert len(frames) == 3 and all(b'"sequence":7' in f for f in frames)
 
 
 def test_tls_refuses_an_unknown_collector(tmp_path: Path) -> None:
