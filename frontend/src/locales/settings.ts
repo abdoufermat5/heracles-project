@@ -188,7 +188,7 @@ export const settingsEn = {
         departments: 'Adds the department auxiliary object class to the organizational units.',
         duplicate_ids: 'Report only. Manually reassign duplicate numeric IDs on the conflicting entries to prevent Unix permission collisions.',
         plugin_data: 'Report only. Enable the plugin again, or clean up the entries.',
-        audit_chain: 'Report only. Load the current Heracles schema (make schema) into the directory server.',
+        audit_chain: 'Report only. Load deploy/ldap/schema/heracles.ldif (or heracles.schema) from this release into the directory server, then restart Heracles.',
         transport: 'Report only. Use an ldaps:// URI, or ldap:// with StartTLS, in the directory configuration.',
       },
       result: {

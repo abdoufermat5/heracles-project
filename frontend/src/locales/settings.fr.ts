@@ -186,7 +186,7 @@ export const settingsFr: typeof settingsEn = {
         departments: 'Ajoute la classe d\'objet de département aux unités organisationnelles.',
         duplicate_ids: 'Rapport seul. Réattribuez manuellement des identifiants uniques aux entrées en conflit.',
         plugin_data: 'Rapport seul. Réactivez le module ou nettoyez les entrées.',
-        audit_chain: 'Rapport seul. Chargez le schéma Heracles actuel (make schema) dans le serveur d\'annuaire.',
+        audit_chain: 'Rapport seul. Chargez deploy/ldap/schema/heracles.ldif (ou heracles.schema) de cette version dans le serveur d\'annuaire, puis redémarrez Heracles.',
         transport: 'Rapport seul. Utilisez une URI ldaps://, ou ldap:// avec StartTLS, dans la configuration de l\'annuaire.',
       },
       result: {

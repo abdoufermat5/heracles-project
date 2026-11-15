@@ -923,7 +923,8 @@ def check_audit_chain(ctx: CheckContext) -> CheckResult:
             "audit_chain",
             "warning",
             "The directory schema predates the audit hash chain (no hrcAuditChain class): "
-            "events are recorded without tamper evidence. Load the current Heracles schema.",
+            "events are recorded without tamper evidence. "
+            "Load deploy/ldap/schema/heracles.ldif from this release into the directory server.",
             message_key="audit_chain.missing",
         )
     return CheckResult(
