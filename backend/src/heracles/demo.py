@@ -99,6 +99,8 @@ def build_demo_directory() -> MemoryDirectory:
             "objectClass": [b"groupOfNames"],
             "cn": [b"lyon-staff"],
             "member": [user_dn("cdupont").encode(), user_dn("dlefevre").encode()],
+            # an owner makes the group requestable (access plugin) and approves the requests
+            "owner": [user_dn("cdupont").encode()],
         },
     )
     d.add(

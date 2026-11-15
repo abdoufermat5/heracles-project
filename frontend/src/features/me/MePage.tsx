@@ -8,6 +8,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useCapabilities } from '@/features/admin/hooks'
 import { ApiTokensPanel } from '@/features/me/ApiTokensPanel'
 import { SessionsPanel } from '@/features/me/SessionsPanel'
+import { useAccessAvailable } from '@/features/grants/hooks'
+import { MyReviewsSection } from '@/features/grants/MyReviewsSection'
+import { ApprovalsList, MyRequestsSection } from '@/features/grants/RequestsSections'
 import { GroupsSection } from '@/features/portal/GroupsSection'
 import { PasswordSection } from '@/features/portal/PasswordSection'
 import { ProfileCard } from '@/features/portal/ProfileCard'
@@ -21,6 +24,7 @@ export function MePage() {
   const { data: me, isPending: mePending } = useMe()
   const { data: caps } = useCapabilities()
   const technical = useTechnicalDetails()
+  const accessAvailable = useAccessAvailable()
 
   const userDn = me?.dn ?? null
   const { data: userObject, isPending: objectPending } = useObject('user', userDn)
@@ -91,6 +95,11 @@ export function MePage() {
 
       {/* My Groups (Read-only list) */}
       <GroupsSection />
+
+      {/* Access requests (access plugin): one's own, and those one approves (owners in the portal) */}
+      <MyRequestsSection />
+      {!isConsoleUser && <ApprovalsList hideWhenEmpty showDn={false} />}
+      {!isConsoleUser && <MyReviewsSection enabled={accessAvailable} />}
 
       {/* Technical details (Visible for console administrators when technical preference is enabled) */}
       {isConsoleUser && technical && (

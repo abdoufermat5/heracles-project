@@ -6,6 +6,7 @@ import { SectionCard } from '@/components/patterns/SectionCard'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { endDay, useMyEndDates } from '@/features/grants/hooks'
 
 export function GroupsSection() {
   const { t } = useTranslation()
@@ -15,6 +16,9 @@ export function GroupsSection() {
     staleTime: 60_000,
   })
   const groupRefs = data ?? []
+  const endDates = useMyEndDates()
+  const untilOf = new Map<string, string>()
+  for (const g of endDates.data?.items ?? []) untilOf.set(g.holder.toLowerCase(), endDay(g.until))
 
   return (
     <SectionCard
@@ -52,6 +56,11 @@ export function GroupsSection() {
                   <p className="text-micro text-muted-foreground uppercase tracking-wide">
                     {t('settingsUI.portal.groupMember')}
                   </p>
+                  {untilOf.get(group.dn.toLowerCase()) ? (
+                    <p className="text-small text-muted-foreground">
+                      {t('grants.until', { day: untilOf.get(group.dn.toLowerCase()) })}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <Badge variant="secondary" className="shrink-0 gap-1 text-micro">

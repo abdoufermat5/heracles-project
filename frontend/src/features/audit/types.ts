@@ -15,6 +15,8 @@ export type AuditAction =
   | 'task'
   | 'api_token'
   | 'purge'
+  | 'access_request'
+  | 'access_review'
   | 'lock'
   | 'unlock'
   | 'member_add'
@@ -35,6 +37,8 @@ export const AUDIT_ACTIONS: AuditAction[] = [
   'task',
   'api_token',
   'purge',
+  'access_request',
+  'access_review',
   'lock',
   'unlock',
   'member_add',

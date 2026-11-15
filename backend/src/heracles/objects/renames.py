@@ -9,6 +9,8 @@ rewrites the references after it.
 
 from __future__ import annotations
 
+import base64
+import binascii
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
@@ -16,6 +18,7 @@ import structlog
 
 from heracles.acl.model import AclAssignment
 from heracles.acl.parser import parse_assignment, serialise_assignment
+from heracles.core.audit import AUDIT_RDN
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Entry, Modification, Scope
 from heracles.objects import filters
@@ -76,6 +79,30 @@ def _rewrite_assignment(value: str, mapping: Mapping[str, str]) -> str | None:
     return serialise_assignment(replace(parsed, role_dn=role, members=members))
 
 
+#: End dates of grants (access plugin): ``<time> <kind> <member DN>``; an ACL kind carries
+#: the base64 role DN (``acl:<scope>:<role>``).
+GRANT_EXPIRY = "hrcGrantExpiry"
+
+
+def _rewrite_end_date(value: str, mapping: Mapping[str, str]) -> str | None:
+    stamp, _, rest = value.partition(" ")
+    kind, _, member = rest.partition(" ")
+    new_member = mapping.get(dnlib.normalize(member), member) if "=" in member else member
+    new_kind = kind
+    if kind.startswith("acl:"):
+        _, scope, role_b64 = [*kind.split(":", 2), "", ""][:3]
+        try:
+            role = base64.b64decode(role_b64.encode(), validate=True).decode()
+        except (binascii.Error, UnicodeError):
+            role = ""
+        moved = mapping.get(dnlib.normalize(role)) if role else None
+        if moved is not None:
+            new_kind = f"acl:{scope}:{base64.b64encode(moved.encode()).decode()}"
+    if new_member == member and new_kind == kind:
+        return None
+    return f"{stamp} {new_kind} {new_member}"
+
+
 def _modifications(
     entry: Entry, attributes: Sequence[str], mapping: Mapping[str, str]
 ) -> list[Modification]:
@@ -90,7 +117,18 @@ def _modifications(
         mods.append(
             Modification("replace", schema.ATTR.ACL_ENTRY, [v.encode("utf-8") for v in new_values])
         )
+    dates = entry.texts(GRANT_EXPIRY)
+    new_dates = [_rewrite_end_date(v, mapping) or v for v in dates]
+    if new_dates != dates:
+        mods.append(Modification("replace", GRANT_EXPIRY, [v.encode() for v in new_dates]))
     return mods
+
+
+def _is_audit_history(directory: DirectoryClient, dn: str) -> bool:
+    """Entries of the audit log (``ou=audit`` below the base), never rewritten."""
+    container = dnlib.normalize(dnlib.join(AUDIT_RDN, directory.base_dn))
+    normalized = dnlib.normalize(dn)
+    return normalized == container or normalized.endswith("," + container)
 
 
 def _apply(
@@ -100,6 +138,8 @@ def _apply(
     mapping: Mapping[str, str],
 ) -> None:
     for holder in holders:
+        if _is_audit_history(directory, holder.dn):
+            continue  # the audit log records the DN of the time; its hash chain forbids edits
         mods = _modifications(holder, attrs, mapping)
         if not mods:
             continue
@@ -127,7 +167,7 @@ def propagate(
     mapping = _moved(old_dns, old_root, new_root)
     attrs = dn_attributes(registry)
     base = directory.base_dn
-    wanted = [*attrs, schema.ATTR.ACL_ENTRY]
+    wanted = [*attrs, schema.ATTR.ACL_ENTRY, GRANT_EXPIRY]
     for start in range(0, len(old_dns), _CHUNK):
         chunk = list(old_dns[start : start + _CHUNK])
         clauses = [filters.equals(a, d) for d in chunk for a in attrs]
@@ -136,11 +176,12 @@ def propagate(
         except DirectoryError:
             continue
         _apply(directory, holders, attrs, mapping)
-    # ACL assignments hold the DNs base64 encoded: one pass over the entries carrying them.
+    # ACL assignments hold the DNs base64 encoded, and grant end dates hold them in text with
+    # a prefix: one pass over the entries carrying them (the member attributes were done above,
+    # so only these values change).
+    flt = f"(|({schema.ATTR.ACL_ENTRY}=*)({GRANT_EXPIRY}=*))"
     try:
-        carriers = list(
-            directory.search(base, f"({schema.ATTR.ACL_ENTRY}=*)", Scope.SUBTREE, wanted)
-        )
+        carriers = list(directory.search(base, flt, Scope.SUBTREE, wanted))
     except DirectoryError:
         return
     _apply(directory, carriers, [], mapping)

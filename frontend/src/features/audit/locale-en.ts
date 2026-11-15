@@ -54,6 +54,8 @@ export const auditEn = {
       member_add: 'Member added',
       api_token: 'API token',
       purge: 'Log purged',
+      access_request: 'Access request',
+      access_review: 'Access review',
       member_remove: 'Member removed',
     },
     results: {

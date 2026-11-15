@@ -213,6 +213,7 @@ PLUGIN_OBJECT_CLASSES: Final = frozenset(
         "hrcAuditEvent",
         "hrcAuditTasks",
         "hrcAuditChain",
+        "hrcGrantExpiries",
         "hrcArchivedObject",
         "hrcArchiveTasks",
         "hrcTasksLifeCycle",

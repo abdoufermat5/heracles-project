@@ -103,7 +103,8 @@ def dept(admin: Client) -> Iterator[str]:
 
 def test_ready_and_spa_served() -> None:
     r = httpx2.get(f"{URL}/readyz", timeout=10)
-    assert r.json() == {"status": "ok", "directories": {"main": True}}
+    ready = r.json()
+    assert ready["status"] == "ok" and ready["directories"]["main"]["ok"] is True
     page = httpx2.get(f"{URL}/types/user", timeout=10)  # SPA history fallback
     assert page.status_code == 200 and "<title>Heracles" in page.text
 

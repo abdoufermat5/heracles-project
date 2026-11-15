@@ -11,6 +11,7 @@ import { safetyFr } from './safety.fr'
 import { adminFr } from '@/features/admin/locale-fr'
 import { setupFr } from '@/features/setup/locale-fr'
 import { onboardingFr } from '@/features/onboarding/locale-fr'
+import { grantsFr } from '@/features/grants/locale-fr'
 import { auditFr } from '@/features/audit/locale-fr'
 import { meFr } from '@/features/me/locale-fr'
 import { publicFormsFr } from '@/features/public/locale-fr'
@@ -433,6 +434,7 @@ const fr: Translation = {
   },
   // --- P3 admin ---
   ...adminFr,
+  ...grantsFr,
   ...auditFr,
   ...setupFr,
   ...onboardingFr,

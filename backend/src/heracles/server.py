@@ -40,6 +40,7 @@ from heracles.attributes import set_default_password_checker, set_default_passwo
 from heracles.auth.mail import Mailer, MailSettings
 from heracles.auth.sessions import Session
 from heracles.core import setup_checks
+from heracles.core.access_config import configure_access
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient
 from heracles.ldap.config import load_settings
@@ -248,6 +249,7 @@ def build_app(
     raw, api_settings, directories = load_config(config_path)
     mailer = MailSettings.model_validate(raw.get("mail") or {}).build()
     configure_audit_syslog(raw.get("audit"))
+    configure_access(raw.get("access"))
     app = create_full_app(
         api_settings,
         directories,
