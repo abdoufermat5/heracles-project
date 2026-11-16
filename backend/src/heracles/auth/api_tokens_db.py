@@ -1,7 +1,8 @@
 """API tokens stored in the application database, shared by every worker process.
 
 The row keeps the SHA-256 of the secret, never the secret. ``owner_key`` is the normalised
-owner DN (listing and revoking do not depend on the letter case). ``types`` is a JSON list.
+owner DN (listing and revoking do not depend on the letter case). ``types`` and
+``allowed_ips`` are JSON lists.
 Recording a use (:meth:`SqlApiTokenStore.touch`) is a single autocommit statement, outside
 :meth:`~heracles.storage.Database.transaction` (on PostgreSQL that one takes a lock shared by
 the whole cluster).
@@ -41,23 +42,31 @@ MIGRATIONS: tuple[str, ...] = (
     CREATE INDEX api_tokens_owner_key ON api_tokens (owner_key);
     CREATE INDEX api_tokens_expires_at ON api_tokens (expires_at);
     """,
+    # 2026-11-16: networks the token may be used from (JSON list; empty: any address)
+    "ALTER TABLE api_tokens ADD COLUMN allowed_ips TEXT NOT NULL DEFAULT '[]';",
+    # 2026-11-16: identity of the owner entry (a re-created entry is another owner)
+    "ALTER TABLE api_tokens ADD COLUMN owner_stamp TEXT NOT NULL DEFAULT '';",
 )
 
 _SELECT = (
     "SELECT id, owner_dn, directory_id, name, scope, types, created_at, expires_at, created_by,"
-    " secret_hash, last_used_at, last_used_ip FROM api_tokens"
+    " secret_hash, last_used_at, last_used_ip, allowed_ips, owner_stamp FROM api_tokens"
 )
 _INSERT = (
     "INSERT INTO api_tokens (id, owner_dn, directory_id, name, scope, types, created_at,"
-    " expires_at, created_by, secret_hash, last_used_at, last_used_ip, owner_key)"
-    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    " expires_at, created_by, secret_hash, last_used_at, last_used_ip, owner_key, allowed_ips,"
+    " owner_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 
 
+def _strings(raw: str | None) -> tuple[str, ...]:
+    value: Any = json.loads(raw or "[]")
+    items = cast("list[object]", value) if isinstance(value, list) else []
+    return tuple(str(t) for t in items)
+
+
 def _row(row: Any) -> ApiToken:
-    raw_types: Any = json.loads(row["types"] or "[]")
-    items = cast("list[object]", raw_types) if isinstance(raw_types, list) else []
-    types = tuple(str(t) for t in items)
+    types = _strings(row["types"])
     last = row["last_used_at"]
     return ApiToken(
         id=row["id"],
@@ -72,6 +81,8 @@ def _row(row: Any) -> ApiToken:
         secret_hash=row["secret_hash"],
         last_used_at=None if last is None else float(last),
         last_used_ip=row["last_used_ip"] or "",
+        allowed_ips=_strings(row["allowed_ips"]),
+        owner_stamp=row["owner_stamp"] or "",
     )
 
 
@@ -101,6 +112,8 @@ class SqlApiTokenStore:
                     token.last_used_at,
                     token.last_used_ip,
                     dnlib.normalize(token.owner_dn),
+                    json.dumps(list(token.allowed_ips)),
+                    token.owner_stamp,
                 ),
             )
 

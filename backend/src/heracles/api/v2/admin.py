@@ -27,6 +27,7 @@ from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.settings import ApiSettings
 from heracles.api.state import AppState
 from heracles.attributes import attribute_key
+from heracles.auth.api_tokens import SESSION_KEY
 from heracles.core import config_store, formats, setup_checks
 from heracles.core.generalized_time import format_generalized_time, parse_generalized_time
 from heracles.ldap import dn as dnlib
@@ -68,8 +69,12 @@ IO_PLUGIN = "ldapmanager"
 
 
 def rights_of(user: CurrentUser, domain: Domain, key: str, dn: str | None = None) -> Rights:
-    """Rights of the connected user on one administration object key."""
-    if domain.is_admin(user.dn):
+    """Rights of the connected user on one administration object key.
+
+    An API token request always asks the evaluator, where the token's scope caps the rights
+    of an administrator too (a ``write`` token never writes administration objects).
+    """
+    if domain.is_admin(user.dn) and SESSION_KEY not in user.session.cache:
         return FULL_RIGHTS
     return domain.evaluator(user).permissions(dn or user.directory.base_dn, key)
 

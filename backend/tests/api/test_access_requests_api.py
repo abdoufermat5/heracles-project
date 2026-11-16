@@ -364,3 +364,37 @@ def test_requests_live_in_the_schedulers_database(client: TestClient) -> None:
     submit(client)
     database = cast(Database, client.app.state.task_store.database)  # type: ignore[attr-defined]
     assert [r.requester_dn for r in AccessRequestStore(database).list("main")] == [ASMITH]
+
+
+def test_tokens_read_the_queue_and_only_an_admin_token_decides(client: TestClient) -> None:
+    """Scripts may read and file requests; deciding one needs the ``admin`` scope; a review
+    decision (a person's attestation) is never made with a token."""
+    created = submit(client)
+    owner = as_user(client, "cdupont")
+
+    def token(scope: str) -> dict[str, str]:
+        r = owner.post(
+            "/auth/tokens", {"name": f"queue {scope}", "scope": scope, "expires_in_days": 7}
+        )
+        assert r.status_code == 201, r.text
+        return {"Authorization": f"Bearer {r.json()['secret']}"}
+
+    read, write, admin = token("read"), token("write"), token("admin")
+    client.cookies.clear()
+    queue = client.get("/api/v2/access/requests", params={"view": "to_approve"}, headers=read)
+    assert queue.status_code == 200, queue.text
+    assert [r["id"] for r in queue.json()["items"]] == [created["id"]]
+    assert client.get("/api/v2/access/queue", headers=read).json()["approvals"] == 1
+
+    approve = f"/api/v2/access/requests/{created['id']}/approve"
+    for headers in (read, write):
+        refused = client.post(approve, json={"comment": "ok"}, headers=headers)
+        assert refused.status_code == 403 and refused.json()["error"]["code"] == "token_scope"
+    done = client.post(approve, json={"comment": "ok"}, headers=admin)
+    assert done.status_code == 200, done.text
+    assert done.json()["request"]["status"] == "approved"
+
+    decision = client.post(
+        "/api/v2/access/reviews/1/items/1", json={"decision": "keep"}, headers=admin
+    )
+    assert decision.status_code == 403 and decision.json()["error"]["code"] == "token_scope"

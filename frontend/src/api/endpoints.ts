@@ -94,6 +94,16 @@ export const api = {
     request<ApiTokenCreated>('/auth/tokens', { method: 'POST', body }),
   revokeMyToken: (id: string) =>
     request<undefined>(`/auth/tokens/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  /** A service account's tokens (needs the right to set its password). */
+  listServiceAccountTokens: (dn: string) =>
+    request<ApiTokenInfo[]>(`/service-accounts/${dnPath(dn)}/tokens`),
+  /** Needs a recent sign-in (403 `reauth_required` otherwise); the answer holds the secret once. */
+  createServiceAccountToken: (dn: string, body: ApiTokenRequest) =>
+    request<ApiTokenCreated>(`/service-accounts/${dnPath(dn)}/tokens`, { method: 'POST', body }),
+  revokeServiceAccountToken: (dn: string, id: string) =>
+    request<undefined>(`/service-accounts/${dnPath(dn)}/tokens/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
   /** Someone's tokens (needs the right to lock their account). */
   listUserTokens: (dn: string) =>
     request<ApiTokenInfo[]>('/tokens', { query: { owner: dn } }),

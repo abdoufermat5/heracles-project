@@ -139,6 +139,21 @@ RULES: Final[tuple[Rule, ...]] = (
     _rule(_ANY, _V2 + "/admin/.*", ADMIN),
     _rule(_ANY, _V2 + "/(ldif|csv)/.*", ADMIN),
     _rule(frozenset({"POST"}), _V2 + "/invitations/send", ADMIN),
+    # -- plugins: tree views, the LDIF screen's capability probe
+    _rule(_SAFE, _V2 + "/(autofs|dhcp)/tree", READ),
+    _rule(_SAFE, _V2 + "/ldapmanager/access", ADMIN),
+    # -- plugin: access governance. Reading and filing requests is everyday work; deciding
+    # a request or running a review campaign is a deliberate grant (admin). A reviewer's
+    # decision on a review item is an attestation by a person: never with a token. The
+    # campaign report needs step-up, which a token never passes.
+    _rule(_SAFE, _V2 + "/access/(grants|me|queue|requestable|requests|reviews|status)", READ),
+    _rule(_SAFE, _V2 + r"/access/reviews/\{campaign_id\}", READ),
+    _rule(frozenset({"PUT"}), _V2 + "/access/grants", WRITE),
+    _rule(frozenset({"POST"}), _V2 + "/access/requests", WRITE),
+    _rule(frozenset({"POST"}), _V2 + r"/access/requests/\{request_id\}/cancel", WRITE),
+    _rule(frozenset({"POST"}), _V2 + r"/access/requests/\{request_id\}/(approve|reject)", ADMIN),
+    _rule(frozenset({"POST"}), _V2 + "/access/reviews", ADMIN),
+    _rule(frozenset({"POST"}), _V2 + r"/access/reviews/\{campaign_id\}/close", ADMIN),
     # -- API v1
     _rule(_SAFE, _V1 + r"/objects/\{type\}(/.*)?", READ),
     _rule(_MUTATING, _V1 + r"/objects/\{type\}(/.*)?", WRITE),
@@ -290,13 +305,19 @@ def authenticate(request: Request, state: AppState) -> CurrentUser:
     directory = state.directories.get(token.directory_id)
     if directory is None:
         raise _invalid("Unknown directory")
-    owner = directory.get(token.owner_dn, [STD_ATTR.USER_PASSWORD])
-    if owner is None:
+    owner = directory.get(token.owner_dn, [STD_ATTR.USER_PASSWORD, *api_tokens.OWNER_STAMP_ATTRS])
+    if owner is None or (
+        token.owner_stamp and api_tokens.owner_stamp(owner.text) != token.owner_stamp
+    ):
+        # gone, or deleted and created again under the same DN: another owner
         raise _invalid("The owner of this API token no longer exists")
     stored = owner.text(STD_ATTR.USER_PASSWORD) or ""
     if stored and is_locked(stored):
         raise _invalid("The owner of this API token is locked")
     ip = client_ip(request, state)
+    if not token.allows_ip(ip):
+        log.warning("api_token_refused_ip", token=token.id, ip=ip)
+        raise ApiError(403, "token_ip", "This API token may not be used from this address")
     if token.last_used_at is None or now - token.last_used_at >= TOUCH_INTERVAL_SECONDS:
         try:
             state.api_tokens.touch(token.id, now, ip)

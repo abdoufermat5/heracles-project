@@ -83,6 +83,47 @@ function inScope(dn: string, base: string, scope: string): boolean {
   return parts.length <= 2
 }
 
+/** The mock of a token creation, for the signed-in person or a service account. */
+async function mockCreateToken(request: Request, owner: string) {
+    const body = (await request.json()) as {
+      name?: string
+      scope?: string
+      types?: string[]
+      expires_in_days?: number
+      allowed_ips?: string[]
+    }
+    const fields: Record<string, string> = {}
+    const name = (body.name ?? '').trim()
+    if (!name) fields.name = 'Give the token a name'
+    if (!['read', 'write', 'admin'].includes(body.scope ?? '')) fields.scope = 'One of: read, write, admin'
+    const types = body.types ?? []
+    if (types.length > 0 && body.scope === 'admin') fields.types = 'An admin token cannot be limited to some types'
+    const days = body.expires_in_days ?? 0
+    if (days < 1 || days > 365) fields.expires_in_days = 'At most 365 days'
+    const networks = body.allowed_ips ?? []
+    const badNetwork = networks.find((n) => !/^[0-9a-fA-F:.]+(\/\d{1,3})?$/.test(n))
+    if (badNetwork) fields.allowed_ips = `Not an address or a network: ${badNetwork}`
+    if (Object.keys(fields).length > 0) return err(422, 'validation', 'Invalid token', { fields })
+    if (!db.reauthFresh) return err(403, 'reauth_required', 'Confirm your password to continue')
+    const now = Math.floor(Date.now() / 1000)
+    const id = (db.nextId++).toString(16).padStart(16, '0')
+    const token: ApiTokenInfo = {
+      id,
+      name,
+      owner_dn: owner,
+      created_by: db.session.user ?? '',
+      scope: body.scope as ApiTokenInfo['scope'],
+      types: [...types].sort(),
+      created_at: now,
+      expires_at: now + days * 86400,
+      last_used_at: null,
+      last_used_ip: '',
+      allowed_ips: networks.map((n) => (n.includes('/') ? n : `${n}/${n.includes(':') ? 128 : 32}`)),
+    }
+    db.apiTokens.push(token)
+    return HttpResponse.json({ ...token, secret: `hrc_${id}_${'m'.repeat(43)}` }, { status: 201 })
+}
+
 export const handlers: HttpHandler[] = [
   http.get(`${B}/auth/csrf`, () => HttpResponse.json({ token: db.csrf })),
   http.get(`${B}/directories`, () => HttpResponse.json(db.directories())),
@@ -372,32 +413,34 @@ export const handlers: HttpHandler[] = [
     `${B}/auth/tokens`,
     guarded(
       async ({ request }) => {
-        const body = (await request.json()) as { name?: string; scope?: string; types?: string[]; expires_in_days?: number }
-        const fields: Record<string, string> = {}
-        const name = (body.name ?? '').trim()
-        if (!name) fields.name = 'Give the token a name'
-        if (!['read', 'write', 'admin'].includes(body.scope ?? '')) fields.scope = 'One of: read, write, admin'
-        const types = body.types ?? []
-        if (types.length > 0 && body.scope === 'admin') fields.types = 'An admin token cannot be limited to some types'
-        const days = body.expires_in_days ?? 0
-        if (days < 1 || days > 365) fields.expires_in_days = 'At most 365 days'
-        if (Object.keys(fields).length > 0) return err(422, 'validation', 'Invalid token', { fields })
-        if (!db.reauthFresh) return err(403, 'reauth_required', 'Confirm your password to continue')
-        const now = Math.floor(Date.now() / 1000)
-        const id = (db.nextId++).toString(16).padStart(16, '0')
-        const token: ApiTokenInfo = {
-          id,
-          name,
-          owner_dn: db.session.user ?? '',
-          scope: body.scope as ApiTokenInfo['scope'],
-          types: [...types].sort(),
-          created_at: now,
-          expires_at: now + days * 86400,
-          last_used_at: null,
-          last_used_ip: '',
-        }
-        db.apiTokens.push(token)
-        return HttpResponse.json({ ...token, secret: `hrc_${id}_${'m'.repeat(43)}` }, { status: 201 })
+        return mockCreateToken(request, db.session.user ?? '')
+      },
+      { mutation: true },
+    ),
+  ),
+
+  http.get(
+    `${B}/service-accounts/:dn/tokens`,
+    guarded(({ params }) => {
+      const owner = dnParam(params.dn).toLowerCase()
+      return HttpResponse.json(db.apiTokens.filter((t) => t.owner_dn.toLowerCase() === owner))
+    }),
+  ),
+
+  http.post(
+    `${B}/service-accounts/:dn/tokens`,
+    guarded(async ({ request, params }) => mockCreateToken(request, dnParam(params.dn)), { mutation: true }),
+  ),
+
+  http.delete(
+    `${B}/service-accounts/:dn/tokens/:id`,
+    guarded(
+      ({ params }) => {
+        const owner = dnParam(params.dn).toLowerCase()
+        const target = db.apiTokens.find((t) => t.id === String(params.id) && t.owner_dn.toLowerCase() === owner)
+        if (!target) return err(404, 'not_found', 'Token not found')
+        db.apiTokens = db.apiTokens.filter((t) => t !== target)
+        return new HttpResponse(null, { status: 204 })
       },
       { mutation: true },
     ),

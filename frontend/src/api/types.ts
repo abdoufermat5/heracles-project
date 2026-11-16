@@ -101,6 +101,10 @@ export interface ApiTokenInfo {
   expires_at: number
   last_used_at: number | null
   last_used_ip: string
+  /** Networks (CIDR) it may be used from; empty: any address. */
+  allowed_ips: string[]
+  /** Who created it: the owner, or for a service account the person who minted it. */
+  created_by: string
 }
 
 /** The answer of a creation: the only time the token itself is shown. */
@@ -113,6 +117,8 @@ export interface ApiTokenRequest {
   scope: ApiTokenScope
   types: string[]
   expires_in_days: number
+  /** Addresses or networks (CIDR) it may be used from; empty: any address. */
+  allowed_ips: string[]
 }
 
 export interface ApiTokenLimits {

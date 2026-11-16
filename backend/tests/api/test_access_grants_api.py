@@ -123,3 +123,48 @@ def test_status_probe_needs_a_session(client: TestClient) -> None:
     assert a.get("/access/status").status_code == 401
     a.login("asmith")
     assert a.get("/access/status").json() == {"enabled": True}
+
+
+@pytest.mark.parametrize("configured_admin", [False, True], ids=["role", "admin_dns"])
+def test_a_write_token_cannot_date_an_acl_assignment(
+    directory: MemoryDirectory, configured_admin: bool
+) -> None:
+    """ACL assignments are administration: below the admin scope a token cannot touch their
+    end dates, even when its owner is an administrator (by role or by ``admin_dns``)."""
+    settings = ApiSettings(
+        admin_dns=[ADMIN] if configured_admin else [],
+        directory_labels={"main": "Demo"},
+        plugins=PluginsSettings(enabled=["*"]),
+    )
+    settings.session.cookie_secure = False
+    with TestClient(create_full_app(settings, {"main": directory})) as client:
+        _write_token_cannot_date_an_acl_assignment(client)
+
+
+def _write_token_cannot_date_an_acl_assignment(client: TestClient) -> None:
+    a = Api(client)
+    a.login("admin")
+
+    def token(scope: str) -> dict[str, str]:
+        r = a.post("/auth/tokens", {"name": scope, "scope": scope, "expires_in_days": 7})
+        assert r.status_code == 201, r.text
+        return {"Authorization": f"Bearer {r.json()['secret']}"}
+
+    write, admin = token("write"), token("admin")
+    helpdesk = f"uid=helpdesk,ou=people,{BASE}"
+    body: dict[str, object] = {
+        "holder": BASE,
+        "kind": "acl",
+        "member": helpdesk,
+        "acl_scope": "subtree",
+        "acl_role": f"cn=helpdesk,ou=aclroles,{BASE}",
+    }
+    client.cookies.clear()
+    for until in (soon(), None):
+        r = client.put("/api/v2/access/grants", json={**body, "until": until}, headers=write)
+        assert r.status_code == 403, r.text
+    # a membership is directory content: the write token dates it
+    member = {"holder": LYON_STAFF, "kind": "member", "member": CDUPONT, "until": soon()}
+    assert client.put("/api/v2/access/grants", json=member, headers=write).status_code == 200
+    done = client.put("/api/v2/access/grants", json={**body, "until": soon()}, headers=admin)
+    assert done.status_code == 200, done.text
