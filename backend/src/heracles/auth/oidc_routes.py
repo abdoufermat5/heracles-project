@@ -15,6 +15,7 @@ import structlog
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import RedirectResponse
 
+from heracles.acl._names import OC_ROLE
 from heracles.api.auth_audit import audit_login, audit_login_failed
 from heracles.api.deps import StateDep, session_from_cookie
 from heracles.api.errors import ApiError, not_found
@@ -29,6 +30,7 @@ from heracles.auth.oidc import (
     PendingStore,
     SqlPendingStore,
     claim_values,
+    mapped_roles,
     new_secret,
 )
 from heracles.auth.routes import (
@@ -39,8 +41,9 @@ from heracles.auth.routes import (
     _rate_limited,  # pyright: ignore[reportPrivateUsage]
     safe_next,
 )
+from heracles.auth.sessions import SESSION_ROLES_KEY
 from heracles.ldap import filter as ldap_filter
-from heracles.ldap.client import DirectoryClient, Scope
+from heracles.ldap.client import DirectoryClient, DirectoryError, Scope
 
 log = structlog.get_logger(__name__)
 
@@ -162,6 +165,32 @@ def _find_account(
     return found[0] if found else None
 
 
+_ACCOUNT = "simplesecurityobject"
+
+
+def _existing_roles(client: DirectoryClient, dns: list[str]) -> list[str]:
+    """The DNs of ``dns`` that name a role entry; others are logged and dropped.
+
+    Only role entries: a user, group or service account DN here would hand the session
+    someone else's assignments.
+    """
+    kept: list[str] = []
+    for dn in dns:
+        try:
+            entry = client.get(dn, ["objectClass"])
+        except DirectoryError:
+            entry = None
+        classes: set[str] = (
+            {c.lower() for c in entry.texts("objectClass")} if entry is not None else set()
+        )
+        # a service account is an organizationalRole too, but an account: never a role here
+        if entry is not None and OC_ROLE.lower() in classes and _ACCOUNT not in classes:
+            kept.append(entry.dn)
+        else:
+            log.warning("oidc_role_mapping_ignored", dn=dn)
+    return kept
+
+
 @router.get("/callback")
 def oidc_callback(
     request: Request,
@@ -219,11 +248,15 @@ def oidc_callback(
     if account_locked(directory, user_dn):
         audit_login_failed(state, request, directory, login, "oidc: account locked")
         return _failed()
+    roles = _existing_roles(directory, mapped_roles(settings, claims))
     state.limiter.record_success(key)
     response = RedirectResponse("/", status_code=302)
-    audit_login(state, request, directory, user_dn, "oidc")
+    audit_login(state, request, directory, user_dn, "oidc", session_roles=roles)
+    cache: dict[str, object] = {ID_TOKEN_KEY: id_token}
+    if roles:
+        cache[SESSION_ROLES_KEY] = roles
     methods = _open_session(
-        request, response, state, user_dn, directory_id, sso="oidc", cache={ID_TOKEN_KEY: id_token}
+        request, response, state, user_dn, directory_id, sso="oidc", cache=cache
     )
     response.headers["location"] = _landing(pending.next_path, methods)
     response.delete_cookie(STATE_COOKIE, path=_COOKIE_PATH)

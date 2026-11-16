@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from heracles.auth.sessions import SessionStore, session_ref
+from heracles.auth.sessions import SESSION_ROLES_KEY, SessionStore, session_ref
 from heracles.auth.sessions_db import MIGRATIONS, SqliteSessionStore
 from heracles.storage import Database
 
@@ -423,3 +423,16 @@ def test_sessions_survive_a_restart(tmp_path: Path) -> None:
         assert again.get(made.id) is not None
     finally:
         again_db.close()
+
+
+def test_roles_granted_at_sign_in_survive_rotation_and_other_processes(pair: Pair) -> None:
+    made = pair.first.create(DN, "main", second_factor_pending=True, second_factor_methods=["totp"])
+    mine = pair.first.get(made.id)
+    assert mine is not None
+    mine.cache[SESSION_ROLES_KEY] = ["cn=managers,ou=roles,dc=example,dc=org"]
+    pair.first.save(mine)
+    rotated = pair.first.rotate(made.id)  # completing the second factor rotates the id
+    assert rotated is not None
+    seen = pair.second.get(rotated.id)
+    assert seen is not None
+    assert seen.cache[SESSION_ROLES_KEY] == ["cn=managers,ou=roles,dc=example,dc=org"]

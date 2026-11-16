@@ -86,6 +86,10 @@ api:
   #   label: Example SSO                   # "Sign in with Example SSO" (default: generic text)
   #   # allowed_groups: [heracles-admins]  # only these values of groups_claim may sign in
   #   # groups_claim: groups
+  #   # role_mapping:                      # value of groups_claim -> directory roles held for
+  #   #   heracles-helpdesk:               # this session only (access rules; the directory
+  #   #     - cn=helpdesk,ou=roles,dc=example,dc=org   # entry is not changed; one DN per
+  #   #                                  # "- " line: a [..] list splits a DN at its commas)
   #   public_url: https://heracles.example.org
   #   # ca_cert_path: /etc/ssl/certs/internal-ca.pem
 

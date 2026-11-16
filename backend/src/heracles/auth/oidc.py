@@ -26,6 +26,7 @@ import httpx2
 import jwt
 from pydantic import BaseModel, Field, model_validator
 
+from heracles.ldap import dn as dnlib
 from heracles.storage import Database
 
 #: Signature algorithms accepted on an ID token. Asymmetric only: ``none`` and the HMAC
@@ -80,6 +81,9 @@ class OidcSettings(BaseModel):
     #: When set, the token must carry one of these values in ``groups_claim``.
     allowed_groups: list[str] = Field(default_factory=lambda: [])
     groups_claim: str = "groups"
+    #: Value of ``groups_claim`` -> DNs of directory roles the session holds for access rules
+    #: (in addition to the roles the person occupies in the directory). See spec 03.
+    role_mapping: dict[str, list[str]] = Field(default_factory=lambda: {})
     #: Base URL of this application as the provider redirects to it (default: as for CAS).
     public_url: str = ""
     #: CA bundle to verify the provider's certificate (empty: the system store).
@@ -95,6 +99,18 @@ class OidcSettings(BaseModel):
                 self.client_secret = path.read_text(encoding="utf-8").rstrip("\r\n")
             except OSError as exc:
                 raise ValueError(f"oidc: cannot read client_secret_file: {exc}") from None
+        for group, dns in self.role_mapping.items():
+            if not group.strip():
+                raise ValueError("oidc.role_mapping: a group value cannot be empty")
+            for dn in dns:
+                parts = dnlib.split(dn)
+                if not parts or any("=" not in part for part in parts):
+                    raise ValueError(f"oidc.role_mapping[{group}]: not a DN: {dn!r}")
+                if len(parts) < 2:  # a YAML [..] list splits a DN at its commas
+                    raise ValueError(
+                        f"oidc.role_mapping[{group}]: {dn!r} is not a full role DN"
+                        " (write one DN per '- ' line, not in a [..] list)"
+                    )
         if self.client_auth not in CLIENT_AUTH:
             raise ValueError(f"oidc.client_auth: one of {', '.join(CLIENT_AUTH)}")
         if self.enabled:
@@ -468,6 +484,21 @@ def claim_values(claims: Mapping[str, Any], name: str) -> list[str]:
     return []
 
 
+def mapped_roles(settings: OidcSettings, claims: Mapping[str, Any]) -> list[str]:
+    """Role DNs ``role_mapping`` grants for the groups the ID token carries (no duplicates)."""
+    if not settings.role_mapping:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for group in claim_values(claims, settings.groups_claim):
+        for dn in settings.role_mapping.get(group, ()):
+            key = dnlib.normalize(dn)
+            if key not in seen:
+                seen.add(key)
+                out.append(dn)
+    return out
+
+
 __all__ = [
     "ALGORITHMS",
     "MemoryPendingStore",
@@ -480,5 +511,6 @@ __all__ = [
     "SqlPendingStore",
     "claim_values",
     "code_challenge",
+    "mapped_roles",
     "new_secret",
 ]

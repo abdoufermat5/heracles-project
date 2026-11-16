@@ -25,6 +25,12 @@ api:
     client_secret: e2e-oidc-client-secret
     claim: preferred_username
     label: the test provider
+    # members of heracles-readers at the provider hold this role for their session (the role
+    # and its ACL assignment are created by frontend/e2e/oidc.spec.ts)
+    # (one DN per "- " line: a [..] list would split each DN at its commas)
+    role_mapping:
+      heracles-readers:
+        - cn=e2e-oidc-readers,ou=roles,dc=heracles,dc=test
   # The browser reaches the container through the Docker network gateway (the Vite dev server
   # proxy, a published port): believe X-Forwarded-For from that gateway (Docker bridge networks
   # live in 172.16.0.0/12) so the audit log and the sessions list show the real client address
