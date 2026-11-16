@@ -603,3 +603,26 @@ EXPECTED_ROUTES: dict[str, list[str]] = {
         "PUT /api/v2/admin/hooks",
     ],
 }
+
+
+# -- network allow-list ---------------------------------------------------------------------------
+def test_a_token_limited_to_networks_is_refused_elsewhere(app: FastAPI, state: AppState) -> None:
+    me = Api(app).login("helpdesk")
+    bad = me.create(allowed_ips=["10.0.0.0/8", "nope"])
+    assert bad.status_code == 422 and "allowed_ips" in bad.json()["error"]["fields"]
+    many = me.create(allowed_ips=[f"10.0.0.{i}" for i in range(40)])
+    assert many.status_code == 422 and "allowed_ips" in many.json()["error"]["fields"]
+
+    r = me.create(allowed_ips=["10.20.0.0/16", "192.0.2.7"])
+    assert r.status_code == 201, r.text
+    assert r.json()["allowed_ips"] == ["10.20.0.0/16", "192.0.2.7/32"]
+    auth = {"Authorization": f"Bearer {r.json()['secret']}"}
+
+    inside = TestClient(app, base_url="http://testserver", client=("10.20.3.4", 40000))
+    assert inside.get("/api/v2/auth/me", headers=auth).status_code == 200
+    outside = TestClient(app, base_url="http://testserver", client=("10.21.0.1", 40000))
+    refused = outside.get("/api/v2/auth/me", headers=auth)
+    assert refused.status_code == 403 and refused.json()["error"]["code"] == "token_ip"
+    # the refused attempt is not recorded as a use
+    token = state.api_tokens.get(r.json()["id"])
+    assert token is not None and token.last_used_ip == "10.20.3.4"

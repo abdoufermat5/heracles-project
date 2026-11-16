@@ -372,7 +372,13 @@ export const handlers: HttpHandler[] = [
     `${B}/auth/tokens`,
     guarded(
       async ({ request }) => {
-        const body = (await request.json()) as { name?: string; scope?: string; types?: string[]; expires_in_days?: number }
+        const body = (await request.json()) as {
+          name?: string
+          scope?: string
+          types?: string[]
+          expires_in_days?: number
+          allowed_ips?: string[]
+        }
         const fields: Record<string, string> = {}
         const name = (body.name ?? '').trim()
         if (!name) fields.name = 'Give the token a name'
@@ -381,6 +387,9 @@ export const handlers: HttpHandler[] = [
         if (types.length > 0 && body.scope === 'admin') fields.types = 'An admin token cannot be limited to some types'
         const days = body.expires_in_days ?? 0
         if (days < 1 || days > 365) fields.expires_in_days = 'At most 365 days'
+        const networks = body.allowed_ips ?? []
+        const badNetwork = networks.find((n) => !/^[0-9a-fA-F:.]+(\/\d{1,3})?$/.test(n))
+        if (badNetwork) fields.allowed_ips = `Not an address or a network: ${badNetwork}`
         if (Object.keys(fields).length > 0) return err(422, 'validation', 'Invalid token', { fields })
         if (!db.reauthFresh) return err(403, 'reauth_required', 'Confirm your password to continue')
         const now = Math.floor(Date.now() / 1000)
@@ -395,6 +404,7 @@ export const handlers: HttpHandler[] = [
           expires_at: now + days * 86400,
           last_used_at: null,
           last_used_ip: '',
+          allowed_ips: networks.map((n) => (n.includes('/') ? n : `${n}/${n.includes(':') ? 128 : 32}`)),
         }
         db.apiTokens.push(token)
         return HttpResponse.json({ ...token, secret: `hrc_${id}_${'m'.repeat(43)}` }, { status: 201 })

@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { formatRelative } from '@/features/audit/format'
 import { ReauthDialog } from './ReauthDialog'
 
@@ -61,6 +62,7 @@ export function TokenRow({
   const facts = [
     t(`apiTokens.scopes.${token.scope}`),
     token.types.length > 0 ? token.types.join(', ') : t('apiTokens.allTypes'),
+    ...(token.allowed_ips.length > 0 ? [t('apiTokens.from', { networks: token.allowed_ips.join(', ') })] : []),
     t('apiTokens.expires', { when: when(token.expires_at) }),
     token.last_used_at !== null
       ? t('apiTokens.lastUsed', { when: when(token.last_used_at), ip: token.last_used_ip })
@@ -184,6 +186,7 @@ function CreateTokenDialog({
   const [days, setDays] = useState(String(lifetimes.includes(90) ? 90 : (lifetimes.at(-1) ?? maxDays)))
   const [limited, setLimited] = useState(false)
   const [chosen, setChosen] = useState<string[]>([])
+  const [networks, setNetworks] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [needsReauth, setNeedsReauth] = useState(false)
   const [created, setCreated] = useState<ApiTokenCreated | null>(null)
@@ -193,6 +196,7 @@ function CreateTokenDialog({
     setScope('read')
     setLimited(false)
     setChosen([])
+    setNetworks('')
     setFieldErrors({})
     setCreated(null)
   }
@@ -208,6 +212,10 @@ function CreateTokenDialog({
         scope,
         types: limited && scope !== 'admin' ? chosen : [],
         expires_in_days: Number(days),
+        allowed_ips: networks
+          .split(/[\s,]+/)
+          .map((n) => n.trim())
+          .filter(Boolean),
       }),
     onSuccess: async (r) => {
       setCreated(r)
@@ -325,6 +333,26 @@ function CreateTokenDialog({
                   )}
                 </div>
               )}
+              <div className="grid gap-1.5">
+                <Label htmlFor="token-networks">{t('apiTokens.allowedIps')}</Label>
+                <Textarea
+                  id="token-networks"
+                  value={networks}
+                  rows={2}
+                  spellCheck={false}
+                  placeholder={t('apiTokens.allowedIpsPlaceholder')}
+                  onChange={(e) => setNetworks(e.target.value)}
+                  aria-invalid={fieldErrors.allowed_ips ? true : undefined}
+                  aria-describedby="token-networks-help"
+                  className="font-mono text-body"
+                />
+                <p id="token-networks-help" className="text-caption text-muted-foreground">
+                  {t('apiTokens.allowedIpsHelp')}
+                </p>
+                {fieldErrors.allowed_ips && (
+                  <p className="text-caption text-destructive">{fieldErrors.allowed_ips}</p>
+                )}
+              </div>
               <DialogFooter>
                 <Button type="button" variant="outline" size="sm" onClick={close}>
                   {t('apiTokens.cancel')}

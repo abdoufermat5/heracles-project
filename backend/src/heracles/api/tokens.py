@@ -312,6 +312,9 @@ def authenticate(request: Request, state: AppState) -> CurrentUser:
     if stored and is_locked(stored):
         raise _invalid("The owner of this API token is locked")
     ip = client_ip(request, state)
+    if not token.allows_ip(ip):
+        log.warning("api_token_refused_ip", token=token.id, ip=ip)
+        raise ApiError(403, "token_ip", "This API token may not be used from this address")
     if token.last_used_at is None or now - token.last_used_at >= TOUCH_INTERVAL_SECONDS:
         try:
             state.api_tokens.touch(token.id, now, ip)

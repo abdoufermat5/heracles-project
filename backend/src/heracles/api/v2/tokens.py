@@ -39,6 +39,8 @@ class TokenOut(BaseModel):
     expires_at: float
     last_used_at: float | None
     last_used_ip: str
+    #: Networks (CIDR) the token may be used from; empty: any address.
+    allowed_ips: list[str]
 
 
 class TokenCreate(BaseModel):
@@ -47,6 +49,8 @@ class TokenCreate(BaseModel):
     #: Object types the token is limited to (empty: every type).
     types: list[str] = Field(default_factory=lambda: [])
     expires_in_days: Annotated[int, Field(ge=1)]
+    #: Addresses or networks (CIDR) the token may be used from (empty: any address).
+    allowed_ips: list[str] = Field(default_factory=lambda: [])
 
 
 class TokenCreated(TokenOut):
@@ -71,6 +75,7 @@ def _out(token: ApiToken) -> TokenOut:
         expires_at=token.expires_at,
         last_used_at=token.last_used_at,
         last_used_ip=token.last_used_ip,
+        allowed_ips=list(token.allowed_ips),
     )
 
 
@@ -143,6 +148,14 @@ def create_token(
         fields["types"] = f"Unknown object types: {', '.join(unknown)}"
     if body.expires_in_days > cfg.max_lifetime_days:
         fields["expires_in_days"] = f"At most {cfg.max_lifetime_days} days"
+    networks: tuple[str, ...] = ()
+    if len([n for n in body.allowed_ips if n.strip()]) > api_tokens.MAX_ALLOWED_IPS:
+        fields["allowed_ips"] = f"At most {api_tokens.MAX_ALLOWED_IPS} addresses or networks"
+    else:
+        try:
+            networks = api_tokens.normalize_networks(body.allowed_ips)
+        except ValueError as exc:
+            fields["allowed_ips"] = f"Not an address or a network: {exc}"
     if fields:
         raise validation("Invalid token", fields)
     require_recent_auth(state, user.session)
@@ -162,6 +175,7 @@ def create_token(
         expires_at=now + body.expires_in_days * DAY,
         created_by=user.dn,
         now=now,
+        allowed_ips=networks,
     )
     state.api_tokens.add(created.token)
     token = created.token
@@ -172,6 +186,7 @@ def create_token(
         user.dn,
         f"created: {token.id} '{token.name}' scope={token.scope}"
         + (f" types={','.join(token.types)}" if token.types else "")
+        + (f" from={','.join(token.allowed_ips)}" if token.allowed_ips else "")
         + f" days={body.expires_in_days}",
     )
     return TokenCreated(**_out(token).model_dump(), secret=created.secret)

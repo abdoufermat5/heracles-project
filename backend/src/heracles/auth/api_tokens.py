@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import re
 import secrets
 import threading
@@ -62,10 +63,47 @@ class ApiToken:
     secret_hash: str
     last_used_at: float | None = None
     last_used_ip: str = ""
+    #: Networks (CIDR) the token may be used from; empty: any address.
+    allowed_ips: tuple[str, ...] = ()
 
     def allows(self, scope: str) -> bool:
         """Whether the token's level includes ``scope``."""
         return SCOPES.index(self.scope) >= SCOPES.index(scope)
+
+    def allows_ip(self, ip: str) -> bool:
+        """Whether a request from ``ip`` may use the token (an unreadable address may not)."""
+        if not self.allowed_ips:
+            return True
+        try:
+            address = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        return any(address in ipaddress.ip_network(net) for net in self.allowed_ips)
+
+
+#: Most networks one token may list.
+MAX_ALLOWED_IPS: Final = 32
+
+
+def normalize_networks(values: Iterable[str]) -> tuple[str, ...]:
+    """Networks in their canonical CIDR form (an address alone is a /32 or /128).
+
+    Raises ``ValueError`` naming the first value that is not an address or a network.
+    """
+    out: list[str] = []
+    for raw in values:
+        text = raw.strip()
+        if not text:
+            continue
+        try:
+            network = ipaddress.ip_network(text, strict=False)
+        except ValueError:
+            raise ValueError(text) from None
+        if str(network) not in out:
+            out.append(str(network))
+    if len(out) > MAX_ALLOWED_IPS:
+        raise ValueError(f"more than {MAX_ALLOWED_IPS} networks")
+    return tuple(out)
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +145,7 @@ def generate(
     expires_at: float,
     created_by: str,
     now: float,
+    allowed_ips: Iterable[str] = (),
 ) -> NewToken:
     if scope not in SCOPES:
         raise ValueError(f"unknown scope {scope!r}")
@@ -123,6 +162,7 @@ def generate(
         expires_at=expires_at,
         created_by=created_by,
         secret_hash=hash_secret(secret),
+        allowed_ips=normalize_networks(allowed_ips),
     )
     return NewToken(token, f"{PREFIX}{token_id}_{secret}")
 

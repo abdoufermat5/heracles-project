@@ -95,3 +95,46 @@ def test_scope_levels() -> None:
             created_by=OWNER,
             now=0.0,
         )
+
+
+def test_allowed_networks_round_trip_and_match(store: ApiTokenStore) -> None:
+    created = api_tokens.generate(
+        owner_dn=OWNER,
+        directory_id="main",
+        name="ci",
+        scope="read",
+        types=(),
+        expires_at=2000.0,
+        created_by=OWNER,
+        now=1000.0,
+        allowed_ips=[" 10.1.0.0/16 ", "192.0.2.7", "2001:db8::/32", "10.1.2.3/16"],
+    ).token
+    # canonical networks, an address alone is a host network, duplicates folded
+    assert created.allowed_ips == ("10.1.0.0/16", "192.0.2.7/32", "2001:db8::/32")
+    store.add(created)
+    loaded = store.get(created.id)
+    assert loaded is not None and loaded.allowed_ips == created.allowed_ips
+    assert loaded.allows_ip("10.1.200.4") and loaded.allows_ip("2001:db8::1")
+    assert not loaded.allows_ip("10.2.0.1") and not loaded.allows_ip("not-an-address")
+    assert _new().token.allows_ip("203.0.113.9")  # no list: any address
+
+
+def test_bad_networks_are_refused() -> None:
+    with pytest.raises(ValueError, match="nope"):
+        api_tokens.normalize_networks(["10.0.0.0/8", "nope"])
+
+
+def test_a_database_of_the_first_schema_gains_the_column(tmp_path: Path) -> None:
+    from heracles.auth.api_tokens_db import COMPONENT, MIGRATIONS
+
+    database = Database(tmp_path / "heracles.db")
+    database.migrate(COMPONENT, MIGRATIONS[:1])
+    with database.transaction() as conn:
+        conn.execute(
+            "INSERT INTO api_tokens (id, owner_dn, owner_key, directory_id, name, scope,"
+            " created_at, expires_at, created_by, secret_hash)"
+            " VALUES ('0123456789abcdef', ?, ?, 'main', 'old', 'read', 1, 2, ?, 'h')",
+            (OWNER, OWNER.lower(), OWNER),
+        )
+    old = SqlApiTokenStore(database).get("0123456789abcdef")
+    assert old is not None and old.allowed_ips == () and old.allows_ip("198.51.100.1")
