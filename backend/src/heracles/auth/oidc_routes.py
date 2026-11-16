@@ -93,6 +93,12 @@ def _redirect_uri(request: Request, state: AppState) -> str:
     return f"{_public_base(request, state)}/api/v2/auth/oidc/callback"
 
 
+def _same(a: str, b: str) -> bool:
+    """Constant-time comparison of two strings of any characters (compare_digest refuses
+    non-ASCII ``str``)."""
+    return secrets.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
+
+
 def _failed(response: RedirectResponse | None = None) -> RedirectResponse:
     out = response or RedirectResponse(_FAILURE, status_code=302)
     out.headers["location"] = _FAILURE
@@ -171,7 +177,7 @@ def oidc_callback(
     if error:
         log.info("oidc_provider_error", error=error[:64])
         return _failed()
-    if not code or not state_param or not cookie or not secrets.compare_digest(cookie, state_param):
+    if not code or not state_param or not cookie or not _same(cookie, state_param):
         log.info("oidc_state_mismatch")
         return _failed()
     pending = _pending(request, state).take(state_param, state.clock())
@@ -227,8 +233,11 @@ def oidc_callback(
 
 @router.get("/logout")
 def oidc_logout(request: Request, state: StateDep) -> RedirectResponse:
-    """End the Heracles session, then the provider's (when it says how)."""
-    _enabled(state)
+    """End the Heracles session, then the provider's (when it says how).
+
+    Answers even when the sign-in is switched off: a browser holding a session opened through
+    it must still be able to sign out.
+    """
     session = session_from_cookie(request, state)
     id_token = ""
     if session is not None:
@@ -239,8 +248,10 @@ def oidc_logout(request: Request, state: StateDep) -> RedirectResponse:
                 hook(session)
             except Exception:
                 log.exception("logout_hook_failed")
-    back = f"{_public_base(request, state)}/login"
-    destination = _client(request, state).logout_url(id_token, back) or "/login"
+    destination = "/login"
+    if state.settings.oidc.enabled:
+        back = f"{_public_base(request, state)}/login"
+        destination = _client(request, state).logout_url(id_token, back) or "/login"
     response = RedirectResponse(destination, status_code=302)
     response.delete_cookie(state.settings.session.cookie_name, path="/")
     response.delete_cookie(SSO_COOKIE, path="/")

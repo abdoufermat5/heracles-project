@@ -151,10 +151,20 @@ def test_off_by_default() -> None:
     with TestClient(create_full_app(settings, {"main": demo.build_demo_directory()})) as client:
         methods = client.get("/api/v2/auth/methods").json()
         assert methods == {"login_method": "form", "methods": [{"id": "form", "url": None}]}
-        for path in ("login", "callback", "logout"):
+        for path in ("login", "callback"):
             assert (
                 client.get(f"/api/v2/auth/oidc/{path}", follow_redirects=False).status_code == 404
             )
+        # signing out still works for a session opened before the sign-in was switched off
+        out = client.get("/api/v2/auth/oidc/logout", follow_redirects=False)
+        assert out.status_code == 302 and out.headers["location"] == "/login"
+
+
+def test_without_a_label_the_button_text_is_left_to_the_console() -> None:
+    app, _provider = make_app(label="")
+    with TestClient(app) as client:
+        methods = client.get("/api/v2/auth/methods").json()["methods"]
+    assert {"id": "oidc", "url": "/api/v2/auth/oidc/login"} in methods
 
 
 def test_enabling_needs_an_issuer_and_a_client() -> None:
@@ -275,6 +285,10 @@ def test_state_must_come_from_this_browser_and_is_single_use() -> None:
         # an error from the provider
         err = client.get("/api/v2/auth/oidc/callback", params={"error": "access_denied"})
         assert err.headers["location"] == FAILURE
+        # hostile values fall back to the form, never a server error
+        client.cookies.set("heracles_oidc", "abc", path="/api/v2/auth/oidc")
+        odd = client.get("/api/v2/auth/oidc/callback", params={"code": "c", "state": "é"})
+        assert odd.status_code == 302 and odd.headers["location"] == FAILURE
 
 
 # -- the account ----------------------------------------------------------------------------------
@@ -333,10 +347,22 @@ def test_email_needs_verification_and_groups_can_be_required() -> None:
 def test_the_password_form_works_while_the_provider_is_down() -> None:
     app, provider = make_app()
     provider.down = True
+    calls: list[str] = []
+    down = provider.handler
+
+    def counted(request: httpx2.Request) -> httpx2.Response:
+        calls.append(str(request.url))
+        return down(request)
+
+    app.state.oidc_transport = httpx2.MockTransport(counted)
     with TestClient(app, follow_redirects=False) as client:
         assert client.get("/api/v2/auth/methods").status_code == 200
+        assert calls == []  # listing the methods never calls the provider
         start = client.get("/api/v2/auth/oidc/login")
         assert start.headers["location"] == FAILURE
+        # a second click right after does not wait for the provider again
+        assert client.get("/api/v2/auth/oidc/login").headers["location"] == FAILURE
+        assert len(calls) == 1
         token = client.get("/api/v2/auth/csrf").json()["token"]
         r = client.post(
             "/api/v2/auth/login",

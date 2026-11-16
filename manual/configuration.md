@@ -79,9 +79,11 @@ api:
   #   client_secret_file: /run/secrets/oidc_client_secret
   #   # client_auth: client_secret_basic   # or client_secret_post, or none (public client)
   #   # scopes: [openid, profile, email]
-  #   claim: preferred_username            # the ID token claim naming the person
+  #   # The claim naming the person must be one people cannot change at the provider (whoever
+  #   # edits it picks the account): an immutable login, or email with email_verified.
+  #   claim: preferred_username
   #   # attribute: uid                     # directory attribute it must equal (one entry)
-  #   label: Example SSO                   # button text: "Sign in with Example SSO"
+  #   label: Example SSO                   # "Sign in with Example SSO" (default: generic text)
   #   # allowed_groups: [heracles-admins]  # only these values of groups_claim may sign in
   #   # groups_claim: groups
   #   public_url: https://heracles.example.org

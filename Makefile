@@ -46,6 +46,7 @@ dev: ## Whole stack: OpenLDAP + API + DNS + SMB/FTP/DHCP containers, Vite dev se
 	@echo "→ API http://$(HOST):$(PORT) (container, real LDAP) · DNS 127.0.0.1:$(DNS_PORT) · UI http://localhost:$(UI_PORT) · login alice / alice-secret"
 	@echo "  DNS zones of the directory: dig @127.0.0.1 -p $(DNS_PORT) www.heracles.test"
 	@echo "  SMB 127.0.0.1:445 · FTP 127.0.0.1:2121 (passive 30000-30009) · DHCP on the isolated compose network (no host port)"
+	@echo "  OpenID Connect test provider http://idp.localhost:8180 · sign in with the test provider as alice / alice-at-the-idp"
 	@echo "  the containers stay up after this exits; stop them with \`make dev-down\`"
 	$(COMPOSE) --profile dev up -d --build --wait
 	@trap 'kill 0' INT TERM EXIT; \

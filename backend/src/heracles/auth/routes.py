@@ -118,7 +118,11 @@ def available_methods(state: AppState, config: SsoConfig) -> MethodsResponse:
         methods.append(MethodInfo(id="cas", url="/api/v2/auth/cas/login"))
     if state.settings.oidc.enabled:
         methods.append(
-            MethodInfo(id="oidc", url="/api/v2/auth/oidc/login", label=state.settings.oidc.label)
+            MethodInfo(
+                id="oidc",
+                url="/api/v2/auth/oidc/login",
+                label=state.settings.oidc.label.strip() or None,
+            )
         )
     primary = config.login_method if any(m.id == config.login_method for m in methods) else "form"
     return MethodsResponse(login_method=primary, methods=methods)

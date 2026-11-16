@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import json
 import secrets
 import threading
 import time
@@ -50,6 +49,9 @@ PENDING_SECONDS: Final = 600.0
 CACHE_SECONDS: Final = 600.0
 #: Least time between two key downloads caused by an unknown key id.
 REFETCH_SECONDS: Final = 30.0
+#: After the discovery document could not be read, sign-ins fail at once for this long
+#: (a hanging provider must not tie up a worker per click).
+FAILURE_SECONDS: Final = 30.0
 CLIENT_AUTH: Final = ("client_secret_basic", "client_secret_post", "none")
 
 
@@ -73,8 +75,8 @@ class OidcSettings(BaseModel):
     claim: str = "preferred_username"
     #: Directory attribute the claim is matched against (empty: the login attribute).
     attribute: str = ""
-    #: Text of the sign-in button ("Sign in with ...").
-    label: str = "single sign-on"
+    #: Text of the sign-in button ("Sign in with ..."; empty: a translated generic text).
+    label: str = ""
     #: When set, the token must carry one of these values in ``groups_claim``.
     allowed_groups: list[str] = Field(default_factory=lambda: [])
     groups_claim: str = "groups"
@@ -255,6 +257,7 @@ class OidcClient:
         self._clock = clock
         self._lock = threading.Lock()
         self._provider: tuple[float, Provider] | None = None
+        self._failed_at: float | None = None
         self._keys: tuple[float, list[dict[str, Any]]] | None = None
 
     def _http(self) -> httpx2.Client:
@@ -284,8 +287,16 @@ class OidcClient:
             cached = self._provider
         if cached is not None and now - cached[0] < CACHE_SECONDS:
             return cached[1]
+        failed = self._failed_at
+        if failed is not None and now - failed < FAILURE_SECONDS:
+            raise OidcError("the provider was unreachable a moment ago")
         issuer = self.settings.issuer.rstrip("/")
-        doc = self._get_json(f"{issuer}/.well-known/openid-configuration")
+        try:
+            doc = self._get_json(f"{issuer}/.well-known/openid-configuration")
+        except OidcError:
+            self._failed_at = now
+            raise
+        self._failed_at = None
         if str(doc.get("issuer", "")).rstrip("/") != issuer:
             raise OidcError("the discovery document names another issuer")
         methods = doc.get("code_challenge_methods_supported")
@@ -399,7 +410,8 @@ class OidcClient:
             )
         except jwt.PyJWTError as exc:
             raise OidcError(f"ID token refused: {type(exc).__name__}") from None
-        if not secrets.compare_digest(str(claims.get("nonce", "")), nonce):
+        got = str(claims.get("nonce", "")).encode("utf-8")
+        if not secrets.compare_digest(got, nonce.encode("utf-8")):
             raise OidcError("ID token nonce mismatch")
         several = len(claim_values(claims, "aud")) > 1
         if several and claims.get("azp") != self.settings.client_id:
@@ -454,17 +466,6 @@ def claim_values(claims: Mapping[str, Any], name: str) -> list[str]:
     if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
         return [str(v) for v in cast("Sequence[object]", value) if isinstance(v, (str, int))]
     return []
-
-
-def unverified_claims(id_token: str) -> dict[str, Any]:
-    """The payload of a token already verified (to read ``sid`` and such at logout)."""
-    try:
-        part = id_token.split(".")[1]
-        padded = part + "=" * (-len(part) % 4)
-        value: object = json.loads(base64.urlsafe_b64decode(padded))
-    except (IndexError, ValueError):
-        return {}
-    return cast("dict[str, Any]", value) if isinstance(value, dict) else {}
 
 
 __all__ = [
