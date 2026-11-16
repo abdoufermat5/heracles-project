@@ -15,11 +15,28 @@
         "http://localhost:8420/api/v2/auth/oidc/callback",
         "http://127.0.0.1:8431/api/v2/auth/oidc/callback"
       ],
-      "webOrigins": ["+"],
+      "webOrigins": [
+        "+"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:8420/login##http://127.0.0.1:8431/login"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "claim.name": "groups"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -30,7 +47,36 @@
       "emailVerified": true,
       "firstName": "Alice",
       "lastName": "Martin",
-      "credentials": [{ "type": "password", "value": "alice-at-the-idp", "temporary": false }]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice-at-the-idp",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@heracles.test",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Durand",
+      "groups": [
+        "/heracles-readers"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bob-at-the-idp",
+          "temporary": false
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "name": "heracles-readers"
     }
   ]
 }
