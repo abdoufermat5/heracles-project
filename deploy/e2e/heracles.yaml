@@ -55,6 +55,7 @@ plugins:
       smb_accounts,
       ftp_accounts,
       dhcp,
+      dsa,
     ]
 
 # Outgoing mail (password recovery, reminder/notification/extractor tasks). Without a host,
