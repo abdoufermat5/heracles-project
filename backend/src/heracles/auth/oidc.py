@@ -106,6 +106,11 @@ class OidcSettings(BaseModel):
                 parts = dnlib.split(dn)
                 if not parts or any("=" not in part for part in parts):
                     raise ValueError(f"oidc.role_mapping[{group}]: not a DN: {dn!r}")
+                if len(parts) < 2:  # a YAML [..] list splits a DN at its commas
+                    raise ValueError(
+                        f"oidc.role_mapping[{group}]: {dn!r} is not a full role DN"
+                        " (write one DN per '- ' line, not in a [..] list)"
+                    )
         if self.client_auth not in CLIENT_AUTH:
             raise ValueError(f"oidc.client_auth: one of {', '.join(CLIENT_AUTH)}")
         if self.enabled:

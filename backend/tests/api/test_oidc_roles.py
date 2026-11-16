@@ -39,6 +39,9 @@ def session_of(client: TestClient, app: Any) -> Any:
 def test_settings_refuse_what_is_not_a_dn() -> None:
     with pytest.raises(ValueError, match="not a DN"):
         OidcSettings(role_mapping={"admins": ["lyon-managers"]})
+    with pytest.raises(ValueError, match="full role DN"):
+        # what `heracles-readers: [cn=r,ou=roles,dc=example,dc=org]` gives in YAML
+        OidcSettings(role_mapping={"admins": ["cn=r", "ou=roles", "dc=example", "dc=org"]})
     with pytest.raises(ValueError, match="empty"):
         OidcSettings(role_mapping={" ": [LYON_MANAGERS]})
     settings = OidcSettings(
