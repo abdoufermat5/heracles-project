@@ -139,6 +139,21 @@ RULES: Final[tuple[Rule, ...]] = (
     _rule(_ANY, _V2 + "/admin/.*", ADMIN),
     _rule(_ANY, _V2 + "/(ldif|csv)/.*", ADMIN),
     _rule(frozenset({"POST"}), _V2 + "/invitations/send", ADMIN),
+    # -- plugins: tree views, the LDIF screen's capability probe
+    _rule(_SAFE, _V2 + "/(autofs|dhcp)/tree", READ),
+    _rule(_SAFE, _V2 + "/ldapmanager/access", ADMIN),
+    # -- plugin: access governance. Reading and filing requests is everyday work; deciding
+    # a request or running a review campaign is a deliberate grant (admin). A reviewer's
+    # decision on a review item is an attestation by a person: never with a token. The
+    # campaign report needs step-up, which a token never passes.
+    _rule(_SAFE, _V2 + "/access/(grants|me|queue|requestable|requests|reviews|status)", READ),
+    _rule(_SAFE, _V2 + r"/access/reviews/\{campaign_id\}", READ),
+    _rule(frozenset({"PUT"}), _V2 + "/access/grants", WRITE),
+    _rule(frozenset({"POST"}), _V2 + "/access/requests", WRITE),
+    _rule(frozenset({"POST"}), _V2 + r"/access/requests/\{request_id\}/cancel", WRITE),
+    _rule(frozenset({"POST"}), _V2 + r"/access/requests/\{request_id\}/(approve|reject)", ADMIN),
+    _rule(frozenset({"POST"}), _V2 + "/access/reviews", ADMIN),
+    _rule(frozenset({"POST"}), _V2 + r"/access/reviews/\{campaign_id\}/close", ADMIN),
     # -- API v1
     _rule(_SAFE, _V1 + r"/objects/\{type\}(/.*)?", READ),
     _rule(_MUTATING, _V1 + r"/objects/\{type\}(/.*)?", WRITE),
