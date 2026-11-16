@@ -1,9 +1,12 @@
-"""Managing API tokens: one's own (``/auth/tokens``), everyone's for administrators (``/tokens``).
+"""Managing API tokens: one's own (``/auth/tokens``), a service account's
+(``/service-accounts/{dn}/tokens``), everyone's for administrators (``/tokens``).
 
 None of these routes accepts an API token (:mod:`heracles.api.tokens` lists no rule for
 them): a token can neither mint nor revoke tokens. Creating one needs a recent proof of
-identity (step-up); revoking does not. A token is created for the signed-in person only:
-nobody mints a credential that acts as someone else.
+identity (step-up); revoking does not. A person's token is created by that person only:
+nobody mints a credential that acts as someone else. A service account (a ``dsa`` object,
+which never signs in) gets its tokens from whoever may set its password, an equivalent
+power: that person could already bind to the directory as the account.
 """
 
 from __future__ import annotations
@@ -41,6 +44,8 @@ class TokenOut(BaseModel):
     last_used_ip: str
     #: Networks (CIDR) the token may be used from; empty: any address.
     allowed_ips: list[str]
+    #: Who created it (the owner, or for a service account the person who minted it).
+    created_by: str
 
 
 class TokenCreate(BaseModel):
@@ -76,12 +81,15 @@ def _out(token: ApiToken) -> TokenOut:
         last_used_at=token.last_used_at,
         last_used_ip=token.last_used_ip,
         allowed_ips=list(token.allowed_ips),
+        created_by=token.created_by,
     )
 
 
-def _audit(state: AppState, user: CurrentUser, owner_dn: str, line: str) -> None:
+def _audit(
+    state: AppState, user: CurrentUser, owner_dn: str, line: str, object_type: str = "user"
+) -> None:
     state.audit.record_by(
-        user, "api_token", object_type="user", object_dn=owner_dn, attributes=[line]
+        user, "api_token", object_type=object_type, object_dn=owner_dn, attributes=[line]
     )
 
 
@@ -132,6 +140,19 @@ def create_token(
     """Create a token acting as the signed-in person. The secret is in this answer only."""
     _require_enabled(state)
     _require_console(request, user)
+    return _mint(state, request, user, body, owner_dn=user.dn, object_type="user")
+
+
+def _mint(
+    state: AppState,
+    request: Request,
+    user: CurrentUser,
+    body: TokenCreate,
+    *,
+    owner_dn: str,
+    object_type: str,
+) -> TokenCreated:
+    """Check ``body``, then create a token acting as ``owner_dn`` (made by ``user``)."""
     cfg = state.settings.api_tokens
     fields: dict[str, str] = {}
     name = body.name.strip()
@@ -159,15 +180,18 @@ def create_token(
     if fields:
         raise validation("Invalid token", fields)
     require_recent_auth(state, user.session)
+    owner = user.directory.get(owner_dn, list(api_tokens.OWNER_STAMP_ATTRS))
+    if owner is None:
+        raise not_found("The owner of the token does not exist")
     now = state.clock()
     state.api_tokens.purge_expired(now)
-    if len(state.api_tokens.list_for_owner(user.dn)) >= cfg.max_per_owner:
+    if len(state.api_tokens.list_for_owner(owner_dn)) >= cfg.max_per_owner:
         raise validation(
             "Too many tokens",
             {"name": f"At most {cfg.max_per_owner} tokens: revoke one first"},
         )
     created = api_tokens.generate(
-        owner_dn=user.dn,
+        owner_dn=owner.dn,
         directory_id=user.directory_id,
         name=name,
         scope=body.scope,
@@ -176,18 +200,20 @@ def create_token(
         created_by=user.dn,
         now=now,
         allowed_ips=networks,
+        owner_stamp=api_tokens.owner_stamp(owner.text),
     )
     state.api_tokens.add(created.token)
     token = created.token
-    log.info("api_token_created", owner=user.dn, token=token.id, scope=token.scope)
+    log.info("api_token_created", owner=owner.dn, actor=user.dn, token=token.id, scope=token.scope)
     _audit(
         state,
         user,
-        user.dn,
+        owner.dn,
         f"created: {token.id} '{token.name}' scope={token.scope}"
         + (f" types={','.join(token.types)}" if token.types else "")
         + (f" from={','.join(token.allowed_ips)}" if token.allowed_ips else "")
         + f" days={body.expires_in_days}",
+        object_type,
     )
     return TokenCreated(**_out(token).model_dump(), secret=created.secret)
 
@@ -269,3 +295,70 @@ def revoke_any_token(
     state.api_tokens.delete(token_id)
     log.warning("api_token_revoked", actor=user.dn, owner=token.owner_dn, token=token_id)
     _audit(state, user, token.owner_dn, f"revoked by {user.dn}: {token.id} '{token.name}'")
+
+
+# -- service accounts: tokens of a ``dsa`` object ----------------------------------------------
+SERVICE_ACCOUNT_TYPE = "dsa"
+
+
+def _service_account(request: Request, user: CurrentUser, dn: str) -> str:
+    """The DN of the service account ``dn``, if the caller may manage its tokens.
+
+    The entry must be a ``dsa`` object (never a person), and the caller must be a console
+    user allowed to set its password.
+    """
+    from heracles.objects import ObjectNotFoundError, UnknownTypeError
+
+    domain = _domain(request)
+    if domain is None:
+        raise not_found("Service accounts are not available")
+    _require_console(request, user)
+    try:
+        service, policy = domain.service(user, SERVICE_ACCOUNT_TYPE)
+        account = service.load(SERVICE_ACCOUNT_TYPE, dn)
+    except (UnknownTypeError, ObjectNotFoundError):
+        raise not_found("Service account not found") from None
+    info = domain.registry.get(SERVICE_ACCOUNT_TYPE)
+    if not policy.can_write(account.dn, info.main_tab.name, "userPassword"):
+        raise forbidden("You cannot manage the API tokens of this service account")
+    return account.dn
+
+
+@router.get("/service-accounts/{dn:path}/tokens")
+def service_account_tokens(
+    dn: str, request: Request, user: CurrentUserDep, state: StateDep
+) -> list[TokenOut]:
+    """The live API tokens of a service account (never their secrets)."""
+    _require_enabled(state)
+    owner = _service_account(request, user, dn)
+    now = state.clock()
+    return [_out(t) for t in state.api_tokens.list_for_owner(owner) if t.expires_at > now]
+
+
+@router.post("/service-accounts/{dn:path}/tokens", status_code=201)
+def create_service_account_token(
+    dn: str, body: TokenCreate, request: Request, user: CurrentUserDep, state: StateDep
+) -> TokenCreated:
+    """Create a token acting as a service account. The secret is in this answer only."""
+    _require_enabled(state)
+    owner = _service_account(request, user, dn)
+    return _mint(state, request, user, body, owner_dn=owner, object_type=SERVICE_ACCOUNT_TYPE)
+
+
+@router.delete("/service-accounts/{dn:path}/tokens/{token_id}", status_code=204)
+def revoke_service_account_token(
+    dn: str, token_id: str, request: Request, user: CurrentUserDep, state: StateDep
+) -> None:
+    owner = _service_account(request, user, dn)
+    token = state.api_tokens.get(token_id)
+    if token is None or dnlib.normalize(token.owner_dn) != dnlib.normalize(owner):
+        raise not_found("Token not found")
+    state.api_tokens.delete(token_id)
+    log.warning("api_token_revoked", actor=user.dn, owner=owner, token=token_id)
+    _audit(
+        state,
+        user,
+        owner,
+        f"revoked by {user.dn}: {token.id} '{token.name}'",
+        SERVICE_ACCOUNT_TYPE,
+    )

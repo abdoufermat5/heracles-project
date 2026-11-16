@@ -305,8 +305,11 @@ def authenticate(request: Request, state: AppState) -> CurrentUser:
     directory = state.directories.get(token.directory_id)
     if directory is None:
         raise _invalid("Unknown directory")
-    owner = directory.get(token.owner_dn, [STD_ATTR.USER_PASSWORD])
-    if owner is None:
+    owner = directory.get(token.owner_dn, [STD_ATTR.USER_PASSWORD, *api_tokens.OWNER_STAMP_ATTRS])
+    if owner is None or (
+        token.owner_stamp and api_tokens.owner_stamp(owner.text) != token.owner_stamp
+    ):
+        # gone, or deleted and created again under the same DN: another owner
         raise _invalid("The owner of this API token no longer exists")
     stored = owner.text(STD_ATTR.USER_PASSWORD) or ""
     if stored and is_locked(stored):

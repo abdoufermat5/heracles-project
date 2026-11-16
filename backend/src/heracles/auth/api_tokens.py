@@ -65,6 +65,10 @@ class ApiToken:
     last_used_ip: str = ""
     #: Networks (CIDR) the token may be used from; empty: any address.
     allowed_ips: tuple[str, ...] = ()
+    #: Identity of the owner entry when the token was made (``attribute:value``, see
+    #: :data:`OWNER_STAMP_ATTRS`): an entry deleted and created again under the same DN is
+    #: another owner. Empty: not recorded (tokens made before it was).
+    owner_stamp: str = ""
 
     def allows(self, scope: str) -> bool:
         """Whether the token's level includes ``scope``."""
@@ -81,6 +85,19 @@ class ApiToken:
         if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
             address = address.ipv4_mapped  # ::ffff:a.b.c.d is the IPv4 client a.b.c.d
         return any(address in ipaddress.ip_network(net) for net in self.allowed_ips)
+
+
+#: Server-maintained attributes identifying an entry, the first one present is recorded.
+OWNER_STAMP_ATTRS: Final = ("entryUUID", "nsUniqueId", "createTimestamp")
+
+
+def owner_stamp(attrs: Callable[[str], str | None]) -> str:
+    """``attribute:value`` of the first :data:`OWNER_STAMP_ATTRS` an entry has ("" if none)."""
+    for name in OWNER_STAMP_ATTRS:
+        value = attrs(name)
+        if value:
+            return f"{name}:{value}"
+    return ""
 
 
 #: Most networks one token may list.
@@ -148,6 +165,7 @@ def generate(
     created_by: str,
     now: float,
     allowed_ips: Iterable[str] = (),
+    owner_stamp: str = "",
 ) -> NewToken:
     if scope not in SCOPES:
         raise ValueError(f"unknown scope {scope!r}")
@@ -165,6 +183,7 @@ def generate(
         created_by=created_by,
         secret_hash=hash_secret(secret),
         allowed_ips=normalize_networks(allowed_ips),
+        owner_stamp=owner_stamp,
     )
     return NewToken(token, f"{PREFIX}{token_id}_{secret}")
 

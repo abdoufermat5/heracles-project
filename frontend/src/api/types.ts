@@ -103,6 +103,8 @@ export interface ApiTokenInfo {
   last_used_ip: string
   /** Networks (CIDR) it may be used from; empty: any address. */
   allowed_ips: string[]
+  /** Who created it: the owner, or for a service account the person who minted it. */
+  created_by: string
 }
 
 /** The answer of a creation: the only time the token itself is shown. */

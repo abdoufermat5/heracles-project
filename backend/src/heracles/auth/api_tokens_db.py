@@ -44,16 +44,18 @@ MIGRATIONS: tuple[str, ...] = (
     """,
     # 2026-11-16: networks the token may be used from (JSON list; empty: any address)
     "ALTER TABLE api_tokens ADD COLUMN allowed_ips TEXT NOT NULL DEFAULT '[]';",
+    # 2026-11-16: identity of the owner entry (a re-created entry is another owner)
+    "ALTER TABLE api_tokens ADD COLUMN owner_stamp TEXT NOT NULL DEFAULT '';",
 )
 
 _SELECT = (
     "SELECT id, owner_dn, directory_id, name, scope, types, created_at, expires_at, created_by,"
-    " secret_hash, last_used_at, last_used_ip, allowed_ips FROM api_tokens"
+    " secret_hash, last_used_at, last_used_ip, allowed_ips, owner_stamp FROM api_tokens"
 )
 _INSERT = (
     "INSERT INTO api_tokens (id, owner_dn, directory_id, name, scope, types, created_at,"
-    " expires_at, created_by, secret_hash, last_used_at, last_used_ip, owner_key, allowed_ips)"
-    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    " expires_at, created_by, secret_hash, last_used_at, last_used_ip, owner_key, allowed_ips,"
+    " owner_stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
 
 
@@ -80,6 +82,7 @@ def _row(row: Any) -> ApiToken:
         last_used_at=None if last is None else float(last),
         last_used_ip=row["last_used_ip"] or "",
         allowed_ips=_strings(row["allowed_ips"]),
+        owner_stamp=row["owner_stamp"] or "",
     )
 
 
@@ -110,6 +113,7 @@ class SqlApiTokenStore:
                     token.last_used_ip,
                     dnlib.normalize(token.owner_dn),
                     json.dumps(list(token.allowed_ips)),
+                    token.owner_stamp,
                 ),
             )
 

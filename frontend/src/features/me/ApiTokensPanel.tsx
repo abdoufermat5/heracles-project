@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { isApiError } from '@/api/client'
 import { api } from '@/api/endpoints'
 import { qk, useTypes } from '@/api/hooks'
-import type { ApiTokenCreated, ApiTokenInfo, ApiTokenScope } from '@/api/types'
+import type { ApiTokenCreated, ApiTokenInfo, ApiTokenRequest, ApiTokenScope } from '@/api/types'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,10 +53,13 @@ export function TokenRow({
   token,
   onRevoke,
   busy,
+  showCreator = false,
 }: {
   token: ApiTokenInfo
   onRevoke: (token: ApiTokenInfo) => void
   busy: boolean
+  /** Name who made it (a service account's tokens are made by people). */
+  showCreator?: boolean
 }) {
   const { t } = useTranslation()
   const facts = [
@@ -67,6 +70,7 @@ export function TokenRow({
     token.last_used_at !== null
       ? t('apiTokens.lastUsed', { when: when(token.last_used_at), ip: token.last_used_ip })
       : t('apiTokens.neverUsed'),
+    ...(showCreator ? [t('apiTokens.createdBy', { dn: token.created_by })] : []),
   ]
   return (
     <li className="flex items-center gap-3 px-4 py-2.5">
@@ -172,10 +176,13 @@ function CreateTokenDialog({
   open,
   maxDays,
   onClose,
+  account,
 }: {
   open: boolean
   maxDays: number
   onClose: () => void
+  /** The service account the token is for; none: the signed-in person. */
+  account?: string
 }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -207,7 +214,7 @@ function CreateTokenDialog({
 
   const create = useMutation({
     mutationFn: () =>
-      api.createToken({
+      (account ? (body: ApiTokenRequest) => api.createServiceAccountToken(account, body) : api.createToken)({
         name: name.trim(),
         scope,
         types: limited && scope !== 'admin' ? chosen : [],
@@ -219,7 +226,7 @@ function CreateTokenDialog({
       }),
     onSuccess: async (r) => {
       setCreated(r)
-      await qc.invalidateQueries({ queryKey: qk.apiTokens })
+      await qc.invalidateQueries({ queryKey: tokensKey(account) })
     },
     onError: (e) => {
       if (isApiError(e) && e.code === 'reauth_required') setNeedsReauth(true)
@@ -384,19 +391,31 @@ function CreateTokenDialog({
 }
 
 /** The signed-in person's API tokens: create (secret shown once) and revoke. */
-export function ApiTokensPanel() {
+/** Cache key of a token list: the signed-in person's, or one service account's. */
+const tokensKey = (account?: string) =>
+  account ? ([...qk.apiTokens, 'account', account] as const) : qk.apiTokens
+
+/**
+ * API tokens of the signed-in person, or with `account` those of a service account (the
+ * `dsa` editor shows it; who may set the account's password manages its tokens).
+ */
+export function ApiTokensPanel({ account }: { account?: string } = {}) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const limits = useQuery({ queryKey: [...qk.apiTokens, 'limits'], queryFn: api.tokenLimits })
-  const tokens = useQuery({ queryKey: qk.apiTokens, queryFn: api.listMyTokens })
+  const tokens = useQuery({
+    queryKey: tokensKey(account),
+    queryFn: () => (account ? api.listServiceAccountTokens(account) : api.listMyTokens()),
+  })
   const [creating, setCreating] = useState(false)
   const [revoking, setRevoking] = useState<ApiTokenInfo | null>(null)
 
   const revoke = useMutation({
-    mutationFn: (id: string) => api.revokeMyToken(id),
+    mutationFn: (id: string) =>
+      account ? api.revokeServiceAccountToken(account, id) : api.revokeMyToken(id),
     onSuccess: async () => {
       toast.success(t('apiTokens.revoked'))
-      await qc.invalidateQueries({ queryKey: qk.apiTokens })
+      await qc.invalidateQueries({ queryKey: tokensKey(account) })
     },
     onError: (e) => toast.error(isApiError(e) ? e.message : t('apiTokens.failed')),
   })
@@ -404,7 +423,7 @@ export function ApiTokensPanel() {
   if (limits.data && !limits.data.enabled) return null
 
   return (
-    <Card id="portal-api-tokens" className="gap-0 py-0">
+    <Card id={account ? 'account-api-tokens' : 'portal-api-tokens'} className="gap-0 py-0">
       <CardHeader className={PANEL_HEADER}>
         <CardTitle className="text-lead">{t('apiTokens.title')}</CardTitle>
         <Button type="button" variant="outline" size="sm" onClick={() => setCreating(true)}>
@@ -413,11 +432,19 @@ export function ApiTokensPanel() {
         </Button>
       </CardHeader>
       <CardContent className="p-0">
-        <p className="px-4 pt-3 text-body text-muted-foreground">{t('apiTokens.help')}</p>
+        <p className="px-4 pt-3 text-body text-muted-foreground">
+          {t(account ? 'apiTokens.accountHelp' : 'apiTokens.help')}
+        </p>
         {tokens.data && tokens.data.length > 0 ? (
           <ul className="mt-3 divide-y border-t text-body" aria-label={t('apiTokens.title')}>
             {tokens.data.map((tok) => (
-              <TokenRow key={tok.id} token={tok} busy={revoke.isPending} onRevoke={setRevoking} />
+              <TokenRow
+                key={tok.id}
+                token={tok}
+                busy={revoke.isPending}
+                onRevoke={setRevoking}
+                showCreator={account !== undefined}
+              />
             ))}
           </ul>
         ) : (
@@ -430,6 +457,7 @@ export function ApiTokensPanel() {
         open={creating}
         maxDays={limits.data?.max_lifetime_days ?? 365}
         onClose={() => setCreating(false)}
+        account={account}
       />
       <RevokeTokenDialog
         token={revoking}

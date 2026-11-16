@@ -59,6 +59,7 @@ import { LdifDialog } from './LdifDialog'
 import { LockedDialog } from './LockedDialog'
 import { ReferencesPanel } from './ReferencesPanel'
 import { SecondFactorsPanel } from './SecondFactorsPanel'
+import { ApiTokensPanel } from '@/features/me/ApiTokensPanel'
 import { SaveReviewDialog } from './SaveReviewDialog'
 import { SnapshotsPanel } from './SnapshotsPanel'
 import { useUndoableSave } from './undo'
@@ -74,6 +75,8 @@ const BASE_KEY = 'main.base'
 const REFERENCES_TAB = '@references'
 const SNAPSHOTS_TAB = '@snapshots'
 const SECOND_FACTORS_TAB = '@secondFactors'
+/** API tokens of a service account (`dsa` objects). */
+const ACCOUNT_TOKENS_TAB = '@apiTokens'
 const HISTORY_TAB = '@history'
 const END_DATES_TAB = '@endDates'
 
@@ -533,11 +536,13 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
   )
 
   const showHistory = useAuditEnabled().enabled && type !== 'audit_event'
+  const showAccountTokens = type === 'dsa'
   const extraPanel =
     tab === REFERENCES_TAB ||
     tab === SNAPSHOTS_TAB ||
     (tab === SECOND_FACTORS_TAB && showSecondFactors) ||
     (tab === HISTORY_TAB && showHistory) ||
+    (tab === ACCOUNT_TOKENS_TAB && showAccountTokens) ||
     (tab === END_DATES_TAB && showOccupantDates)
       ? tab
       : null
@@ -548,6 +553,7 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
         { name: SNAPSHOTS_TAB, label: t('snapshots.tab') },
         ...(showHistory ? [{ name: HISTORY_TAB, label: t('audit.history.tab') }] : []),
         ...(showSecondFactors ? [{ name: SECOND_FACTORS_TAB, label: t('secondFactors.tab') }] : []),
+        ...(showAccountTokens ? [{ name: ACCOUNT_TOKENS_TAB, label: t('apiTokens.accountTab') }] : []),
         ...(showOccupantDates ? [{ name: END_DATES_TAB, label: t('grants.occupants.tab') }] : []),
       ]
   const currentTabObj = extraPanel ? undefined : (desc.tabs.find((tb) => tb.name === tab) ?? desc.tabs[0])
@@ -636,6 +642,7 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
             <SnapshotsPanel type={type} dn={detail.dn} onRestored={() => void reloadAfterRestore()} />
           )}
           {extraPanel === SECOND_FACTORS_TAB && detail && <SecondFactorsPanel dn={detail.dn} />}
+          {extraPanel === ACCOUNT_TOKENS_TAB && detail && <ApiTokensPanel account={detail.dn} />}
           {extraPanel === END_DATES_TAB && detail && (
             <OccupantEndDates dn={detail.dn} occupants={occupantsOf(detail.tabs)} />
           )}
