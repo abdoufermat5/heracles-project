@@ -151,7 +151,13 @@ class AclResolver:
         *,
         uid: str | None = None,
         user_attrs: Mapping[str, Sequence[str]] | None = None,
+        session_roles: Sequence[str] = (),
     ) -> ResolvedAcl:
+        """Rules of ``user_dn``.
+
+        ``session_roles``: role DNs the sign-in granted for this session only (OpenID Connect
+        group mapping); they count as roles the user occupies.
+        """
         attrs: dict[str, Sequence[str]] = {k.lower(): v for k, v in (user_attrs or {}).items()}
         attrs.setdefault("dn", [user_dn])
         if uid is not None:
@@ -164,6 +170,7 @@ class AclResolver:
         if uid:
             identities.update(dnlib.normalize(g) for g in self._dir.posix_groups_by_uid(uid))
         identities.update(dnlib.normalize(r) for r in self._dir.roles_of_user(user_dn))
+        identities.update(dnlib.normalize(r) for r in session_roles)
 
         # Steps 3-4.
         for entry in self._dir.assignment_entries():

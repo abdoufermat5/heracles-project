@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, Request
 
 from heracles.acl import AclEvaluator, AclResolver, LdapAclDirectory, ResolvedAcl, Rights
 from heracles.api.deps import CurrentUser
-from heracles.auth.sessions import Session
+from heracles.auth.sessions import SESSION_ROLES_KEY, Session
 from heracles.core.audit import AuditSink
 from heracles.core.locks import LockService
 from heracles.core.snapshots import SnapshotService
@@ -194,7 +194,9 @@ class Domain:
             resolver = AclResolver(
                 LdapAclDirectory(user.directory), target_limit=self.acl_target_limit
             )
-            resolved = resolver.resolve(user.dn, uid=uid, user_attrs=attrs)
+            resolved = resolver.resolve(
+                user.dn, uid=uid, user_attrs=attrs, session_roles=session_roles(user.session)
+            )
             user.session.cache[_ACL_CACHE_KEY] = resolved
         from heracles.api.tokens import rights_cap  # tokens builds on deps, like this module
 
@@ -263,6 +265,14 @@ class Domain:
         if isinstance(events, CompositeEvents):
             return events.collected()
         return [], []
+
+
+def session_roles(session: Session) -> list[str]:
+    """Role DNs the sign-in granted to this session (empty for most sessions)."""
+    value = session.cache.get(SESSION_ROLES_KEY)
+    if not isinstance(value, list):
+        return []
+    return [v for v in cast("list[object]", value) if isinstance(v, str)]
 
 
 def _cached_resolution(session: Session) -> ResolvedAcl | None:

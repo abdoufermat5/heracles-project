@@ -25,6 +25,11 @@ def session_ref(session_id: str) -> str:
     return hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:32]
 
 
+#: Session cache key: role DNs an identity provider's groups granted for this session only
+#: (a list of strings, see ``api.oidc.role_mapping``). Read by the ACL resolution.
+SESSION_ROLES_KEY = "sso.roles"
+
+
 @dataclass(frozen=True, slots=True)
 class SessionInfo:
     """What the owner (or an administrator) may see of an active session."""

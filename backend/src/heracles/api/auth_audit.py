@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from fastapi import Request
 
 from heracles.api.deps import client_ip
@@ -32,7 +34,13 @@ def audit_login_failed(
 
 
 def audit_login(
-    state: AppState, request: Request, directory: DirectoryClient, user_dn: str, via: str
+    state: AppState,
+    request: Request,
+    directory: DirectoryClient,
+    user_dn: str,
+    via: str,
+    *,
+    session_roles: Sequence[str] = (),
 ) -> None:
     state.audit.record(
         directory,
@@ -41,5 +49,5 @@ def audit_login(
         object_dn=user_dn,
         author_dn=user_dn,
         author_ip=client_ip(request, state),
-        attributes=[f"method: {via}"],
+        attributes=[f"method: {via}", *(f"session role: {dn}" for dn in session_roles)],
     )
