@@ -10,6 +10,7 @@ const READER = { login: 'bob', password: 'bob-at-the-idp' }
 const BASE = 'dc=heracles,dc=test'
 const READERS = `cn=e2e-oidc-readers,ou=roles,${BASE}`
 const PEOPLE = `ou=people,${BASE}`
+const READ_PEOPLE = `cn=e2e-oidc-read-people,ou=aclroles,${BASE}`
 const CAROL = `uid=carol,${PEOPLE}`
 
 test.beforeAll(async ({ request }) => {
@@ -68,6 +69,12 @@ async function readsCarol(page: Page): Promise<number> {
 test('a group at the provider grants a directory role for the session only', async ({ page, baseURL }) => {
   const { api, csrf } = await adminApi(baseURL ?? 'http://localhost:8420')
   // the mapped role (nobody occupies it in the directory) and what it may do: read people
+  // leftovers of an interrupted run on a kept stack
+  await api.put(`/api/v2/admin/acl/assignments/${encodeURIComponent(PEOPLE)}`, {
+    data: { assignments: [] },
+    headers: { 'X-CSRF-Token': await csrf() },
+  })
+  await api.delete(`/api/v2/admin/acl/roles/${encodeURIComponent(READ_PEOPLE)}`, { headers: { 'X-CSRF-Token': await csrf() } })
   await api.delete(`/api/v2/objects/role/${encodeURIComponent(READERS)}`, { headers: { 'X-CSRF-Token': await csrf() } })
   const role = await api.post('/api/v2/objects/role', {
     data: { base: '', tabs: { main: { values: { cn: 'e2e-oidc-readers' } } } },
