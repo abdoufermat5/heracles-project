@@ -78,6 +78,8 @@ class ApiToken:
             address = ipaddress.ip_address(ip)
         except ValueError:
             return False
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+            address = address.ipv4_mapped  # ::ffff:a.b.c.d is the IPv4 client a.b.c.d
         return any(address in ipaddress.ip_network(net) for net in self.allowed_ips)
 
 

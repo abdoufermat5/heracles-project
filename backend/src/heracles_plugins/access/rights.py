@@ -5,6 +5,7 @@ from __future__ import annotations
 from heracles.api.deps import CurrentUser
 from heracles.api.domain import Domain
 from heracles.api.v2.admin import ASSIGNMENT_KEY, rights_of
+from heracles.auth.api_tokens import SESSION_KEY
 from heracles.ldap.client import Entry
 from heracles.ldap.filter import matches as filter_matches
 from heracles.objects.registry import TypeInfo, TypeRegistry
@@ -40,8 +41,12 @@ def can_read_grants(user: CurrentUser, domain: Domain, entry: Entry, kind: str) 
 
 
 def can_change_grants(user: CurrentUser, domain: Domain, entry: Entry, kind: str) -> bool:
-    """Whoever may edit the membership (or the ACL assignments) may date it."""
-    if domain.is_admin(user.dn):
+    """Whoever may edit the membership (or the ACL assignments) may date it.
+
+    An API token request always goes through the ACL evaluator, where its scope caps the
+    rights (a ``write`` token gets no write on ACL assignments, administrator owner or not).
+    """
+    if domain.is_admin(user.dn) and SESSION_KEY not in user.session.cache:
         return True
     if kind == ACL_KIND:
         return rights_of(user, domain, ASSIGNMENT_KEY, entry.dn).write

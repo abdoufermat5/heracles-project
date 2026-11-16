@@ -116,6 +116,7 @@ def test_allowed_networks_round_trip_and_match(store: ApiTokenStore) -> None:
     assert loaded is not None and loaded.allowed_ips == created.allowed_ips
     assert loaded.allows_ip("10.1.200.4") and loaded.allows_ip("2001:db8::1")
     assert not loaded.allows_ip("10.2.0.1") and not loaded.allows_ip("not-an-address")
+    assert loaded.allows_ip("::ffff:10.1.2.3")  # an IPv4 client seen through an IPv6 socket
     assert _new().token.allows_ip("203.0.113.9")  # no list: any address
 
 
