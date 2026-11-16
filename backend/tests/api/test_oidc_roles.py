@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import quote
 
+import pyotp
 import pytest
 from fastapi.testclient import TestClient
 
@@ -12,6 +13,7 @@ from heracles import demo
 from heracles.api.domain import invalidate_acl_cache
 from heracles.auth.oidc import OidcSettings, mapped_roles
 from heracles.auth.sessions import SESSION_ROLES_KEY
+from heracles.ldap.client import Modification
 from tests.api.test_oidc_login import ASMITH, BASE, ISSUER, make_app, sign_in
 
 LYON_MANAGERS = f"cn=lyon-managers,ou=roles,ou=lyon,{BASE}"
@@ -109,8 +111,25 @@ def test_the_same_person_signing_in_with_a_password_gets_nothing() -> None:
 
 
 def test_only_role_entries_can_be_mapped() -> None:
-    mapping = {"lyon-admins": [CDUPONT, LYON_STAFF, f"cn=missing,ou=roles,{BASE}"]}
-    app, provider = make_app(role_mapping=mapping)
+    account = f"cn=svc,ou=roles,ou=lyon,{BASE}"
+    mapping = {"lyon-admins": [CDUPONT, LYON_STAFF, account, f"cn=missing,ou=roles,{BASE}"]}
+    directory = demo.build_demo_directory()
+    # a service account: an organizationalRole that binds, holding the Lyon managers' rights
+    directory.add(
+        account,
+        {
+            "objectClass": [b"organizationalRole", b"simpleSecurityObject"],
+            "cn": [b"svc"],
+            "userPassword": [b"x"],
+        },
+    )
+    role = directory.get(LYON_MANAGERS)
+    assert role is not None
+    acl = directory.get(f"ou=lyon,{BASE}")
+    assert acl is not None
+    values = [v.replace(LYON_MANAGERS.encode(), account.encode()) for v in acl.attrs["hrcAclEntry"]]
+    directory.modify(f"ou=lyon,{BASE}", [Modification("replace", "hrcAclEntry", values)])
+    app, provider = make_app(directory, role_mapping=mapping)
     with TestClient(app, follow_redirects=False) as client:
         provider.claims = {"groups": ["lyon-admins"]}
         assert sign_in(client, provider).headers["location"] == "/dashboard"
@@ -143,3 +162,22 @@ def test_a_token_made_in_a_mapped_session_does_not_carry_the_role() -> None:
             headers={"Authorization": f"Bearer {secret}"},
         )
         assert own.status_code == 200, own.text
+
+
+def test_the_role_survives_the_second_factor() -> None:
+    app, provider = make_app(role_mapping=MAPPING)
+    secret = pyotp.random_base32()
+    app.state.heracles.second_factor.store.set_totp_secret(ASMITH, secret)
+    with TestClient(app, follow_redirects=False) as client:
+        provider.claims = {"groups": ["lyon-admins"]}
+        done = sign_in(client, provider)
+        assert done.status_code == 302
+        assert client.get("/api/v2/auth/me").status_code == 401  # second factor pending
+        headers = {"X-CSRF-Token": client.get("/api/v2/auth/csrf").json()["token"]}
+        r = client.post(
+            "/api/v2/auth/second-factor",
+            json={"method": "totp", "code": pyotp.TOTP(secret).now()},
+            headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        assert can_read_lyon_user(client)  # the session id rotated, the role stayed

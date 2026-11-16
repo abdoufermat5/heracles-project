@@ -165,11 +165,14 @@ def _find_account(
     return found[0] if found else None
 
 
+_ACCOUNT = "simplesecurityobject"
+
+
 def _existing_roles(client: DirectoryClient, dns: list[str]) -> list[str]:
     """The DNs of ``dns`` that name a role entry; others are logged and dropped.
 
-    Only role entries: a user or group DN here would hand the session someone else's
-    assignments.
+    Only role entries: a user, group or service account DN here would hand the session
+    someone else's assignments.
     """
     kept: list[str] = []
     for dn in dns:
@@ -177,7 +180,11 @@ def _existing_roles(client: DirectoryClient, dns: list[str]) -> list[str]:
             entry = client.get(dn, ["objectClass"])
         except DirectoryError:
             entry = None
-        if entry is not None and OC_ROLE.lower() in {c.lower() for c in entry.texts("objectClass")}:
+        classes: set[str] = (
+            {c.lower() for c in entry.texts("objectClass")} if entry is not None else set()
+        )
+        # a service account is an organizationalRole too, but an account: never a role here
+        if entry is not None and OC_ROLE.lower() in classes and _ACCOUNT not in classes:
             kept.append(entry.dn)
         else:
             log.warning("oidc_role_mapping_ignored", dn=dn)
