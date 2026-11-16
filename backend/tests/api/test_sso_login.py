@@ -167,6 +167,21 @@ def test_cas_callback_rejects_bad_tickets_and_unknown_accounts(
     assert cas_client.get("/api/v2/auth/me").status_code == 401
 
 
+def test_cas_callback_refuses_a_locked_account(cas_app: FastAPI, cas_client: TestClient) -> None:
+    """CAS does no bind: the Heracles lock marker must still stop the person."""
+    from heracles.auth.passwords import lock
+    from heracles.ldap.client import Modification
+
+    directory = cas_app.state.heracles.directories["main"]
+    dn = f"uid=asmith,ou=people,ou=paris,{BASE}"
+    stored = directory.get(dn).text("userPassword") or "{SSHA}x"
+    directory.modify(dn, [Modification("replace", "userPassword", [lock(stored).encode()])])
+    fake_cas(cas_app, {"ST-9": "asmith"})
+    r = cas_client.get("/api/v2/auth/cas/callback", params={"ticket": "ST-9"})
+    assert r.headers["location"] == "/login?sso_error=1"
+    assert cas_client.get("/api/v2/auth/me").status_code == 401
+
+
 def test_cas_callback_second_factor(cas_app: FastAPI, cas_client: TestClient) -> None:
     fake_cas(cas_app, {"ST-1": "asmith"})
 

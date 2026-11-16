@@ -20,6 +20,7 @@ def component_migrations() -> dict[str, Sequence[str | Migration]]:
     """Every component that keeps tables in the application database."""
     from heracles.auth import (
         api_tokens_db,
+        oidc,
         ratelimit_db,
         recovery_db,
         second_factor_db,
@@ -37,6 +38,7 @@ def component_migrations() -> dict[str, Sequence[str | Migration]]:
         recovery_db.COMPONENT: recovery_db.MIGRATIONS,
         second_factor_db.COMPONENT: second_factor_db.MIGRATIONS,
         api_tokens_db.COMPONENT: api_tokens_db.MIGRATIONS,
+        oidc.COMPONENT: oidc.MIGRATIONS,
         "tasks": scheduler.TASKS_MIGRATIONS,
         activation.COMPONENT: activation.MIGRATIONS,
         listing_epochs.COMPONENT: listing_epochs.MIGRATIONS,

@@ -183,10 +183,10 @@ def warn_about_config(raw: Mapping[str, Any], settings: ApiSettings) -> None:
     """Startup warnings about options that are removed or leave the server exposed."""
     api_raw = raw.get("api")
     api_keys: dict[str, Any] = cast("dict[str, Any]", api_raw) if isinstance(api_raw, dict) else {}
-    if "oidc" in raw or "oidc" in api_keys:
+    if "oidc" in raw:
         log.warning(
-            "config_oidc_ignored",
-            detail="OpenID Connect login was removed; the oidc key is ignored",
+            "config_oidc_misplaced",
+            detail="the oidc block belongs under api: (api.oidc); the top-level one is ignored",
         )
     sso_raw = api_keys.get("sso")
     sso_keys: dict[str, Any] = cast("dict[str, Any]", sso_raw) if isinstance(sso_raw, dict) else {}

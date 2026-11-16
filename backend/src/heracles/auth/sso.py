@@ -17,7 +17,7 @@ from heracles.core.config_store import effective_settings
 from heracles.ldap.client import DirectoryClient
 
 LoginMethod = Literal["form", "http-basic", "http-header", "cas"]
-LOGIN_METHODS: tuple[str, ...] = ("form", "http-basic", "http-header", "cas")
+LOGIN_METHODS: tuple[str, ...] = ("form", "http-basic", "http-header", "cas", "oidc")
 
 
 class SsoSettings(BaseModel):

@@ -8,6 +8,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
 
 from heracles.api.hosts import DEFAULT_ALLOWED_HOSTS
+from heracles.auth.oidc import OidcSettings
 from heracles.auth.recovery import RecoveryConfig
 from heracles.auth.sso import SsoSettings
 from heracles.auth.webauthn import WebAuthnSettings
@@ -172,3 +173,5 @@ class ApiSettings(BaseModel):
     # --- P3 compat ---
     #: Login methods (YAML defaults; the directory-stored configuration overrides them).
     sso: SsoSettings = Field(default_factory=SsoSettings)
+    #: OpenID Connect sign-in (off unless ``enabled``); never overridden from the directory.
+    oidc: OidcSettings = Field(default_factory=OidcSettings)

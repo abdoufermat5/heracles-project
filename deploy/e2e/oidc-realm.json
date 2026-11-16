@@ -1,0 +1,36 @@
+{
+  "realm": "heracles",
+  "enabled": true,
+  "sslRequired": "none",
+  "clients": [
+    {
+      "clientId": "heracles",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "e2e-oidc-client-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8420/api/v2/auth/oidc/callback",
+        "http://127.0.0.1:8431/api/v2/auth/oidc/callback"
+      ],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8420/login##http://127.0.0.1:8431/login"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@heracles.test",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Martin",
+      "credentials": [{ "type": "password", "value": "alice-at-the-idp", "temporary": false }]
+    }
+  ]
+}

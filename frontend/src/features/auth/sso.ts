@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { API_BASE, request } from '@/api/client'
 
-export type LoginMethodId = 'form' | 'http-basic' | 'http-header' | 'cas'
+export type LoginMethodId = 'form' | 'http-basic' | 'http-header' | 'cas' | 'oidc'
 
 export interface LoginMethod {
   id: LoginMethodId
   url: string | null
+  /** Button text the configuration gives (OpenID Connect). */
+  label?: string
 }
 
 export interface LoginMethods {
@@ -13,7 +15,7 @@ export interface LoginMethods {
   methods: LoginMethod[]
 }
 
-/** Cookie set when the session was opened through CAS (so logout can end the CAS session too). */
+/** Cookie naming the single sign-on a session was opened through (`cas`, `oidc`), so logout ends it too. */
 export const SSO_COOKIE = 'heracles_sso'
 
 export function useLoginMethods() {
@@ -37,10 +39,26 @@ export function methodUrl(method: LoginMethod, next?: string): string {
   return `${base}${base.includes('?') ? '&' : '?'}next=${encodeURIComponent(next)}`
 }
 
+export type SsoMethod = 'cas' | 'oidc'
+
+/** The single sign-on this session was opened through, if any. */
+export function ssoCookie(): SsoMethod | null {
+  for (const part of document.cookie.split(';')) {
+    const [name, value] = part.trim().split('=')
+    if (name === SSO_COOKIE && (value === 'cas' || value === 'oidc')) return value
+  }
+  return null
+}
+
 export function hasSsoCookie(): boolean {
-  return document.cookie.split(';').some((c) => c.trim() === `${SSO_COOKIE}=cas`)
+  return ssoCookie() !== null
+}
+
+/** Ends the Heracles session, then the provider's, and comes back to the login page. */
+export function ssoLogoutUrl(method: SsoMethod): string {
+  return `${API_BASE}/auth/${method}/logout`
 }
 
 export function casLogoutUrl(): string {
-  return `${API_BASE}/auth/cas/logout`
+  return ssoLogoutUrl('cas')
 }

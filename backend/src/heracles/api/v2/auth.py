@@ -26,6 +26,7 @@ from heracles.api.stepup import mark_reauthenticated, require_recent_auth
 from heracles.auth import csrf
 from heracles.auth.login import (
     InvalidLoginError,
+    account_locked,
     authenticate_bind,
     authenticate_header,
 )
@@ -308,6 +309,16 @@ def login_header(
         )
     except InvalidLoginError:
         raise unauthenticated() from None
+    if account_locked(directory, user_dn):
+        # no bind here: the lock marker on the password would not stop the proxy's user
+        audit_login_failed(
+            state,
+            request,
+            directory,
+            request.headers.get(cfg.header_name) or user_dn,
+            "account locked",
+        )
+        raise unauthenticated()
     audit_login(state, request, directory, user_dn, "header")
     return _start_session(request, response, state, user_dn, directory_id)
 

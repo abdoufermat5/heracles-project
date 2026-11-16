@@ -101,6 +101,28 @@ def test_header_login_requires_trusted_proxy() -> None:
     assert attempt("192.0.2.9") == 401
 
 
+def test_header_login_refuses_a_locked_account() -> None:
+    """No password is checked here: the Heracles lock marker must still stop the person."""
+    from heracles.auth.passwords import lock
+
+    directory = FakeDirectory()
+    directory.add_user("jdoe", "pw", user_password=lock("{SSHA}x"))
+    settings = ApiSettings(login=LoginSettings(header_enabled=True, trusted_proxies=["10.0.0.0/8"]))
+    client = TestClient(
+        create_app(settings, {"main": directory}),
+        base_url="https://testserver",
+        client=("10.1.2.3", 50000),
+    )
+    token = client.get("/api/v2/auth/csrf").json()["token"]
+    r = client.post(
+        "/api/v2/auth/login/header",
+        json={"directory": "main"},
+        headers={"X-CSRF-Token": token, "AUTH_USER": "jdoe"},
+    )
+    assert r.status_code == 401
+    assert client.get("/api/v2/auth/me").status_code == 401
+
+
 def test_header_login_disabled_by_default(env: Env) -> None:
     r = env.post("/api/v2/auth/login/header", {"directory": "main"})
     assert r.status_code == 404

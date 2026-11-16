@@ -46,6 +46,7 @@ dev: ## Whole stack: OpenLDAP + API + DNS + SMB/FTP/DHCP containers, Vite dev se
 	@echo "→ API http://$(HOST):$(PORT) (container, real LDAP) · DNS 127.0.0.1:$(DNS_PORT) · UI http://localhost:$(UI_PORT) · login alice / alice-secret"
 	@echo "  DNS zones of the directory: dig @127.0.0.1 -p $(DNS_PORT) www.heracles.test"
 	@echo "  SMB 127.0.0.1:445 · FTP 127.0.0.1:2121 (passive 30000-30009) · DHCP on the isolated compose network (no host port)"
+	@echo "  OpenID Connect test provider http://idp.localhost:8180 · sign in with the test provider as alice / alice-at-the-idp"
 	@echo "  the containers stay up after this exits; stop them with \`make dev-down\`"
 	$(COMPOSE) --profile dev up -d --build --wait
 	@trap 'kill 0' INT TERM EXIT; \
@@ -155,7 +156,7 @@ test-integration: ## python-ldap integration tests (in a container, against the 
 	$(COMPOSE) --profile e2e run --rm --build integration
 
 e2e: ## Build and start OpenLDAP + Heracles containers, run the end-to-end tests
-	$(COMPOSE) --profile e2e up -d --build --wait heracles
+	$(COMPOSE) --profile e2e --profile oidc up -d --build --wait heracles idp
 	cd $(BACKEND) && HERACLES_E2E_URL=http://localhost:8420 uv run pytest -q -m e2e tests/e2e
 	$(COMPOSE) --profile e2e run --rm integration
 	cd $(FRONTEND) && HERACLES_E2E_URL=http://localhost:8420 pnpm exec playwright test
@@ -187,7 +188,7 @@ e2e-ds-down: ## Remove the 389 Directory Server test containers
 	docker rm -f heracles-ds-app heracles-ds
 
 e2e-down: ## Stop the end-to-end stack and drop its LDAP data
-	$(COMPOSE) --profile e2e down -v
+	$(COMPOSE) --profile e2e --profile oidc down -v
 
 changelog: ## Regenerate CHANGELOG.md from the conventional commits and tags
 	python3 scripts/changelog.py -o CHANGELOG.md
