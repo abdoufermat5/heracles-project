@@ -1,6 +1,6 @@
 [project]
 name = "heracles"
-version = "0.1.0"
+version = "0.1.0-rc.1"
 description = "Heracles — web console for LDAP directory management"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
