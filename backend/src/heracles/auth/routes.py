@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import math
+from collections.abc import Mapping
 from typing import Annotated
 from urllib.parse import urlencode, urlsplit
 
@@ -12,7 +13,7 @@ import httpx2
 import structlog
 from fastapi import APIRouter, Query, Request, Response
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from heracles.api.auth_audit import audit_login, audit_login_failed
 from heracles.api.deps import StateDep, client_ip, session_from_cookie
@@ -40,6 +41,8 @@ class MethodInfo(BaseModel):
     id: str
     #: Where the browser goes to start this method (``null`` for the form).
     url: str | None = None
+    #: Text of its button, when the configuration names it (OpenID Connect; absent otherwise).
+    label: str | None = Field(default=None, exclude_if=lambda v: v is None)
 
 
 class MethodsResponse(BaseModel):
@@ -108,6 +111,10 @@ def available_methods(state: AppState, config: SsoConfig) -> MethodsResponse:
         methods.append(MethodInfo(id="http-header", url="/api/v2/auth/login/header"))
     if config.cas_available:
         methods.append(MethodInfo(id="cas", url="/api/v2/auth/cas/login"))
+    if state.settings.oidc.enabled:
+        methods.append(
+            MethodInfo(id="oidc", url="/api/v2/auth/oidc/login", label=state.settings.oidc.label)
+        )
     primary = config.login_method if any(m.id == config.login_method for m in methods) else "form"
     return MethodsResponse(login_method=primary, methods=methods)
 
@@ -129,6 +136,7 @@ def _open_session(
     directory_id: str,
     *,
     sso: str | None = None,
+    cache: Mapping[str, object] | None = None,
 ) -> list[str]:
     """Rotate the session and open a new one; returns the pending second-factor methods."""
     old = session_from_cookie(request, state)
@@ -146,6 +154,7 @@ def _open_session(
     )
     if sso:
         session.cache["sso"] = sso
+    session.cache.update(cache or {})
     state.sessions.save(session)
     cfg = state.settings.session
     response.set_cookie(

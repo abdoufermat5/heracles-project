@@ -1,4 +1,4 @@
-import { casLogoutUrl, hasSsoCookie, navigateExternal } from '@/features/auth/sso'
+import { navigateExternal, ssoCookie, ssoLogoutUrl } from '@/features/auth/sso'
 import { dnPath, request, resetCsrf } from './client'
 import type {
   ApiTokenCreated,
@@ -116,9 +116,11 @@ export const api = {
       method: 'DELETE',
     }),
   logout: async () => {
-    if (hasSsoCookie()) {
-      // opened through CAS: the server ends our session and the CAS one, then returns to /login
-      navigateExternal(casLogoutUrl())
+    const sso = ssoCookie()
+    if (sso) {
+      // opened through single sign-on: the server ends our session and the provider's one,
+      // then returns to /login
+      navigateExternal(ssoLogoutUrl(sso))
       return
     }
     await request<undefined>('/auth/logout', { method: 'POST' })

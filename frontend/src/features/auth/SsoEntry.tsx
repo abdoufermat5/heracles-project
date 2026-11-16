@@ -7,6 +7,7 @@ const LABEL_KEYS: Record<Exclude<LoginMethodId, 'form'>, string> = {
   cas: 'sso.signIn.cas',
   'http-basic': 'sso.signIn.httpBasic',
   'http-header': 'sso.signIn.httpHeader',
+  oidc: 'sso.signIn.oidc',
 }
 
 /**
@@ -40,7 +41,9 @@ export function SsoEntry({ next, failed }: { next?: string; failed?: boolean }) 
         >
           <a href={methodUrl(method, next)}>
             <KeyRound aria-hidden />
-            {t(LABEL_KEYS[method.id as Exclude<LoginMethodId, 'form'>])}
+            {t(LABEL_KEYS[method.id as Exclude<LoginMethodId, 'form'>], {
+              label: method.label ?? t('sso.signIn.oidcDefault'),
+            })}
           </a>
         </Button>
       ))}

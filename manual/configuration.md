@@ -68,6 +68,25 @@ api:
   #   user_attributes:     # extra SCIM path -> LDAP attribute mappings (plain strings)
   #     "title": "description"
 
+  # Sign-in through your identity provider (OpenID Connect, authorization code + PKCE). Off
+  # unless enabled here; read from this file only. The password form stays available (and
+  # audited) as the fallback. Register the redirect URI
+  # <public_url>/api/v2/auth/oidc/callback and the post-logout URI <public_url>/login.
+  # oidc:
+  #   enabled: true
+  #   issuer: https://login.example.org/realms/staff   # its discovery document must match
+  #   client_id: heracles
+  #   client_secret_file: /run/secrets/oidc_client_secret
+  #   # client_auth: client_secret_basic   # or client_secret_post, or none (public client)
+  #   # scopes: [openid, profile, email]
+  #   claim: preferred_username            # the ID token claim naming the person
+  #   # attribute: uid                     # directory attribute it must equal (one entry)
+  #   label: Example SSO                   # button text: "Sign in with Example SSO"
+  #   # allowed_groups: [heracles-admins]  # only these values of groups_claim may sign in
+  #   # groups_claim: groups
+  #   public_url: https://heracles.example.org
+  #   # ca_cert_path: /etc/ssl/certs/internal-ca.pem
+
   # Built console to serve. The container image finds /app/static by itself.
   # static_dir: /app/static
 

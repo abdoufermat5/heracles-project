@@ -42,6 +42,20 @@ def user_filter(config: LoginConfig, login: str) -> str:
     )
 
 
+def account_locked(directory: DirectoryClient, dn: str) -> bool:
+    """Whether the account carries the Heracles lock marker.
+
+    A password bind fails on its own for such an account; the sign-in methods without a bind
+    (single sign-on, trusted header) must ask.
+    """
+    from heracles.auth.passwords.lock import is_locked
+    from heracles.schema.names import STD_ATTR
+
+    entry = directory.get(dn, [STD_ATTR.USER_PASSWORD])
+    stored = entry.text(STD_ATTR.USER_PASSWORD) if entry is not None else None
+    return bool(stored) and is_locked(stored or "")
+
+
 def find_user_dn(directory: DirectoryClient, config: LoginConfig, login: str) -> str | None:
     """DN of the single user matching ``login``; ``None`` for zero or several matches."""
     if not login.strip():

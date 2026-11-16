@@ -54,6 +54,25 @@ describe('login page entry points', () => {
     expect(link).toHaveAttribute('data-variant', 'outline')
   })
 
+  it('names the OpenID Connect provider on its button and keeps the form', async () => {
+    server.use(
+      http.get('/api/v2/auth/methods', () =>
+        HttpResponse.json({
+          login_method: 'oidc',
+          methods: [
+            { id: 'form', url: null },
+            { id: 'oidc', url: '/api/v2/auth/oidc/login', label: 'Example SSO' },
+          ],
+        }),
+      ),
+    )
+    renderApp('/login?redirect=%2Fme')
+    const link = await screen.findByRole('link', { name: 'Sign in with Example SSO' })
+    expect(link).toHaveAttribute('href', '/api/v2/auth/oidc/login?next=%2Fme')
+    expect(link).toHaveAttribute('data-variant', 'default')
+    expect(screen.getByLabelText('Username')).toBeInTheDocument()
+  })
+
   it('explains a failed single sign-on', async () => {
     methods('cas', ['form', 'cas'])
     renderApp('/login?sso_error=1')
@@ -81,6 +100,13 @@ describe('helpers', () => {
     expect(hasSsoCookie()).toBe(true)
     await api.logout()
     expect(go).toHaveBeenCalledWith(casLogoutUrl())
+  })
+
+  it('logs out of the OpenID Connect provider when the session was opened through it', async () => {
+    const go = vi.mocked(navigateExternal)
+    document.cookie = `${SSO_COOKIE}=oidc; path=/`
+    await api.logout()
+    expect(go).toHaveBeenCalledWith('/api/v2/auth/oidc/logout')
   })
 
   it('uses the regular logout endpoint otherwise', async () => {

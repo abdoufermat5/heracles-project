@@ -18,6 +18,7 @@ dependencies = [
   "webauthn>=3.0.1",
   "bcrypt>=5.0.0",
   "httpx2>=2.16.0",
+  "pyjwt[crypto]>=2.10",
 ]
 
 [project.optional-dependencies]
