@@ -21,7 +21,12 @@ from heracles.api.errors import ApiError, not_found, unauthenticated, validation
 from heracles.api.hosts import request_base
 from heracles.api.state import AppState
 from heracles.auth.cas import CasClient, CasError
-from heracles.auth.login import InvalidLoginError, authenticate_bind, find_user_dn
+from heracles.auth.login import (
+    InvalidLoginError,
+    account_locked,
+    authenticate_bind,
+    find_user_dn,
+)
 from heracles.auth.sessions import CLIENT_KEY, client_info
 from heracles.auth.sso import SsoConfig, effective_sso
 from heracles.ldap.client import DirectoryClient
@@ -241,6 +246,10 @@ def cas_callback(
     if user_dn is None:
         log.info("cas_unknown_account", directory=directory_id)
         audit_login_failed(state, request, client, principal.name, "unknown account")
+        return failure
+    if account_locked(client, user_dn):
+        # no bind here: the lock marker on the password would not stop the CAS user
+        audit_login_failed(state, request, client, principal.name, "account locked")
         return failure
     state.limiter.record_success(key)
     response = RedirectResponse("/", status_code=302)
