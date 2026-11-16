@@ -155,7 +155,7 @@ test-integration: ## python-ldap integration tests (in a container, against the 
 	$(COMPOSE) --profile e2e run --rm --build integration
 
 e2e: ## Build and start OpenLDAP + Heracles containers, run the end-to-end tests
-	$(COMPOSE) --profile e2e up -d --build --wait heracles
+	$(COMPOSE) --profile e2e --profile oidc up -d --build --wait heracles idp
 	cd $(BACKEND) && HERACLES_E2E_URL=http://localhost:8420 uv run pytest -q -m e2e tests/e2e
 	$(COMPOSE) --profile e2e run --rm integration
 	cd $(FRONTEND) && HERACLES_E2E_URL=http://localhost:8420 pnpm exec playwright test
@@ -187,7 +187,7 @@ e2e-ds-down: ## Remove the 389 Directory Server test containers
 	docker rm -f heracles-ds-app heracles-ds
 
 e2e-down: ## Stop the end-to-end stack and drop its LDAP data
-	$(COMPOSE) --profile e2e down -v
+	$(COMPOSE) --profile e2e --profile oidc down -v
 
 changelog: ## Regenerate CHANGELOG.md from the conventional commits and tags
 	python3 scripts/changelog.py -o CHANGELOG.md

@@ -57,6 +57,30 @@ services:
       ldap:
         condition: service_healthy
 
+  # OpenID Connect identity provider for the sign-in tests (profile `oidc`, with `e2e`). Its
+  # issuer, http://idp.localhost:8180/realms/heracles, is the same for the browser (Chromium
+  # sends *.localhost to the loopback, where the port is published) and for Heracles (the
+  # network alias below). Test realm, client and person: ./e2e/oidc-realm.json.
+  idp:
+    profiles: [oidc]
+    image: quay.io/keycloak/keycloak:26.0.7
+    command: ["start-dev", "--http-port=8180", "--hostname=http://idp.localhost:8180", "--import-realm", "--health-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "127.0.0.1:8180:8180"
+    volumes:
+      - ./e2e/oidc-realm.json:/opt/keycloak/data/import/realm.json:ro
+    networks:
+      default:
+        aliases: [idp.localhost]
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+
   # python-ldap integration tests: docker compose ... --profile e2e run --rm integration
   integration:
     profiles: [e2e]
