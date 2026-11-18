@@ -30,28 +30,28 @@ export const accessApi = {
   createRequest: (body: { target: string; reason: string; until: string | null; member?: string }) =>
     request<{ request: AccessRequest }>('/access/requests', { method: 'POST', body }),
   approve: (id: string, comment: string) =>
-    request<{ request: AccessRequest }>(`/access/requests/${id}/approve`, { method: 'POST', body: { comment } }),
+    request<{ request: AccessRequest }>(`/access/requests/${encodeURIComponent(id)}/approve`, { method: 'POST', body: { comment } }),
   reject: (id: string, comment: string) =>
-    request<{ request: AccessRequest }>(`/access/requests/${id}/reject`, { method: 'POST', body: { comment } }),
-  cancel: (id: string) => request<{ request: AccessRequest }>(`/access/requests/${id}/cancel`, { method: 'POST' }),
+    request<{ request: AccessRequest }>(`/access/requests/${encodeURIComponent(id)}/reject`, { method: 'POST', body: { comment } }),
+  cancel: (id: string) => request<{ request: AccessRequest }>(`/access/requests/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
   queue: (signal?: AbortSignal) => request<{ approvals: number; reviews: number }>('/access/queue', { signal }),
 
   campaigns: (signal?: AbortSignal) =>
     request<{ items: Campaign[]; can_manage: boolean }>('/access/reviews', { signal }),
   campaign: (id: string, signal?: AbortSignal) =>
-    request<{ campaign: Campaign; items: ReviewItem[]; can_manage: boolean }>(`/access/reviews/${id}`, { signal }),
+    request<{ campaign: Campaign; items: ReviewItem[]; can_manage: boolean }>(`/access/reviews/${encodeURIComponent(id)}`, { signal }),
   createCampaign: (body: CampaignBody) =>
     request<{ campaign: Campaign }>('/access/reviews', { method: 'POST', body }),
   decideItem: (campaign: string, item: string, decision: ReviewDecision, comment: string) =>
-    request<{ item: ReviewItem }>(`/access/reviews/${campaign}/items/${item}`, {
+    request<{ item: ReviewItem }>(`/access/reviews/${encodeURIComponent(campaign)}/items/${encodeURIComponent(item)}`, {
       method: 'POST',
       body: { decision, comment },
     }),
   closeCampaign: (id: string) =>
-    request<{ campaign: Campaign; failed: ReviewItem[] }>(`/access/reviews/${id}/close`, { method: 'POST' }),
+    request<{ campaign: Campaign; failed: ReviewItem[] }>(`/access/reviews/${encodeURIComponent(id)}/close`, { method: 'POST' }),
   /** The report (step-up: 403 `reauth_required` when the sign-in is old). */
   report: async (id: string, format: 'json' | 'csv'): Promise<{ blob: Blob; name: string }> => {
-    const res = await fetch(`${API_BASE}/access/reviews/${id}/report?format=${format}`, { credentials: 'include' })
+    const res = await fetch(`${API_BASE}/access/reviews/${encodeURIComponent(id)}/report?format=${format}`, { credentials: 'include' })
     if (!res.ok) {
       let body: ApiErrorBody['error']
       try {

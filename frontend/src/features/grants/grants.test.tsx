@@ -388,3 +388,23 @@ describe('end dates of ACL assignments', () => {
     expect(screen.queryByRole('button', { name: /^Set end date for / })).not.toBeInTheDocument()
   })
 })
+
+describe('access api paths', () => {
+  it('encodes every dynamic path segment so an id cannot escape its route', async () => {
+    const seen: string[] = []
+    server.use(
+      http.all('/api/v2/*', ({ request }) => {
+        seen.push(new URL(request.url).pathname)
+        return HttpResponse.json({})
+      }),
+    )
+    await accessApi.campaign('../../admin/config?x=1#')
+    await accessApi.decideItem('a/b', '../c', 'approve', '')
+    await accessApi.approve('x/../y', '')
+    expect(seen.filter((p) => !p.endsWith('/auth/csrf'))).toEqual([
+      '/api/v2/access/reviews/..%2F..%2Fadmin%2Fconfig%3Fx%3D1%23',
+      '/api/v2/access/reviews/a%2Fb/items/..%2Fc',
+      '/api/v2/access/requests/x%2F..%2Fy/approve',
+    ])
+  })
+})
