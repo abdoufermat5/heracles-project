@@ -19,7 +19,7 @@ BUILD_ID ?=
 VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(BACKEND)/pyproject.toml)
 
 .PHONY: bundle-check help install install-backend install-frontend \
-        dev dev-demo dev-down dev-reset dev-mock dhcp-test kdc-test backend frontend demo build docker-build serve dns-demo \
+        dev dev-demo dev-down dev-reset down dev-mock dhcp-test kdc-test backend frontend demo build docker-build serve dns-demo \
         test test-backend test-frontend lint lint-backend lint-frontend \
         format typecheck check bench bench-ldap bench-check bench-baseline ldap-up ldap-down ldap-logs test-integration e2e e2e-replicas e2e-ui e2e-down e2e-ds e2e-ds-down schema changelog third-party-schema clean
 
@@ -194,6 +194,11 @@ e2e-ds: ## End-to-end tests against 389 Directory Server (containers heracles-ds
 
 e2e-ds-down: ## Remove the 389 Directory Server test containers
 	docker rm -f heracles-ds-app heracles-ds
+
+down: ## Stop every stack (dev, e2e, replicas, 389 DS) and drop all their containers, networks and data
+	$(COMPOSE) --profile dev --profile e2e --profile oidc --profile dhcp-test down -v --remove-orphans
+	$(REPLICAS) down -v --remove-orphans
+	docker rm -f -v heracles-ds-app heracles-ds 2>/dev/null || true
 
 e2e-down: ## Stop the end-to-end stack and drop its LDAP data
 	$(COMPOSE) --profile e2e --profile oidc down -v
