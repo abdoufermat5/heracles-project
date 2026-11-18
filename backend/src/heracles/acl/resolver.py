@@ -79,12 +79,15 @@ def _substituter(values: Mapping[str, str]) -> Callable[[re.Match[str]], str]:
     return substitute
 
 
-def expand_target_filter(template: str, user_attrs: Mapping[str, Sequence[str]]) -> list[str]:
+def expand_target_filter(
+    template: str, user_attrs: Mapping[str, Sequence[str]], limit: int = DEFAULT_TARGET_LIMIT
+) -> list[str]:
     """Substitute ``%attr%`` placeholders with escaped values of the user.
 
     A multi-valued attribute yields one filter per value. When a placeholder has
     no value the result is empty: an unresolved placeholder must never widen the
-    match.
+    match. The product of several multi-valued attributes is cut at ``limit + 1`` filters
+    (one more than allowed, so the caller can tell that some were dropped).
     """
     names: list[str] = []
     for match in _PLACEHOLDER.finditer(template):
@@ -98,7 +101,7 @@ def expand_target_filter(template: str, user_attrs: Mapping[str, Sequence[str]])
     if any(not pool for pool in pools):
         return []
     filters: list[str] = []
-    for combo in itertools.product(*pools):
+    for combo in itertools.islice(itertools.product(*pools), limit + 1):
         chosen = dict(zip(names, combo, strict=True))
         filters.append(_PLACEHOLDER.sub(_substituter(chosen), template))
     return filters
@@ -222,8 +225,9 @@ class AclResolver:
             return [entry_dn]
         found: list[str] = []
         seen: set[str] = set()
-        overflow = False
-        for filterstr in expand_target_filter(assignment.target_filter, attrs):
+        expanded = expand_target_filter(assignment.target_filter, attrs, self._limit)
+        overflow = len(expanded) > self._limit
+        for filterstr in expanded[: self._limit]:
             for target in self._dir.search_targets(entry_dn, filterstr, self._limit + 1):
                 key = dnlib.normalize(target)
                 if key in seen:

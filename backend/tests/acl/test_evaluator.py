@@ -164,14 +164,31 @@ def test_self_flag(w: World) -> None:
     assert ev.permissions(alice.upper(), "user/user", "userPassword").write
 
 
-def test_self_flag_skips_whole_rule(w: World) -> None:
+def test_self_flag_skips_only_its_block(w: World) -> None:
     alice = w.user("alice")
     bob = w.user("bob")
     w.assign(BASE, w.acl_role("one", "0:all;r,user/user;sw"), [alice])
     ev = w.evaluator(alice)
-    assert ev.permissions(bob, "user/user").is_empty  # whole rule skipped
+    assert ev.permissions(bob, "user/user") == R("r")  # the self block adds nothing, `all` stays
+    assert ev.permissions(bob, "user/user", "cn") == R("r")
     assert ev.permissions(bob, "group/ogroup") == R("r")  # no user block => all applies
     assert ev.permissions(alice, "user/user") == R("rw")
+
+
+def test_self_and_other_blocks_of_one_key_stay_apart(w: World) -> None:
+    alice = w.user("alice")
+    bob = w.user("bob")
+    w.assign(BASE, w.acl_role("both", "0:user/user;r,user/user;sw#userPassword;sw"), [alice])
+    ev = w.evaluator(alice)
+    assert ev.permissions(bob, "user/user") == R("r")  # not widened by the self block
+    assert not ev.permissions(bob, "user/user", "userPassword").write
+    assert ev.permissions(alice, "user/user") == R("rw")
+    assert ev.permissions(alice, "user/user", "userPassword").write
+    # and in the other order
+    w.assign(BASE, w.acl_role("rev", "1:user/user;sw,user/user;r"), [bob])
+    ev = w.evaluator(bob)
+    assert ev.permissions(alice, "user/user") == R("r")
+    assert ev.permissions(bob, "user/user") == R("rw")
 
 
 def test_self_flag_on_all_and_wildcard_and_attrs(w: World) -> None:
@@ -378,3 +395,10 @@ def test_manages_others_ignores_read_only_and_self_only_roles() -> None:
     assert _evaluator([("e", BASE, "subtree")]).manages_others() is False  # self-only
     assert _evaluator([("d", SALES, "subtree")]).manages_others() is True
     assert AclEvaluator(_evaluator([])._resolved, ignore_acl=True).manages_others() is True  # pyright: ignore[reportPrivateUsage]
+
+
+def test_template_right_survives_a_full_rule_before_it(w: World) -> None:
+    alice = w.user("alice")
+    w.assign(BASE, w.acl_role("a", "0:all;rwcdm"), [alice])
+    w.assign(BASE, w.acl_role("b", "0:user/user;t"), [alice])
+    assert w.evaluator(alice).permissions(BASE, "user/user").template

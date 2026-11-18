@@ -232,3 +232,9 @@ def test_resolver_with_pure_fake_directory() -> None:
 
     resolved = AclResolver(Fake()).resolve("uid=u,dc=x")
     assert "dc=x" in resolved.views
+
+
+def test_expand_target_filter_is_bounded() -> None:
+    values = {"a": [str(i) for i in range(50)], "b": [str(i) for i in range(50)]}
+    out = expand_target_filter("(&(x=%a%)(y=%b%))", values, 10)
+    assert len(out) == 11  # one more than the limit tells the caller some were dropped

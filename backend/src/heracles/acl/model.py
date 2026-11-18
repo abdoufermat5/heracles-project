@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from heracles.acl.rights import NO_RIGHTS, Rights
@@ -28,11 +28,47 @@ class AclBlock:
     object: str
     rights: Rights = NO_RIGHTS
     attributes: tuple[tuple[str, Rights], ...] = ()
+    #: Object-level rights that only apply to the user's own entry and that were merged into
+    #: a block holding rights for everybody (``user/user;r`` + ``user/user;sw``): ``rights``
+    #: then stays the part that applies to every entry.
+    self_rights: Rights = NO_RIGHTS
 
     @property
     def is_self(self) -> bool:
         """True when the block only applies to the connected user's own entry."""
         return self.rights.self_only
+
+    def object_rights(self, *, own: bool = True) -> Rights:
+        """Object-level rights that apply to an entry (``own``: the user's own entry)."""
+        return self.rights.union(self.self_rights) if own else self.rights
+
+    def merge(self, other: AclBlock) -> AclBlock:
+        """Merge two blocks of the same object key, keeping self-only rights apart.
+
+        Rights flagged ``s`` stay confined to the user's own entry; the ones that apply to
+        every entry are never widened or narrowed by the other block's flag.
+        """
+        everyone = [b for b in (self, other) if not b.is_self]
+        selfish = [b for b in (self, other) if b.is_self]
+        if not everyone or not selfish:
+            return AclBlock(
+                self.object,
+                self.rights.union(other.rights),
+                self.attributes + other.attributes,
+                self.self_rights.union(other.self_rights),
+            )
+        rights = NO_RIGHTS
+        self_rights = NO_RIGHTS
+        attributes: list[tuple[str, Rights]] = []
+        for b in everyone:
+            rights = rights.union(b.rights)
+            self_rights = self_rights.union(b.self_rights)
+            attributes.extend(b.attributes)
+        for b in selfish:
+            self_rights = self_rights.union(b.rights.without_self())
+            self_rights = self_rights.union(b.self_rights)
+            attributes.extend((n, replace(r, self_only=True)) for n, r in b.attributes)
+        return AclBlock(self.object, rights, tuple(attributes), self_rights.without_self())
 
     def attribute_rights(self, attribute: str, *, own: bool = True) -> Rights:
         """Union of the rights granted on ``attribute`` (case-insensitive).
@@ -48,7 +84,7 @@ class AclBlock:
 
     def all_rights(self, *, own: bool = True) -> Rights:
         """Union of object-level and every attribute-level right."""
-        result = self.rights
+        result = self.object_rights(own=own)
         for _, rights in self.attributes:
             if own or not rights.self_only:
                 result = result.union(rights)
@@ -70,11 +106,7 @@ class RoleTemplateValue:
             if previous is None:
                 result[block.object] = block
             else:
-                result[block.object] = AclBlock(
-                    block.object,
-                    previous.rights.union(block.rights),
-                    previous.attributes + block.attributes,
-                )
+                result[block.object] = previous.merge(block)
         return result
 
 

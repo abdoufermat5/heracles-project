@@ -618,15 +618,7 @@ def _merged_blocks(templates: Iterable[str]) -> dict[str, AclBlock]:
             continue
         for key, block in parsed.block_map().items():
             previous = merged.get(key)
-            merged[key] = (
-                block
-                if previous is None
-                else AclBlock(
-                    key,
-                    previous.rights.union(block.rights),
-                    previous.attributes + block.attributes,
-                )
-            )
+            merged[key] = block if previous is None else previous.merge(block)
     return merged
 
 
@@ -652,7 +644,7 @@ def _granted(block: AclBlock) -> list[tuple[str, Rights]]:
     The ``s`` flag is not a right: a self-only block still grants on the assignee's own
     entry, so its rights are required like any other.
     """
-    out: list[tuple[str, Rights]] = [("", block.rights.without_self())]
+    out: list[tuple[str, Rights]] = [("", block.rights.union(block.self_rights).without_self())]
     by_name: dict[str, Rights] = {}
     for name, rights in block.attributes:
         key = name.lower()

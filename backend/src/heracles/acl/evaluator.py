@@ -129,7 +129,7 @@ class AclEvaluator:
     ) -> Rights:
         result = NO_RIGHTS
         for rule in view:
-            if result.is_full:
+            if result.is_full and result.template:
                 break
             if rule.scope is AclScope.BASE and rule.origin != ndn:
                 continue
@@ -142,7 +142,9 @@ class AclEvaluator:
         blocks = rule.blocks
         target = blocks.get(obj)
         if target is not None and target.is_self and not own:
-            return NO_RIGHTS  # the whole rule is skipped
+            # a self-only block grants nothing on another entry, but the rest of the rule
+            # (the ``all`` block, the other tabs of a wildcard) still applies
+            target = None
         result = NO_RIGHTS
         everything = blocks.get(ALL_OBJECTS)
         if everything is not None and (own or not everything.is_self):
@@ -150,21 +152,23 @@ class AclEvaluator:
         category, _, tab = obj.partition("/")
         if tab == WILDCARD and not attribute:
             if target is not None:
-                result = result.union(target.rights)
+                result = result.union(target.object_rights(own=own))
             for name in self._tabs.get(category, ()):
                 block = blocks.get(object_key(category, name))
                 if block is not None and (own or not block.is_self):
-                    result = result.union(block.rights)
+                    result = result.union(block.object_rights(own=own))
             return result
         if target is None:
             return result
         if not attribute:
-            return result.union(target.rights if object_only else target.all_rights(own=own))
+            return result.union(
+                target.object_rights(own=own) if object_only else target.all_rights(own=own)
+            )
         return result.union(self._attribute_rights(target, attribute, own=own))
 
     @staticmethod
     def _attribute_rights(block: AclBlock, attribute: str, *, own: bool) -> Rights:
-        return block.attribute_rights(attribute, own=own).union(block.rights)
+        return block.attribute_rights(attribute, own=own).union(block.object_rights(own=own))
 
     def manages_others(self) -> bool:
         """True when some role lets the user change entries other than their own.
