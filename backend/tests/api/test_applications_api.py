@@ -79,7 +79,11 @@ def test_user_sees_the_applications_of_their_roles(app_client: TestClient) -> No
         "web_application",
         {"main": {"values": {"cn": "wiki", "labeledURI": "https://wiki.example.com/"}}},
     )
-    create(admin, "web_application", {"main": {"values": {"cn": "hidden", "labeledURI": "x:y"}}})
+    create(
+        admin,
+        "web_application",
+        {"main": {"values": {"cn": "hidden", "labeledURI": "https://hidden.example.com/"}}},
+    )
     create(
         admin,
         "role",
