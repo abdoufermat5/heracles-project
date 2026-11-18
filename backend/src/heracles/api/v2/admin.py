@@ -141,7 +141,7 @@ def _refuse_granting_above_caller(
         stored,
         saved,
         at=dn,
-        permissions=domain.evaluator(user).permissions,
+        delegable=domain.evaluator(user).delegable,
     )
     if missing:
         raise forbidden("You cannot grant rights you do not hold: " + ", ".join(missing))
@@ -151,6 +151,10 @@ def _refuse_granting_above_caller(
 def admin_errors() -> Iterator[None]:
     try:
         yield
+    except acl_admin.UnheldRightsError as exc:
+        raise forbidden(
+            "You cannot grant rights you do not hold: " + ", ".join(exc.missing)
+        ) from exc
     except acl_admin.RoleInUseError as exc:
         raise ApiError(409, "conflict", "The role is still in use", fields=exc.fields) from exc
     except acl_admin.AclAdminError as exc:
@@ -659,6 +663,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
                 cn=body.cn,
                 description=body.description,
                 templates=body.templates,
+                delegable=domain.evaluator(user).delegable,
             )
             role = acl_admin.get_role(user.directory, dn)
         assert role is not None
@@ -672,7 +677,11 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         _require(user, domain, ROLE_KEY, "w", dn)
         with admin_errors():
             role = acl_admin.update_role(
-                user.directory, dn, description=body.description, templates=body.templates
+                user.directory,
+                dn,
+                description=body.description,
+                templates=body.templates,
+                delegable=domain.evaluator(user).delegable,
             )
         invalidate_acl_cache(user.session)
         _audit(user, domain, "acl", "acl_role", dn, "role updated")

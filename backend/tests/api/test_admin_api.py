@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from heracles.acl import serialise_assignment
+from heracles.acl.admin import template_to_json
 from heracles.acl.model import AclAssignment, AclScope
 from heracles.api.state import AppState
 from heracles.demo import BASE
@@ -246,6 +247,56 @@ def test_assignment_may_grant_an_equal_or_lesser_role(client: TestClient) -> Non
     assert api.put(f"/acl/assignments/{dnp(PARIS)}", lesser).status_code == 200
     equal = {"assignments": [{"scope": "subtree", "role": DELEGATE_ROLE, "members": [BMARTIN]}]}
     assert api.put(f"/acl/assignments/{dnp(PARIS)}", equal).status_code == 200
+
+
+def _role_editor(client: TestClient) -> str:
+    """Give bmartin a role that may edit roles, itself included, assigned on the base."""
+    state = cast("AppState", cast("FastAPI", client.app).state.heracles)
+    directory = cast("MemoryDirectory", state.directories["main"])
+    role = f"cn=role-editor,ou=aclroles,{BASE}"
+    directory.add(
+        role,
+        {
+            "objectClass": [schema.OC.ACL_ROLE.encode()],
+            "cn": [b"role-editor"],
+            schema.ATTR.ACL_TEMPLATE: [b"0:user/user;rw,acl/aclRole;rw"],
+        },
+    )
+    value = serialise_assignment(AclAssignment(3, AclScope.SUBTREE, role, (BMARTIN,))).encode()
+    directory.modify(BASE, [Modification("add", schema.ATTR.ACL_ENTRY, [value])])
+    return role
+
+
+def test_role_edit_cannot_grant_rights_the_caller_does_not_hold(client: TestClient) -> None:
+    role = _role_editor(client)
+    api = Api(client).login("bmartin")
+    path = f"/acl/roles/{dnp(role)}"
+    escalation = {"templates": [template_to_json("0:all;rwcdm")]}
+    refused = api.put(path, escalation)
+    assert refused.status_code == 403, refused.text
+    assert "all:rwcdm" in refused.json()["error"]["message"]
+    assert api.get(path).json()["templates"][0]["raw"] == "0:user/user;rw,acl/aclRole;rw"
+    # a change within the caller's own rights goes through
+    lesser = {"templates": [template_to_json("0:user/user;r,acl/aclRole;rw")]}
+    assert api.put(path, lesser).status_code == 200
+
+
+def test_role_object_edit_cannot_grant_rights_the_caller_does_not_hold(
+    client: TestClient,
+) -> None:
+    """The role type writes its templates through the generic object API."""
+    role = _role_editor(client)
+    api = Api(client).login("bmartin")
+    path = f"/api/v2/objects/acl_role/{dnp(role)}"
+
+    def patch(*templates: str) -> Any:
+        body = {"tabs": {"main": {"values": {schema.ATTR.ACL_TEMPLATE: list(templates)}}}}
+        return client.patch(path, json=body, headers=api.headers)
+
+    refused = patch("0:all;rwcdm")
+    assert refused.status_code == 422, refused.text
+    assert "all:rwcdm" in refused.json()["error"]["fields"]["main"]
+    assert patch("0:user/user;r,acl/aclRole;rw").status_code == 200
 
 
 def test_super_admin_assigns_any_role(client: TestClient, admin: Api) -> None:

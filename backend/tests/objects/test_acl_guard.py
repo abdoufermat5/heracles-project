@@ -62,7 +62,10 @@ class GuardPolicy(AllowAll):
         }
         self.calls: list[tuple[str, str, str]] = []
 
-    def permissions(self, dn: str, object_key: str, attribute: str) -> Rights:
+    def delegable(
+        self, dn: str, object_key: str, attribute: str = "", *, below: bool = False
+    ) -> Rights:
+        del below
         self.calls.append((dnlib.normalize(dn), object_key, attribute))
         return self.held.get((dnlib.normalize(dn), object_key), NO_RIGHTS)
 
@@ -70,7 +73,10 @@ class GuardPolicy(AllowAll):
 class IgnoresAcl(GuardPolicy):
     """A bootstrap administrator's policy: every right everywhere."""
 
-    def permissions(self, dn: str, object_key: str, attribute: str) -> Rights:
+    def delegable(
+        self, dn: str, object_key: str, attribute: str = "", *, below: bool = False
+    ) -> Rights:
+        del dn, object_key, attribute, below
         return FULL_RIGHTS
 
 

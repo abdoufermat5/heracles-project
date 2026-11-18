@@ -77,9 +77,11 @@ class TypeAclPolicy:
     def can_move(self, dn: str) -> bool:
         return self._ev.permissions(dn, self._info.acl_object(self._info.main_tab)).move
 
-    def permissions(self, dn: str, object_key: str, attribute: str = "") -> Rights:
-        """Effective rights of the user, for the ACL assignment guard of the object layer."""
-        return self._ev.permissions(dn, object_key, attribute)
+    def delegable(
+        self, dn: str, object_key: str, attribute: str = "", *, below: bool = False
+    ) -> Rights:
+        """Rights the user may grant to others, for the ACL grant guard of the object layer."""
+        return self._ev.delegable(dn, object_key, attribute, below=below)
 
     def tab_rights(self, dn: str, tab: type[Tab]) -> tuple[Rights, dict[str, Rights]]:
         """Object-level rights of a tab and per-attribute rights (for the ``acl`` block)."""

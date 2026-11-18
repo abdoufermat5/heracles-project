@@ -48,15 +48,17 @@ class MovePolicy(Protocol):
 
 @runtime_checkable
 class AssignmentPolicy(Protocol):
-    """A policy able to report the acting user's effective rights (the ACL engine).
+    """A policy able to report the rights the acting user may grant (the ACL engine).
 
-    Optional: the object layer asks it for the rights an ACL assignment would grant
-    and refuses the write when the caller holds less. A policy without ``permissions``
-    (public forms, tests) does not restrict assignments, and a policy that ignores the
-    ACLs (bootstrap administrators) returns full rights, so it never refuses one.
+    Optional: the object layer asks it for the rights an ACL assignment or role template
+    would grant and refuses the write when the caller holds less. A policy without
+    ``delegable`` (public forms, tests) does not restrict grants, and a policy that ignores
+    the ACLs (bootstrap administrators) returns full rights, so it never refuses one.
     """
 
-    def permissions(self, dn: str, object_key: str, attribute: str) -> Rights: ...
+    def delegable(
+        self, dn: str, object_key: str, attribute: str = "", *, below: bool = False
+    ) -> Rights: ...
 
 
 class AllowAll:

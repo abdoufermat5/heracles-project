@@ -60,6 +60,8 @@ class AclAccessPolicy:
         key = self._types.get(type_name)
         return key is not None and self._ev.permissions(dn, key).delete
 
-    def permissions(self, dn: str, object_key: str, attribute: str = "") -> Rights:
-        """Effective rights of the user on ``object_key`` (and ``attribute``) at ``dn``."""
-        return self._ev.permissions(dn, object_key, attribute)
+    def delegable(
+        self, dn: str, object_key: str, attribute: str = "", *, below: bool = False
+    ) -> Rights:
+        """Rights the user may grant to others on ``object_key`` (and ``attribute``) at ``dn``."""
+        return self._ev.delegable(dn, object_key, attribute, below=below)

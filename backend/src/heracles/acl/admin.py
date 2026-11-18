@@ -8,9 +8,9 @@ are carried through untouched (they can only be removed explicitly).
 from __future__ import annotations
 
 import base64
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from heracles.acl._names import (
     ATTR_ACL_ENTRY,
@@ -34,7 +34,7 @@ from heracles.acl.parser import (
     serialise_role_value,
 )
 from heracles.acl.resolver import AclResolver, AssignmentEntry
-from heracles.acl.rights import Rights, RightsParseError
+from heracles.acl.rights import NO_RIGHTS, Rights, RightsParseError
 from heracles.core.containers import ensure_container
 from heracles.core.formats import check as check_format
 from heracles.ldap import dn as dnlib
@@ -67,6 +67,14 @@ class AclAdminError(ValueError):
 
 class RoleInUseError(AclAdminError):
     """The role is still referenced by assignments."""
+
+
+class UnheldRightsError(AclAdminError):
+    """The change would grant rights the caller may not grant (``missing`` lists them)."""
+
+    def __init__(self, missing: Sequence[str]) -> None:
+        super().__init__({"templates": "You cannot grant rights you do not hold."})
+        self.missing = list(missing)
 
 
 # ------------------------------------------------------------------ role values
@@ -225,7 +233,13 @@ def create_role(
     cn: str,
     description: str,
     templates: Sequence[Mapping[str, Any]],
+    delegable: Delegable | None = None,
 ) -> str:
+    """Create a role; with ``delegable``, refuse templates the caller may not grant.
+
+    A new role is normally assigned nowhere, but an assignment left behind by a
+    directory edit could already name its DN.
+    """
     problem = check_role_name(cn.strip())
     if problem is not None:
         raise AclAdminError({"cn": problem})
@@ -233,6 +247,10 @@ def create_role(
     values = _templates_from(templates)
     ensure_container(directory, container)
     dn = f"cn={dnlib.escape_rdn_value(cn.strip())},{container}"
+    if delegable is not None:
+        missing = unheld_template_grants(directory, dn, [], values, delegable=delegable)
+        if missing:
+            raise UnheldRightsError(missing)
     attrs: dict[str, list[bytes]] = {
         "objectClass": [OC_ACL_ROLE.encode()],
         "cn": [cn.strip().encode()],
@@ -253,7 +271,9 @@ def update_role(
     *,
     description: str | None,
     templates: Sequence[Mapping[str, Any]] | None,
+    delegable: Delegable | None = None,
 ) -> RoleInfo:
+    """Update a role; with ``delegable``, refuse template rights the caller may not grant."""
     current = get_role(directory, dn)
     if current is None:
         raise NoSuchObjectError(dn)
@@ -263,6 +283,12 @@ def update_role(
     if templates is not None:
         values = _templates_from(templates)
         if values != list(current.templates):
+            if delegable is not None:
+                missing = unheld_template_grants(
+                    directory, dn, current.templates, values, delegable=delegable
+                )
+                if missing:
+                    raise UnheldRightsError(missing)
             mods.append(Modification("replace", ATTR_ACL_TEMPLATE, [v.encode() for v in values]))
     if description is not None and description.strip() != current.description:
         if description.strip():
@@ -583,13 +609,10 @@ def grants_everything(templates: Iterable[str]) -> bool:
     return False
 
 
-def role_blocks(directory: DirectoryClient, role_dn: str) -> list[AclBlock]:
-    """Merged rights blocks of a role (empty when it is missing or has no usable value)."""
-    entry = directory.get(role_dn, [ATTR_ACL_TEMPLATE])
-    if entry is None:
-        return []
+def _merged_blocks(templates: Iterable[str]) -> dict[str, AclBlock]:
+    """Rights blocks of template values by object key (unusable values are skipped)."""
     merged: dict[str, AclBlock] = {}
-    for raw in entry.texts(ATTR_ACL_TEMPLATE):
+    for raw in templates:
         parsed = parse_role_value(raw)
         if isinstance(parsed, Ignored):
             continue
@@ -604,7 +627,72 @@ def role_blocks(directory: DirectoryClient, role_dn: str) -> list[AclBlock]:
                     previous.attributes + block.attributes,
                 )
             )
-    return list(merged.values())
+    return merged
+
+
+def role_blocks(directory: DirectoryClient, role_dn: str) -> list[AclBlock]:
+    """Merged rights blocks of a role (empty when it is missing or has no usable value)."""
+    entry = directory.get(role_dn, [ATTR_ACL_TEMPLATE])
+    if entry is None:
+        return []
+    return list(_merged_blocks(entry.texts(ATTR_ACL_TEMPLATE)).values())
+
+
+class Delegable(Protocol):
+    """Rights the caller may grant to others (:meth:`AclEvaluator.delegable`)."""
+
+    def __call__(
+        self, dn: str, obj: str, attribute: str = "", /, *, below: bool = False
+    ) -> Rights: ...
+
+
+def _granted(block: AclBlock) -> list[tuple[str, Rights]]:
+    """What a block grants: ``("", object rights)`` then ``(attribute, rights)``.
+
+    The ``s`` flag is not a right: a self-only block still grants on the assignee's own
+    entry, so its rights are required like any other.
+    """
+    out: list[tuple[str, Rights]] = [("", block.rights.without_self())]
+    by_name: dict[str, Rights] = {}
+    for name, rights in block.attributes:
+        key = name.lower()
+        by_name[key] = by_name.get(key, NO_RIGHTS).union(rights.without_self())
+    out.extend(by_name.items())
+    return [(attr, rights) for attr, rights in out if not rights.is_empty]
+
+
+def _unheld(
+    blocks: Iterable[AclBlock],
+    *,
+    at: str,
+    subtree: bool,
+    delegable: Delegable,
+    already: Mapping[str, AclBlock] | None = None,
+) -> list[str]:
+    """``<object key>[#attribute]:<rights>`` granted by ``blocks`` that the caller cannot grant.
+
+    Object-level and per-attribute rights are checked separately: holding one attribute
+    never covers the whole object. A subtree grant must be held at ``at`` and on every
+    entry below it. Rights ``already`` granted (the role's previous templates) are skipped.
+    """
+    missing: list[str] = []
+    for block in blocks:
+        prior = already.get(block.object) if already else None
+        previous = dict(_granted(prior)) if prior is not None else {}
+        for attr, needed in _granted(block):
+            # object-level rights already cover every attribute of the object
+            before = previous.get(attr, NO_RIGHTS).union(previous.get("", NO_RIGHTS))
+            if needed.issubset(before):
+                continue
+            held = delegable(at, block.object, attr)
+            if subtree:
+                held = held.intersection(delegable(at, block.object, attr, below=True))
+            if not needed.issubset(held):
+                label = f"{block.object}#{attr}" if attr else block.object
+                text = f"{label}:{needed.canonical()}"
+                if text not in missing:
+                    missing.append(text)
+    return missing
 
 
 def missing_role_rights(
@@ -612,25 +700,14 @@ def missing_role_rights(
     role_dn: str,
     *,
     at: str,
-    permissions: Callable[[str, str, str], Rights],
+    delegable: Delegable,
+    subtree: bool = False,
 ) -> list[str]:
-    """Rights the role grants at ``at`` that ``permissions`` does not return.
+    """Rights the role grants at ``at`` that the caller cannot grant (see :func:`_unheld`).
 
-    ``permissions(dn, object_key, attribute)`` is an effective-rights accessor (normally
-    :meth:`heracles.acl.evaluator.AclEvaluator.permissions`). The result lists the
-    offending blocks as ``<object key>:<rights>``; empty means the caller holds every
-    right the role grants, so assigning it grants nothing the caller does not have.
-    The ``s`` flag is not a right: self-only blocks only ever apply on the assignee's
-    own entry when the ACL engine evaluates them.
+    Empty means assigning the role there grants nothing the caller does not hold.
     """
-    missing: list[str] = []
-    for block in role_blocks(directory, role_dn):
-        needed = block.all_rights()
-        if needed.is_empty:
-            continue
-        if not needed.issubset(permissions(at, block.object, "")):
-            missing.append(f"{block.object}:{needed.canonical().replace('s', '')}")
-    return missing
+    return _unheld(role_blocks(directory, role_dn), at=at, subtree=subtree, delegable=delegable)
 
 
 def assignment_identity(parsed: AclAssignment) -> tuple[object, ...]:
@@ -669,19 +746,61 @@ def unheld_grants(
     saved: Sequence[str],
     *,
     at: str,
-    permissions: Callable[[str, str, str], Rights],
+    delegable: Delegable,
 ) -> list[str]:
-    """``<object key>:<rights>`` of new or changed assignments granting more than ``permissions``.
+    """``<object key>:<rights>`` of new or changed assignments granting more than the caller can.
 
     ``stored`` are the assignment values already on the entry, ``saved`` the ones about to
-    replace them. Each new or changed assignment must be a subset of the caller's rights at
-    ``at`` (see :func:`missing_role_rights`); removed assignments are always allowed.
+    replace them. Each new or changed assignment must be a subset of what the caller may
+    grant at ``at`` (and below it for a subtree assignment); removed ones are always allowed.
     """
     missing: list[str] = []
     for parsed in new_assignments(stored, saved):
-        for block in missing_role_rights(directory, parsed.role_dn, at=at, permissions=permissions):
+        for block in missing_role_rights(
+            directory,
+            parsed.role_dn,
+            at=at,
+            delegable=delegable,
+            subtree=parsed.scope is AclScope.SUBTREE,
+        ):
             if block not in missing:
                 missing.append(block)
+    return missing
+
+
+def unheld_template_grants(
+    directory: DirectoryClient,
+    role_dn: str,
+    stored: Sequence[str],
+    saved: Sequence[str],
+    *,
+    delegable: Delegable,
+) -> list[str]:
+    """Rights a role template change adds where the role is assigned, that the caller cannot grant.
+
+    Changing a role changes what every existing assignment of it grants, so each right
+    the ``saved`` templates add over the ``stored`` ones must be grantable by the caller
+    at every entry assigning the role. A role assigned nowhere grants nothing yet: its
+    assignments are checked when they are made.
+    """
+    previous = _merged_blocks(stored)
+    added = list(_merged_blocks(saved).values())
+    target = dnlib.normalize(role_dn)
+    missing: list[str] = []
+    for entry in _assignment_entries(directory):
+        for value in entry.values:
+            parsed = parse_assignment(value)
+            if not isinstance(parsed, AclAssignment) or dnlib.normalize(parsed.role_dn) != target:
+                continue
+            for block in _unheld(
+                added,
+                at=entry.dn,
+                subtree=parsed.scope is AclScope.SUBTREE,
+                delegable=delegable,
+                already=previous,
+            ):
+                if block not in missing:
+                    missing.append(block)
     return missing
 
 
@@ -692,9 +811,11 @@ def encode_member(dn: str) -> str:
 
 __all__ = [
     "AclAdminError",
+    "Delegable",
     "RightsReport",
     "RoleInUseError",
     "RoleInfo",
+    "UnheldRightsError",
     "all_assignments",
     "assignment_from_json",
     "assignment_identity",
@@ -719,5 +840,6 @@ __all__ = [
     "template_from_json",
     "template_to_json",
     "unheld_grants",
+    "unheld_template_grants",
     "update_role",
 ]

@@ -222,19 +222,19 @@ def test_grants_everything() -> None:
 def test_missing_role_rights_compares_with_the_callers_rights(directory: MemoryDirectory) -> None:
     role = f"cn=full-admin,ou=aclroles,{BASE}"
 
-    def everything(dn: str, obj: str, attribute: str) -> Rights:
-        del dn, obj, attribute
+    def everything(dn: str, obj: str, attribute: str = "", /, *, below: bool = False) -> Rights:
+        del dn, obj, attribute, below
         return FULL_RIGHTS
 
-    def nothing(dn: str, obj: str, attribute: str) -> Rights:
-        del dn, obj, attribute
+    def nothing(dn: str, obj: str, attribute: str = "", /, *, below: bool = False) -> Rights:
+        del dn, obj, attribute, below
         return NO_RIGHTS
 
-    assert admin.missing_role_rights(directory, role, at=BASE, permissions=everything) == []
-    assert admin.missing_role_rights(directory, role, at=BASE, permissions=nothing) == ["all:rwcdm"]
+    assert admin.missing_role_rights(directory, role, at=BASE, delegable=everything) == []
+    assert admin.missing_role_rights(directory, role, at=BASE, delegable=nothing) == ["all:rwcdm"]
     assert (
         admin.missing_role_rights(
-            directory, f"cn=ghost,ou=aclroles,{BASE}", at=BASE, permissions=nothing
+            directory, f"cn=ghost,ou=aclroles,{BASE}", at=BASE, delegable=nothing
         )
         == []
     )
@@ -258,19 +258,19 @@ def test_unheld_grants_checks_new_assignments_only(directory: MemoryDirectory) -
     role = f"cn=full-admin,ou=aclroles,{BASE}"
     added = f"9:subtree:{_b64(role)}:{_b64('*')}"
 
-    def everything(dn: str, obj: str, attribute: str) -> Rights:
-        del dn, obj, attribute
+    def everything(dn: str, obj: str, attribute: str = "", /, *, below: bool = False) -> Rights:
+        del dn, obj, attribute, below
         return FULL_RIGHTS
 
-    def nothing(dn: str, obj: str, attribute: str) -> Rights:
-        del dn, obj, attribute
+    def nothing(dn: str, obj: str, attribute: str = "", /, *, below: bool = False) -> Rights:
+        del dn, obj, attribute, below
         return NO_RIGHTS
 
-    assert admin.unheld_grants(directory, stored, stored, at=BASE, permissions=nothing) == []
+    assert admin.unheld_grants(directory, stored, stored, at=BASE, delegable=nothing) == []
     assert (
-        admin.unheld_grants(directory, stored, [*stored, added], at=BASE, permissions=everything)
+        admin.unheld_grants(directory, stored, [*stored, added], at=BASE, delegable=everything)
         == []
     )
-    assert admin.unheld_grants(
-        directory, stored, [*stored, added], at=BASE, permissions=nothing
-    ) == ["all:rwcdm"]
+    assert admin.unheld_grants(directory, stored, [*stored, added], at=BASE, delegable=nothing) == [
+        "all:rwcdm"
+    ]

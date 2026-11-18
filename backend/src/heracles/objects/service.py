@@ -141,14 +141,14 @@ def _text(raw: bytes) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
-def _written_acl_entry(
-    info: TypeInfo, tabs: Mapping[str, TabState]
+def _written_values(
+    info: TypeInfo, tabs: Mapping[str, TabState], attribute: str
 ) -> tuple[str, list[str]] | None:
-    """Tab owning the ACL assignment attribute and the values about to be written.
+    """Tab owning ``attribute`` and the values about to be written.
 
     ``None`` when no active tab writes the attribute: nothing changes, nothing to check.
     """
-    wanted = schema.ATTR.ACL_ENTRY.lower()
+    wanted = attribute.lower()
     for tab in info.tabs:
         state = tabs[tab.name]
         if not state.active:
@@ -806,32 +806,39 @@ class ObjectService:
         raw: Mapping[str, Sequence[bytes]],
         errors: dict[str, str],
     ) -> None:
-        """Refuse a new or changed ACL assignment granting more than the caller holds at ``dn``.
+        """Refuse an ACL write granting more than the caller may grant.
 
-        The rule lives on this single save path, so it covers every writer of the ACL
-        attribute (generic object API, UI tabs, plugins), not only the administration
-        endpoint. A policy without ``permissions`` (public forms, tests) does not restrict
-        assignments; a bootstrap administrator's policy returns full rights and passes.
+        Covers a new or changed assignment at ``dn`` and a role template change, which
+        changes what every existing assignment of the role grants. The rule lives on this
+        single save path, so it covers every writer of the ACL attributes (generic object
+        API, UI tabs, plugins), not only the administration endpoints. A policy without
+        ``delegable`` (public forms, tests) does not restrict grants; a bootstrap
+        administrator's policy returns full rights and passes.
         """
         policy = self.policy
-        found = _written_acl_entry(info, tabs)
-        if found is None or not isinstance(policy, AssignmentPolicy):
+        if not isinstance(policy, AssignmentPolicy):
             return
-        tab_name, saved = found
-        missing = acl_admin.unheld_grants(
-            self.directory,
-            [_text(value) for value in raw_values(raw, schema.ATTR.ACL_ENTRY)],
-            saved,
-            at=dn,
-            permissions=policy.permissions,
-        )
-        if missing:
-            errors.setdefault(
-                tab_name,
-                _("You cannot grant rights you do not hold: {rights}").format(
-                    rights=", ".join(missing)
-                ),
-            )
+        for attribute in (schema.ATTR.ACL_ENTRY, schema.ATTR.ACL_TEMPLATE):
+            found = _written_values(info, tabs, attribute)
+            if found is None:
+                continue
+            tab_name, saved = found
+            stored = [_text(value) for value in raw_values(raw, attribute)]
+            if attribute == schema.ATTR.ACL_ENTRY:
+                missing = acl_admin.unheld_grants(
+                    self.directory, stored, saved, at=dn, delegable=policy.delegable
+                )
+            else:
+                missing = acl_admin.unheld_template_grants(
+                    self.directory, dn, stored, saved, delegable=policy.delegable
+                )
+            if missing:
+                errors.setdefault(
+                    tab_name,
+                    _("You cannot grant rights you do not hold: {rights}").format(
+                        rights=", ".join(missing)
+                    ),
+                )
 
     def _rename(self, dn: str, new_rdn: str, superior: str | None) -> str:
         """Rename/move an entry, then rewrite the references to it and to what lies below."""

@@ -77,6 +77,36 @@ class AclEvaluator:
             granted = granted.intersection(self._cap(obj))
         return granted.read_only() if skip_write else granted
 
+    def delegable(self, dn: str, obj: str, attribute: str = "", *, below: bool = False) -> Rights:
+        """Rights the user holds on ``obj`` at ``dn`` that an ACL grant may hand to others.
+
+        Stricter than :meth:`permissions` in three ways, so a delegated administrator can
+        only pass on what they hold: the user's self-only rights never count (the grant
+        applies to other people's entries), ``attribute=""`` means the object-level rights
+        alone (not their union with the per-attribute rights), and ``below=True`` answers
+        for every entry strictly below ``dn`` (base-scope rules never reach them), which a
+        subtree assignment at ``dn`` grants on.
+        """
+        if self._ignore:
+            granted = FULL_RIGHTS
+        else:
+            ndn = dnlib.normalize(dn)
+            nearest = self._resolved.nearest_view(ndn)
+            if nearest is None:
+                granted = NO_RIGHTS
+            else:
+                granted = NO_RIGHTS
+                for rule in nearest[1]:
+                    if rule.scope is AclScope.BASE and (below or rule.origin != ndn):
+                        continue
+                    granted = granted.union(
+                        self._rule_rights(rule, obj, attribute, own=False, object_only=True)
+                    )
+                granted = granted.without_self()
+        if self._cap is not None:
+            granted = granted.intersection(self._cap(obj))
+        return granted
+
     def _compute(self, ndn: str, obj: str, attribute: str) -> Rights:
         nearest = self._resolved.nearest_view(ndn)
         if nearest is None:
@@ -106,7 +136,9 @@ class AclEvaluator:
             result = result.union(self._rule_rights(rule, obj, attribute, own=own))
         return result.without_self()
 
-    def _rule_rights(self, rule: Rule, obj: str, attribute: str, *, own: bool) -> Rights:
+    def _rule_rights(
+        self, rule: Rule, obj: str, attribute: str, *, own: bool, object_only: bool = False
+    ) -> Rights:
         blocks = rule.blocks
         target = blocks.get(obj)
         if target is not None and target.is_self and not own:
@@ -127,7 +159,7 @@ class AclEvaluator:
         if target is None:
             return result
         if not attribute:
-            return result.union(target.all_rights(own=own))
+            return result.union(target.rights if object_only else target.all_rights(own=own))
         return result.union(self._attribute_rights(target, attribute, own=own))
 
     @staticmethod
