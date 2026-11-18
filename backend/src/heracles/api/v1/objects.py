@@ -30,7 +30,7 @@ from heracles.api.v2.objects import locked_error, object_errors
 from heracles.attributes import JSON, AnyAttribute
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import Entry, NoSuchObjectError, Scope
-from heracles.ldap.filter import Filter, FilterError, filter_attributes, parse_filter
+from heracles.ldap.filter import Filter, FilterError, filter_attributes, format_filter, parse_filter
 from heracles.objects import ObjectService, ObjectState, PermissionDeniedError, TypeInfo, filters
 
 router = APIRouter(route_class=V1Route)
@@ -250,6 +250,7 @@ def search_objects(
     info = _info(domain, type)
     search_base = base or user.directory.base_dn
     filter_checks: list[tuple[str, str]] = []
+    checked_filter = ""
     if filter:
         try:
             parsed_filter = parse_filter(filter)
@@ -258,6 +259,7 @@ def search_objects(
         except RecursionError:
             raise bad_request("Invalid filter: nested too deeply") from None
         filter_checks = _filter_checks(info, parsed_filter)
+        checked_filter = format_filter(parsed_filter)
     if templates:
         module = _templates()
         with object_errors():
@@ -265,7 +267,7 @@ def search_objects(
             found = module.list_templates(_template_context(service), info.name)
         return {str(t.dn): str(t.name) for t in found}
     ldap_scope = _SCOPES.get(scope.lower(), Scope.SUBTREE)
-    flt = filters.and_(info.type.filter, filter or "")
+    flt = filters.and_(info.type.filter, checked_filter)
     wanted = _parse_attrs(request)
     fetch = list(dict.fromkeys([info.type.main_attr, info.type.name_attr, *wanted]))
     with object_errors():

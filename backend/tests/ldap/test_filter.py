@@ -12,6 +12,7 @@ from heracles.ldap.filter import (
     Present,
     Substring,
     escape_filter_value,
+    format_filter,
     matches,
     parse_filter,
 )
@@ -71,8 +72,16 @@ def test_parse_errors(bad: str) -> None:
         parse_filter(bad)
 
 
-def test_bare_item_is_tolerated() -> None:
-    assert parse_filter("cn=foo") == Equal("cn", "foo")
+@pytest.mark.parametrize("flt", ["cn=foo", "uid=foo)(userPassword=*", "uid=foo)(userPassword=*)("])
+def test_filter_without_outer_parentheses_is_refused(flt: str) -> None:
+    with pytest.raises(FilterError):
+        parse_filter(flt)
+
+
+def test_format_filter_round_trips_escaped_values() -> None:
+    text = "(&(cn=a\\2ab\\28c)(!(uid=x*))(|(mail=*@x.org)(sn>=m)(sn<=z)(o=*)))"
+    node = parse_filter(text)
+    assert parse_filter(format_filter(node)) == node
 
 
 @pytest.mark.parametrize(

@@ -122,12 +122,6 @@ class _Parser:
         return FilterError(f"{msg} at position {self.i} in filter {self.s!r}")
 
     def parse(self) -> Filter:
-        self._skip_ws()
-        if self.i < len(self.s) and self.s[self.i] != "(":
-            # Tolerate a bare simple item such as ``cn=foo``.
-            node = self._item(self.s.strip())
-            self.i = len(self.s)
-            return node
         node = self._filter()
         self._skip_ws()
         if self.i != len(self.s):
@@ -214,6 +208,35 @@ class _Parser:
 def parse_filter(text: str) -> Filter:
     """Parse an RFC 4515 filter string into an AST."""
     return _Parser(text).parse()
+
+
+def format_filter(node: Filter) -> str:
+    """Serialise a filter AST back to RFC 4515 text (values escaped).
+
+    Callers that pass a user supplied filter to the directory send this canonical
+    form of the validated AST, never the raw input.
+    """
+    esc = escape_filter_value
+    match node:
+        case And(children):
+            return "(&" + "".join(format_filter(c) for c in children) + ")"
+        case Or(children):
+            return "(|" + "".join(format_filter(c) for c in children) + ")"
+        case Not(child):
+            return "(!" + format_filter(child) + ")"
+        case Equal(attr, value):
+            return f"({attr}={esc(value)})"
+        case Present(attr):
+            return f"({attr}=*)"
+        case Substring():
+            parts = [esc(node.initial) if node.initial is not None else ""]
+            parts.extend(esc(p) for p in node.any)
+            parts.append(esc(node.final) if node.final is not None else "")
+            return f"({node.attr}={'*'.join(parts)})"
+        case GreaterOrEqual(attr, value):
+            return f"({attr}>={esc(value)})"
+        case LessOrEqual(attr, value):
+            return f"({attr}<={esc(value)})"
 
 
 def filter_attributes(node: Filter) -> set[str]:

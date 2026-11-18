@@ -29,6 +29,7 @@ from heracles.ldap.client import (
     NoSuchObjectError,
     Scope,
 )
+from heracles.ldap.filter import format_filter, parse_filter
 from heracles.ldap.filter import matches as filter_matches
 from heracles.objects import deletes, filters, renames
 from heracles.objects.diff import diff_modifications, raw_values
@@ -390,8 +391,10 @@ class ObjectService:
                 # the caller cannot read any searched attribute: matching nothing keeps
                 # the query from revealing the values of hidden attributes
                 return [], 0
+        # the caller's filter is validated, then sent in its canonical serialised form
+        checked_filter = format_filter(parse_filter(extra_filter)) if extra_filter else ""
         flt = filters.and_(
-            info.type.filter, extra_filter, filters.text_query(search_attrs, query or "")
+            info.type.filter, checked_filter, filters.text_query(search_attrs, query or "")
         )
         attrs = self._order_attrs(info, sort_key) if light else self._row_attrs(info, extra_attrs)
         entries: list[Entry] = []
