@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 import heracles_plugins.kerberos as kerberos
+from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
@@ -155,7 +156,8 @@ def test_prepare_auto_derives_realm(service: ObjectService, directory: MemoryDir
     entry = directory.get(dn)
     assert entry is not None
     assert entry.text("krbPrincipalName") == "bob@TEST.REALM"
-    assert entry.text("krbTicketFlags") == "4"
+    # DISALLOW_TGT_BASED (0x04) | default REQUIRES_PRE_AUTH (0x80)
+    assert entry.text("krbTicketFlags") == "132"
 
 
 def test_update_ticket_flags(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -175,7 +177,7 @@ def test_update_ticket_flags(service: ObjectService, directory: MemoryDirectory)
     )
     entry = directory.get(dn)
     assert entry is not None
-    assert entry.text("krbTicketFlags") == "1"
+    assert entry.text("krbTicketFlags") == "129"
 
     service.update(
         "user",
@@ -191,8 +193,8 @@ def test_update_ticket_flags(service: ObjectService, directory: MemoryDirectory)
     )
     entry = directory.get(dn)
     assert entry is not None
-    # NEW_PRINC is 0x8000 = 32768
-    assert entry.text("krbTicketFlags") == "32768"
+    # NEW_PRINC (0x8000) | REQUIRES_PRE_AUTH (0x80), kept from creation
+    assert entry.text("krbTicketFlags") == "32896"
 
 
 def test_deactivate_kerberos_tab(service: ObjectService, directory: MemoryDirectory) -> None:
@@ -220,3 +222,26 @@ def test_deactivate_kerberos_tab(service: ObjectService, directory: MemoryDirect
     assert not entry.has_object_class("krbPrincipalAux")
     assert not entry.has_object_class("krbTicketPolicyAux")
     assert entry.first("krbPrincipalName") is None
+
+
+def test_update_keeps_unknown_ticket_flag_bits(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    dn = service.create(
+        "user",
+        BASE,
+        {
+            "main": {"values": {"uid": "dave", "sn": "Dave", "givenName": "D"}},
+            "kerberos": {
+                "active": True,
+                "values": {"krbPrincipalName": "dave@EXAMPLE.COM", "REQUIRES_PRE_AUTH": True},
+            },
+        },
+    )
+    directory.modify(
+        dn, [Modification("replace", "krbTicketFlags", [str(0x10000 | 0x80).encode()])]
+    )
+    service.update("user", dn, {"kerberos": {"values": {"DISALLOW_POSTDATED": True}}})
+    entry = directory.get(dn)
+    assert entry is not None
+    assert entry.text("krbTicketFlags") == str(0x10000 | 0x80 | 1)

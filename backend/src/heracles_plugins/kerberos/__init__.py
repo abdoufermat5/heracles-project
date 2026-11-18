@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import reduce
+from operator import or_
 from typing import Final
 
 from heracles.attributes import (
@@ -40,6 +42,8 @@ TICKET_FLAGS: Final[tuple[tuple[str, int, str], ...]] = (
     ("SUPPORT_DESMD5", 0x00004000, _("Support DES-MD5")),
     ("NEW_PRINC", 0x00008000, _("New principal")),
 )
+
+_KNOWN_FLAGS: Final = reduce(or_, (bit for _, bit, _ in TICKET_FLAGS))
 
 
 def virtual[A: AnyAttribute](attr: A) -> A:
@@ -120,7 +124,12 @@ class KerberosAccountTab(Tab):
     flags = Section(
         _("Ticket flags"),
         IntAttr("krbTicketFlags", _("Ticket flags bitmask"), default=0),
-        *(virtual(BooleanAttr(name, label, default=False)) for name, _, label in TICKET_FLAGS),
+        # Pre-authentication is on unless asked otherwise: without it anyone can request
+        # a ticket-granting reply for the principal and crack its password offline.
+        *(
+            virtual(BooleanAttr(name, label, default=name == "REQUIRES_PRE_AUTH"))
+            for name, _, label in TICKET_FLAGS
+        ),
     )
 
     delegation = Section(
@@ -154,7 +163,9 @@ class KerberosAccountTab(Tab):
     @classmethod
     def prepare(cls, ctx: TabContext) -> None:
         if any(name in ctx.values for name, _, _label in TICKET_FLAGS):
-            flags = 0
+            raw = ctx.values.get("krbTicketFlags")
+            # Keep the bits this tab has no switch for (set by other tools).
+            flags = (raw if isinstance(raw, int) else 0) & ~_KNOWN_FLAGS
             for name, bit, _label in TICKET_FLAGS:
                 if ctx.values.get(name):
                     flags |= bit
