@@ -14,6 +14,11 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from heracles.auth.ratelimit import (
+    DEFAULT_IP_FREE_ATTEMPTS,
+    DEFAULT_LOGIN_FREE_ATTEMPTS,
+    aggregate_keys,
+)
 from heracles.storage import Database
 
 COMPONENT = "ratelimit"
@@ -47,8 +52,12 @@ class SqliteRateLimiter:
         max_delay: float = 900.0,
         forget_after: float = 3600.0,
         max_entries: int = 10_000,
+        ip_free_attempts: int = DEFAULT_IP_FREE_ATTEMPTS,
+        login_free_attempts: int = DEFAULT_LOGIN_FREE_ATTEMPTS,
         clock: Callable[[], float] = time.time,
     ) -> None:
+        self._ip_free = ip_free_attempts
+        self._login_free = login_free_attempts
         self._db = database
         self._free = free_attempts
         self._base = base_delay
@@ -83,36 +92,49 @@ class SqliteRateLimiter:
             conn.execute(
                 "DELETE FROM ratelimit_failures WHERE last_failure < ?", (now - self._forget,)
             )
-            self._count_failure(conn, key, now)
+            self._count_failure(conn, key, now, self._free)
 
     def attempt(self, key: str) -> float:
-        """Check the key and count the attempt in one transaction (see ``LoginLimiter``)."""
+        """Check the key and count the attempt in one transaction (see ``LoginLimiter``).
+
+        Same policy as the in-memory limiter: pair, address and login counters; a key that
+        cannot be tracked because the table is full of active blocks is refused.
+        """
         now = self._clock()
+        counters = [(key, self._free), *aggregate_keys(key, self._ip_free, self._login_free)]
         with self._db.transaction() as conn:
             conn.execute(
                 "DELETE FROM ratelimit_failures WHERE last_failure < ?", (now - self._forget,)
             )
-            row = conn.execute(
-                "SELECT blocked_until FROM ratelimit_failures WHERE key = ?", (key,)
-            ).fetchone()
-            if row is not None:
-                wait = max(0.0, float(row["blocked_until"]) - now)
-                if wait > 0:
-                    return wait
-            self._count_failure(conn, key, now)
+            wait = 0.0
+            for name, _ in counters:
+                row = conn.execute(
+                    "SELECT blocked_until FROM ratelimit_failures WHERE key = ?", (name,)
+                ).fetchone()
+                if row is not None:
+                    wait = max(wait, float(row["blocked_until"]) - now)
+            if wait > 0:
+                return wait
+            for name, free in counters:
+                if not self._count_failure(conn, name, now, free):
+                    row = conn.execute(
+                        "SELECT MIN(blocked_until) FROM ratelimit_failures"
+                    ).fetchone()
+                    return max(1.0, float(row[0]) - now)
             return 0.0
 
-    def _count_failure(self, conn: Any, key: str, now: float) -> None:
-        """Count one failure of ``key`` inside the caller's transaction."""
+    def _count_failure(self, conn: Any, key: str, now: float, free: int) -> bool:
+        """Count one failure of ``key`` in the caller's transaction; False when untrackable."""
         row = conn.execute(
             "SELECT failures FROM ratelimit_failures WHERE key = ?", (key,)
         ).fetchone()
         if row is None:
-            self._make_room(conn)
+            if not self._make_room(conn, now):
+                return False
             failures = 1
         else:
             failures = int(row["failures"]) + 1
-        over = failures - self._free
+        over = failures - free
         blocked_until = 0.0
         if over >= 0:
             delay = min(self._max, self._base * (2 ** min(over, _MAX_EXPONENT)))
@@ -125,22 +147,28 @@ class SqliteRateLimiter:
             " last_failure = excluded.last_failure",
             (key, failures, blocked_until, now),
         )
+        return True
 
     def record_success(self, key: str) -> None:
         with self._db.transaction() as conn:
             conn.execute("DELETE FROM ratelimit_failures WHERE key = ?", (key,))
 
-    def _make_room(self, conn: sqlite3.Connection) -> None:
-        """Drop the oldest tenth when the (already purged) table is still full.
+    def _make_room(self, conn: sqlite3.Connection, now: float) -> bool:
+        """Drop the oldest tenth of the unblocked entries when the (purged) table is full.
 
         Keys are chosen by the client (an address and a login name), so the table must not
-        grow with the attacker's imagination.
+        grow with the attacker's imagination. An entry whose block is still running is never
+        evicted, or filling the table with made-up logins would erase it. Returns False when
+        no room could be made.
         """
         row = conn.execute("SELECT COUNT(*) FROM ratelimit_failures").fetchone()
         if int(row[0]) < self._max_entries:
-            return
+            return True
         conn.execute(
             "DELETE FROM ratelimit_failures WHERE key IN ("
-            " SELECT key FROM ratelimit_failures ORDER BY last_failure LIMIT ?)",
-            (max(1, self._max_entries // 10),),
+            " SELECT key FROM ratelimit_failures WHERE blocked_until <= ?"
+            " ORDER BY last_failure LIMIT ?)",
+            (now, max(1, self._max_entries // 10)),
         )
+        row = conn.execute("SELECT COUNT(*) FROM ratelimit_failures").fetchone()
+        return int(row[0]) < self._max_entries

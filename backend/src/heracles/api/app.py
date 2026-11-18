@@ -134,6 +134,8 @@ def create_app(
             free_attempts=settings.login.free_attempts,
             base_delay=settings.login.base_delay_seconds,
             max_delay=settings.login.max_delay_seconds,
+            ip_free_attempts=settings.login.ip_free_attempts,
+            login_free_attempts=settings.login.login_free_attempts,
             clock=clock,
         )
     else:
@@ -141,6 +143,8 @@ def create_app(
             free_attempts=settings.login.free_attempts,
             base_delay=settings.login.base_delay_seconds,
             max_delay=settings.login.max_delay_seconds,
+            ip_free_attempts=settings.login.ip_free_attempts,
+            login_free_attempts=settings.login.login_free_attempts,
         )
     policy_cfg = settings.password
     policy = PasswordPolicy(

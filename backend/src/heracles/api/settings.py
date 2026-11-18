@@ -33,6 +33,10 @@ class LoginSettings(BaseModel):
     free_attempts: int = 5
     base_delay_seconds: float = 2.0
     max_delay_seconds: float = 900.0
+    #: Attempts tolerated per hour from one address / against one login (all pairs together)
+    #: before the same backoff applies to it; 0 disables the aggregate.
+    ip_free_attempts: int = 300
+    login_free_attempts: int = 30
     #: Failed second-factor codes tolerated before the pending session is dropped.
     max_second_factor_failures: int = 5
 
