@@ -56,6 +56,17 @@ services:
     depends_on:
       ldap:
         condition: service_healthy
+      heracles-data-owner:
+        condition: service_completed_successfully
+
+  # The image runs as uid/gid 10001; a data volume created by an older image belonged to
+  # another uid. This one-shot step gives it to 10001 before the server starts.
+  heracles-data-owner:
+    profiles: [e2e, dev]
+    image: alpine:3.22
+    command: ["chown", "-R", "10001:10001", "/var/lib/heracles"]
+    volumes:
+      - heracles-data:/var/lib/heracles
 
   # OpenID Connect identity provider for the sign-in tests (profile `oidc` with `e2e`, and
   # `dev`: the dev stack shares deploy/e2e/heracles.yaml, which turns the sign-in on). Its
