@@ -186,9 +186,6 @@ class ObjectService:
         #: Snapshot cache of :meth:`list` for one user; ``None`` searches every page.
         self.listings = listings
 
-    # ------------------------------------------------------------------ load
-
-    def load(self, type_name: str, dn: str) -> ObjectState:
     def _inside(self, dn: str) -> bool:
         """True when ``dn`` is the directory's base or lies below it.
 
@@ -201,12 +198,15 @@ class ObjectService:
         if not self._inside(dn):
             raise ObjectNotFoundError(dn)
 
+    # ------------------------------------------------------------------ load
+
+    def load(self, type_name: str, dn: str) -> ObjectState:
         """Read an entry and build its :class:`ObjectState`."""
         info = self.registry.get(type_name)
+        self._require_inside(dn)
         entry = self.directory.get(dn)
         if entry is None:
             raise ObjectNotFoundError(dn)
-        self._require_inside(dn)
         main = info.main_tab
         if not all(entry.has_object_class(c) for c in main.object_classes) or not filter_matches(
             entry, info.type.filter
@@ -301,10 +301,10 @@ class ObjectService:
         """
         info = self.registry.get(type_name)
         base = base or self.directory.base_dn
+        self._require_inside(base)
         sort_key = self._sort_key(info, sort)
         offset = _decode_cursor(cursor)
         limit = max(1, limit)
-        self._require_inside(base)
         entries: Sequence[Entry] | None = None
         light = False
         listings = self.listings
@@ -477,10 +477,10 @@ class ObjectService:
         """Number of objects :meth:`list` would report as ``total`` (no rows, no sorting)."""
         info = self.registry.get(type_name)
         base = base or self.directory.base_dn
+        self._require_inside(base)
         if scope == Scope.SUBTREE:
             search_base, ldap_scope = base, Scope.SUBTREE
         else:
-        self._require_inside(base)
             search_base, ldap_scope = dnlib.join(info.type.rdn, base), Scope.ONE
         main_tab, main_attr = info.main_tab.name, info.type.main_attr
         try:
@@ -560,11 +560,11 @@ class ObjectService:
         info = self.registry.get(type_name)
         if not info.type.creatable:
             raise PermissionDeniedError(f"{type_name} objects cannot be created")
+        if not self._inside(base):
+            raise PermissionDeniedError(f"cannot create {type_name} in {base}")
         if not self.policy.can_create(type_name, base):
             raise PermissionDeniedError(f"cannot create {type_name} in {base}")
         initial: dict[str, TabState] = {}
-        if not self._inside(base):
-            raise PermissionDeniedError(f"cannot create {type_name} in {base}")
         for tab in info.tabs:
             state = TabState(active=not tab.optional)
             if state.active:
@@ -625,10 +625,15 @@ class ObjectService:
             self.directory.add(dn, attrs)
         except AlreadyExistsError:
             raise ObjectConflictError(f"{dn} already exists") from None
-        for tab in info.tabs:
-            if new[tab.name].active:
-                tab.after_save(self._ctx(info, tab, dn, base, new, None, touched, creating=True))
-        self.events.post_create(ctx)
+        try:
+            for tab in info.tabs:
+                if new[tab.name].active:
+                    tab.after_save(
+                        self._ctx(info, tab, dn, base, new, None, touched, creating=True)
+                    )
+        finally:
+            # the entry exists: it is audited even when a later step fails
+            self.events.post_create(ctx)
         return dn
 
     def _ctx(
@@ -712,6 +717,7 @@ class ObjectService:
         info = self.registry.get(type_name)
         if not info.type.editable:
             raise PermissionDeniedError(f"{type_name} objects cannot be modified")
+        self._require_inside(dn)
         if state is None or dnlib.normalize(state.dn) != dnlib.normalize(dn):
             state = self.load(type_name, dn)
         errors: dict[str, str] = {}
@@ -721,7 +727,6 @@ class ObjectService:
         self._compute(info, new)
         self._validate(info, new, state, errors, creating=False)
 
-        self._require_inside(dn)
         main_name = info.type.main_attr
         old_main = state.original[info.main_tab.name].values.get(main_name)
         new_main = new[info.main_tab.name].values.get(main_name)
@@ -749,9 +754,9 @@ class ObjectService:
         after = ObjectState.build(dn, type_name, new, state.raw, state.object_classes)
         ctx = EventContext(type_name, dn, state, after, mods)
         self.events.pre_modify(ctx)
-        if mods:
-            self.directory.modify(dn, mods)
         new_dn = dn
+        new_rdn: str | None = None
+        superior: str | None = None
         if renamed:
             new_rdn = (
                 f"{main_name}={dnlib.escape_rdn_value(str(new_main))}"
@@ -763,20 +768,35 @@ class ObjectService:
                 if dnlib.normalize(new_base) != dnlib.normalize(old_base)
                 else None
             )
-            new_dn = self._rename(dn, new_rdn, superior)
-        final_base = department_of(new_dn, info.type.rdn)
-        for tab in info.tabs:
-            was_active = state.original[tab.name].active
-            ctx = self._ctx(
-                info, tab, new_dn, final_base, new, state.original, touched, creating=False
-            )
-            if new[tab.name].active:
-                ctx.activating = not was_active
-                tab.after_save(ctx)
-            elif was_active:
-                ctx.values = state.original[tab.name].values
-                tab.on_deactivate(ctx)
-        result = self.load(type_name, new_dn)
+            target = f"{new_rdn},{superior or dnlib.parent(dn) or ''}"
+            if dnlib.normalize(target) != dnlib.normalize(dn) and (
+                self.directory.get(target) is not None
+            ):
+                # checked before any write: a refused rename must leave nothing behind
+                raise ObjectConflictError(f"{new_rdn} already exists")
+        if mods:
+            self.directory.modify(dn, mods)
+        try:
+            if new_rdn is not None:
+                new_dn = self._rename(dn, new_rdn, superior)
+            final_base = department_of(new_dn, info.type.rdn)
+            for tab in info.tabs:
+                was_active = state.original[tab.name].active
+                ctx = self._ctx(
+                    info, tab, new_dn, final_base, new, state.original, touched, creating=False
+                )
+                if new[tab.name].active:
+                    ctx.activating = not was_active
+                    tab.after_save(ctx)
+                elif was_active:
+                    ctx.values = state.original[tab.name].values
+                    tab.on_deactivate(ctx)
+            result = self.load(type_name, new_dn)
+        except BaseException:
+            if mods or new_dn != dn:
+                # part of the change is written: it is audited even though a later step failed
+                self.events.post_modify(EventContext(type_name, new_dn, state, after, mods))
+            raise
         self.events.post_modify(EventContext(type_name, new_dn, state, result, mods))
         return result
 
@@ -821,6 +841,8 @@ class ObjectService:
         policy = self.policy
         if isinstance(policy, MovePolicy) and not policy.can_move(dn):
             raise PermissionDeniedError(f"cannot rename or move {dn}")
+        if new_base is not None and not self._inside(new_base):
+            raise PermissionDeniedError(f"cannot move {dn} to {new_base}")
         if new_base is not None and not policy.can_create(type_name, new_base):
             raise PermissionDeniedError(f"cannot move {dn} to {new_base}")
 
@@ -846,8 +868,6 @@ class ObjectService:
             return
         for attribute in (schema.ATTR.ACL_ENTRY, schema.ATTR.ACL_TEMPLATE):
             found = _written_values(info, tabs, attribute)
-        if new_base is not None and not self._inside(new_base):
-            raise PermissionDeniedError(f"cannot move {dn} to {new_base}")
             if found is None:
                 continue
             tab_name, saved = found
@@ -983,6 +1003,9 @@ class ObjectService:
         current = state.values.get(attr_name)
         if attr.write_only:
             if value is not None:
+                if attr.readonly:
+                    errors[key] = _("This field is read-only.")
+                    return
                 touched.append((tab.name, attr_name))
                 state.values[attr_name] = value
             return
@@ -1010,9 +1033,6 @@ class ObjectService:
     def _validate(
         self,
         info: TypeInfo,
-                if attr.readonly:
-                    errors[key] = _("This field is read-only.")
-                    return
         tabs: Mapping[str, TabState],
         old: ObjectState | None,
         errors: dict[str, str],

@@ -198,6 +198,20 @@ def test_dn_outside_the_base_is_out_of_reach(
         service.list("user", other)
 
 
+def test_refused_rename_leaves_no_partial_write(
+    service: ObjectService, directory: FakeDirectory, jdoe: str
+) -> None:
+    gdn = service.create("group", BASE, {"main": {"values": {"cn": "devs", "member": [jdoe]}}})
+    # an entry the group type does not see already holds the target name
+    directory.put(f"cn=ops,ou=groups,{BASE}", objectClass="organizationalRole", cn="ops")
+    events = Recorder()
+    service.events = events
+    with pytest.raises(ObjectConflictError):
+        service.update("group", gdn, {"main": {"values": {"cn": "ops", "description": "x"}}})
+    assert directory.entries[gdn.lower()].attrs.get("description") is None
+    assert events.calls == [("pre_modify", events.calls[0][1])]
+
+
 def test_create_reference_must_exist(service: ObjectService) -> None:
     group = {"main": {"values": {"cn": "devs", "member": [f"uid=ghost,{PEOPLE}"]}}}
     with pytest.raises(ObjectValidationError) as exc:

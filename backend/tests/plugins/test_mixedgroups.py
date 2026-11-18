@@ -65,6 +65,12 @@ def new_group(service: ObjectService, members: list[str], **mixed_values: object
     )
 
 
+def test_forced_gid_below_minimum_is_refused(service: ObjectService) -> None:
+    with pytest.raises(ObjectValidationError) as exc:
+        new_group(service, [user_dn("alice")], force_id=True, gidNumber=0)
+    assert "mixed.gidNumber" in exc.value.fields
+
+
 def test_acl_key(service: ObjectService) -> None:
     info = service.registry.get("group")
     tab = info.tab("mixed")

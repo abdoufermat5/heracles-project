@@ -282,6 +282,15 @@ def _refuse_duplicate(
         )
 
 
+def _error_duplicate(
+    ctx: TabContext, object_class: str, attr: str, value: object, field: str
+) -> None:
+    """Report a duplicate id before anything is written (the write-time check is a race net)."""
+    holder = _other_holder(ctx.directory, object_class, attr, value, ctx.dn)
+    if holder is not None:
+        ctx.error(field, _("This id is already used by {dn}.").format(dn=holder))
+
+
 def _remove_member_everywhere(directory: DirectoryClient, uid: str) -> None:
     for group in _groups_with_member(directory, uid):
         try:
@@ -426,6 +435,7 @@ class PosixAccountTab(Tab):
             return
         cls._check_membership_rights(ctx, uid)
         _check_min_id(ctx, settings, "uidNumber", "gidNumber")
+        _error_duplicate(ctx, "posixAccount", "uidNumber", values.get("uidNumber"), "uidNumber")
 
         # shadowLastChange
         today = today_epoch_days()
@@ -663,6 +673,9 @@ class PosixGroup(ObjectType):
                     ctx.error("gidNumber", _("Required when the group id is forced."))
                 else:
                     _check_min_id(ctx, settings, "gidNumber")
+                    _error_duplicate(
+                        ctx, "posixGroup", "gidNumber", ctx.values.get("gidNumber"), "gidNumber"
+                    )
                 return
             if ctx.creating or not isinstance(ctx.values.get("gidNumber"), int):
                 try:

@@ -83,18 +83,23 @@ class MixedGroupTab(Tab):
     @classmethod
     def prepare(cls, ctx: TabContext) -> None:
         values = ctx.values
+        settings = posix_settings(ctx)
         members = _dns(ctx.main_values().get("member"))
         values["memberUid"] = logins_of(ctx.directory, members) or None
         gid = values.get("gidNumber")
         if values.get("force_id"):
             if not isinstance(gid, int):
                 ctx.error("gidNumber", _("Required when the group id is forced."))
+            elif gid < settings.min_id and ctx.was_touched("gidNumber"):
+                ctx.error(
+                    "gidNumber",
+                    _("Must be at least {n}, the configured minimum id.").format(n=settings.min_id),
+                )
             elif cls._gid_taken(ctx, gid):
                 ctx.error("gidNumber", _("This group id is already in use."))
             return
         if isinstance(gid, int) and not ctx.activating:
             return
-        settings = posix_settings(ctx)
         try:
             values["gidNumber"] = next_free_id(
                 ctx.directory,

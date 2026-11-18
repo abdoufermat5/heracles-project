@@ -254,6 +254,19 @@ def test_forced_ids_require_values(service: ObjectService) -> None:
     assert "posix.uidNumber" in exc.value.fields
 
 
+def test_forced_duplicate_uid_number_is_refused_before_any_write(
+    service: ObjectService, directory: MemoryDirectory
+) -> None:
+    new_user(service, "admin", {"force_ids": True, "uidNumber": 4242, "gidNumber": 4343})
+    before = {e.dn for e in directory.search(BASE, "(objectClass=*)")}
+    with pytest.raises(ObjectValidationError) as exc:
+        new_user(service, "mallory", {"force_ids": True, "uidNumber": 4242, "gidNumber": 4444})
+    assert "posix.uidNumber" in exc.value.fields
+    assert {
+        e.dn for e in directory.search(BASE, "(objectClass=*)")
+    } == before  # nothing left behind
+
+
 def test_group_membership_is_stored_on_groups(
     service: ObjectService, directory: MemoryDirectory
 ) -> None:
