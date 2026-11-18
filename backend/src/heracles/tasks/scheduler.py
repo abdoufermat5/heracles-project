@@ -303,6 +303,14 @@ class Scheduler:
         """Finish the task being run, then start no other (graceful shutdown)."""
         self._stopping.set()
 
+    def close(self) -> None:
+        """Close the directory connections and the application database (worker exit)."""
+        for directory in self.directories.values():
+            close = getattr(directory, "close", None)
+            if callable(close):
+                close()
+        self.store.database.close()
+
     @property
     def registry(self) -> TypeRegistry:
         """The registry of the current pass (re-read from the provider when there is one)."""

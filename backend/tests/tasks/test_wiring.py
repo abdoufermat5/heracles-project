@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import signal
 from collections.abc import Iterator
 from typing import Any
 from urllib.parse import quote
@@ -46,6 +48,14 @@ def test_syslog_bad_facility_is_not_configured() -> None:
 class FakeScheduler(Scheduler):
     def __init__(self) -> None:  # pyright: ignore[reportMissingSuperCall]
         self.passes = 0
+        self.stopped = False
+        self.closed = False
+
+    def request_stop(self) -> None:
+        self.stopped = True
+
+    def close(self) -> None:
+        self.closed = True
 
     def run_pass(self, directory_ids: Any = None, kinds: Any = None) -> list[RunRecord] | None:
         self.passes += 1
@@ -61,6 +71,33 @@ def test_worker_once_runs_a_single_pass(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(wiring, "build_worker", build)
     assert main(["worker", "--once", "--config", "ignored.yaml"]) == 0
     assert fake.passes == 1
+
+
+def test_worker_sigterm_stops_the_scheduler_and_closes_resources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeScheduler()
+
+    def terminate_during_pass(directory_ids: Any = None, kinds: Any = None) -> list[RunRecord]:
+        fake.passes += 1
+        os.kill(os.getpid(), signal.SIGTERM)  # the orchestrator stops the pod mid-pass
+        return []
+
+    monkeypatch.setattr(fake, "run_pass", terminate_during_pass)
+
+    def build(_config: str | None = None) -> Scheduler:
+        return fake
+
+    monkeypatch.setattr(wiring, "build_worker", build)
+    old = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        assert main(["worker", "--interval", "3600", "--config", "ignored.yaml"]) == 0
+    finally:
+        for sig, handler in old.items():
+            signal.signal(sig, handler)
+    assert fake.passes == 1
+    assert fake.stopped
+    assert fake.closed
 
 
 def test_worker_rejects_a_bad_interval() -> None:

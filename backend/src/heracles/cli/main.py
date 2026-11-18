@@ -104,21 +104,27 @@ def _worker(args: argparse.Namespace) -> int:
     if not args.once:
 
         def request_stop(_signum: int, _frame: object) -> None:
+            # the pass in progress stops after the task it runs; the wait below wakes up
+            scheduler.request_stop()
             stop.set()
 
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, request_stop)
-    while True:
-        runs = scheduler.run_pass()
-        if runs is None:
-            print("heracles worker: another worker holds the lease", file=sys.stderr)
-        else:
-            for run in runs:
-                print(
-                    f"{run.directory} {run.runner}: {run.status} ({run.summary})", file=sys.stderr
-                )
-        if args.once or stop.wait(args.interval):
-            return 0
+    try:
+        while True:
+            runs = scheduler.run_pass()
+            if runs is None:
+                print("heracles worker: another worker holds the lease", file=sys.stderr)
+            else:
+                for run in runs:
+                    print(
+                        f"{run.directory} {run.runner}: {run.status} ({run.summary})",
+                        file=sys.stderr,
+                    )
+            if args.once or stop.is_set() or stop.wait(args.interval):
+                return 0
+    finally:
+        scheduler.close()
 
 
 def _dns(args: argparse.Namespace) -> int:
