@@ -20,34 +20,27 @@ concurrency:
 
 jobs:
   check:
-    # The tag must name the version the packages carry, and the gates must pass.
+    # The tag must name the version every package carries.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Tag matches the package versions
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          py=$(sed -n 's/^version = "\(.*\)"/\1/p' backend/pyproject.toml | head -1)
-          js=$(sed -n 's/^  "version": "\(.*\)",/\1/p' frontend/package.json | head -1)
-          echo "tag=$tag backend=$py frontend=$js"
-          test "$tag" = "$py" && test "$tag" = "$js"
-      - name: System libraries for python-ldap
-        run: sudo apt-get update && sudo apt-get install -y libldap2-dev libsasl2-dev
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-      - name: Backend gates
-        working-directory: backend
-        run: |
-          uv sync --locked --extra ldap
-          uv run ruff check .
-          uv run ruff format --check .
-          uv run pyright
-          uv run pytest -q
+      - name: Tag, backend, frontend and chart versions agree
+        run: python3 scripts/check_versions.py "$GITHUB_REF_NAME"
+
+  # The same gates as every push (ci.yml): backend lint, types and tests with PostgreSQL,
+  # frontend lint, tests and build, dependency audits, both directory servers, the Kubernetes
+  # install, the two-replica browser tests and the benchmark.
+  gates:
+    needs: check
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
 
   image:
-    needs: check
+    needs: [check, gates]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -75,6 +68,26 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+      # Scan the image before anything is pushed or signed: a HIGH or CRITICAL finding that has a
+      # fix available stops the release (findings without a fix upstream are ignored).
+      - name: Build the image for the scan (linux/amd64, not pushed)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          load: true
+          tags: heracles:scan
+          build-args: HERACLES_BUILD_ID=${{ github.ref_name }}
+          cache-to: type=gha,mode=max
+          cache-from: type=gha
+      - name: Vulnerability scan (Trivy)
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          image-ref: heracles:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
       - id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
@@ -85,6 +98,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: HERACLES_BUILD_ID=${{ github.ref_name }}
+          cache-from: type=gha
           sbom: true
           provenance: mode=max
       - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
@@ -100,7 +114,7 @@ jobs:
           push-to-registry: true
 
   wheel:
-    needs: check
+    needs: [check, gates]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
