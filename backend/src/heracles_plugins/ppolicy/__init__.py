@@ -13,6 +13,7 @@ from heracles.attributes import (
     BooleanAttr,
     DateTimeAttr,
     DepartmentAttr,
+    FloatAttr,
     HiddenAttr,
     IntAttr,
     ObjectRefAttr,
@@ -60,7 +61,7 @@ def virtual[A](attr: A) -> A:
 # --------------------------------------------------------------- attributes
 
 
-class DurationAttr(IntAttr):
+class DurationAttr(FloatAttr):
     """A duration stored in seconds in LDAP, presented in a friendly unit (default: days)."""
 
     def __init__(
@@ -77,31 +78,33 @@ class DurationAttr(IntAttr):
         self.unit_seconds = unit_seconds
         self.unit_name = unit_name
 
-    def from_ldap(self, values: list[bytes]) -> int | None:
+    def from_ldap(self, values: list[bytes]) -> float | None:
         if not values:
             return None
         try:
             seconds = int(values[0].decode("ascii").strip())
         except (ValueError, UnicodeDecodeError):
             return None
-        if seconds % self.unit_seconds != 0:
-            return seconds
-        return seconds // self.unit_seconds
+        return self.from_seconds(seconds)
 
-    def to_ldap(self, value: int | None) -> list[bytes]:
+    def to_ldap(self, value: float | None) -> list[bytes]:
         if value is None:
             return []
-        return [str(value * self.unit_seconds).encode("ascii")]
+        return [str(self.to_seconds(value)).encode("ascii")]
 
-    def to_seconds(self, value: int) -> int:
-        """Convert friendly unit value to seconds."""
-        return value * self.unit_seconds
+    def to_seconds(self, value: float) -> int:
+        """Convert a value in the friendly unit to whole seconds."""
+        return round(value * self.unit_seconds)
 
-    def from_seconds(self, seconds: int) -> int:
-        """Convert seconds to friendly unit (or keep seconds if not a whole unit)."""
-        if seconds % self.unit_seconds != 0:
-            return seconds
-        return seconds // self.unit_seconds
+    def from_seconds(self, seconds: int) -> float:
+        """Convert seconds to the friendly unit: a whole number when exact, else fractional.
+
+        A stored ``1801`` seconds is shown as a fraction of a day, so saving the form
+        writes ``1801`` back instead of multiplying the seconds by the unit.
+        """
+        if seconds % self.unit_seconds == 0:
+            return seconds // self.unit_seconds
+        return seconds / self.unit_seconds
 
 
 class CheckQualityAttr(SelectAttr):

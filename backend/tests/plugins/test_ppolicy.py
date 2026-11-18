@@ -113,13 +113,16 @@ def test_seconds_conversion_whole_units() -> None:
     assert attr.to_ldap(None) == []
 
 
-def test_seconds_conversion_non_whole_values() -> None:
+@pytest.mark.parametrize("seconds", [1, 45, 1801, 12345, 86401, 7776001])
+def test_seconds_conversion_non_whole_values_round_trip(seconds: int) -> None:
     attr = DurationAttr("pwdMinAge", "Min age", unit_seconds=DEFAULT_DURATION_UNIT)
-    # Non-whole second values (e.g. 45 seconds or 12345 seconds) are kept as seconds
-    assert attr.from_ldap([b"45"]) == 45
-    assert attr.from_seconds(45) == 45
-    assert attr.from_ldap([b"12345"]) == 12345
-    assert attr.from_seconds(12345) == 12345
+    # A value that is not a whole number of days is shown as a fraction of a day and
+    # written back unchanged, never multiplied by 86400 as if it were a count of days.
+    shown = attr.from_ldap([str(seconds).encode()])
+    assert shown is not None and shown == pytest.approx(seconds / 86400)
+    assert attr.to_ldap(shown) == [str(seconds).encode()]
+    assert attr.to_ldap(attr.from_json(shown)) == [str(seconds).encode()]
+    assert attr.from_seconds(seconds) == shown
 
     # Invalid string returns None
     assert attr.from_ldap([b"invalid"]) is None
@@ -239,8 +242,14 @@ def test_policy_read_arbitrary_non_whole_seconds(
         },
     )
     state = service.load("ppolicy", dn)
-    assert state.tabs["main"].values["pwdMinAge"] == 75
+    assert state.tabs["main"].values["pwdMinAge"] == pytest.approx(75 / 86400)
     assert state.tabs["main"].values["pwdMaxAge"] == 1
+
+    # Saving the loaded value back (as a form does) must not scale the seconds
+    loaded = state.tabs["main"].values["pwdMinAge"]
+    service.update("ppolicy", dn, {"main": {"values": {"pwdMinAge": loaded}}})
+    reloaded = directory.get(dn)
+    assert reloaded is not None and reloaded.text("pwdMinAge") == "75"
 
     # Update description only; pwdMinAge should remain 75 in LDAP
     service.update("ppolicy", dn, {"main": {"values": {"description": "Legacy policy"}}})
