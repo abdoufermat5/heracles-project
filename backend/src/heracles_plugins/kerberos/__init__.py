@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import reduce
-from operator import or_
 from typing import Final
 
 from heracles.attributes import (
@@ -43,7 +41,15 @@ TICKET_FLAGS: Final[tuple[tuple[str, int, str], ...]] = (
     ("NEW_PRINC", 0x00008000, _("New principal")),
 )
 
-_KNOWN_FLAGS: Final = reduce(or_, (bit for _, bit, _ in TICKET_FLAGS))
+
+def _known_flags() -> int:
+    out = 0
+    for _name, bit, _label in TICKET_FLAGS:
+        out |= bit
+    return out
+
+
+_KNOWN_FLAGS: Final = _known_flags()
 
 
 def virtual[A: AnyAttribute](attr: A) -> A:

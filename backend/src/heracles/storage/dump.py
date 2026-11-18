@@ -167,7 +167,8 @@ def dump_database(db: Database, dest: Path, *, exclude_secrets: bool = False) ->
                 if exclude_secrets and table in SECRET_TABLES:
                     result.tables[table] = 0
                     continue
-                blanked = SECRET_COLUMNS.get(table, frozenset()) if exclude_secrets else frozenset()
+                none: frozenset[str] = frozenset()
+                blanked = SECRET_COLUMNS.get(table, none) if exclude_secrets else none
                 for row in conn.execute(f"SELECT * FROM {_quote(table)} ORDER BY 1"):  # noqa: S608
                     names = row.keys()
                     record = {
