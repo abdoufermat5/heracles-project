@@ -16,6 +16,7 @@ from heracles.api.domain import DomainDep, TypeAclPolicy
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.etag import json_with_etag
 from heracles.api.filter_rules import filter_checks
+from heracles.api.snapshot_guard import restore_authorizer
 from heracles.api.stepup import require_recent_auth
 from heracles.attributes import JSON
 from heracles.core import references
@@ -739,11 +740,15 @@ def snapshot_json(snap: Snapshot) -> dict[str, JSON]:
 
 
 def _snapshot_type_and_key(domain: DomainDep, snap: Snapshot) -> str:
+    info = _snapshot_type(domain, snap)
+    return info.acl_object(info.main_tab)
+
+
+def _snapshot_type(domain: DomainDep, snap: Snapshot) -> TypeInfo:
     if snap.object_type is None:
         raise forbidden("Snapshot has no object type")
     with object_errors():
-        info = domain.registry.get(snap.object_type)
-    return info.acl_object(info.main_tab)
+        return domain.registry.get(snap.object_type)
 
 
 @router.get("/snapshots/deleted")
@@ -779,7 +784,9 @@ def restore_snapshot(snapshot_id: str, user: CurrentUserDep, domain: DomainDep) 
         raise forbidden("Cannot restore this snapshot")
     _check_not_locked_by_other(domain, user, snap.object_dn)
     try:
-        restored = snapshots.restore(snapshot_id)
+        restored = snapshots.restore(
+            snapshot_id, authorize=restore_authorizer(domain, user, _snapshot_type(domain, snap))
+        )
     except SnapshotError as exc:
         raise ApiError(409, "conflict", str(exc)) from exc
     return {"dn": snap.object_dn, "restored": list(restored)}

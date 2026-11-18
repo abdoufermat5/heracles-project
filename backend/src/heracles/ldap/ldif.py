@@ -8,15 +8,38 @@ from __future__ import annotations
 
 import base64
 import binascii
+import zlib
 from collections.abc import Iterable, Iterator
 
 from heracles.ldap.client import Entry
 
 FOLD_WIDTH = 76
 
+#: Largest LDIF text a compressed snapshot may expand to (a few bytes of zlib can claim
+#: gigabytes: the expansion is bounded before it is held in memory).
+MAX_INFLATED_BYTES = 64 * 1024 * 1024
+
 
 class LdifError(ValueError):
     """Raised on malformed LDIF input."""
+
+
+class InflatedTooLargeError(ValueError):
+    """Compressed data expands past :data:`MAX_INFLATED_BYTES`."""
+
+
+def inflate(blob: bytes, limit: int = MAX_INFLATED_BYTES) -> bytes:
+    """Decompress zlib ``blob`` into at most ``limit`` bytes.
+
+    Raises:
+        zlib.error: the data is not valid zlib.
+        InflatedTooLargeError: the data expands to more than ``limit`` bytes.
+    """
+    inflater = zlib.decompressobj()
+    out = inflater.decompress(blob, limit)
+    if inflater.unconsumed_tail:
+        raise InflatedTooLargeError(f"data expands to more than {limit} bytes")
+    return out
 
 
 def _unfold(text: str) -> list[str]:

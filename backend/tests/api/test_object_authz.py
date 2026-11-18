@@ -11,10 +11,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from heracles.acl import ResolvedAcl
+from heracles.acl import ResolvedAcl, serialise_assignment, serialise_role_value
+from heracles.acl.model import AclAssignment, AclScope, RoleTemplateValue
+from heracles.acl.parser import parse_role_value
 from heracles.api import domain
 from heracles.demo import BASE
+from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
+from heracles.schema.names import ATTR, OC
 from heracles.server import build_demo_app
 
 ASMITH = f"uid=asmith,ou=people,ou=paris,{BASE}"
@@ -137,3 +141,39 @@ def test_cached_acl_resolution_expires() -> None:
     assert cached(cast("Any", session), 5) is None  # roles or assignments changed since
     fresh.resolved_at -= domain.ACL_CACHE_SECONDS + 1
     assert cached(cast("Any", session), 4) is None
+
+
+def test_snapshot_restore_cannot_write_what_the_caller_may_not(app: FastAPI) -> None:
+    """The restore right does not let a caller put back an attribute they cannot write."""
+    directory = cast("MemoryDirectory", app.state.heracles.directories["main"])
+    role = f"cn=snapshots-only,ou=aclroles,{BASE}"
+    parsed = parse_role_value("0:user/user;r#snapshot;rw")
+    assert isinstance(parsed, RoleTemplateValue)
+    directory.add(
+        role,
+        {
+            "objectClass": [OC.ACL_ROLE.encode()],
+            "cn": [b"snapshots-only"],
+            ATTR.ACL_TEMPLATE: [serialise_role_value(parsed).encode()],
+        },
+    )
+    member = f"uid=bmartin,ou=people,{PARIS}"
+    grant = AclAssignment(index=0, scope=AclScope.SUBTREE, role_dn=role, members=(member,))
+    directory.modify(
+        PARIS,
+        [
+            Modification("add", "objectClass", [OC.ACL_ASSIGNMENT.encode()]),
+            Modification("add", ATTR.ACL_ENTRY, [serialise_assignment(grant).encode()]),
+        ],
+    )
+    admin = login(app, "admin")
+    snap = admin.post(f"/objects/user/{q(ASMITH)}/snapshots", {}).json()["id"]
+    old = directory.get(ASMITH)
+    assert old is not None
+    directory.modify(ASMITH, [Modification("replace", "userPassword", [b"{SSHA}changed"])])
+
+    r = login(app, "bmartin").post(f"/snapshots/{q(snap)}/restore")
+
+    assert r.status_code == 403, r.text
+    now = directory.get(ASMITH)
+    assert now is not None and now.text("userPassword") == "{SSHA}changed"

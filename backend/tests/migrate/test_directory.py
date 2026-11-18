@@ -14,7 +14,7 @@ from pathlib import Path
 from heracles.acl.model import Ignored
 from heracles.acl.parser import parse_assignment, parse_role_value
 from heracles.ldap.client import Entry
-from heracles.ldap.ldif import dump_ldif, parse_ldif
+from heracles.ldap.ldif import MAX_INFLATED_BYTES, dump_ldif, parse_ldif
 from heracles.migrate.directory import migrate_entries, migrate_ldif
 
 BASE = "dc=example,dc=org"
@@ -170,6 +170,21 @@ def test_snapshots_are_migrated_inside() -> None:
     (restored,) = parse_ldif(plain.decode())
     assert restored.text("hrcNickName") == "annie"
     assert entry.text("hrcSnapshotHash") == hashlib.md5(plain, usedforsecurity=False).hexdigest()
+
+
+def test_a_compressed_bomb_in_a_snapshot_is_not_expanded() -> None:
+    ldif = f"dn: uid=ann,{BASE}\nobjectClass: inetOrgPerson\nuid: ann\ncn: A\nsn: A\n\n#"
+    bomb = zlib.compress(ldif.encode() + b"0" * MAX_INFLATED_BYTES)
+    snapshot = _entry(
+        f"gosaSnapshotTimestamp=1700000000-0,ou=snapshots,{BASE}",
+        objectClass=["gosaSnapshotObject"],
+        gosaSnapshotTimestamp=["1700000000-0"],
+        gosaSnapshotDN=[f"uid=ann,{BASE}"],
+        gosaSnapshotData=[bomb],
+    )
+    out, report = migrate_entries([snapshot])
+    assert any("unreadable snapshot data" in e for e in report.errors)
+    assert out[0].first("hrcSnapshotData") == bomb  # kept as it was, never expanded
 
 
 def test_locks_are_dropped_and_unknown_names_are_errors() -> None:

@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import time
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -27,7 +27,7 @@ from heracles.ldap.client import (
     Scope,
 )
 from heracles.ldap.filter import escape_filter_value
-from heracles.ldap.ldif import dump_ldif, parse_ldif
+from heracles.ldap.ldif import InflatedTooLargeError, dump_ldif, inflate, parse_ldif
 from heracles.schema import names as schema
 
 log = structlog.get_logger(__name__)
@@ -91,6 +91,16 @@ def _parse_timestamp(timestamp: str) -> tuple[int, int] | None:
     else:
         micros = 0
     return int(seconds), micros
+
+
+@dataclass(frozen=True, slots=True)
+class RestorePlan:
+    """What a restore is about to write, handed to the caller's authorisation check."""
+
+    #: Snapshot entries, parents first; the first one is the restored object.
+    records: Sequence[Entry]
+    #: Entries live now under the restored object (normalised DN -> entry); they are replaced.
+    live: Mapping[str, Entry]
 
 
 class SnapshotService:
@@ -229,29 +239,52 @@ class SnapshotService:
         if blob is None:
             raise SnapshotError(f"{snapshot_dn} has no data")
         try:
-            raw = zlib.decompress(blob)
+            raw = inflate(blob)
         except zlib.error as exc:
             raise SnapshotError(f"{snapshot_dn} data is not valid zlib") from exc
+        except InflatedTooLargeError as exc:
+            raise SnapshotError(f"{snapshot_dn} data is too large: {exc}") from exc
         expected = entry.text(_A.SNAPSHOT_HASH)
         if expected and hashlib.md5(raw, usedforsecurity=False).hexdigest() != expected.lower():
             raise SnapshotError(f"{snapshot_dn} failed its integrity check")
         return raw.decode("utf-8")
 
-    def restore(self, snapshot_dn: str) -> list[str]:
+    def restore(
+        self,
+        snapshot_dn: str,
+        *,
+        authorize: Callable[[RestorePlan], None] | None = None,
+    ) -> list[str]:
         """Re-import the snapshot, replacing the existing subtree.
 
         Returns the DNs written, parents first. A live subtree is snapshotted first; when
         an add fails, that safety snapshot is restored (or, when nothing was live, the
         partial import is dropped) and the error is raised again.
 
+        The snapshot must sit below the snapshot base and hold the object it is filed for.
+        ``authorize`` sees what is about to change before anything is touched and refuses by
+        raising: the snapshot data is written as stored, so the caller must check its rights
+        on every entry and attribute that differs.
+
         Raises:
             NoSuchObjectError: the snapshot, or the parent of the restored
                 object, does not exist.
+            SnapshotError: the snapshot is outside the snapshot base, unreadable, or does
+                not hold the object it is filed for.
         """
+        if not dnlib.is_descendant(snapshot_dn, self.snapshot_base, include_self=False):
+            raise SnapshotError(f"{snapshot_dn} is not below the snapshot base")
+        meta = self.get(snapshot_dn)
+        if meta is None:
+            raise NoSuchObjectError(snapshot_dn)
         records = sorted(parse_ldif(self.ldif(snapshot_dn)), key=lambda e: dnlib.depth(e.dn))
         if not records:
             raise SnapshotError(f"{snapshot_dn} is empty")
         root = records[0].dn
+        if dnlib.normalize(root) != dnlib.normalize(meta.object_dn):
+            raise SnapshotError(f"{snapshot_dn} holds {root}, not {meta.object_dn}")
+        if dnlib.is_descendant(root, self.snapshot_base):
+            raise SnapshotError(f"{snapshot_dn} cannot be restored into the snapshot base")
         stray = [e.dn for e in records if not dnlib.is_descendant(e.dn, root)]
         if stray:  # checked before anything is deleted: a snapshot holds one subtree
             raise SnapshotError(f"{snapshot_dn} holds entries outside {root}: {stray[0]}")
@@ -259,14 +292,19 @@ class SnapshotService:
         if parent is not None and self._dir.get(parent, ["objectClass"]) is None:
             raise NoSuchObjectError(parent)
         live = self._dir.get(root, ["objectClass"]) is not None
+        if authorize is not None:
+            existing = (
+                {
+                    dnlib.normalize(e.dn): e
+                    for e in self._dir.search(root, "(objectClass=*)", Scope.SUBTREE)
+                }
+                if live
+                else {}
+            )
+            authorize(RestorePlan(records, existing))
         safety: Snapshot | None = None
         if live:
-            current = self.get(snapshot_dn)
-            safety = self.create(
-                root,
-                object_type=current.object_type if current is not None else None,
-                description="Before restore",
-            )
+            safety = self.create(root, object_type=meta.object_type, description="Before restore")
         try:
             return self._import(records)
         except DirectoryError:

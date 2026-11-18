@@ -7,8 +7,8 @@ import pytest
 
 from heracles.core.snapshots import SnapshotError, SnapshotService
 from heracles.ldap import dn as dnlib
-from heracles.ldap.client import DirectoryError, Entry, NoSuchObjectError, Scope
-from heracles.ldap.ldif import parse_ldif
+from heracles.ldap.client import DirectoryError, Entry, Modification, NoSuchObjectError, Scope
+from heracles.ldap.ldif import MAX_INFLATED_BYTES, parse_ldif
 from heracles.ldap.memory import MemoryDirectory
 from tests.core.conftest import LDIF
 
@@ -269,3 +269,53 @@ def test_list_deleted_reads_every_entry_in_one_search() -> None:
 
     assert svc.list_deleted() == []
     assert directory.get_calls == 0
+
+
+def _forge(directory: MemoryDirectory, dn: str, object_dn: str, ldif: str) -> None:
+    stamp = dn.split(",", 1)[0].partition("=")[2]
+    directory.add(
+        dn,
+        {
+            "objectClass": [b"hrcSnapshotObject"],
+            "hrcSnapshotTimestamp": [stamp.encode()],
+            "hrcSnapshotDN": [object_dn.encode()],
+            "hrcSnapshotData": [zlib.compress(ldif.encode())],
+        },
+    )
+
+
+@pytest.mark.parametrize("where", ["outside the snapshot base", "another object"])
+def test_restore_refuses_a_snapshot_that_is_not_what_it_claims(
+    svc: SnapshotService, directory: MemoryDirectory, where: str
+) -> None:
+    """A forged entry must not pass for a snapshot, nor restore an object it is not filed for."""
+    forged = f"dn: {ALICE}\nobjectClass: inetOrgPerson\nuid: alice\ncn: Evil\nsn: A\n"
+    if where == "outside the snapshot base":
+        snap_dn = "hrcSnapshotTimestamp=1-0,ou=people,dc=heracles,dc=test"
+        _forge(directory, snap_dn, ALICE, forged)
+    else:
+        snap_dn = f"hrcSnapshotTimestamp=1-0,{BASE}"
+        svc.create(ALICE)  # makes the container
+        _forge(directory, snap_dn, f"uid=carol,{SUB}", forged)
+    with pytest.raises(SnapshotError):
+        svc.restore(snap_dn)
+    alice = directory.get(ALICE)
+    assert alice is not None and alice.text("cn") == "Alice"
+
+
+def test_restore_bounds_the_decompressed_size(
+    svc: SnapshotService, directory: MemoryDirectory
+) -> None:
+    """A few kilobytes of zlib must not be able to expand to gigabytes in memory."""
+    snap = svc.create(ALICE)
+    ldif = f"dn: {ALICE}\nobjectClass: inetOrgPerson\nuid: alice\ncn: A\nsn: A\n\n#"
+    bomb = zlib.compress(ldif.encode() + b"0" * MAX_INFLATED_BYTES)
+    directory.modify(
+        snap.dn,
+        [
+            Modification("replace", "hrcSnapshotData", [bomb]),
+            Modification("delete", "hrcSnapshotHash"),
+        ],
+    )
+    with pytest.raises(SnapshotError):
+        svc.ldif(snap.dn)

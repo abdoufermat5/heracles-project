@@ -24,7 +24,7 @@ from heracles.acl.parser import (
 )
 from heracles.attributes.kinds import parse_generalized_time
 from heracles.ldap.client import Entry
-from heracles.ldap.ldif import dump_ldif, parse_ldif
+from heracles.ldap.ldif import InflatedTooLargeError, dump_ldif, inflate, parse_ldif
 from heracles.migrate import legacy_map
 from heracles.schema import names as schema
 from heracles.schema.definitions import ATTRIBUTE_TYPES, OBJECT_CLASSES
@@ -373,9 +373,9 @@ class _Migrator:
 
     def _snapshot(self, raw: bytes, where: str) -> bytes:
         try:
-            ldif = zlib.decompress(raw).decode("utf-8")
+            ldif = inflate(raw).decode("utf-8")
             inner = parse_ldif(ldif)
-        except (zlib.error, UnicodeDecodeError, ValueError) as exc:
+        except (zlib.error, UnicodeDecodeError, ValueError) as exc:  # includes too large
             self.report.errors.append(f"{where}: unreadable snapshot data ({exc})")
             return raw
         migrated = [e for e in (self.entry(e) for e in inner) if e is not None]
@@ -402,8 +402,8 @@ class _Migrator:
         if data is None or not entry.get(schema.ATTR.SNAPSHOT_HASH):
             return
         try:
-            plain = zlib.decompress(data)
-        except zlib.error:
+            plain = inflate(data)
+        except (zlib.error, InflatedTooLargeError):
             return
         digest = hashlib.md5(plain, usedforsecurity=False).hexdigest()
         entry.attrs[schema.ATTR.SNAPSHOT_HASH] = [digest.encode()]
