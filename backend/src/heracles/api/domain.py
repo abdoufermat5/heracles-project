@@ -27,8 +27,10 @@ from heracles.objects.activation import PluginManager
 from heracles.objects.listing_cache import ListingCache, ListingScope
 from heracles.objects.listing_epochs import ListingEpochs
 from heracles.objects.model import Tab
-from heracles.objects.policy import CompositeEvents, ObjectEvents
+from heracles.objects.policy import CompositeEvents, EventContext, NullEvents, ObjectEvents
 from heracles.objects.registry import EventsContext
+from heracles.objects.state import ObjectState
+from heracles.schema import names as schema
 
 #: How long a session keeps its ACL resolution before resolving again. Roles, assignments and
 #: group memberships changed by someone else (a revocation, say) apply to a live session
@@ -36,6 +38,11 @@ from heracles.objects.registry import EventsContext
 ACL_CACHE_SECONDS = 60.0
 
 _ACL_CACHE_KEY = "acl.resolved"
+#: Value of the ACL change counter the cached resolution was made under.
+_ACL_EPOCH_KEY = "acl.epoch"
+#: Owner of the directory-wide ACL change counter in the shared epoch store (no session
+#: id has this form).
+ACL_EPOCH_OWNER = "\0acl"
 #: How often a process compares its enabled plugins with the shared app database.
 PLUGIN_SYNC_SECONDS = 2.0
 
@@ -115,6 +122,8 @@ class Domain:
     listings: ListingCache = field(default_factory=ListingCache)
     #: Per-session change counters shared with the other replicas (``None``: single process).
     epochs: ListingEpochs | None = None
+    #: ACL change counter of this process, used without a shared epoch store.
+    _acl_epoch: int = field(default=0, repr=False, compare=False)
     #: When this process last compared its plugins with the app database (monotonic).
     _plugins_checked: float = field(default=float("-inf"), repr=False, compare=False)
 
@@ -179,7 +188,8 @@ class Domain:
         every service and check of that request. It is rebuilt when the session's
         resolution was invalidated in between (ACL or membership change).
         """
-        resolved = _cached_resolution(user.session)
+        epoch = self.acl_epoch()
+        resolved = _cached_resolution(user.session, epoch)
         memo = cast("tuple[ResolvedAcl, AclEvaluator] | None", user.acl)
         if memo is not None and memo[0] is resolved:
             return memo[1]
@@ -200,6 +210,7 @@ class Domain:
                 user.dn, uid=uid, user_attrs=attrs, session_roles=session_roles(user.session)
             )
             user.session.cache[_ACL_CACHE_KEY] = resolved
+            user.session.cache[_ACL_EPOCH_KEY] = epoch
         from heracles.api.tokens import rights_cap  # tokens builds on deps, like this module
 
         evaluator = AclEvaluator(
@@ -236,6 +247,19 @@ class Domain:
         )
         return service, policy
 
+    def acl_epoch(self) -> int:
+        """Directory-wide ACL change counter (shared by the replicas when they can)."""
+        if self.epochs is not None:
+            return self.epochs.current(ACL_EPOCH_OWNER)
+        return self._acl_epoch
+
+    def acl_changed(self) -> None:
+        """Roles or assignments changed: every session resolves its ACLs again."""
+        if self.epochs is not None:
+            self.epochs.bump(ACL_EPOCH_OWNER)
+        else:
+            self._acl_epoch += 1
+
     def invalidate_listings(self, session_id: str) -> None:
         """Drop the listing snapshots of one session (the raw id, as in ``Session.id``)."""
         self.listings.invalidate(session_id)
@@ -249,7 +273,8 @@ class Domain:
         hooks collected during a write can be read back with :meth:`collected`.
         """
         if user.events is None:
-            hooks = [
+            hooks: list[ObjectEvents] = [AclChanges(self.acl_changed)]
+            hooks += [
                 factory(
                     EventsContext(
                         user.directory, user.dn, user.client_ip, self.registry.settings.get(name)
@@ -277,13 +302,44 @@ def session_roles(session: Session) -> list[str]:
     return [v for v in cast("list[object]", value) if isinstance(v, str)]
 
 
-def _cached_resolution(session: Session) -> ResolvedAcl | None:
+def _cached_resolution(session: Session, epoch: int) -> ResolvedAcl | None:
     value = session.cache.get(_ACL_CACHE_KEY)
     if not isinstance(value, ResolvedAcl):
         return None
+    if session.cache.get(_ACL_EPOCH_KEY) != epoch:
+        return None  # roles or assignments changed since
     if time.monotonic() - value.resolved_at > ACL_CACHE_SECONDS:
         return None  # a change made by another administrator reaches the session in time
     return value
+
+
+_ACL_CLASSES = frozenset(c.lower() for c in (schema.OC.ACL_ASSIGNMENT, schema.OC.ACL_ROLE))
+
+
+def _holds_acl(state: ObjectState | None) -> bool:
+    return state is not None and any(c.lower() in _ACL_CLASSES for c in state.object_classes)
+
+
+class AclChanges(NullEvents):
+    """Calls ``changed`` after an object write that can change anyone's ACLs.
+
+    That is a write to an entry holding assignments or a role template, and any delete:
+    a deleted entry is removed from the assignments naming it.
+    """
+
+    def __init__(self, changed: Callable[[], None]) -> None:
+        self._changed = changed
+
+    def post_create(self, ctx: EventContext) -> None:
+        if _holds_acl(ctx.after):
+            self._changed()
+
+    def post_modify(self, ctx: EventContext) -> None:
+        if _holds_acl(ctx.before) or _holds_acl(ctx.after):
+            self._changed()
+
+    def post_delete(self, ctx: EventContext) -> None:
+        self._changed()
 
 
 def invalidate_acl_cache(session: Session) -> None:

@@ -221,6 +221,8 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         )
         if not body.dry_run:
             summary = importer.summarize(results)
+            if summary["add"] or summary["modify"]:
+                domain.acl_changed()  # raw records may change roles, assignments, members
             domain.audit.record_by(
                 user,
                 "import",

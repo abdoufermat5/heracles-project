@@ -299,6 +299,21 @@ def test_role_object_edit_cannot_grant_rights_the_caller_does_not_hold(
     assert patch("0:user/user;r,acl/aclRole;rw").status_code == 200
 
 
+def test_revoked_assignment_takes_effect_in_other_sessions(client: TestClient) -> None:
+    """An ACL change reaches every session at once, not when its cache expires."""
+    _delegate(client)
+    delegate = Api(TestClient(client.app, base_url="http://testserver")).login("bmartin")
+    assert delegate.get(f"/acl/assignments/{dnp(PARIS)}").status_code == 200
+    admin = Api(client).login("admin")
+    kept = [
+        {"scope": a["scope"], "role": a["role"], "members": [m["dn"] for m in a["members"]]}
+        for a in admin.get(f"/acl/assignments/{dnp(BASE)}").json()["assignments"]
+        if a["role"] != DELEGATE_ROLE
+    ]
+    assert admin.put(f"/acl/assignments/{dnp(BASE)}", {"assignments": kept}).status_code == 200
+    assert delegate.get(f"/acl/assignments/{dnp(PARIS)}").status_code == 403
+
+
 def test_super_admin_assigns_any_role(client: TestClient, admin: Api) -> None:
     payload = {"assignments": [{"scope": "subtree", "role": FULL_ADMIN_ROLE, "members": [BMARTIN]}]}
     saved = admin.put(f"/acl/assignments/{dnp(PARIS)}", payload)

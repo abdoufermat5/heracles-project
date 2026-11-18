@@ -22,7 +22,7 @@ from heracles.acl import FULL_RIGHTS, NO_RIGHTS, Rights
 from heracles.acl import admin as acl_admin
 from heracles.acl.model import ALL_OBJECTS
 from heracles.api.deps import CurrentUser, CurrentUserDep, StateDep
-from heracles.api.domain import Domain, DomainDep, invalidate_acl_cache
+from heracles.api.domain import Domain, DomainDep
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.settings import ApiSettings
 from heracles.api.state import AppState
@@ -683,7 +683,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
                 templates=body.templates,
                 delegable=domain.evaluator(user).delegable,
             )
-        invalidate_acl_cache(user.session)
+        domain.acl_changed()
         _audit(user, domain, "acl", "acl_role", dn, "role updated")
         return role.to_json()
 
@@ -697,7 +697,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         _require(user, domain, ROLE_KEY, "d", dn)
         with admin_errors():
             acl_admin.delete_role(user.directory, dn, force=force)
-        invalidate_acl_cache(user.session)
+        domain.acl_changed()
         _audit(user, domain, "acl", "acl_role", dn, "role deleted")
         return Response(status_code=204)
 
@@ -724,7 +724,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         with admin_errors():
             _refuse_granting_above_caller(user, domain, dn, body.assignments)
             items = acl_admin.set_assignments(user.directory, dn, body.assignments)
-        invalidate_acl_cache(user.session)
+        domain.acl_changed()
         _audit(user, domain, "acl", "acl_assignment", dn, f"assignments: {len(items)}")
         return {"dn": dn, "assignments": items}
 
@@ -917,7 +917,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         if problems:
             raise validation("Invalid fix options", problems)
         outcome = setup_checks.run_fix(ctx, check_id, body.dns, body.options)
-        invalidate_acl_cache(user.session)
+        domain.acl_changed()
         _audit(user, domain, "config", "setup_check", user.directory.base_dn, f"fix: {check_id}")
         remaining = setup_checks.run_checks(ctx, [check_id])
         return {"result": outcome.to_json(), "check": remaining[0].to_json() if remaining else None}

@@ -131,6 +131,9 @@ def test_cached_acl_resolution_expires() -> None:
     session = SimpleNamespace(cache={})
     fresh = ResolvedAcl("uid=x,dc=example,dc=com")
     session.cache["acl.resolved"] = fresh
-    assert domain._cached_resolution(cast("Any", session)) is fresh  # pyright: ignore[reportPrivateUsage]
+    session.cache["acl.epoch"] = 4
+    cached = domain._cached_resolution  # pyright: ignore[reportPrivateUsage]
+    assert cached(cast("Any", session), 4) is fresh
+    assert cached(cast("Any", session), 5) is None  # roles or assignments changed since
     fresh.resolved_at -= domain.ACL_CACHE_SECONDS + 1
-    assert domain._cached_resolution(cast("Any", session)) is None  # pyright: ignore[reportPrivateUsage]
+    assert cached(cast("Any", session), 4) is None
