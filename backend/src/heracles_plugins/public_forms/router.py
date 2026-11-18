@@ -295,7 +295,7 @@ def build_public_router(
                 return _error(404, "not_found", "Form not found")
             registry = registry_of(request)
             info = registry.get(form.type_name)
-            template = template_tabs(directory, registry, form)
+            template = template_tabs(directory, registry, form, exposed_only=True)
         except (UnknownTypeError, FormError):
             return _error(503, "unavailable", "This form is not available")
         except DirectoryError:

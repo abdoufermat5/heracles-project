@@ -10,12 +10,13 @@ from typing import Any
 
 import pytest
 
+import heracles_plugins.acl_admin as acl_admin
 import heracles_plugins.invitations as inv
 import heracles_plugins.public_forms as forms
 from heracles.attributes import set_default_password_hasher
 from heracles.auth.mail import MemoryMailer
 from heracles.auth.passwords import PasswordPolicy, is_locked
-from heracles.ldap.client import DirectoryError
+from heracles.ldap.client import DirectoryError, Scope
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
@@ -465,3 +466,70 @@ def test_policy_only_allows_the_planned_writes() -> None:
 
 def _replace(form: Any, **changes: Any) -> Any:
     return dataclasses.replace(form, **changes)
+
+
+def test_the_form_policy_grants_nothing() -> None:
+    policy = FormPolicy("user", BASE, set())
+    assert not policy.delegable(BASE, "user/user").write
+    assert not policy.delegable(BASE, "acl/aclRole", "hrcAclTemplate", below=True).read
+
+
+@pytest.fixture
+def acl_service(directory: MemoryDirectory) -> Iterator[ObjectService]:
+    """Services with the access control plugin too (roles, assignments on departments)."""
+    directory.set_schema_object_classes([*directory.schema_object_classes(), "hrcRole", "hrcAcl"])
+    set_default_password_hasher(PasswordPolicy().hash_new)
+    registry = TypeRegistry()
+    register_builtin_types(registry)
+    available = {c.lower() for c in directory.schema_object_classes()}
+    for plugin in (forms.plugin(), inv.plugin(), acl_admin.plugin()):
+        assert registry.register_plugin(plugin, available).enabled
+    yield ObjectService(directory, registry)
+    set_default_password_hasher(None)
+
+
+def test_a_form_never_fills_acl_attributes(acl_service: ObjectService) -> None:
+    with pytest.raises(ObjectValidationError) as refused:
+        new_form(
+            acl_service,
+            fields=[{"field": "main.cn"}, {"field": "main.hrcAclTemplate"}],
+            hrcPublicFormTemplateType="acl_role",
+        )
+    assert (
+        "cannot fill main.hrcAclTemplate" in refused.value.fields["main.hrcPublicFormTemplateType"]
+    )
+
+
+def test_a_submission_cannot_write_an_acl_assignment(acl_service: ObjectService) -> None:
+    """A form stored with an assignment field (it passes the save checks) still grants nothing."""
+    service = acl_service
+    directory = service.directory
+    registry = service.registry
+    role = f"cn=boss,ou=aclroles,{BASE}"
+    directory.add(
+        f"ou=aclroles,{BASE}", {"objectClass": [b"organizationalUnit"], "ou": [b"aclroles"]}
+    )
+    directory.add(
+        role,
+        {
+            "objectClass": [b"hrcRole"],
+            "cn": [b"boss"],
+            "hrcAclTemplate": [b"0:all;rwcdm"],
+        },
+    )
+    new_form(
+        service,
+        fields=[{"field": "main.ou"}, {"field": "main.description"}, {"field": "acl.assignments"}],
+        hrcPublicFormTemplateType="department",
+    )
+    values = {
+        "main.ou": "evil",
+        "main.description": "x",
+        "acl.assignments": [
+            {"index": 0, "scope": "subtree", "role": role, "members": ["uid=me,dc=test"]}
+        ],
+    }
+    with pytest.raises(ObjectValidationError) as refused:
+        submit_form(directory, registry, load(service), values, context=None, now=NOW)
+    assert "acl" in refused.value.fields or any(k.startswith("acl") for k in refused.value.fields)
+    assert not list(directory.search(BASE, "(ou=evil)", Scope.SUBTREE))

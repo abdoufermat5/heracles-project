@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from heracles.acl.rights import NO_RIGHTS, Rights
 from heracles.attributes import (
     JSON,
     AnyAttribute,
@@ -34,8 +35,9 @@ from heracles.objects import (
     TypeRegistry,
     UnknownTypeError,
 )
-from heracles.objects.policy import TAB_ATTR
+from heracles.objects.policy import TAB_ATTR, AccessPolicy
 from heracles.objects.service import department_of
+from heracles.schema import names as schema
 from heracles_plugins.invitations.tokens import (
     InvitationContext,
     claim_token,
@@ -151,7 +153,7 @@ def usable_attribute(attr: AnyAttribute) -> bool:
     return not isinstance(attr, DisplayAttr | DepartmentAttr)
 
 
-def _template_tabs(
+def stored_template(
     service: ObjectService, info: TypeInfo, template_dn: str
 ) -> dict[str, dict[str, Any]]:
     """Template object as ``tabs`` JSON (active optional tabs + stored, readable values)."""
@@ -182,15 +184,52 @@ def _template_tabs(
     return out
 
 
+class _ExposedPolicy:
+    """Read policy of the public page: only the fields the form shows, nothing else.
+
+    The template is copied server side into new objects, but what a visitor sees is
+    limited to the visible fields, whose readability by the form's author was checked
+    when the form was saved (:func:`author_denials`).
+    """
+
+    def __init__(self, exposed: set[tuple[str, str]]) -> None:
+        self._exposed = exposed
+
+    def can_read(self, dn: str, tab: str, attr: str) -> bool:
+        return (tab, attr) in self._exposed
+
+    def can_write(self, dn: str, tab: str, attr: str) -> bool:
+        return False
+
+    def can_create(self, type_name: str, base: str) -> bool:
+        return False
+
+    def can_delete(self, dn: str, type_name: str) -> bool:
+        return False
+
+
 def template_tabs(
-    directory: DirectoryClient, registry: TypeRegistry, form: FormDefinition
+    directory: DirectoryClient,
+    registry: TypeRegistry,
+    form: FormDefinition,
+    *,
+    exposed_only: bool = False,
 ) -> dict[str, dict[str, Any]]:
-    """Defaults provided by the form's template object (empty without template)."""
+    """Defaults provided by the form's template object (empty without template).
+
+    The whole template is read to build a submission (it is copied, never returned).
+    With ``exposed_only`` (the public description of the form) only the values of the
+    fields shown to visitors are read.
+    """
     if not form.template_dn:
         return {}
     info = registry.get(form.type_name)
+    service = ObjectService(directory, registry)
+    if exposed_only:
+        shown = {(r.tab, r.attr) for r in form.rules if not r.hidden}
+        service = ObjectService(directory, registry, policy=_ExposedPolicy(shown))
     try:
-        return _template_tabs(ObjectService(directory, registry), info, form.template_dn)
+        return stored_template(service, info, form.template_dn)
     except ObjectNotFoundError:
         raise FormError("The template of this form does not exist.") from None
 
@@ -243,6 +282,56 @@ def describe_form(
         "invitee_email": email,
         "fields": fields,
     }
+
+
+# ------------------------------------------------------------ author rights
+
+#: Attributes a form never exposes or fills (they grant rights; see :class:`FormPolicy`).
+ACL_ATTRIBUTES = frozenset({schema.ATTR.ACL_ENTRY.lower(), schema.ATTR.ACL_TEMPLATE.lower()})
+
+
+def author_denials(
+    info: TypeInfo,
+    rules: tuple[FieldRule, ...],
+    template: Mapping[str, Any],
+    *,
+    base: str,
+    template_dn: str | None,
+    policy: AccessPolicy,
+) -> list[str]:
+    """What the form's author may not do, as messages (empty: the definition is allowed).
+
+    A form acts with the rights of the person who saved it: ``can_create`` on the target
+    type at ``base``, ``can_write`` on every attribute a submission fills (the fields and
+    the values copied from the template) and ``can_read`` on the template values the
+    visible fields show. ``policy`` answers for the target type.
+    """
+    denied: list[str] = []
+    container = dnlib.join(info.type.rdn, base) if info.type.rdn else base
+    # A not yet existing object of the target type, for entry level rules.
+    target = f"{info.type.main_attr}=form-target,{container}"
+    if not policy.can_create(info.name, base):
+        denied.append(f"cannot create {info.name} in {base}")
+    keys: dict[tuple[str, str], AnyAttribute | None] = {}
+    for rule in rules:
+        attr = _attribute(info, rule)
+        if attr is not None and usable_attribute(attr):
+            keys[(rule.tab, rule.attr)] = attr
+    for tab_name, values in template.items():
+        keys.update({(tab_name, name): None for name in values["values"]})
+        tab = info.tab(tab_name)
+        if tab is not None and tab.optional and not policy.can_write(target, tab_name, TAB_ATTR):
+            denied.append(f"cannot activate {tab_name}")
+    for tab_name, attr_name in sorted(keys):
+        if attr_name.lower() in ACL_ATTRIBUTES:
+            denied.append(f"a form cannot fill {tab_name}.{attr_name}")
+        elif not policy.can_write(target, tab_name, attr_name):
+            denied.append(f"cannot write {tab_name}.{attr_name}")
+    if template_dn:
+        for rule in rules:
+            if not rule.hidden and not policy.can_read(template_dn, rule.tab, rule.attr):
+                denied.append(f"cannot read {rule.key} of the template")
+    return denied
 
 
 # -------------------------------------------------------------- submission
@@ -317,7 +406,11 @@ def build_submission(
 
 
 class FormPolicy:
-    """Access policy of a submission: create one object type, write the chosen attributes."""
+    """Access policy of a submission: create one object type, write the chosen attributes.
+
+    It implements the assignment policy with no rights at all, so the object layer refuses
+    any ACL assignment or role template a submission would write.
+    """
 
     def __init__(self, type_name: str, base: str, writes: set[tuple[str, str]]) -> None:
         self._type = type_name
@@ -335,6 +428,12 @@ class FormPolicy:
 
     def can_delete(self, dn: str, type_name: str) -> bool:
         return False
+
+    def delegable(
+        self, dn: str, object_key: str, attribute: str = "", *, below: bool = False
+    ) -> Rights:
+        """Nothing may be granted by an anonymous submission (ACL assignments, role templates)."""
+        return NO_RIGHTS
 
 
 def lock_user(directory: DirectoryClient, registry: TypeRegistry, dn: str) -> None:
@@ -412,12 +511,14 @@ __all__ = [
     "FormError",
     "FormPolicy",
     "Submission",
+    "author_denials",
     "build_submission",
     "describe_form",
     "find_form",
     "form_from_entry",
     "lock_user",
     "parse_rules",
+    "stored_template",
     "submit_form",
     "template_tabs",
     "usable_attribute",

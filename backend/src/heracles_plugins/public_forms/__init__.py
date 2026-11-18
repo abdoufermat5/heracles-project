@@ -37,10 +37,21 @@ from heracles.attributes import (
 from heracles.core.containers import ensure_container
 from heracles.i18n import _
 from heracles.ldap import dn as dnlib
+from heracles.ldap.client import NoSuchObjectError, Scope
+from heracles.ldap.filter import escape_filter_value
 from heracles.ldap.filter import matches as filter_matches
-from heracles.objects import ObjectType, Plugin, Section, Tab, TypeInfo, UnknownTypeError
+from heracles.objects import (
+    ObjectNotFoundError,
+    ObjectService,
+    ObjectType,
+    Plugin,
+    Section,
+    Tab,
+    TypeInfo,
+    UnknownTypeError,
+)
 from heracles.objects.hooks import TabContext
-from heracles.objects.policy import TypedPolicy
+from heracles.objects.policy import AccessPolicy, TypedPolicy
 from heracles_plugins.public_forms.captcha import Captcha
 from heracles_plugins.public_forms.forms import (
     ALTERED_ATTR,
@@ -49,9 +60,11 @@ from heracles_plugins.public_forms.forms import (
     FormDefinition,
     FormError,
     FormPolicy,
+    author_denials,
     build_submission,
     describe_form,
     find_form,
+    stored_template,
     submit_form,
     usable_attribute,
 )
@@ -94,6 +107,94 @@ def _may_read(ctx: TabContext, info: TypeInfo, dn: str) -> bool:
 def _public_link(values: dict[str, Any]) -> str | None:
     name = values.get("cn")
     return f"/forms/{name}" if isinstance(name, str) and name else None
+
+
+def _check_unique_name(ctx: TabContext, name: str) -> None:
+    """The name is unique in the whole directory: visitors reach a form by name alone."""
+    flt = f"(&(objectClass={FORM_CLASS})(cn={escape_filter_value(name)}))"
+    try:
+        found = ctx.directory.search(ctx.directory.base_dn, flt, Scope.SUBTREE, ["cn"])
+    except NoSuchObjectError:
+        return
+    own = dnlib.normalize(ctx.dn) if ctx.dn else None
+    if any(dnlib.normalize(e.dn) != own for e in found):
+        ctx.error("cn", _("A form with this name already exists."))
+
+
+#: Changes that call for checking the rights of whoever saves the form again.
+_AUTHOR_ATTRS = (
+    ("main", "hrcPublicFormTemplateType"),
+    ("main", "hrcPublicFormTemplateDN"),
+    ("main", "base"),
+    ("alteration", ALTERED_ATTR),
+)
+
+
+def _check_author(ctx: TabContext, info: TypeInfo) -> None:
+    """The person saving the form holds the rights the anonymous submissions will use.
+
+    A submission creates objects without any user, so a form is only as powerful as the
+    person who defined it: they need ``can_create`` on the target type at the form's
+    department, ``can_write`` on what it fills and ``can_read`` on what it shows from the
+    template (see :func:`author_denials`). Checked at creation and whenever the target,
+    the template or the fields change, with the rights of whoever makes that change.
+    """
+    policy: AccessPolicy | None = ctx.policy
+    if policy is None or not (
+        ctx.creating or any(ctx.was_touched(attr, tab) for tab, attr in _AUTHOR_ATTRS)
+    ):
+        return
+    if isinstance(policy, TypedPolicy):
+        policy = policy.for_type(info.name)
+    values = ctx.values
+    base = values.get("base")
+    target_base = base if isinstance(base, str) and base else ctx.base
+    alteration = ctx.tabs.get("alteration")
+    raw = alteration.values.get(ALTERED_ATTR) if alteration is not None else None
+    rules = _rules(raw)
+    template_dn = values.get("hrcPublicFormTemplateDN")
+    template_dn = template_dn if isinstance(template_dn, str) and template_dn else None
+    template: dict[str, dict[str, Any]] = {}
+    if template_dn is not None:
+        try:
+            template = stored_template(
+                ObjectService(ctx.directory, ctx.registry), info, template_dn
+            )
+        except ObjectNotFoundError:
+            return  # reported on the template attribute
+    denied = author_denials(
+        info, rules, template, base=target_base, template_dn=template_dn, policy=policy
+    )
+    if denied:
+        ctx.error(
+            "hrcPublicFormTemplateType",
+            _("You do not hold the rights this form would use: {reasons}").format(
+                reasons="; ".join(denied)
+            ),
+        )
+
+
+def _rules(raw: object) -> tuple[FieldRule, ...]:
+    """Field rules of the alteration values being saved (entries already validated)."""
+    out: list[FieldRule] = []
+    for item in cast("list[object]", raw) if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        entry = cast("dict[str, object]", item)
+        field = entry.get("field")
+        tab, _sep, attr = (field if isinstance(field, str) else "").partition(".")
+        if tab and attr:
+            out.append(
+                FieldRule(
+                    tab,
+                    attr,
+                    bool(entry.get("mandatory")),
+                    bool(entry.get("readonly")),
+                    bool(entry.get("imported")),
+                    bool(entry.get("hidden")),
+                )
+            )
+    return tuple(out)
 
 
 class PublicForm(ObjectType):
@@ -201,6 +302,11 @@ class PublicForm(ObjectType):
                     ) and not _may_read(ctx, info, template):
                         # Its values are copied into new objects and shown to anonymous visitors.
                         ctx.error("hrcPublicFormTemplateDN", _("You cannot read this template."))
+                if info is not None:
+                    _check_author(ctx, info)
+            name = values.get("cn")
+            if isinstance(name, str) and name and (ctx.creating or ctx.was_touched("cn")):
+                _check_unique_name(ctx, name)
             if ctx.creating:
                 ensure_container(ctx.directory, dnlib.join(PublicForm.rdn, ctx.base))
 

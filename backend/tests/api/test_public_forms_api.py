@@ -11,16 +11,21 @@ from fastapi.testclient import TestClient
 
 import heracles_plugins.invitations as inv
 import heracles_plugins.public_forms as forms
+import heracles_plugins.public_forms.forms as pf
 from heracles import demo
+from heracles.acl import serialise_assignment
+from heracles.acl.model import AclAssignment, AclScope
 from heracles.api.settings import ApiSettings
 from heracles.attributes import set_default_password_hasher
 from heracles.auth.mail import MemoryMailer
 from heracles.auth.passwords import PasswordPolicy, is_locked
 from heracles.auth.ratelimit import RateLimiter
 from heracles.demo import BASE
+from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
+from heracles.schema import names as schema
 from heracles.server import create_full_app
 from heracles_plugins.public_forms import Captcha, PublicFormsSettings, build_public_router
 from heracles_plugins.public_forms.captcha import solve
@@ -475,3 +480,131 @@ def test_registry_is_built_from_the_plugins_when_the_app_has_none(env: Env) -> N
     assert client.get(f"{PATH}/join").status_code == 200
     r = client.post(f"{PATH}/join", json={"values": person(**{"main.uid": "viaplugins"})})
     assert r.status_code == 201, r.text
+
+
+# ------------------------------------------------- the form acts with its author's rights
+
+PARIS = f"ou=paris,{BASE}"
+BMARTIN = f"uid=bmartin,ou=people,{PARIS}"
+FORMS_ONLY = "publicForm/publicForm;rwc,publicForm/publicFormAlteration;rw"
+
+
+def _delegate_forms(client: TestClient, *templates: str) -> None:
+    """Give bmartin a role made of ``templates`` over the whole directory."""
+    state = cast("Any", client.app).state.heracles
+    directory = cast("MemoryDirectory", state.directories["main"])
+    role = f"cn=forms-editor,ou=aclroles,{BASE}"
+    directory.add(
+        role,
+        {
+            "objectClass": [schema.OC.ACL_ROLE.encode()],
+            "cn": [b"forms-editor"],
+            schema.ATTR.ACL_TEMPLATE: [f"0:{t}".encode() for t in templates],
+        },
+    )
+    value = serialise_assignment(AclAssignment(3, AclScope.SUBTREE, role, (BMARTIN,))).encode()
+    directory.modify(BASE, [Modification("add", schema.ATTR.ACL_ENTRY, [value])])
+
+
+def _form_body(name: str, type_name: str = "user", **main: object) -> dict[str, Any]:
+    return {
+        "main": {
+            "values": {
+                "cn": name,
+                "hrcPublicFormTitle": name,
+                "hrcPublicFormTemplateType": type_name,
+                **main,
+            }
+        },
+        "alteration": {"values": {"hrcPublicFormAlteredAttributes": FIELDS}},
+    }
+
+
+def test_a_form_editor_cannot_target_a_type_they_cannot_create(full_client: TestClient) -> None:
+    _delegate_forms(full_client, FORMS_ONLY)
+    editor = Api(full_client).login("bmartin")
+    for type_name in ("user", "acl_role"):
+        r = editor.post("/objects/public_form", {"base": BASE, "tabs": _form_body("f", type_name)})
+        assert r.status_code == 422, r.text
+        assert "hrcPublicFormTemplateType" in r.text
+
+
+def test_a_form_editor_needs_write_on_every_field(full_client: TestClient) -> None:
+    _delegate_forms(full_client, FORMS_ONLY, "user/user;rc")  # may create, not write
+    editor = Api(full_client).login("bmartin")
+    r = editor.post("/objects/public_form", {"base": BASE, "tabs": _form_body("f")})
+    assert r.status_code == 422, r.text
+
+
+def test_a_form_editor_holding_the_rights_can_save_the_form(full_client: TestClient) -> None:
+    _delegate_forms(full_client, FORMS_ONLY, "user/user;rwc")
+    editor = Api(full_client).login("bmartin")
+    r = editor.post("/objects/public_form", {"base": BASE, "tabs": _form_body("f")})
+    assert r.status_code == 201, r.text
+    dn = r.json()["dn"]
+    # the rights are checked again for whoever changes the fields
+    fields = [*FIELDS, {"field": "main.telephoneNumber"}]
+    patch = {"tabs": {"alteration": {"values": {"hrcPublicFormAlteredAttributes": fields}}}}
+    r = editor.client.patch(f"/api/v2/objects/public_form/{dn}", json=patch, headers=editor.headers)
+    assert r.status_code == 200, r.text
+
+
+def test_a_form_cannot_show_what_its_author_cannot_read(full_client: TestClient) -> None:
+    admin = Api(full_client).login("admin")
+    template = admin.create(
+        "user",
+        {"main": {"values": {"uid": "tpl", "givenName": "T", "sn": "T", "description": "Secret"}}},
+    )
+    # may write and create users, read the account name only (not the description)
+    _delegate_forms(full_client, FORMS_ONLY, "user/user;wc#uid;r")
+    editor = Api(full_client).login("bmartin")
+    body = _form_body("f", hrcPublicFormTemplateDN=template)
+    body["alteration"]["values"]["hrcPublicFormAlteredAttributes"] = [{"field": "main.description"}]
+    r = editor.post("/objects/public_form", {"base": BASE, "tabs": body})
+    assert r.status_code == 422, r.text
+    assert "cannot read main.description" in r.text
+
+
+def test_the_public_page_only_reads_the_visible_fields_of_the_template(
+    full_client: TestClient,
+) -> None:
+    admin = Api(full_client).login("admin")
+    template = admin.create(
+        "user",
+        {"main": {"values": {"uid": "tpl", "givenName": "T", "sn": "T", "description": "Hidden"}}},
+    )
+    body = _form_body("f", hrcPublicFormTemplateDN=template)
+    r = admin.post("/objects/public_form", {"base": BASE, "tabs": body})
+    assert r.status_code == 201, r.text
+    state = cast("Any", full_client.app).state.heracles
+    directory = cast("MemoryDirectory", state.directories["main"])
+    registry = cast("Any", full_client.app).state.domain.registry
+    form = pf.find_form(directory, "f")
+    assert form is not None
+    assert pf.template_tabs(directory, registry, form)["main"]["values"]["description"]
+    shown = pf.template_tabs(directory, registry, form, exposed_only=True)
+    assert "description" not in shown.get("main", {}).get("values", {})
+
+
+def test_form_names_are_unique_across_the_directory(full_client: TestClient) -> None:
+    admin = Api(full_client).login("admin")
+    first = admin.post("/objects/public_form", {"base": BASE, "tabs": _form_body("join")})
+    assert first.status_code == 201, first.text
+    # the form of the root department would shadow this one: names are global
+    again = admin.post("/objects/public_form", {"base": PARIS, "tabs": _form_body("join")})
+    assert again.status_code == 422, again.text
+    other = admin.post("/objects/public_form", {"base": PARIS, "tabs": _form_body("other")})
+    assert other.status_code == 201, other.text
+    renamed = admin.client.patch(
+        f"/api/v2/objects/public_form/{other.json()['dn']}",
+        json={"tabs": {"main": {"values": {"cn": "join"}}}},
+        headers=admin.headers,
+    )
+    assert renamed.status_code == 422, renamed.text
+    # saving a form under its own name is not a clash
+    own = admin.client.patch(
+        f"/api/v2/objects/public_form/{first.json()['dn']}",
+        json={"tabs": {"main": {"values": {"cn": "join", "hrcPublicFormTitle": "Join"}}}},
+        headers=admin.headers,
+    )
+    assert own.status_code == 200, own.text
