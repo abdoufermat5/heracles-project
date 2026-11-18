@@ -10,8 +10,8 @@ from fastapi import APIRouter, FastAPI
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
+from heracles.api import drain, v1, v2
 from heracles.api import status as status_routes
-from heracles.api import v1, v2
 from heracles.api.errors import install_error_handlers
 from heracles.api.metrics import install_metrics
 from heracles.api.middleware import install_body_limit, install_middleware
@@ -207,7 +207,7 @@ def _install_health(app: FastAPI) -> None:
 
     @app.get("/readyz", include_in_schema=False)
     def readyz() -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-        if getattr(app.state, "draining", False):
+        if drain.is_draining() or getattr(app.state, "draining", False):
             return JSONResponse({"status": "draining"}, status_code=503)
         report = status_routes.readiness(app.state.heracles)
         return JSONResponse(report, status_code=200 if report["status"] == "ok" else 503)
@@ -230,5 +230,6 @@ def _shutdown(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    drain.install()
     yield
     await run_in_threadpool(_shutdown, app)

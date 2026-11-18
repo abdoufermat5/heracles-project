@@ -11,7 +11,8 @@ from __future__ import annotations
 import hmac
 import sys
 import threading
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Any
@@ -23,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.types import Receive, Scope, Send
 
 from heracles import __version__
+from heracles.api import drain
 from heracles.api.errors import ApiError, install_error_handlers, validation
 from heracles.api.middleware import install_body_limit, install_middleware
 from heracles.api.settings import ApiSettings
@@ -235,7 +237,20 @@ def build_setup_router(state: SetupState) -> APIRouter:
 
 def build_setup_app(state: SetupState, static_dir: Path | None = None) -> FastAPI:
     """The application served while the setup is pending."""
-    app = FastAPI(title="Heracles setup", docs_url=None, redoc_url=None, openapi_url=None)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        # the lifespan of the server's first application also covers the one that replaces it
+        drain.install()
+        yield
+
+    app = FastAPI(
+        title="Heracles setup",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+        lifespan=lifespan,
+    )
     settings = ApiSettings()
     install_error_handlers(app)
     install_body_limit(app, settings)

@@ -21,6 +21,8 @@ def _serve(args: argparse.Namespace) -> int:
 
     from heracles.server import build_app, build_demo_app
 
+    if args.drain_seconds is not None:
+        os.environ["HERACLES_DRAIN_SECONDS"] = str(max(0.0, args.drain_seconds))
     workers = int(args.workers)
     if workers < 1:
         print("heracles serve: --workers must be at least 1", file=sys.stderr)
@@ -337,6 +339,13 @@ def main(
     )
     serve.add_argument(
         "--worker-interval", type=float, default=60.0, help="seconds between scheduler passes"
+    )
+    serve.add_argument(
+        "--drain-seconds",
+        type=float,
+        default=None,
+        help="after SIGTERM, keep serving this long with /readyz answering 503, then stop "
+        "(default: $HERACLES_DRAIN_SECONDS or 5)",
     )
     serve.set_defaults(func=_serve)
 
