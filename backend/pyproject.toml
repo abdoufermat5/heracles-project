@@ -19,13 +19,14 @@ dependencies = [
   "bcrypt>=5.0.0",
   "httpx2>=2.16.0",
   "pyjwt[crypto]>=2.10",
+  "cryptography>=46",
 ]
 
 [project.optional-dependencies]
 ldap = ["python-ldap>=3.4.4"]  # needs libldap2-dev + libsasl2-dev
 dns = ["dnspython>=2.7"]
 # shared application database for several replicas on different hosts
-postgres = ["psycopg[binary,pool]==3.3.8", "psycopg-pool==3.3.3"]
+postgres = ["psycopg[binary,pool]>=3.3.8,<4", "psycopg-pool>=3.3.3,<4"]
 
 [project.scripts]
 heracles = "heracles.cli.main:main"
@@ -127,6 +128,7 @@ pythonVersion = "3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
   "integration: needs a real LDAP server (set HERACLES_TEST_LDAP_URI)",
   "e2e: needs the running container stack (set HERACLES_E2E_URL)",
