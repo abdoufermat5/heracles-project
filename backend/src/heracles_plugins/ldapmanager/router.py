@@ -11,9 +11,10 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from heracles.acl.model import ALL_OBJECTS
-from heracles.api.deps import CurrentUserDep
+from heracles.api.deps import CurrentUserDep, StateDep
 from heracles.api.domain import DomainDep
 from heracles.api.errors import ApiError, forbidden, not_found, validation
+from heracles.api.stepup import require_recent_auth
 from heracles.api.v2.objects import object_errors
 from heracles.attributes import JSON
 from heracles.core import formats
@@ -187,7 +188,7 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
     # -- LDIF import --------------------------------------------------------------------------
     @router.post("/ldif/import")
     def import_ldif(
-        body: LdifImportBody, user: CurrentUserDep, domain: DomainDep
+        body: LdifImportBody, user: CurrentUserDep, domain: DomainDep, state: StateDep
     ) -> dict[str, JSON]:
         """Import raw LDIF records (no object-level validation): needs ``ldif`` write rights."""
         gate = Access(domain, user)
@@ -207,16 +208,21 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         if not any(gate.can_import_ldif(e.dn) for e in entries):
             raise forbidden("You are not allowed to import LDIF")
         options = importer.ImportOptions(body.overwrite, body.remove_missing)
-        # Who may edit the configuration (hence the triggers) may also import the configuration
-        # entry. Privileged content (credentials, ACLs, membership, ids) stays reserved to who
-        # could write it anyway: a bootstrap administrator, or full rights on every object of
+        # The configuration entry defines the triggers, i.e. programs the server runs: only a
+        # bootstrap administrator who re-authenticated recently may import it. Privileged
+        # content (credentials, ACLs, membership, ids) stays reserved to who could write it
+        # anyway: a bootstrap administrator, or full rights on every object of
         # the whole directory.
         base = user.directory.base_dn
         unrestricted = domain.is_admin(user.dn) or (
             gate.evaluator.delegable(base, ALL_OBJECTS).is_full
             and gate.evaluator.delegable(base, ALL_OBJECTS, below=True).is_full
         )
-        config_writer = unrestricted or (gate.evaluator.permissions(base, "config/config").write)
+        config_writer = domain.is_admin(user.dn)
+        if config_writer and not body.dry_run:
+            is_config = importer.configuration_entry(user.directory)
+            if any(is_config(e) for e in entries):
+                require_recent_auth(state, user.session)
         results = importer.run_import(
             user.directory,
             entries,

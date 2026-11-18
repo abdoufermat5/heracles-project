@@ -17,7 +17,6 @@ from heracles.triggers import (
     apply_changes,
     mask_attrs,
     parse_hook,
-    render_command,
     run_hook,
 )
 
@@ -41,76 +40,94 @@ def test_parse_rejects_malformed(value: str) -> None:
     assert parse_hook(value) is None
 
 
-def test_render_quotes_values() -> None:
-    attrs = {"uid": ["jdoe; rm -rf /"], "cn": ["John Doe"]}
-    assert render_command("echo %uid% %CN%", attrs) == "echo 'jdoe; rm -rf /' 'John Doe'"
+def _script(directory: Path, name: str, body: str) -> Path:
+    directory.mkdir(exist_ok=True)
+    path = directory / name
+    path.write_text("#!/bin/sh\n" + body + "\n")
+    path.chmod(0o755)
+    return path
 
 
-def test_render_keeps_unusable_percent_text() -> None:
-    attrs = {"uid": ["jdoe"]}
-    # A name the object does not have is shell text, not a placeholder.
-    assert render_command("echo %missing%", attrs) == "echo %missing%"
-    assert render_command("date +%Y-%m-%d", attrs) == "date +%Y-%m-%d"
-    assert render_command("date +%s", attrs) == "date +%s"
-    # The mask modifiers are available, so a decorated placeholder still resolves.
-    assert render_command("echo %u|uid%", attrs) == "echo JDOE"
-    # A value never breaks out of its argument.
-    assert render_command("echo %uid%", {"uid": ["a' b"]}) == "echo 'a'\"'\"' b'"
+@pytest.mark.parametrize(
+    "value",
+    [
+        "x'\"); touch /tmp/heracles-pwned-$$; echo (`id`)$(id) \\",
+        '"${VAR:-"a\'b"}" ; touch /tmp/heracles-pwned-$$ #\'',
+        "`touch /tmp/heracles-pwned-$$`",
+    ],
+)
+def test_attribute_values_reach_the_script_only_as_environment(tmp_path: Path, value: str) -> None:
+    _script(tmp_path, "show.sh", 'printf %s "$HRC_ATTR_SN"')
+    result = run_hook(TabHook("user", "check", "show.sh"), {"sn": [value]}, scripts_dir=tmp_path)
+    assert result.ok and result.output == value
+    assert not list(Path("/tmp").glob("heracles-pwned-*"))
+
+
+def test_multiple_values_are_joined_with_a_line_feed(tmp_path: Path) -> None:
+    _script(tmp_path, "show.sh", 'printf %s "$HRC_ATTR_MAIL"')
+    hook = TabHook("user", "check", "show.sh")
+    result = run_hook(hook, {"mail": ["a@x", "b@x"]}, scripts_dir=tmp_path)
+    assert result.output == "a@x\nb@x"
 
 
 @pytest.mark.parametrize(
     "command",
-    ["echo '%cn%'", 'echo "%cn%"', "echo $(printf %s %cn%)", "echo `printf %s %cn%`", "echo %cn%"],
+    ["echo hi", "/bin/true", "../outside.sh", "sub/inner.sh", "link.sh", "plain.txt", "missing.sh"],
 )
-def test_render_resists_injection_in_every_quoting_context(command: str) -> None:
-    payload = "x'\"); touch /tmp/heracles-pwned-$$; echo (`id`)$(id) \\"
-    rendered = render_command(command, {"cn": [payload]})
-    result = run_hook(TabHook("user", "check", command), {"cn": [payload]})
-    # Nothing but the value reaches the shell as text: no command ran, no file appeared.
-    assert "uid=" not in result.output
-    assert not list(Path("/tmp").glob("heracles-pwned-*")), rendered
+def test_only_bare_names_of_approved_executables_run(tmp_path: Path, command: str) -> None:
+    approved = tmp_path / "approved"
+    marker = tmp_path / "ran"
+    _script(tmp_path, "outside.sh", f"touch {marker}")
+    _script(approved, "inner.sh", f"touch {marker}")
+    (approved / "sub").mkdir()
+    _script(approved / "sub", "inner.sh", f"touch {marker}")
+    (approved / "link.sh").symlink_to(tmp_path / "outside.sh")
+    (approved / "plain.txt").write_text(f"touch {marker}")
+    result = run_hook(TabHook("user", "check", command), {}, scripts_dir=approved)
+    assert result.refused and not result.ok and not marker.exists()
 
 
-def test_double_quoted_value_is_echoed_verbatim() -> None:
-    value = 'a"; echo PWNED; "$HOME`id`\\'
-    result = run_hook(TabHook("user", "check", 'printf %s "%cn%"'), {"cn": [value]})
-    assert result.ok and result.output == value
+def test_triggers_are_disabled_without_a_scripts_directory() -> None:
+    result = run_hook(TabHook("user", "check", "true"), {}, scripts_dir=None)
+    assert result.refused
 
 
-def test_single_quoted_value_is_echoed_verbatim() -> None:
-    value = "a'; echo PWNED; '"
-    result = run_hook(TabHook("user", "check", "printf %s '%cn%'"), {"cn": [value]})
-    assert result.ok and result.output == value
-
-
-def test_run_hook_does_not_leak_the_server_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_hook_does_not_leak_the_server_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setenv("HERACLES_SECRET_TEST", "hunter2")
-    result = run_hook(TabHook("user", "check", "env"), {})
+    _script(tmp_path, "env.sh", "env")
+    result = run_hook(TabHook("user", "check", "env.sh"), {}, scripts_dir=tmp_path)
     assert result.ok
     assert "hunter2" not in result.output and "HERACLES_SECRET_TEST" not in result.output
 
 
-def test_timeout_kills_grandchildren_promptly() -> None:
+def test_timeout_kills_grandchildren_promptly(tmp_path: Path) -> None:
     import time
 
+    _script(tmp_path, "slow.sh", "sleep 30 & sleep 30")
     started = time.monotonic()
-    result = run_hook(TabHook("user", "check", "sleep 30 & sleep 30"), {}, timeout=0.3)
+    result = run_hook(TabHook("user", "check", "slow.sh"), {}, scripts_dir=tmp_path, timeout=0.3)
     assert result.timed_out
     assert time.monotonic() - started < 5
 
 
 def test_mask_attrs_hides_passwords() -> None:
-    masked = mask_attrs({"userPassword": ["{SSHA}x"], "uid": ["a"]})
+    masked = mask_attrs({"userPassword": ["{SSHA}x"], "uid": ["a"], "hrcToken": ["t"]})
     assert masked["userPassword"] == ["********"]
+    assert masked["hrcToken"] == ["********"]
     assert masked["uid"] == ["a"]
 
 
-def test_run_hook_success_failure_timeout() -> None:
-    ok = run_hook(TabHook("user", "check", "echo hello %uid%"), {"uid": ["bob"]})
+def test_run_hook_success_failure_timeout(tmp_path: Path) -> None:
+    _script(tmp_path, "ok.sh", 'echo hello "$HRC_ATTR_UID"')
+    _script(tmp_path, "bad.sh", "echo nope >&2; exit 3")
+    _script(tmp_path, "slow.sh", "sleep 5")
+    ok = run_hook(TabHook("user", "check", "ok.sh"), {"uid": ["bob"]}, scripts_dir=tmp_path)
     assert ok.ok and ok.output == "hello bob"
-    bad = run_hook(TabHook("user", "check", "echo nope >&2; exit 3"), {})
+    bad = run_hook(TabHook("user", "check", "bad.sh"), {}, scripts_dir=tmp_path)
     assert not bad.ok and bad.exit_code == 3 and bad.output == "nope"
-    slow = run_hook(TabHook("user", "check", "sleep 5"), {}, timeout=0.2)
+    slow = run_hook(TabHook("user", "check", "slow.sh"), {}, scripts_dir=tmp_path, timeout=0.2)
     assert slow.timed_out and not slow.ok
 
 
@@ -165,22 +182,34 @@ class _Registry:
         return _FakeInfo()
 
 
+def _events(directory: MemoryDirectory, scripts: Path) -> TriggerEvents:
+    settings = TriggerSettings(registry=_Registry(), scripts_dir=scripts)
+    return TriggerEvents(directory, CALLER, settings)
+
+
 def test_events_run_hooks_and_abort_on_pre_failure(
     directory: MemoryDirectory, tmp_path: Path
 ) -> None:
     out = tmp_path / "out.txt"
+    scripts = tmp_path / "scripts"
+    _script(
+        scripts,
+        "log.sh",
+        f'echo "$HRC_ATTR_UID $HRC_ATTR_CALLERUID $HRC_ATTR_CALLERCN $HRC_ATTR_DN" > {out}',
+    )
+    _script(scripts, "refuse.sh", "echo refused; exit 2")
     config_store.save_config(
         directory,
         {
             "tab_hooks": [
-                f"posixAccount|postcreate|echo %uid% %callerUID% %callerCN% %dn% > {out}",
-                "user|precreate|#exit 1",
-                "user|premodify|echo refused; exit 2",
+                "posixAccount|postcreate|log.sh",
+                "user|precreate|#refuse.sh",
+                "user|premodify|refuse.sh",
             ],
             "display_hook_output": True,
         },
     )
-    events = TriggerEvents(directory, CALLER, TriggerSettings(registry=_Registry()))
+    events = _events(directory, scripts)
     state = _state({"uid": [b"jdoe"]})
     events.pre_create(EventContext("user", USER, None, state))  # disabled hook: no abort
     events.post_create(EventContext("user", USER, None, state))
@@ -190,37 +219,60 @@ def test_events_run_hooks_and_abort_on_pre_failure(
     assert exc.value.fields == {"_": "refused"}
 
 
-def test_post_failures_are_warnings(directory: MemoryDirectory) -> None:
-    config_store.save_config(directory, {"tab_hooks": ["user|postremove|echo broken >&2; exit 1"]})
-    events = TriggerEvents(directory, CALLER, TriggerSettings(registry=_Registry()))
+def test_secrets_of_the_object_are_not_handed_to_the_script(
+    directory: MemoryDirectory, tmp_path: Path
+) -> None:
+    out = tmp_path / "env.txt"
+    scripts = tmp_path / "scripts"
+    _script(scripts, "dump.sh", f"env > {out}")
+    config_store.save_config(directory, {"tab_hooks": ["user|postcreate|dump.sh"]})
+    state = _state({"uid": [b"jdoe"], "userPassword": [b"{SSHA}hash-of-bob"]})
+    _events(directory, scripts).post_create(EventContext("user", USER, None, state))
+    text = out.read_text()
+    assert "HRC_ATTR_UID=jdoe" in text and "hash-of-bob" not in text
+
+
+def test_a_stored_hook_that_is_not_an_approved_script_is_skipped(
+    directory: MemoryDirectory, tmp_path: Path
+) -> None:
+    marker = tmp_path / "m"
+    config_store.save_config(
+        directory,
+        {"tab_hooks": [f"user|precreate|touch {marker}", "user|postcreate|echo x >&2; exit 1"]},
+    )
+    events = _events(directory, tmp_path)
     state = _state({"uid": [b"jdoe"]})
-    events.post_delete(EventContext("user", USER, state, None))
-    assert events.warnings == ["broken"]
+    events.pre_create(EventContext("user", USER, None, state))  # no abort, nothing ran
+    events.post_create(EventContext("user", USER, None, state))
+    assert not marker.exists() and events.warnings == []
 
 
 def test_inactive_tab_does_not_fire(directory: MemoryDirectory, tmp_path: Path) -> None:
     marker = tmp_path / "m"
-    config_store.save_config(directory, {"tab_hooks": [f"posixAccount|postcreate|touch {marker}"]})
-    events = TriggerEvents(directory, CALLER, TriggerSettings(registry=_Registry()))
+    scripts = tmp_path / "scripts"
+    _script(scripts, "touch.sh", f"touch {marker}")
+    config_store.save_config(directory, {"tab_hooks": ["posixAccount|postcreate|touch.sh"]})
     state = _state({"uid": [b"jdoe"]})
     state.tabs["posix"].active = False
-    events.post_create(EventContext("user", USER, None, state))
+    _events(directory, scripts).post_create(EventContext("user", USER, None, state))
     assert not marker.exists()
 
 
-def test_output_that_is_not_utf8_does_not_break_the_hook() -> None:
-    result = run_hook(TabHook("user", "check", "printf 'caf\\351'; exit 1"), {})
+def test_output_that_is_not_utf8_does_not_break_the_hook(tmp_path: Path) -> None:
+    _script(tmp_path, "latin.sh", "printf 'caf\\351'; exit 1")
+    result = run_hook(TabHook("user", "check", "latin.sh"), {}, scripts_dir=tmp_path)
     assert not result.ok and result.exit_code == 1
     assert result.output.startswith("caf")
 
 
-def test_the_command_line_is_not_logged() -> None:
+def test_the_attribute_values_are_not_logged(tmp_path: Path) -> None:
     from structlog.testing import capture_logs
 
-    hook = TabHook("user", "check", "echo --token=s3cr3t-in-the-command %uid%")
+    _script(tmp_path, "ok.sh", "true")
+    _script(tmp_path, "bad.sh", "exit 2")
+    hook = TabHook("user", "check", "ok.sh")
     with capture_logs() as logs:
-        assert run_hook(hook, {"uid": ["bob"]}).ok
-        run_hook(TabHook("user", "check", "sleep 5 # s3cr3t"), {}, timeout=0.2)
-        run_hook(TabHook("user", "check", "exit 2 # s3cr3t"), {})
+        assert run_hook(hook, {"uid": ["bob"]}, scripts_dir=tmp_path).ok
+        run_hook(TabHook("user", "check", "bad.sh"), {"uid": ["bob"]}, scripts_dir=tmp_path)
     assert logs
-    assert "s3cr3t" not in repr(logs) and "bob" not in repr(logs)
+    assert "bob" not in repr(logs)

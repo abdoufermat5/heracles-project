@@ -138,6 +138,14 @@ class ApiTokenSettings(BaseModel):
     max_per_owner: int = Field(default=20, ge=1)
 
 
+class TriggersSettings(BaseModel):
+    """Triggers run only pre-approved scripts kept on disk by the operator."""
+
+    #: Directory of the executables a trigger may name (bare file names, no shell). Empty
+    #: disables the triggers. Keep it root-owned and not writable by the service user.
+    scripts_dir: Path | None = None
+
+
 class ApiSettings(BaseModel):
     """Everything ``create_app`` needs besides the directories."""
 
@@ -156,6 +164,7 @@ class ApiSettings(BaseModel):
     plugins: PluginsSettings = Field(default_factory=PluginsSettings)
     metrics: MetricsSettings = Field(default_factory=MetricsSettings)
     branding: BrandingSettings = Field(default_factory=BrandingSettings)
+    triggers: TriggersSettings = Field(default_factory=TriggersSettings)
     #: Host names the server may build links from when no public address is configured
     #: (``cas_service_name``, the invitations ``public_base_url``): the request ``Host``
     #: header is client-chosen. ``*.example.org`` matches subdomains. Set it in production.

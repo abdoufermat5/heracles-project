@@ -26,6 +26,7 @@ from heracles.api.domain import Domain, DomainDep
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.settings import ApiSettings
 from heracles.api.state import AppState
+from heracles.api.stepup import require_recent_auth
 from heracles.attributes import attribute_key
 from heracles.auth.api_tokens import SESSION_KEY
 from heracles.core import config_store, formats, setup_checks
@@ -49,9 +50,11 @@ from heracles.triggers import (
     HOOK_MODES,
     TabHook,
     TriggerSettings,
+    available_scripts,
     check_hook_fields,
     parse_hook,
     parse_hooks,
+    resolve_script,
 )
 
 log = structlog.get_logger(__name__)
@@ -253,6 +256,7 @@ def apply_runtime(
     if isinstance(own, TriggerSettings):
         own.registry = registry
         own.location = directory_id
+        own.scripts_dir = state.settings.triggers.scripts_dir
 
 
 def refresh_runtime(app: FastAPI) -> None:
@@ -809,6 +813,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
         config = effective(state, user.directory_id)
         hooks: list[dict[str, Any]] = []
         invalid: list[str] = []
+        scripts_dir = state.settings.triggers.scripts_dir
         for raw in config.tab_hooks:
             parsed = parse_hook(raw)
             if parsed is None:
@@ -820,6 +825,7 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
                         "mode": parsed.mode,
                         "command": parsed.command,
                         "enabled": parsed.enabled,
+                        "approved": resolve_script(scripts_dir, parsed.command.strip()) is not None,
                     }
                 )
         return {
@@ -828,7 +834,9 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
             "display_output": config.display_hook_output,
             "modes": list(HOOK_MODES),
             "tabs": tab_keys(domain.registry),
-            "can_write": rights_of(user, domain, CONFIG_KEY).write,
+            "can_write": rights_of(user, domain, CONFIG_KEY).write and domain.is_admin(user.dn),
+            "scripts_enabled": scripts_dir is not None,
+            "scripts": available_scripts(scripts_dir),
         }
 
     @router.get("/hooks")
@@ -843,6 +851,11 @@ def build_router(settings: TriggerSettings | None = None) -> APIRouter:
     ) -> dict[str, Any]:
         remember(domain)
         _require(user, domain, CONFIG_KEY, "w")
+        # triggers are code execution on the server: bootstrap administrators only, freshly
+        # re-authenticated (the commands are limited to the approved scripts of the YAML settings)
+        if not domain.is_admin(user.dn):
+            raise forbidden("Only administrators may change the triggers")
+        require_recent_auth(state, user.session)
         current = effective(state, user.directory_id)
         # a tab already used by a stored trigger stays accepted (a plugin may have been switched
         # off since); any other tab must be one the type registry knows

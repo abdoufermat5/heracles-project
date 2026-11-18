@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any, cast
 from urllib.parse import quote
 
@@ -10,10 +11,12 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from heracles import demo
+from heracles.api.settings import ApiSettings, PluginsSettings, TriggersSettings
 from heracles.core import config_store
 from heracles.demo import BASE
 from heracles.ldap.memory import MemoryDirectory
-from heracles.server import build_demo_app
+from heracles.server import build_demo_app, create_full_app
 from heracles.triggers import MAX_COMMAND_LENGTH
 
 ADMIN = f"uid=admin,ou=people,{BASE}"
@@ -59,6 +62,23 @@ def api() -> Iterator[Api]:
         yield Api(app)
 
 
+@pytest.fixture
+def hook_api(tmp_path: Path) -> Iterator[Api]:
+    """The demo administrator as a bootstrap administrator, with an approved scripts directory."""
+    (tmp_path / "true.sh").write_text("#!/bin/sh\ntrue\n")
+    (tmp_path / "true.sh").chmod(0o755)
+    settings = ApiSettings(
+        admin_dns=[ADMIN],
+        directory_labels={"main": "Demo directory"},
+        plugins=PluginsSettings(enabled=["*"]),
+        triggers=TriggersSettings(scripts_dir=tmp_path),
+    )
+    settings.session.cookie_secure = False
+    app = create_full_app(settings, {"main": demo.build_demo_directory()})
+    with TestClient(app):
+        yield Api(app)
+
+
 def fields_of(response: Any) -> dict[str, str]:
     assert response.status_code == 422, response.text
     return cast("dict[str, str]", response.json()["error"]["fields"])
@@ -68,7 +88,7 @@ def fields_of(response: Any) -> dict[str, str]:
 
 
 def hook(**kw: Any) -> dict[str, Any]:
-    return {"tab": "user", "mode": "postcreate", "command": "echo %uid%", **kw}
+    return {"tab": "user", "mode": "postcreate", "command": "true.sh", **kw}
 
 
 @pytest.mark.parametrize(
@@ -80,43 +100,55 @@ def hook(**kw: Any) -> dict[str, Any]:
         (hook(mode="whenever"), "mode"),
         (hook(command="   "), "command"),
         (hook(command="echo a\necho b"), "command"),
+        (hook(command="echo %uid%"), "command"),
+        (hook(command="/bin/true"), "command"),
         (hook(command="echo a\rb"), "command"),
         (hook(command="echo \x00"), "command"),
         (hook(command="# looks disabled"), "command"),
         (hook(command="x" * (MAX_COMMAND_LENGTH + 1)), "command"),
     ],
 )
-def test_hook_refused_on_its_own_field(api: Api, item: dict[str, Any], field: str) -> None:
-    errors = fields_of(api.put("/admin/hooks", {"hooks": [hook(command="true"), item]}))
+def test_hook_refused_on_its_own_field(hook_api: Api, item: dict[str, Any], field: str) -> None:
+    errors = fields_of(hook_api.put("/admin/hooks", {"hooks": [hook(), item]}))
     assert set(errors) == {f"hooks.1.{field}"}
-    assert [h["command"] for h in api.get("/admin/hooks").json()["hooks"]] == []  # nothing saved
+    assert [
+        h["command"] for h in hook_api.get("/admin/hooks").json()["hooks"]
+    ] == []  # nothing saved
 
 
-def test_duplicate_hook_is_refused(api: Api) -> None:
-    first = hook(command="true")
+def test_duplicate_hook_is_refused(hook_api: Api) -> None:
+    first = hook()
     errors = fields_of(
-        api.put("/admin/hooks", {"hooks": [first, hook(mode="check"), {**first, "enabled": False}]})
+        hook_api.put(
+            "/admin/hooks", {"hooks": [first, hook(mode="check"), {**first, "enabled": False}]}
+        )
     )
     assert errors == {"hooks.2.command": "Same trigger as #1."}
 
 
-def test_longest_command_and_inner_hash_are_accepted(api: Api) -> None:
-    ok = [
-        hook(command="x" * MAX_COMMAND_LENGTH),
-        hook(command="echo a # b", mode="check"),
-        hook(command="\techo tabbed", mode="premodify"),
-    ]
-    assert api.put("/admin/hooks", {"hooks": ok}).status_code == 200
+def test_longest_name_is_accepted(hook_api: Api) -> None:
+    ok = [hook(command="x" * MAX_COMMAND_LENGTH), hook(command="a.b-c_d", mode="check")]
+    assert hook_api.put("/admin/hooks", {"hooks": ok}).status_code == 200
 
 
-def test_a_tab_already_stored_is_still_accepted(api: Api) -> None:
-    config_store.save_config(api.directory, {"tab_hooks": ["legacyTab|postcreate|true"]})
-    current = api.get("/admin/hooks").json()
+def test_a_tab_already_stored_is_still_accepted(hook_api: Api) -> None:
+    config_store.save_config(hook_api.directory, {"tab_hooks": ["legacyTab|postcreate|true.sh"]})
+    current = hook_api.get("/admin/hooks").json()
     assert [h["tab"] for h in current["hooks"]] == ["legacyTab"]
-    kept = api.put("/admin/hooks", {"hooks": current["hooks"], "display_output": True})
+    kept = hook_api.put("/admin/hooks", {"hooks": current["hooks"], "display_output": True})
     assert kept.status_code == 200, kept.text
-    added = api.put("/admin/hooks", {"hooks": [*current["hooks"], hook(tab="otherLegacy")]})
+    added = hook_api.put("/admin/hooks", {"hooks": [*current["hooks"], hook(tab="otherLegacy")]})
     assert fields_of(added) == {"hooks.1.tab": "Unknown tab."}
+
+
+def test_a_stored_shell_command_is_reported_as_not_approved(hook_api: Api) -> None:
+    config_store.save_config(hook_api.directory, {"tab_hooks": ["user|postcreate|echo %uid%"]})
+    (listed,) = hook_api.get("/admin/hooks").json()["hooks"]
+    assert listed["approved"] is False
+    refused = hook_api.put("/admin/hooks", {"hooks": [listed]})
+    assert fields_of(refused) == {
+        "hooks.0.command": "Give the bare file name of an approved script."
+    }
 
 
 # ------------------------------------------------------------------- tasks

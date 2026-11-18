@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -15,7 +16,7 @@ from heracles.objects.errors import ObjectValidationError
 from heracles.objects.policy import EventContext, NullEvents
 from heracles.objects.state import ObjectState
 from heracles.schema import names as schema
-from heracles.triggers.hooks import HookResult, TabHook, parse_hooks, run_hook
+from heracles.triggers.hooks import HookResult, TabHook, mask_attrs, parse_hooks, run_hook
 
 log = structlog.get_logger(__name__)
 
@@ -86,6 +87,9 @@ class TriggerSettings:
     #: Identifier of the directory handed to commands as ``%location%``.
     location: str = "main"
     timeout: float = 30.0
+    #: Directory of the approved trigger scripts (YAML ``triggers.scripts_dir``); ``None``
+    #: disables the triggers.
+    scripts_dir: Path | None = None
 
 
 @dataclass(slots=True)
@@ -156,14 +160,19 @@ class TriggerEvents(NullEvents):
         hooks = self._hooks(mode, active_tab_keys(state, self.settings.registry))
         if not hooks:
             return []
-        attrs: dict[str, Sequence[str] | str] = dict(_texts(raw))
+        # secrets (password hashes, keys...) are masked before anything reaches a script
+        attrs: dict[str, Sequence[str] | str] = dict(mask_attrs(_texts(raw)))
         attrs.update(self._caller())
         attrs.update({"dn": dn, "base": self._base_of(dn), "location": self.settings.location})
         show = bool(effective_settings(self.directory).display_hook_output)
         results: list[HookResult] = []
         for hook in hooks:
-            result = run_hook(hook, attrs, timeout=self.settings.timeout)
+            result = run_hook(
+                hook, attrs, scripts_dir=self.settings.scripts_dir, timeout=self.settings.timeout
+            )
             results.append(result)
+            if result.refused:
+                continue  # not an approved script: logged by run_hook, never blocks the operation
             if result.ok:
                 if show and result.output:
                     self.messages.append(result.output)

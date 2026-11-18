@@ -309,6 +309,22 @@ def test_import_cannot_define_triggers_unless_administrator(app: FastAPI) -> Non
     assert helpdesk.directory.get(f"ou=sneaky,{BASE}") is None
 
 
+def test_configuration_write_rights_do_not_allow_importing_triggers(app: FastAPI) -> None:
+    """``config/config;w`` is not enough: the trigger list is a bootstrap-administrator matter."""
+    _grant_ldif_write(app, "helpdesk", "ldif/ldifManager;rw,config/config;rw")
+    hook_text = (
+        f"dn: ou=sneaky,{BASE}\nobjectClass: organizationalUnit\nou: sneaky\n"
+        "hrcTabHook: user|postcreate|touch.sh\n"
+    )
+    config_text = f"dn: cn=config,ou=heracles,{BASE}\nobjectClass: hrcConf\ncn: config\n"
+    helpdesk = Api(app).login("helpdesk")
+    for text in (hook_text, config_text):
+        body = helpdesk.post("/ldif/import", {"text": text}).json()
+        assert body["summary"]["error"] == 1 and body["summary"]["add"] == 0
+        assert "administrator" in body["results"][0]["error"]
+    assert helpdesk.directory.get(f"ou=sneaky,{BASE}") is None
+
+
 def test_import_cannot_set_hashes_acls_or_roles_unless_administrator(app: FastAPI) -> None:
     _grant_ldif_write(app, "helpdesk")
     base = "objectClass: inetOrgPerson\ncn: x\nsn: x\n"

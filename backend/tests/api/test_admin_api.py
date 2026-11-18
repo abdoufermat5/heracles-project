@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any, cast
 from urllib.parse import quote
 
@@ -10,15 +12,17 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from heracles import demo
 from heracles.acl import serialise_assignment
 from heracles.acl.admin import template_to_json
 from heracles.acl.model import AclAssignment, AclScope
+from heracles.api.settings import ApiSettings, PluginsSettings, TriggersSettings
 from heracles.api.state import AppState
 from heracles.demo import BASE
 from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
 from heracles.schema import names as schema
-from heracles.server import build_demo_app
+from heracles.server import build_demo_app, create_full_app
 
 PARIS = f"ou=paris,{BASE}"
 HELPDESK_ROLE = f"cn=helpdesk,ou=aclroles,{BASE}"
@@ -473,15 +477,51 @@ def test_config_put_refuses_invalid_values_with_the_offending_keys(admin: Api) -
     assert set(cross.json()["error"]["fields"]) == {"shells"}
 
 
-def test_hooks_endpoint(admin: Api) -> None:
-    view = admin.get("/hooks").json()
+def _script(directory: Path, name: str, body: str) -> str:
+    path = directory / name
+    path.write_text("#!/bin/sh\n" + body + "\n")
+    path.chmod(0o755)
+    return name
+
+
+@pytest.fixture
+def scripts(tmp_path: Path) -> Path:
+    directory = tmp_path / "scripts"
+    directory.mkdir()
+    return directory
+
+
+@pytest.fixture
+def hook_client(scripts: Path) -> Iterator[TestClient]:
+    """Application whose demo administrator is a bootstrap administrator, with approved scripts."""
+    settings = ApiSettings(
+        admin_dns=[ADMIN],
+        directory_labels={"main": "Demo directory"},
+        plugins=PluginsSettings(enabled=["*"]),
+        triggers=TriggersSettings(scripts_dir=scripts),
+    )
+    settings.session.cookie_secure = False
+    app = create_full_app(settings, {"main": demo.build_demo_directory()})
+    with TestClient(app, base_url="http://testserver") as c:
+        yield c
+
+
+@pytest.fixture
+def hook_admin(hook_client: TestClient) -> Api:
+    return Api(hook_client).login("admin")
+
+
+def test_hooks_endpoint(hook_admin: Api, scripts: Path) -> None:
+    ok = _script(scripts, "ok.sh", "true")
+    view = hook_admin.get("/hooks").json()
     assert view["hooks"] == [] and "posixAccount" in view["tabs"] and "check" in view["modes"]
-    saved = admin.put(
+    assert view["scripts"] == [ok] and view["scripts_enabled"] is True
+    saved = hook_admin.put(
         "/hooks",
         {
             "hooks": [
-                {"tab": "user", "mode": "postcreate", "command": "echo %uid%", "enabled": True},
-                {"tab": "posixAccount", "mode": "premodify", "command": "true", "enabled": False},
+                {"tab": "user", "mode": "postcreate", "command": ok, "enabled": True},
+                {"tab": "posixAccount", "mode": "premodify", "command": ok, "enabled": False},
             ],
             "display_output": True,
         },
@@ -489,44 +529,72 @@ def test_hooks_endpoint(admin: Api) -> None:
     assert saved.status_code == 200, saved.text
     assert saved.json()["display_output"] is True
     assert saved.json()["hooks"][1]["enabled"] is False
-    bad = admin.put("/hooks", {"hooks": [{"tab": "user", "mode": "nope", "command": ""}]})
+    bad = hook_admin.put("/hooks", {"hooks": [{"tab": "user", "mode": "nope", "command": ""}]})
     assert bad.status_code == 422
     assert set(bad.json()["error"]["fields"]) == {"hooks.0.mode", "hooks.0.command"}
 
 
-def test_hook_runs_on_object_events(client: TestClient, admin: Api, tmp_path: Any) -> None:
+def test_triggers_are_for_bootstrap_administrators_who_just_signed_in(
+    admin: Api, hook_client: TestClient, hook_admin: Api
+) -> None:
+    item = {"tab": "user", "mode": "postcreate", "command": "ok.sh"}
+    # config/config;w alone (the demo administrator is not a bootstrap administrator)
+    refused = admin.put("/hooks", {"hooks": [item]})
+    assert refused.status_code == 403, refused.text
+    assert admin.get("/hooks").json()["can_write"] is False
+    # a bootstrap administrator whose sign-in is old must confirm the password first
+    state = cast("AppState", cast("FastAPI", hook_client.app).state.heracles)
+    state.clock = lambda: time.time() + 3600
+    stale = hook_admin.put("/hooks", {"hooks": [item]})
+    assert stale.status_code == 403 and stale.json()["error"]["code"] == "reauth_required"
+
+
+def test_a_shell_command_is_not_accepted_as_a_trigger(hook_admin: Api) -> None:
+    for command in ("echo %uid%", "touch /tmp/x; id", "/bin/true", "../x.sh", "a b"):
+        r = hook_admin.put(
+            "/hooks", {"hooks": [{"tab": "user", "mode": "check", "command": command}]}
+        )
+        assert r.status_code == 422, command
+        assert set(r.json()["error"]["fields"]) == {"hooks.0.command"}
+
+
+def test_hook_runs_on_object_events(
+    hook_client: TestClient, hook_admin: Api, scripts: Path, tmp_path: Path
+) -> None:
     marker = tmp_path / "marker"
-    admin.put(
-        "/hooks",
-        {"hooks": [{"tab": "user", "mode": "premodify", "command": f"echo no >{marker}; exit 1"}]},
-    )
-    r = client.patch(
+    refuse = _script(scripts, "refuse.sh", f"echo no >{marker}; exit 1")
+    hook_admin.put("/hooks", {"hooks": [{"tab": "user", "mode": "premodify", "command": refuse}]})
+    r = hook_client.patch(
         f"/api/v2/objects/user/{dnp(BMARTIN)}",
         json={"tabs": {"main": {"active": True, "values": {"sn": "Changed"}}}},
-        headers=admin.headers,
+        headers=hook_admin.headers,
     )
     assert r.status_code == 422, r.text
     assert marker.read_text().strip() == "no"
-    after = client.get(f"/api/v2/objects/user/{dnp(BMARTIN)}").json()
+    after = hook_client.get(f"/api/v2/objects/user/{dnp(BMARTIN)}").json()
     assert after["tabs"]["main"]["values"]["sn"] == "Martin"
 
 
-def test_hook_output_reaches_the_user(client: TestClient, admin: Api, tmp_path: Any) -> None:
+def test_hook_output_reaches_the_user(
+    hook_client: TestClient, hook_admin: Api, scripts: Path, tmp_path: Path
+) -> None:
     marker = tmp_path / "marker"
-    admin.put(
+    saved = _script(scripts, "saved.sh", f"touch {marker}; echo saved")
+    oops = _script(scripts, "oops.sh", "echo oops >&2; exit 2")
+    hook_admin.put(
         "/hooks",
         {
             "hooks": [
-                {"tab": "user", "mode": "postmodify", "command": f"touch {marker}; echo saved"},
-                {"tab": "user", "mode": "postmodify", "command": "echo oops >&2; exit 2"},
+                {"tab": "user", "mode": "postmodify", "command": saved},
+                {"tab": "user", "mode": "postmodify", "command": oops},
             ],
             "display_output": True,
         },
     )
-    r = client.patch(
+    r = hook_client.patch(
         f"/api/v2/objects/user/{dnp(BMARTIN)}",
         json={"tabs": {"main": {"active": True, "values": {"sn": "Changed"}}}},
-        headers=admin.headers,
+        headers=hook_admin.headers,
     )
     assert r.status_code == 200, r.text
     assert marker.exists()
@@ -535,34 +603,37 @@ def test_hook_output_reaches_the_user(client: TestClient, admin: Api, tmp_path: 
 
 
 def test_lock_triggers_run_on_lock_and_unlock(
-    client: TestClient, admin: Api, tmp_path: Any
+    hook_client: TestClient, hook_admin: Api, scripts: Path, tmp_path: Path
 ) -> None:
     seen = tmp_path / "seen"
-    admin.put(
-        "/hooks",
+    hooks = [
         {
-            "hooks": [
-                {"tab": "user", "mode": "prelock", "command": f"echo pre >>{seen}"},
-                {"tab": "user", "mode": "postlock", "command": f"echo post >>{seen}"},
-                {"tab": "user", "mode": "preunlock", "command": f"echo upre >>{seen}"},
-                {"tab": "user", "mode": "postunlock", "command": f"echo upost >>{seen}"},
-            ]
-        },
-    )
-    locked = client.post(f"/api/v2/users/{dnp(BMARTIN)}/lock", headers=admin.headers)
+            "tab": "user",
+            "mode": mode,
+            "command": _script(scripts, f"{mode}.sh", f"echo {word} >>{seen}"),
+        }
+        for mode, word in (
+            ("prelock", "pre"),
+            ("postlock", "post"),
+            ("preunlock", "upre"),
+            ("postunlock", "upost"),
+        )
+    ]
+    hook_admin.put("/hooks", {"hooks": hooks})
+    locked = hook_client.post(f"/api/v2/users/{dnp(BMARTIN)}/lock", headers=hook_admin.headers)
     assert locked.status_code == 200, locked.text
     assert locked.json()["locked"] is True
-    unlocked = client.post(f"/api/v2/users/{dnp(BMARTIN)}/unlock", headers=admin.headers)
+    unlocked = hook_client.post(f"/api/v2/users/{dnp(BMARTIN)}/unlock", headers=hook_admin.headers)
     assert unlocked.json()["locked"] is False
     assert seen.read_text().split() == ["pre", "post", "upre", "upost"]
 
 
-def test_failing_prelock_trigger_aborts_the_lock(client: TestClient, admin: Api) -> None:
-    admin.put(
-        "/hooks",
-        {"hooks": [{"tab": "user", "mode": "prelock", "command": "echo refused >&2; exit 1"}]},
-    )
-    r = client.post(f"/api/v2/users/{dnp(BMARTIN)}/lock", headers=admin.headers)
+def test_failing_prelock_trigger_aborts_the_lock(
+    hook_client: TestClient, hook_admin: Api, scripts: Path
+) -> None:
+    refuse = _script(scripts, "refuse.sh", "echo refused >&2; exit 1")
+    hook_admin.put("/hooks", {"hooks": [{"tab": "user", "mode": "prelock", "command": refuse}]})
+    r = hook_client.post(f"/api/v2/users/{dnp(BMARTIN)}/lock", headers=hook_admin.headers)
     assert r.status_code == 422, r.text
     assert "refused" in r.text
 
