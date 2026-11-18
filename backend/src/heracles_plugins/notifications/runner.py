@@ -24,6 +24,7 @@ from heracles.ldap.client import (
     Scope,
 )
 from heracles.schema import names as schema
+from heracles_plugins._secrets import is_secret_name
 from heracles_plugins._tasks import (
     TaskReport,
     expand_members,
@@ -32,12 +33,11 @@ from heracles_plugins._tasks import (
     task_filter,
     utc,
 )
+from heracles_plugins._tasks.author import AuthorRights, author_missing
 
 TASK_CLASS = "hrcTasksNotifications"
 TASK_FILTER = task_filter(TASK_CLASS)
 SNAPSHOT_PREFIX = "snapshot-"
-#: Never monitored: their values are secrets.
-FORBIDDEN_ATTRIBUTES = frozenset({"userpassword", "hrcsmbntpassword", "hrcsmblmpassword"})
 TEMPLATE_FIELDS = ("uid", "cn", "mail", "changes", "attributes")
 
 type Values = dict[str, list[str]]
@@ -166,11 +166,11 @@ def _diff(old: Values, new: Values, attributes: list[str]) -> list[str]:
 
 def monitored_attributes(task: Entry, settings: NotificationsSettings) -> list[str]:
     """The task's attributes that are allowed by the settings (secrets are always dropped)."""
-    allowed = {a.lower() for a in settings.attributes} - FORBIDDEN_ATTRIBUTES
+    allowed = {a.lower() for a in settings.attributes}
     return [
         a
         for a in dict.fromkeys(task.texts("hrcTasksNotificationsAttributes"))
-        if a.lower() in allowed
+        if a.lower() in allowed and not is_secret_name(a)
     ]
 
 
@@ -180,11 +180,18 @@ def _process_task(
     task: Entry,
     settings: NotificationsSettings,
     report: NotificationsReport,
+    rights: AuthorRights | None,
 ) -> bool:
     attributes = monitored_attributes(task, settings)
     if not attributes:
         report.errors.append(f"{task.dn}: no monitored attribute")
         return False
+    reader = None
+    if rights is not None:
+        reader = rights.reader_for(task)
+        if reader is None:
+            report.errors.append(author_missing(task.dn))
+            return False
     template_dn = task.text("hrcTasksNotificationsMailTemplate")
     template = (
         directory.get(
@@ -214,13 +221,24 @@ def _process_task(
     ):
         key = dnlib.normalize(user.dn)
         seen.add(key)
-        values = _current(user, attributes)
+        # only what the task's author may read: an attribute (or a person) they cannot see
+        # is neither recorded nor mailed, even when a recipient could read it
+        shown = attributes
+        view = user
+        if reader is not None:
+            allowed = reader.readable(user, attributes)
+            filtered = reader.filtered(user, ["mail"])
+            if allowed is None or filtered is None:
+                continue
+            shown, view = allowed, filtered
+        values = _current(user, shown)
         old = previous.get(key)
         if old is not None:
-            changes = _diff(old, values, attributes)
+            old = {k: v for k, v in old.items() if k in shown}
+            changes = _diff(old, values, shown)
             if changes:
                 _notify(
-                    mailer, task, user, changes, recipients, (subject_tpl, body_tpl, sender), report
+                    mailer, task, view, changes, recipients, (subject_tpl, body_tpl, sender), report
                 )
         if old != values:
             _store_snapshot(directory, task.dn, user.dn, values)
@@ -266,15 +284,21 @@ def run_notifications(
     mailer: Mailer,
     now: datetime,
     settings: NotificationsSettings | None = None,
+    *,
+    rights: AuthorRights | None = None,
 ) -> NotificationsReport:
-    """Run every due notifications task once."""
+    """Run every due notifications task once.
+
+    With ``rights`` a task only handles what its author may read (a task without a usable
+    author does not run); the scheduler always passes it.
+    """
     settings = settings or NotificationsSettings()
     report = NotificationsReport()
     run_tasks(
         directory,
         TASK_FILTER,
         utc(now),
-        lambda task: _process_task(directory, mailer, task, settings, report),
+        lambda task: _process_task(directory, mailer, task, settings, report, rights),
         report,
     )
     return report

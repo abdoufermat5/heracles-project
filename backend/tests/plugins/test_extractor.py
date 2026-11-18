@@ -9,9 +9,13 @@ import pytest
 
 import heracles_plugins.extractor as ex
 from heracles.auth.mail import MemoryMailer
+from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
+from heracles_plugins._tasks.author import AuthorRights
+from heracles_plugins.extractor.runner import export_attributes
+from tests.plugins.acl_support import ACL_CLASSES, grant
 
 BASE = "dc=test"
 PEOPLE = f"ou=people,{BASE}"
@@ -116,6 +120,55 @@ def test_formula_cells_are_neutralised_and_secrets_never_exported(
     assert "'+33 1 23" in text
     assert "SSHA" not in text
     assert "'=HYPERLINK(1)" in text
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "sambaNTPassword",
+        "sambaPasswordHistory",
+        "krbPrincipalKey",
+        "hrcImapPassword",
+        "hrcToken",
+        "hrcPhysicalKeyValue",
+        "hrcMobilePUK",
+        "radiusControlAttribute",
+    ],
+)
+def test_secret_attributes_are_never_exported_whatever_the_settings(
+    directory: MemoryDirectory, name: str
+) -> None:
+    add_task(directory, [], [name, "uid"])
+    task = directory.get(TASK_DN)
+    assert task is not None
+    settings = ex.ExtractorSettings(attributes=(name, "uid"))
+    assert export_attributes(task, settings) == ["uid"]
+
+
+def test_a_task_exports_only_what_its_author_may_read(
+    directory: MemoryDirectory, tmp_path: Path
+) -> None:
+    registry = TypeRegistry()
+    register_builtin_types(registry)
+    directory.set_schema_object_classes([*directory.schema_object_classes(), *ACL_CLASSES])
+    author = add_user(directory, "author")
+    grant(directory, BASE, author, "0:user/user;#uid;r#cn;r")
+    a = add_user(directory, "alice", telephoneNumber=["+33 1 23"])
+    add_task(directory, [a], ["uid", "telephoneNumber"])
+    directory.modify(TASK_DN, [Modification("add", "hrcTasksAuthor", [author.encode()])])
+    settings = ex.ExtractorSettings(export_directory=str(tmp_path))
+    report = ex.run_extractor(
+        directory, MemoryMailer(), NOW, settings, rights=AuthorRights(directory, registry)
+    )
+    assert report.extractions[0].path is not None
+    assert Path(report.extractions[0].path).read_text() == "uid,telephoneNumber\nalice,\n"
+    # a task nobody is recorded as the author of does not run at all
+    directory.delete(TASK_DN)
+    add_task(directory, [a], ["uid", "telephoneNumber"])
+    again = ex.run_extractor(
+        directory, MemoryMailer(), NOW, settings, rights=AuthorRights(directory, registry)
+    )
+    assert again.extractions == [] and "author" in again.errors[0]
 
 
 def test_attributes_outside_the_settings_are_dropped(

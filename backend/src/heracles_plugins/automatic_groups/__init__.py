@@ -12,12 +12,10 @@ longer match are removed too. The group may be a ``groupOfNames`` or a POSIX gro
 
 from __future__ import annotations
 
-from heracles.acl import AclEvaluator, AclResolver, LdapAclDirectory
-from heracles.api.domain import TypeAclPolicy, category_tabs_of
+from heracles.api.domain import TypeAclPolicy
 from heracles.attributes import BooleanAttr, ListAttr, ObjectRefAttr, StringAttr
 from heracles.i18n import _
-from heracles.ldap import dn as dnlib
-from heracles.ldap.client import DirectoryClient, Entry
+from heracles.ldap.client import Entry
 from heracles.objects import Plugin, Section
 from heracles.objects.errors import UnknownTypeError
 from heracles.objects.hooks import TabContext
@@ -25,8 +23,8 @@ from heracles.objects.registry import TypeRegistry
 from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles_plugins._patterns import PatternError
 from heracles_plugins._tasks import TaskObjectType, TaskTab
+from heracles_plugins._tasks.author import AuthorRights, author_section, stamp_author
 from heracles_plugins.automatic_groups.runner import (
-    AUTHOR_ATTR,
     TASK_CLASS,
     TASK_FILTER,
     AutomaticGroupsReport,
@@ -82,15 +80,7 @@ class AutomaticGroupsTask(TaskObjectType):
                 default=False,
             ),
         )
-        author = Section(
-            _("Author"),
-            StringAttr(
-                AUTHOR_ATTR,
-                _("Author"),
-                readonly=True,
-                description=_("Whose rights the task runs with: the person who last saved it"),
-            ),
-        )
+        author = author_section()
         members = Section(
             _("Users"),
             ListAttr(
@@ -124,7 +114,7 @@ def _check_author(ctx: TabContext) -> None:
     author = getattr(ctx.policy, "user_dn", None)
     if not isinstance(author, str):
         return  # an internal save, no acting user
-    ctx.values[AUTHOR_ATTR] = author
+    stamp_author(ctx)
     group_dn = ctx.values.get("hrcTasksAutomaticGroupsOfName")
     group = ctx.directory.get(group_dn) if isinstance(group_dn, str) and group_dn else None
     if group is None:
@@ -140,32 +130,10 @@ def _check_author(ctx: TabContext) -> None:
 def _authorizer(ctx: TaskRunContext) -> GroupAuthorizer:
     """Whether an author may change a group, from the author's ACLs (resolved once per run)."""
     registry: TypeRegistry = ctx.registry
-    directory: DirectoryClient = ctx.directory
-    admins = {dnlib.normalize(d) for d in ctx.admin_dns}
-    category_tabs = category_tabs_of(registry)
-    evaluators: dict[str, AclEvaluator | None] = {}
-
-    def evaluator(author: str) -> AclEvaluator | None:
-        key = dnlib.normalize(author)
-        if key not in evaluators:
-            entry = directory.get(author)
-            if entry is None:
-                evaluators[key] = None
-            else:
-                attrs = {
-                    k: [v.decode("utf-8", "replace") for v in vals]
-                    for k, vals in entry.attrs.items()
-                }
-                resolved = AclResolver(LdapAclDirectory(directory)).resolve(
-                    author, uid=entry.text("uid"), user_attrs=attrs
-                )
-                evaluators[key] = AclEvaluator(
-                    resolved, category_tabs=category_tabs, ignore_acl=key in admins
-                )
-        return evaluators[key]
+    rights = AuthorRights(ctx.directory, registry, ctx.admin_dns)
 
     def authorize(author: str, group: Entry) -> bool:
-        acl = evaluator(author)
+        acl = rights.evaluator_for(author)
         if acl is None:
             return False
         type_name, attr = group_target(group)

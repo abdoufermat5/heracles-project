@@ -28,11 +28,11 @@ from heracles_plugins._tasks import (
     task_filter,
     utc,
 )
+from heracles_plugins._tasks.author import AUTHOR_ATTR
 
 log = structlog.get_logger(__name__)
 
 TASK_CLASS = "hrcTasksAutomaticGroups"
-AUTHOR_ATTR = "hrcTasksAuthor"
 #: ``(author DN, group)`` -> whether the author may change the members of the group.
 GroupAuthorizer = Callable[[str, Entry], bool]
 TASK_FILTER = task_filter(TASK_CLASS)

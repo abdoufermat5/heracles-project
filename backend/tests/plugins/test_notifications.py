@@ -12,6 +12,9 @@ from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
+from heracles_plugins._tasks.author import AuthorRights
+from heracles_plugins.notifications.runner import monitored_attributes
+from tests.plugins.acl_support import ACL_CLASSES, grant
 
 BASE = "dc=test"
 PEOPLE = f"ou=people,{BASE}"
@@ -174,6 +177,102 @@ def test_unmonitored_and_forbidden_attributes_are_ignored(directory: MemoryDirec
     assert run(directory, mailer, NOW + timedelta(hours=1)).mails_sent == 0
     snap = nt.load_snapshots(directory, TASK_DN)[a.lower()]
     assert list(snap) == ["mail"]
+
+
+def test_a_task_handles_only_what_its_author_may_read(directory: MemoryDirectory) -> None:
+    registry = TypeRegistry()
+    register_builtin_types(registry)
+    directory.set_schema_object_classes([*directory.schema_object_classes(), *ACL_CLASSES])
+    author = add_user(directory, "author")
+    grant(directory, BASE, author, "0:user/user;#mail;r#uid;r#cn;r")
+    a = add_user(directory, "alice", telephoneNumber="111")
+    add_task(directory, [a])
+    directory.modify(TASK_DN, [Modification("add", "hrcTasksAuthor", [author.encode()])])
+    rights = AuthorRights(directory, registry)
+    mailer = MemoryMailer()
+    first = nt.run_notifications(directory, mailer, NOW, nt.NotificationsSettings(), rights=rights)
+    assert first.snapshots_written == 1
+    # the telephone number is not readable by the author: it is neither recorded nor mailed
+    assert nt.load_snapshots(directory, TASK_DN)[a.lower()] == {"mail": ["alice@example.com"]}
+    directory.modify(a, [Modification("replace", "telephoneNumber", [b"222"])])
+    later = NOW + timedelta(hours=1)
+    assert (
+        nt.run_notifications(
+            directory, mailer, later, nt.NotificationsSettings(), rights=rights
+        ).mails_sent
+        == 0
+    )
+    # a task nobody is recorded as the author of does not run at all
+    directory.modify(TASK_DN, [Modification("delete", "hrcTasksAuthor")])
+    report = nt.run_notifications(
+        directory,
+        mailer,
+        later + timedelta(hours=1),
+        nt.NotificationsSettings(),
+        rights=AuthorRights(directory, registry),
+    )
+    assert report.tasks_run == 0 and "author" in report.errors[0]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "sambaNTPassword",
+        "sambaPasswordHistory",
+        "krbPrincipalKey",
+        "hrcImapPassword",
+        "hrcToken",
+        "hrcPhysicalKeyValue",
+        "hrcMobilePUK",
+        "radiusControlAttribute",
+    ],
+)
+def test_secret_attributes_are_never_monitored_whatever_the_settings(
+    directory: MemoryDirectory, name: str
+) -> None:
+    add_task(directory, [], attributes=f"{name}|mail")
+    task = directory.get(TASK_DN)
+    assert task is not None
+    settings = nt.NotificationsSettings(attributes=(name, "mail"))
+    assert monitored_attributes(task, settings) == ["mail"]
+
+
+class _Acting:
+    """Policy of an acting user (what the object layer hands to a tab)."""
+
+    user_dn = HR
+
+    def can_read(self, dn: str, tab: str, attr: str) -> bool:
+        return True
+
+    can_write = can_read
+
+    def can_create(self, type_name: str, base: str) -> bool:
+        return True
+
+    def can_delete(self, dn: str, type_name: str) -> bool:
+        return True
+
+
+def test_saving_a_task_records_its_author(directory: MemoryDirectory) -> None:
+    registry = TypeRegistry()
+    register_builtin_types(registry)
+    classes = {c.lower() for c in directory.schema_object_classes()}
+    assert registry.register_plugin(nt.plugin(), classes).enabled
+    a = add_user(directory, "alice")
+    values = {
+        "cn": "watch",
+        "hrcTasksNotificationsAttributes": ["mail"],
+        "hrcTasksNotificationsMailTemplate": TEMPLATE_DN,
+        "hrcTasksNotificationsEmailSender": "noreply@example.com",
+        "hrcTasksNotificationsMonitoredMembers": [a],
+        "hrcTasksNotificationsRecipientsMembers": [HR],
+    }
+    dn = ObjectService(directory, registry, policy=_Acting()).create(
+        "notifications_task", BASE, {"main": {"values": values}}
+    )
+    task = directory.get(dn)
+    assert task is not None and task.text("hrcTasksAuthor") == HR
 
 
 def test_missing_template_attributes_and_errors(directory: MemoryDirectory) -> None:

@@ -11,11 +11,12 @@ from pathlib import Path
 
 from heracles.auth.mail import Mailer
 from heracles.ldap.client import DirectoryClient, Entry
+from heracles_plugins._secrets import is_secret_name
 from heracles_plugins._tasks import TaskReport, expand_members, run_tasks, task_filter, utc
+from heracles_plugins._tasks.author import AuthorRights, author_missing
 
 TASK_CLASS = "hrcExtractorTasks"
 TASK_FILTER = task_filter(TASK_CLASS)
-FORBIDDEN_ATTRIBUTES = frozenset({"userpassword", "hrcsmbntpassword", "hrcsmblmpassword"})
 FORMATS = {"csv": ",", "tsv": "\t"}
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 _FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
@@ -90,9 +91,11 @@ def render_csv(
 
 def export_attributes(task: Entry, settings: ExtractorSettings) -> list[str]:
     """The task's attributes allowed by the settings (secrets are always dropped)."""
-    allowed = {a.lower() for a in settings.attributes} - FORBIDDEN_ATTRIBUTES
+    allowed = {a.lower() for a in settings.attributes}
     return [
-        a for a in dict.fromkeys(task.texts("hrcExtractorTaskAttributes")) if a.lower() in allowed
+        a
+        for a in dict.fromkeys(task.texts("hrcExtractorTaskAttributes"))
+        if a.lower() in allowed and not is_secret_name(a)
     ]
 
 
@@ -103,11 +106,18 @@ def _process_task(
     now: datetime,
     settings: ExtractorSettings,
     report: ExtractorReport,
+    rights: AuthorRights | None,
 ) -> bool:
     attributes = export_attributes(task, settings)
     if not attributes:
         report.errors.append(f"{task.dn}: no exported attribute")
         return False
+    reader = None
+    if rights is not None:
+        reader = rights.reader_for(task)
+        if reader is None:
+            report.errors.append(author_missing(task.dn))
+            return False
     recipients = [
         mail
         for mail in dict.fromkeys(
@@ -120,6 +130,10 @@ def _process_task(
         report.errors.append(f"{task.dn}: no destination (export directory or recipients)")
         return False
     users = expand_members(directory, task.texts("hrcExtractorTaskMembers"), attributes)
+    if reader is not None:
+        # a person the author may not read is not exported, an attribute they may not read is blank
+        seen = (reader.filtered(user, attributes) for user in users)
+        users = [user for user in seen if user is not None]
     users.sort(key=lambda u: (u.text("uid") or "", u.dn))
     fmt = (task.text("hrcExtractorTaskFormat") or "csv").lower()
     content = render_csv(
@@ -164,8 +178,14 @@ def run_extractor(
     mailer: Mailer,
     now: datetime,
     settings: ExtractorSettings | None = None,
+    *,
+    rights: AuthorRights | None = None,
 ) -> ExtractorReport:
-    """Run every due extractor task once."""
+    """Run every due extractor task once.
+
+    With ``rights`` a task only exports what its author may read (a task without a usable
+    author does not run); the scheduler always passes it.
+    """
     settings = settings or ExtractorSettings()
     now = utc(now)
     report = ExtractorReport()
@@ -173,7 +193,7 @@ def run_extractor(
         directory,
         TASK_FILTER,
         now,
-        lambda task: _process_task(directory, mailer, task, now, settings, report),
+        lambda task: _process_task(directory, mailer, task, now, settings, report, rights),
         report,
     )
     return report

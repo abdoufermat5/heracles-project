@@ -21,9 +21,10 @@ from heracles.i18n import _
 from heracles.objects import Plugin, Section
 from heracles.objects.hooks import TabContext
 from heracles.objects.task_runner import TaskRunContext, TaskRunner
+from heracles_plugins._secrets import is_secret_name
 from heracles_plugins._tasks import TaskObjectType, TaskTab
+from heracles_plugins._tasks.author import AuthorRights, author_section, stamp_author
 from heracles_plugins.notifications.runner import (
-    FORBIDDEN_ATTRIBUTES,
     TASK_CLASS,
     TASK_FILTER,
     TEMPLATE_FIELDS,
@@ -62,9 +63,7 @@ class NotificationsTask(TaskObjectType):
                 "hrcTasksNotificationsAttributes",
                 _("Monitored attributes"),
                 options=[
-                    (a, a)
-                    for a in NotificationsSettings().attributes
-                    if a.lower() not in FORBIDDEN_ATTRIBUTES
+                    (a, a) for a in NotificationsSettings().attributes if not is_secret_name(a)
                 ],
                 required=True,
             ),
@@ -95,6 +94,13 @@ class NotificationsTask(TaskObjectType):
             ),
         )
 
+        author = author_section()
+
+        @classmethod
+        def prepare(cls, ctx: TabContext) -> None:
+            super().prepare(ctx)
+            stamp_author(ctx)
+
         @classmethod
         def before_delete(cls, ctx: TabContext) -> None:
             if ctx.dn is not None:
@@ -120,7 +126,8 @@ def _run(ctx: TaskRunContext) -> NotificationsReport:
     mailer = ctx.mailer
     if mailer is None:
         raise RuntimeError("no mail server is configured")
-    return run_notifications(ctx.directory, mailer, ctx.now, settings)
+    rights = AuthorRights(ctx.directory, ctx.registry, ctx.admin_dns)
+    return run_notifications(ctx.directory, mailer, ctx.now, settings, rights=rights)
 
 
 __all__ = [

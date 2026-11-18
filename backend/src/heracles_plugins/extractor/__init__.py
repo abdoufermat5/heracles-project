@@ -15,10 +15,12 @@ from __future__ import annotations
 from heracles.attributes import EmailAttr, ListAttr, MultiSelectAttr, ObjectRefAttr, SelectAttr
 from heracles.i18n import _
 from heracles.objects import Plugin, Section
+from heracles.objects.hooks import TabContext
 from heracles.objects.task_runner import TaskRunContext, TaskRunner
+from heracles_plugins._secrets import is_secret_name
 from heracles_plugins._tasks import TaskObjectType, TaskTab
+from heracles_plugins._tasks.author import AuthorRights, author_section, stamp_author
 from heracles_plugins.extractor.runner import (
-    FORBIDDEN_ATTRIBUTES,
     TASK_CLASS,
     TASK_FILTER,
     ExtractionRecord,
@@ -52,11 +54,7 @@ class ExtractorTask(TaskObjectType):
             MultiSelectAttr(
                 "hrcExtractorTaskAttributes",
                 _("Exported attributes"),
-                options=[
-                    (a, a)
-                    for a in ExtractorSettings().attributes
-                    if a.lower() not in FORBIDDEN_ATTRIBUTES
-                ],
+                options=[(a, a) for a in ExtractorSettings().attributes if not is_secret_name(a)],
                 required=True,
             ),
             SelectAttr(
@@ -83,6 +81,12 @@ class ExtractorTask(TaskObjectType):
             ),
             EmailAttr("hrcExtractorEmailSender", _("Sender address")),
         )
+        author = author_section()
+
+        @classmethod
+        def prepare(cls, ctx: TabContext) -> None:
+            super().prepare(ctx)
+            stamp_author(ctx)
 
 
 def plugin() -> Plugin:
@@ -102,7 +106,8 @@ def _run(ctx: TaskRunContext) -> ExtractorReport:
     mailer = ctx.mailer
     if mailer is None:
         raise RuntimeError("no mail server is configured")
-    return run_extractor(ctx.directory, mailer, ctx.now, settings)
+    rights = AuthorRights(ctx.directory, ctx.registry, ctx.admin_dns)
+    return run_extractor(ctx.directory, mailer, ctx.now, settings, rights=rights)
 
 
 __all__ = [
