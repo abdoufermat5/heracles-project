@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import re
 from dataclasses import dataclass
 
 from heracles.attributes import StringAttr, TextAttr
@@ -16,6 +17,32 @@ from heracles_plugins.autofs5.router import build_router
 from heracles_plugins.autofs5.tree import build_autofs_tree
 
 PLUGIN_NAME = "autofs5"
+
+#: ``program:`` (and ``prog:``) runs the named executable on the client that mounts the map.
+_EXECUTABLE_MAP = re.compile(r"(?:^|[\s,=:])prog(?:ram)?\s*:", re.IGNORECASE)
+_PATH_SPLIT = re.compile(r"[/\s:,=]+")
+
+
+def _unsafe_automount_text(value: str) -> str | None:
+    """Problem with a key or information value that would run code or climb out of a tree."""
+    if not value.isprintable():
+        return _("Must not contain control characters.")
+    if _EXECUTABLE_MAP.search(value):
+        return _("Executable maps (program:) are not allowed.")
+    if ".." in _PATH_SPLIT.split(value):
+        return _("Must not contain '..' path segments.")
+    return None
+
+
+class AutomountTextAttr(StringAttr):
+    """Automount key or information, refusing executable maps and '..' segments."""
+
+    def _validate(self, value: str) -> list[str]:
+        errors = self._check_text(value)
+        problem = _unsafe_automount_text(value)
+        if problem is not None:
+            errors.append(problem)
+        return errors
 
 
 @dataclass(slots=True)
@@ -93,8 +120,8 @@ class AutomountTab(Tab):
 
     properties = Section(
         _("Properties"),
-        StringAttr("automountKey", _("Mount point / key"), required=True, max_length=64),
-        StringAttr("automountInformation", _("Automount information"), required=True),
+        AutomountTextAttr("automountKey", _("Mount point / key"), required=True, max_length=64),
+        AutomountTextAttr("automountInformation", _("Automount information"), required=True),
         TextAttr("description", _("Description")),
         StringAttr("cn", _("Alternative name")),
     )

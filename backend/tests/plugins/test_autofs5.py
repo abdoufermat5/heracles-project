@@ -160,3 +160,45 @@ def test_build_autofs_tree(service: ObjectService, directory: MemoryDirectory) -
     assert len(tree[0]["children"]) == 2
     child_labels = {c["label"] for c in tree[0]["children"]}
     assert child_labels == {"/home", "/net"}
+
+
+@pytest.mark.parametrize(
+    ("key", "information"),
+    [
+        ("evil", "program:/tmp/script"),
+        ("evil", "  PROGRAM:/tmp/script"),
+        ("evil", "-fstype=autofs program:/tmp/script"),
+        ("evil", "-fstype=autofs,ro Program : /tmp/script"),
+        ("../etc", "srv:/export"),
+        ("evil", "srv:/export/../../etc"),
+    ],
+)
+def test_automount_refuses_executable_maps_and_dotdot(
+    service: ObjectService, key: str, information: str
+) -> None:
+    map_dn = service.create("automountMap", PARIS, {"main": {"values": {"ou": "auto.bad"}}})
+    with pytest.raises(ObjectValidationError):
+        service.create(
+            "automount",
+            map_dn,
+            {"main": {"values": {"automountKey": key, "automountInformation": information}}},
+        )
+
+
+@pytest.mark.parametrize(
+    ("key", "information"),
+    [
+        ("*", "-fstype=nfs,rw server:/export/home/&"),
+        ("alice", "-fstype=nfs,rw server:/export/home/alice"),
+        ("prog", "srv:/programs/data"),
+    ],
+)
+def test_automount_regular_values_are_accepted(
+    service: ObjectService, key: str, information: str
+) -> None:
+    map_dn = service.create("automountMap", PARIS, {"main": {"values": {"ou": "auto.ok"}}})
+    service.create(
+        "automount",
+        map_dn,
+        {"main": {"values": {"automountKey": key, "automountInformation": information}}},
+    )
