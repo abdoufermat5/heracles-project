@@ -57,6 +57,15 @@ class TabContext:
             policy = policy.for_type(type_name)
         return policy.can_write(dn, tab, attr)
 
+    def can_read_object(self, type_name: str, dn: str, tab: str, attr: str) -> bool:
+        """True if the acting user may read ``tab.attr`` of ``dn``, an object of another type."""
+        policy = self.policy
+        if policy is None:
+            return True
+        if isinstance(policy, TypedPolicy):
+            policy = policy.for_type(type_name)
+        return policy.can_read(dn, tab, attr)
+
     @property
     def settings(self) -> Mapping[str, Any]:
         """Plugin settings registered on the registry (plugin name → settings)."""

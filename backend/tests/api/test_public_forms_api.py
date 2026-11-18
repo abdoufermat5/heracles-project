@@ -456,6 +456,79 @@ def test_invitation_flow_on_the_full_application(full_client: TestClient) -> Non
     assert denied.status_code == 403
 
 
+def _private_form_and_invitation(admin: Api) -> str:
+    form = admin.create(
+        "public_form",
+        {
+            "main": {
+                "values": {
+                    "cn": "guests",
+                    "hrcPublicFormTitle": "Guests",
+                    "hrcPublicFormTemplateType": "user",
+                    "hrcPublicFormPrivate": True,
+                }
+            },
+            "alteration": {"values": {"hrcPublicFormAlteredAttributes": FIELDS}},
+        },
+    )
+    return admin.create(
+        "invitation",
+        {
+            "main": {
+                "values": {
+                    "cn": "guests",
+                    "hrcInvitationFormDN": form,
+                    "hrcInvitationEmailSubject": "Hello",
+                }
+            }
+        },
+    )
+
+
+def test_an_invitation_needs_the_senders_rights_on_its_form(full_client: TestClient) -> None:
+    """Someone who may edit invitations but not see the private form cannot point an
+    invitation at it, nor send personal links to it."""
+    invitation = _private_form_and_invitation(Api(full_client).login("admin"))
+    form = (
+        cast(
+            "MemoryDirectory", cast("Any", full_client.app).state.heracles.directories["main"]
+        ).get(invitation)
+        or pytest.fail()
+    ).text("hrcInvitationFormDN")
+    _delegate_forms(full_client, "invitation/invitation;rwc")
+    editor = Api(full_client).login("bmartin")
+    sent = editor.post("/invitations/send", {"invitation": invitation, "emails": ["a@b.co"]})
+    assert sent.status_code == 403, sent.text
+    created = editor.post(
+        "/objects/invitation",
+        {
+            "base": BASE,
+            "tabs": {
+                "main": {
+                    "values": {
+                        "cn": "mine",
+                        "hrcInvitationFormDN": form,
+                        "hrcInvitationEmailSubject": "Hi",
+                    }
+                }
+            },
+        },
+    )
+    assert created.status_code == 422, created.text
+
+
+def test_sending_invitations_is_rate_limited(full_client: TestClient) -> None:
+    admin = Api(full_client).login("admin")
+    invitation = _private_form_and_invitation(admin)
+    codes = [
+        admin.post(
+            "/invitations/send", {"invitation": invitation, "emails": ["a@b.co"]}
+        ).status_code
+        for _ in range(8)
+    ]
+    assert codes[0] == 200 and codes[-1] == 429
+
+
 def test_submission_window_table_is_bounded() -> None:
     now = [0.0]
     window = SubmissionWindow(2, 3600.0, lambda: now[0], max_keys=20)

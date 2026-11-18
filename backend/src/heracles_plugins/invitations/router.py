@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -10,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from heracles.api.deps import CurrentUserDep, get_state
 from heracles.api.domain import DomainDep
-from heracles.api.errors import forbidden, not_found, validation
+from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.hosts import request_base
 from heracles.objects.registry import PluginRouterContext
 from heracles_plugins.invitations.sending import InvitationError, send_invitation
@@ -35,9 +36,22 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         settings: Any = ctx.settings
         if not domain.evaluator(user).permissions(body.invitation, ACL_OBJECT).write:
             raise forbidden("You cannot send this invitation")
-        if user.directory.get(body.invitation, ["objectClass"]) is None:
+        invitation = user.directory.get(body.invitation, ["objectClass", "hrcInvitationFormDN"])
+        if invitation is None:
             raise not_found("Invitation not found")
+        # the link opens the form with the server's rights: the sender must see the form
+        form_dn = invitation.text("hrcInvitationFormDN")
+        if form_dn and not domain.service(user, "public_form")[1].can_read(form_dn, "main", "cn"):
+            raise forbidden("You cannot use the form of this invitation")
         state = get_state(request)
+        wait = state.limiter.attempt(f"invitations-send|{user.dn.lower()}")
+        if wait > 0:
+            raise ApiError(
+                429,
+                "rate_limited",
+                "Too many invitations sent, try again later",
+                headers={"Retry-After": str(math.ceil(wait))},
+            )
         base_url = str(getattr(settings, "public_base_url", "") or "") or request_base(
             request,
             state.settings.allowed_hosts,

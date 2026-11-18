@@ -143,6 +143,14 @@ class Invitation(ObjectType):
                 ctx.values["hrcInvitationEmailContent"] = settings_of(ctx).default_email_content
             elif isinstance(content, str) and "{link}" not in content:
                 ctx.error("hrcInvitationEmailContent", _("The content must contain {link}."))
+            form = ctx.values.get("hrcInvitationFormDN")
+            if (
+                isinstance(form, str)
+                and form
+                and (ctx.creating or ctx.was_touched("hrcInvitationFormDN"))
+                and not ctx.can_read_object("public_form", form, "main", "cn")
+            ):
+                ctx.error("hrcInvitationFormDN", _("You cannot use this form."))
             if ctx.creating:
                 ensure_container(ctx.directory, dnlib.join(Invitation.rdn, ctx.base))
 
