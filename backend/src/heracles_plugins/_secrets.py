@@ -11,15 +11,31 @@ from collections.abc import Iterable
 
 from heracles.attributes import JSON, StringAttr
 
-SECRET_NAME_FRAGMENTS = ("password", "secret", "principalkey")
+#: Fragments anywhere in a name: passwords and hashes of every kind (``sambaNTPassword``,
+#: ``hrcIpmiPassword``), shared secrets, Kerberos keys (``krbPrincipalKey``), private keys,
+#: salts, physical key values and RADIUS control attributes (which carry ``Cleartext-Password``).
+SECRET_NAME_FRAGMENTS = (
+    "password",
+    "secret",
+    "principalkey",
+    "privatekey",
+    "salt",
+    "keyvalue",
+    "radiuscontrolattribute",
+)
+#: Endings of a name: a ``...Token`` or ``...PUK`` value is a secret, while ``hrcTokenType`` or
+#: ``hrcTokenRDN`` (settings and metadata of tokens) are not.
+SECRET_NAME_SUFFIXES = ("token", "puk")
 
 
 def is_secret_name(name: str, extra: Iterable[str] = ()) -> bool:
     """True if ``name`` (options such as ``;binary`` ignored) is listed in ``extra`` or looks
     like a secret."""
     lowered = name.partition(";")[0].strip().lower()
-    return lowered in {e.lower() for e in extra} or any(
-        fragment in lowered for fragment in SECRET_NAME_FRAGMENTS
+    return (
+        lowered in {e.lower() for e in extra}
+        or any(fragment in lowered for fragment in SECRET_NAME_FRAGMENTS)
+        or lowered.endswith(SECRET_NAME_SUFFIXES)
     )
 
 

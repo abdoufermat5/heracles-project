@@ -23,6 +23,7 @@ from heracles.objects import ObjectType, Plugin, Section, Tab, TabAttachment
 from heracles.objects.hooks import TabContext
 from heracles_plugins.pgp_keys.parser import (
     ParsedPgpKey,
+    has_private_key,
     normalize_hex,
     parse_openpgp_key,
 )
@@ -184,7 +185,9 @@ class PgpKey(ObjectType):
             if ctx.creating and not ctx.errors:
                 ensure_container(ctx.directory, dnlib.join(ctx.info.type.rdn, ctx.base))
             raw_key = ctx.values.get("pgpKey")
-            if isinstance(raw_key, str) and raw_key.strip():
+            if isinstance(raw_key, str) and has_private_key(raw_key):
+                ctx.error("pgpKey", _("A private key must never be stored: paste the public key."))
+            elif isinstance(raw_key, str) and raw_key.strip():
                 parsed = parse_openpgp_key(raw_key)
                 if parsed is not None:
                     if not ctx.values.get("pgpCertID"):

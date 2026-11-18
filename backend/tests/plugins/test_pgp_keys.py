@@ -9,7 +9,7 @@ import pytest
 
 import heracles_plugins.pgp_keys as pgp_keys
 from heracles.ldap.memory import MemoryDirectory
-from heracles.objects import ObjectService, TypeRegistry
+from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
 from heracles_plugins.pgp_keys.parser import parse_openpgp_key
 
@@ -108,6 +108,19 @@ def test_create_pgp_key(service: ObjectService, directory: MemoryDirectory) -> N
     cert_id = entry.text("pgpCertID")
     assert cert_id is not None and len(cert_id) == 16
     assert entry.text("pgpKeyType") == "RSA"
+
+
+def test_a_private_key_is_refused(service: ObjectService, directory: MemoryDirectory) -> None:
+    public = make_dummy_armored_key()
+    private = public.replace("PUBLIC KEY BLOCK", "PRIVATE KEY BLOCK")
+    with pytest.raises(ObjectValidationError) as exc:
+        service.create("pgp_key", BASE, {"main": {"values": {"pgpKey": private}}})
+    assert "pgpKey" in str(exc.value.fields)
+    with pytest.raises(ObjectValidationError):  # smuggled after a public block
+        service.create("pgp_key", BASE, {"main": {"values": {"pgpKey": public + private}}})
+    assert directory.get(PGP_OU) is not None and not list(
+        directory.search(PGP_OU, "(objectClass=pgpKeyInfo)")
+    )
 
 
 def test_create_pgp_server_info(service: ObjectService, directory: MemoryDirectory) -> None:

@@ -39,6 +39,11 @@ def normalize_hex(text: str) -> str:
     return re.sub(r"\s+", "", text).upper()
 
 
+def has_private_key(text: str) -> bool:
+    """True if ``text`` holds a private (or secret) key block, armored or in any PEM flavour."""
+    return bool(re.search(r"-----BEGIN [A-Z0-9 ]*(PRIVATE|SECRET) KEY", text))
+
+
 def parse_pgp_armor(text: str) -> bytes | None:
     """Extract raw OpenPGP binary packets from an ASCII armored block."""
     if "-----BEGIN PGP PUBLIC KEY BLOCK-----" not in text:

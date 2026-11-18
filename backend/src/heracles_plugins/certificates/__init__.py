@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
@@ -49,6 +50,8 @@ def to_der(data: bytes | str) -> bytes:
     """Convert PEM string/bytes or DER bytes into canonical DER bytes."""
     raw = data.encode("utf-8") if isinstance(data, str) else data
     raw_str = raw.decode("utf-8", errors="ignore").strip()
+    if re.search(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY", raw_str):
+        raise ValueError("a private key must never be stored, give the certificate only")
 
     if "-----BEGIN CERTIFICATE-----" in raw_str:
         pem_part = raw_str[raw_str.index("-----BEGIN CERTIFICATE-----") :]

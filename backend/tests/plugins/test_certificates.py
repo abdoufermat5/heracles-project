@@ -8,7 +8,7 @@ import datetime
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
 import heracles_plugins.certificates as certs_plugin
 from heracles.attributes import ValidationError
@@ -93,6 +93,21 @@ def test_to_der_and_parse_cert(test_cert: tuple[bytes, str]) -> None:
     assert "O=Acme Corp" in info.issuer
     assert info.not_valid_before < info.not_valid_after
     assert len(info.fingerprint.split(":")) == 32  # SHA-256
+
+
+def test_a_pasted_private_key_is_refused(test_cert: tuple[bytes, str]) -> None:
+    _, pem = test_cert
+    key = ec.generate_private_key(ec.SECP256R1()).private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    )
+    with pytest.raises(ValueError, match="private key"):
+        to_der(key.decode("ascii"))
+    with pytest.raises(ValueError, match="private key"):
+        to_der(pem + key.decode("ascii"))  # a certificate with its key behind it
+    with pytest.raises(ValidationError):
+        CertificateAttr("cert", "Certificate").from_json(pem + key.decode("ascii"))
 
 
 def test_certificate_attr_validation() -> None:
