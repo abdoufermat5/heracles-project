@@ -225,3 +225,43 @@ def test_escaped_comma_in_dn() -> None:
     d.add(r"cn=Doe\, John,dc=x", {"objectClass": [b"person"]})
     assert len(list(d.search("dc=x", scope=Scope.ONE))) == 1
     assert len(list(d.search("dc=x", r"(cn=Doe, John)"))) == 1
+
+
+def test_escaped_comma_does_not_cross_rdn_boundaries() -> None:
+    d = MemoryDirectory("dc=x")
+    d.add("dc=x", {"objectClass": [b"dcObject"]})
+    d.add("ou=sub,dc=x", {"objectClass": [b"organizationalUnit"], "ou": [b"sub"]})
+    d.add("uid=child,ou=sub,dc=x", {"objectClass": [b"person"], "cn": [b"c"], "sn": [b"c"]})
+    d.add(r"cn=foo\,ou=sub,dc=x", {"objectClass": [b"person"], "sn": [b"f"]})
+    d.add(
+        r"uid=nested,cn=foo\,ou=sub,dc=x", {"objectClass": [b"person"], "cn": [b"n"], "sn": [b"n"]}
+    )
+
+    subtree_dns = {e.dn for e in d.search("ou=sub,dc=x", scope=Scope.SUBTREE)}
+    assert subtree_dns == {"ou=sub,dc=x", "uid=child,ou=sub,dc=x"}
+
+    one_dns = {e.dn for e in d.search("ou=sub,dc=x", scope=Scope.ONE)}
+    assert one_dns == {"uid=child,ou=sub,dc=x"}
+
+    # Rename of ou=sub,dc=x must leave cn=foo\,ou=sub,dc=x and its child untouched
+    renamed = d.rename("ou=sub,dc=x", "ou=renamed")
+    assert renamed == "ou=renamed,dc=x"
+    assert d.get(r"cn=foo\,ou=sub,dc=x") is not None
+    assert d.get(r"uid=nested,cn=foo\,ou=sub,dc=x") is not None
+    assert d.get("uid=child,ou=renamed,dc=x") is not None
+
+    # Moving ou=renamed below cn=foo\,ou=sub is valid (not a descendant of ou=renamed)
+    d.rename("ou=renamed,dc=x", "ou=sub")
+    # Non-recursive delete after removing real child must not treat cn=foo\,ou=sub as a child
+    d.delete("uid=child,ou=sub,dc=x")
+    d.delete("ou=sub,dc=x")
+    assert d.get("ou=sub,dc=x") is None
+    assert d.get(r"cn=foo\,ou=sub,dc=x") is not None
+
+    # Recursive delete of ou=sub must also leave cn=foo\,ou=sub intact
+    d.add("ou=sub,dc=x", {"objectClass": [b"organizationalUnit"], "ou": [b"sub"]})
+    d.add("uid=child,ou=sub,dc=x", {"objectClass": [b"person"], "cn": [b"c"], "sn": [b"c"]})
+    d.delete("ou=sub,dc=x", recursive=True)
+    assert d.get("ou=sub,dc=x") is None
+    assert d.get(r"cn=foo\,ou=sub,dc=x") is not None
+    assert d.get(r"uid=nested,cn=foo\,ou=sub,dc=x") is not None

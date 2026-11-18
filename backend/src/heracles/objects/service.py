@@ -115,10 +115,11 @@ def department_of(dn: str, container_rdn: str) -> str:
     """Department DN of an object: its DN minus the RDN and the type container."""
     container = dnlib.parent(dn) or ""
     if container_rdn:
-        suffix = dnlib.normalize(container_rdn) + ","
-        if dnlib.normalize(container).startswith(suffix):
+        c_parts = dnlib.split(dnlib.normalize(container))
+        r_parts = dnlib.split(dnlib.normalize(container_rdn))
+        if r_parts and len(c_parts) > len(r_parts) and c_parts[: len(r_parts)] == r_parts:
             parts = dnlib.split(container)
-            return ",".join(parts[len(dnlib.split(container_rdn)) :])
+            return ",".join(parts[len(r_parts) :])
     return container
 
 

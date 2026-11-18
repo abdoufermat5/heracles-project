@@ -59,3 +59,51 @@ def test_unescape_rdn_value() -> None:
 
 def test_normalize_survives_lone_surrogates() -> None:
     assert dn.normalize("cn=\ud800\\,x,dc=y").endswith(",dc=y")
+
+
+def test_is_descendant_enforces_rdn_boundaries() -> None:
+    # Escaped commas (backslash, hex \2c/\2C, odd backslash count) never cross RDN boundaries
+    assert not dn.is_descendant(r"cn=foo\,ou=sub,dc=org", "ou=sub,dc=org")
+    assert not dn.is_descendant(r"cn=foo\,ou=sub,dc=org", "ou=sub,dc=org", include_self=False)
+    assert not dn.is_descendant(r"uid=a,cn=foo\,ou=sub,dc=org", "ou=sub,dc=org")
+    assert not dn.is_descendant(r"cn=foo\2cou=sub,dc=org", "ou=sub,dc=org")
+    assert not dn.is_descendant(r"cn=foo\2Cou=sub,dc=org", "ou=sub,dc=org")
+    assert not dn.is_descendant(r"cn=foo\\\,ou=sub,dc=org", "ou=sub,dc=org")
+
+    # Escaped backslash before an unescaped comma IS a real RDN boundary
+    assert dn.is_descendant(r"cn=foo\\,ou=sub,dc=org", "ou=sub,dc=org")
+    assert dn.is_descendant(r"cn=foo\\,ou=sub,dc=org", "ou=sub,dc=org", include_self=False)
+
+    # Valid descendants with escaped commas in own or ancestor RDNs
+    assert dn.is_descendant(r"cn=foo\,bar,ou=sub,dc=org", "ou=sub,dc=org")
+    assert dn.is_descendant(r"cn=x,ou=a\,b,dc=org", r"ou=a\2cb,dc=org")
+
+    # Whitespace, case, escaped trailing space, and multi-valued RDNs
+    assert dn.is_descendant("  UID = Alice , OU = Sub , DC = Org  ", "ou=sub,dc=org")
+    assert dn.is_descendant(r"cn=foo\ ,ou=sub,dc=org", r"cn=foo\ ,ou=sub,dc=org")
+    assert not dn.is_descendant(
+        r"cn=foo\ ,ou=sub,dc=org", r"cn=foo\ ,ou=sub,dc=org", include_self=False
+    )
+    assert not dn.is_descendant(r"cn=foo\ ,ou=sub,dc=org", "cn=foo,ou=sub,dc=org")
+    assert dn.is_descendant("cn=a+sn=b,ou=sub,dc=org", "ou=sub,dc=org")
+    assert not dn.is_descendant("cn=a+ou=sub,dc=org", "ou=sub,dc=org")
+
+
+def test_is_descendant_rejects_empty_and_malformed_dns() -> None:
+    invalid_pairs = [
+        ("", ""),
+        ("", "dc=org"),
+        ("dc=org", ""),
+        ("   ", "   "),
+        (",", ","),
+        ("not-a-dn", "not-a-dn"),
+        ("uid=a,not-a-dn", "not-a-dn"),
+        ("cn=,dc=org", "dc=org"),
+        ("=a,dc=org", "dc=org"),
+        ("uid=a,,dc=org", "dc=org"),
+        ("uid=a,dc=org,", "dc=org"),
+        (r"uid=a\\,", "dc=org"),
+    ]
+    for candidate, ancestor in invalid_pairs:
+        assert not dn.is_descendant(candidate, ancestor)
+        assert not dn.is_descendant(candidate, ancestor, include_self=False)

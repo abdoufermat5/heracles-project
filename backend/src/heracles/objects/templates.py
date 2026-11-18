@@ -121,7 +121,9 @@ def _is_template_of(info: TypeInfo, dn: str) -> bool:
     parent = dnlib.parent(dn)
     if parent is None or not info.type.rdn:
         return False
-    return dnlib.normalize(parent).startswith(dnlib.normalize(container_rdn(info)) + ",")
+    p_parts = dnlib.split(dnlib.normalize(parent))
+    c_parts = dnlib.split(dnlib.normalize(container_rdn(info)))
+    return bool(c_parts) and len(p_parts) > len(c_parts) and p_parts[: len(c_parts)] == c_parts
 
 
 def _load(ctx: ObjectService, info: TypeInfo, dn: str) -> Template:

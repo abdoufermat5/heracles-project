@@ -66,3 +66,13 @@ def test_nothing_is_recorded_without_the_audit_plugin() -> None:
     directory, wrapped = setup(enabled=())
     wrapped.modify(a_user(directory), [Modification("replace", "description", [b"x"])])
     assert events(directory) == []
+
+
+def test_escaped_comma_matching_audit_container_is_still_recorded() -> None:
+    directory, wrapped = setup()
+    entry_dn = rf"cn=foo\,ou=audit,{demo.BASE}"
+    wrapped.add(entry_dn, {"objectClass": [b"organizationalRole"], "cn": [b"foo,ou=audit"]})
+    wrapped.modify(entry_dn, [Modification("replace", "description", [b"touched"])])
+    recorded = events(directory)
+    assert [e.text("hrcAuditAction") for e in recorded] == ["create", "modify"]
+    assert all(e.text("hrcAuditObject") == entry_dn for e in recorded)

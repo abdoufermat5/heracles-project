@@ -292,7 +292,9 @@ def _in_container(dn: str, container_rdn: str) -> bool:
     parent = dnlib.parent(dn)
     if parent is None:
         return False
-    return dnlib.normalize(parent).startswith(dnlib.normalize(container_rdn) + ",")
+    p_parts = dnlib.split(dnlib.normalize(parent))
+    c_parts = dnlib.split(dnlib.normalize(container_rdn))
+    return bool(c_parts) and len(p_parts) > len(c_parts) and p_parts[: len(c_parts)] == c_parts
 
 
 def _add_classes(directory: DirectoryClient, entry: Entry, classes: Sequence[str]) -> None:
@@ -698,13 +700,12 @@ def fix_default_roles(
 
 
 def _misplaced(ctx: CheckContext, flt: str, container_rdn: str) -> list[str]:
+    app_dn = dnlib.join(schema.APP_OU, ctx.base)
     return [
         e.dn
         for e in ctx.search(flt, ["1.1"])
         if not _in_container(e.dn, container_rdn)
-        and not dnlib.normalize(e.dn).endswith(
-            ",ou=" + schema.APP_OU.partition("=")[2].lower() + "," + dnlib.normalize(ctx.base)
-        )
+        and not dnlib.is_descendant(e.dn, app_dn, include_self=False)
     ]
 
 

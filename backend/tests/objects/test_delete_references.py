@@ -157,3 +157,36 @@ def test_mandatory_member_is_kept_with_a_warning() -> None:
     kept = d.get(solo)
     assert kept is not None and kept.texts("member") == [ALICE]
     assert any(entry["event"] == "reference_to_deleted_object_kept" for entry in logs)
+
+
+def test_delete_cleans_escaped_comma_non_audit_entry_while_skipping_audit() -> None:
+    service, d = _service()
+    _user(d, ALICE, "alice")
+    _user(d, BOB, "bob")
+    audit_ou = f"ou=audit,{BASE}"
+    audit_entry = f"cn=evt,{audit_ou}"
+    outside_entry = rf"cn=foo\,ou=audit,{BASE}"
+    d.add(audit_ou, {"objectClass": [b"organizationalUnit"], "ou": [b"audit"]})
+    d.add(
+        audit_entry,
+        {
+            "objectClass": [b"groupOfNames"],
+            "cn": [b"evt"],
+            "member": [ALICE.encode(), BOB.encode()],
+        },
+    )
+    d.add(
+        outside_entry,
+        {
+            "objectClass": [b"groupOfNames"],
+            "cn": [b"foo,ou=audit"],
+            "member": [ALICE.encode(), BOB.encode()],
+        },
+    )
+
+    service.delete("user", ALICE)
+
+    outside = d.get(outside_entry)
+    assert outside is not None and outside.texts("member") == [BOB]
+    audit = d.get(audit_entry)
+    assert audit is not None and audit.texts("member") == [ALICE, BOB]

@@ -114,9 +114,7 @@ def _acl_modifications(entry: Entry, gone: set[str]) -> list[Modification]:
 
 def _is_audit_history(directory: DirectoryClient, dn: str) -> bool:
     """Entries of the audit log (``ou=audit`` below the base), never rewritten."""
-    container = dnlib.normalize(dnlib.join(AUDIT_RDN, directory.base_dn))
-    normalized = dnlib.normalize(dn)
-    return normalized == container or normalized.endswith("," + container)
+    return dnlib.is_descendant(dn, dnlib.join(AUDIT_RDN, directory.base_dn))
 
 
 def _apply(

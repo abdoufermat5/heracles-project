@@ -139,12 +139,52 @@ def depth(dn: str) -> int:
     return len(split(dn))
 
 
+def _has_empty_segment(dn: str) -> bool:
+    """True when ``dn`` is empty, whitespace-only, or contains an empty RDN segment."""
+    if not dn:
+        return True
+    has_content = False
+    escaped = False
+    for ch in dn:
+        if escaped:
+            has_content = True
+            escaped = False
+        elif ch == "\\":
+            has_content = True
+            escaped = True
+        elif ch == ",":
+            if not has_content:
+                return True
+            has_content = False
+        elif not ch.isspace():
+            has_content = True
+    return not has_content
+
+
+@lru_cache(maxsize=32768)
+def _normalized_rdns(dn: str) -> tuple[str, ...] | None:
+    """Validated tuple of normalized RDN strings, or ``None`` for empty/invalid DNs."""
+    if _has_empty_segment(dn):
+        return None
+    parts = tuple(split(normalize(dn)))
+    if not parts:
+        return None
+    for part in parts:
+        attr, sep, value = part.partition("=")
+        if not sep or not attr.strip() or not value:
+            return None
+    return parts
+
+
 def is_descendant(dn: str, ancestor: str, *, include_self: bool = True) -> bool:
     """True if ``dn`` is below ``ancestor`` (case-insensitive)."""
-    d, a = normalize(dn), normalize(ancestor)
-    if d == a:
+    d_parts = _normalized_rdns(dn)
+    a_parts = _normalized_rdns(ancestor)
+    if d_parts is None or a_parts is None:
+        return False
+    if d_parts == a_parts:
         return include_self
-    return d.endswith("," + a)
+    return len(d_parts) > len(a_parts) and d_parts[-len(a_parts) :] == a_parts
 
 
 def _clean_fragment(fragment: str) -> str:

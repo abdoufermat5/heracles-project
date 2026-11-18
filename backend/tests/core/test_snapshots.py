@@ -173,6 +173,32 @@ def test_restore_refuses_entries_outside_the_snapshotted_subtree(
     assert directory.get(f"cn=intruder,{foreign}") is None
 
 
+def test_restore_rejects_escaped_comma_outside_subtree(
+    svc: SnapshotService, directory: MemoryDirectory
+) -> None:
+    from heracles.ldap.client import Modification
+
+    snap = svc.create(SUB)
+    intruder_dn = r"cn=intruder\,ou=sub,ou=people,dc=heracles,dc=test"
+    forged = zlib.compress(
+        (
+            f"dn: {SUB}\nobjectClass: organizationalUnit\nou: sub\n\n"
+            f"dn: {intruder_dn}\nobjectClass: organizationalRole\ncn: intruder,ou=sub\n"
+        ).encode()
+    )
+    directory.modify(
+        snap.dn,
+        [
+            Modification("replace", "hrcSnapshotData", [forged]),
+            Modification("delete", "hrcSnapshotHash"),
+        ],
+    )
+    with pytest.raises(SnapshotError):
+        svc.restore(snap.dn)
+    assert directory.get(f"uid=carol,{SUB}") is not None
+    assert directory.get(intruder_dn) is None
+
+
 class _FlakyDirectory(MemoryDirectory):
     """A directory whose ``add`` fails for one DN (to exercise the restore rollback)."""
 

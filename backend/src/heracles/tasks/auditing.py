@@ -137,10 +137,7 @@ class AuditingDirectory:
 
     def _ignored(self, dn: str) -> bool:
         """Entries of the audit log itself."""
-        normalized = dnlib.normalize(dn)
-        return normalized == self._audit_container or normalized.endswith(
-            "," + self._audit_container
-        )
+        return dnlib.is_descendant(dn, self._audit_container)
 
     def _record(self, action: str, dn: str, lines: list[str]) -> None:
         self._sink.record(

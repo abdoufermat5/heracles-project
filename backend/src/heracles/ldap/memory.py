@@ -255,12 +255,13 @@ class MemoryDirectory:
         with self._lock:
             if key not in self._entries:
                 raise NoSuchObjectError(dn)
-            below = [k for k in self._entries if k != key and k.endswith("," + key)]
+            below = [k for k in self._entries if dnlib.is_descendant(k, key, include_self=False)]
             if below and not recursive:
                 raise DirectoryError(f"{dn} has subordinate entries")
             for k in below:
                 del self._entries[k]
                 self._ops.pop(k, None)
+                self._passwords.pop(k, None)
             del self._entries[key]
             self._ops.pop(key, None)
             self._passwords.pop(key, None)
@@ -297,14 +298,13 @@ class MemoryDirectory:
                     del attrs[old_key]
             self._ensure_rdn_value(attrs, f"{new_attr}={new_value}")
 
-            suffix = "," + key
             rebuilt: dict[str, Entry] = {}
             ops: dict[str, dict[str, list[bytes]]] = {}
             for k, e in self._entries.items():
                 if k == key:
                     rebuilt[new_key] = Entry(new_dn, attrs)
                     moved = new_key
-                elif k.endswith(suffix):
+                elif dnlib.is_descendant(k, key, include_self=False):
                     relative = dnlib.split(e.dn)[: dnlib.depth(e.dn) - dnlib.depth(dn)]
                     child_dn = dnlib.join(",".join(relative), new_dn)
                     moved = dnlib.normalize(child_dn)
@@ -351,8 +351,11 @@ class MemoryDirectory:
         if scope is Scope.BASE:
             return key == nbase
         if scope is Scope.ONE:
-            return key.endswith("," + nbase) and dnlib.depth(key) == dnlib.depth(nbase) + 1
-        return key == nbase or key.endswith("," + nbase)
+            return (
+                dnlib.is_descendant(key, nbase, include_self=False)
+                and dnlib.depth(key) == dnlib.depth(nbase) + 1
+            )
+        return dnlib.is_descendant(key, nbase, include_self=True)
 
     def _with_ops(self, key: str, entry: Entry) -> Entry:
         """The entry with its operational attributes, for filter matching."""

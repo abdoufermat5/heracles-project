@@ -398,3 +398,18 @@ def test_startup_warns_about_plaintext_ldap(
     with capture_logs() as logs:
         server.load_config(path)
     assert any(entry["event"] == "directory_plaintext_ldap" for entry in logs)
+
+
+def test_misplaced_does_not_exempt_escaped_comma_app_ou(directory: MemoryDirectory) -> None:
+    stray = rf"uid=foo\,ou=heracles,{BASE}"
+    directory.add(
+        stray,
+        {
+            "objectClass": [b"inetOrgPerson"],
+            "uid": [b"foo,ou=heracles"],
+            "cn": [b"F"],
+            "sn": [b"F"],
+        },
+    )
+    ctx = sc.context_for(directory)
+    assert stray in sc.check_users_tree(ctx).dns

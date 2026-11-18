@@ -178,3 +178,28 @@ def test_rename_keeps_grant_end_dates(
     assert directory.entries[dnlib.normalize(BASE)].attrs["hrcGrantExpiry"] == [
         f"20300101000000Z {acl_kind} {new}".encode()
     ]
+
+
+def test_rename_rewrites_escaped_comma_non_audit_entry_while_skipping_audit(
+    service: ObjectService, directory: FakeDirectory, refs: str
+) -> None:
+    audit_entry = f"hrcAuditId=1,ou=audit,{BASE}"
+    outside_entry = rf"cn=foo\,ou=audit,{BASE}"
+    directory.put(f"ou=audit,{BASE}", objectClass=["organizationalUnit"], ou="audit")
+    directory.put(audit_entry, objectClass=["groupOfNames"], cn="1", member=[refs])
+    directory.put(
+        outside_entry, objectClass=["groupOfNames"], cn="foo,ou=audit", member=[refs, MANAGED]
+    )
+
+    service.update("user", refs, {"main": {"values": {"uid": "jdupont"}}})
+    new = f"uid=jdupont,{PEOPLE}"
+
+    assert [
+        v.decode() for v in directory.entries[dnlib.normalize(outside_entry)].attrs["member"]
+    ] == [
+        new,
+        MANAGED,
+    ]
+    assert [
+        v.decode() for v in directory.entries[dnlib.normalize(audit_entry)].attrs["member"]
+    ] == [refs]
