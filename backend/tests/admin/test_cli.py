@@ -234,3 +234,25 @@ def test_audit_verify_reports_the_first_break(
     assert run(directory, "audit", "verify", "--json") == 1
     data = json.loads(capsys.readouterr().out)
     assert data["ok"] is False and data["first_break"]["sequence"] == 2
+
+
+@pytest.mark.parametrize("workers", ["1", "2"])
+def test_serve_never_lets_uvicorn_rewrite_the_client_address(
+    workers: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Uvicorn would trust X-Forwarded-For from loopback before ``login.trusted_proxies``."""
+    import uvicorn
+
+    seen: dict[str, object] = {}
+
+    def fake_run(*args: object, **kwargs: object) -> None:
+        seen.update(kwargs)
+
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    config = tmp_path / "heracles.yaml"
+    config.write_text("directories: [{id: main}]\n")
+    argv = ["serve", "--config", str(config), "--workers", workers]
+    if workers == "1":
+        argv.append("--demo")
+    assert main(argv) == 0
+    assert seen["proxy_headers"] is False

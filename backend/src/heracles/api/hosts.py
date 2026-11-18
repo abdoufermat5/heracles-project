@@ -15,6 +15,7 @@ import structlog
 from fastapi import Request
 
 from heracles.api.errors import ApiError
+from heracles.auth.login import IPNetwork
 
 _HOST_RE = re.compile(r"[A-Za-z0-9.\-]+(:\d{1,5})?|\[[0-9A-Fa-f:.]+\](:\d{1,5})?")
 
@@ -51,10 +52,18 @@ def host_allowed(host: str, allowed: list[str]) -> bool:
     return False
 
 
-def request_base(request: Request, allowed: list[str], *, setting: str) -> str:
+def request_base(
+    request: Request,
+    allowed: list[str],
+    *,
+    setting: str,
+    trusted_proxies: list[IPNetwork] | None = None,
+) -> str:
     """Base URL (no trailing slash) of the request, if its ``Host`` is allowed.
 
     ``setting`` names the option that fixes the public address, for the error message.
+    The scheme is ``https`` when the connection is, or when a trusted proxy (``trusted_proxies``,
+    the ``login.trusted_proxies`` setting) says so with ``X-Forwarded-Proto``.
     """
     host = request.headers.get("host", "")
     if not host_allowed(host, allowed):
@@ -65,7 +74,12 @@ def request_base(request: Request, allowed: list[str], *, setting: str) -> str:
             f"The host '{host[:100]}' is not allowed: configure {setting} "
             "or add the host to api.allowed_hosts",
         )
-    return str(request.base_url).rstrip("/")
+    from heracles.api.middleware import is_https  # settings import this module: avoid a cycle
+
+    base = request.base_url
+    if is_https(request, trusted_proxies or []):
+        base = base.replace(scheme="https")
+    return str(base).rstrip("/")
 
 
 __all__ = ["DEFAULT_ALLOWED_HOSTS", "host_allowed", "request_base"]

@@ -88,7 +88,12 @@ def _public_base(request: Request, state: AppState) -> str:
     url = state.settings.oidc.public_url.strip()
     if url:
         return (url if "://" in url else f"https://{url}").rstrip("/")
-    return request_base(request, state.settings.allowed_hosts, setting="oidc.public_url")
+    return request_base(
+        request,
+        state.settings.allowed_hosts,
+        setting="oidc.public_url",
+        trusted_proxies=state.trusted_proxies,
+    )
 
 
 def _redirect_uri(request: Request, state: AppState) -> str:

@@ -57,7 +57,7 @@ dev: ## Whole stack: OpenLDAP + API + DNS + SMB/FTP/DHCP containers, Vite dev se
 dev-demo: ## Demo backend (in-memory directory, auto-reload) + Vite dev server
 	@echo "→ API http://$(HOST):$(PORT)  ·  UI http://localhost:$(UI_PORT)  ·  login admin / heracles"
 	@trap 'kill 0' INT TERM EXIT; \
-	  (cd $(BACKEND) && uv run uvicorn heracles.server:build_demo_app --factory --reload \
+	  (cd $(BACKEND) && uv run uvicorn heracles.server:build_demo_app --factory --reload --no-proxy-headers \
 	      --host $(HOST) --port $(PORT)) & \
 	  (cd $(FRONTEND) && VITE_API_MOCK=false HERACLES_API_URL=http://$(HOST):$(PORT) \
 	      pnpm exec vite --port $(UI_PORT)) & \
@@ -73,7 +73,7 @@ dev-mock: ## Frontend only, with the in-browser mock API (no backend)
 	cd $(FRONTEND) && VITE_API_MOCK=true pnpm exec vite --port $(UI_PORT)
 
 backend: ## Demo backend only, with auto-reload
-	cd $(BACKEND) && uv run uvicorn heracles.server:build_demo_app --factory --reload \
+	cd $(BACKEND) && uv run uvicorn heracles.server:build_demo_app --factory --reload --no-proxy-headers \
 	  --host $(HOST) --port $(PORT)
 
 frontend: ## Vite dev server only, proxied to the backend on $(PORT)

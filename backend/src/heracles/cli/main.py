@@ -44,7 +44,7 @@ def _serve(args: argparse.Namespace) -> int:
             with_worker=args.with_worker,
             worker_interval=args.worker_interval,
         )
-        uvicorn.run(dispatcher, host=args.host, port=args.port, proxy_headers=True)
+        uvicorn.run(dispatcher, host=args.host, port=args.port, proxy_headers=False)
         return 0
     if workers > 1:
         if args.demo:
@@ -67,7 +67,7 @@ def _serve(args: argparse.Namespace) -> int:
             workers=workers,
             host=args.host,
             port=args.port,
-            proxy_headers=True,
+            proxy_headers=False,
         )
         return 0
     if args.demo:
@@ -79,7 +79,7 @@ def _serve(args: argparse.Namespace) -> int:
     else:
         os.environ["HERACLES_WORKER_INTERVAL"] = str(args.worker_interval)
         app = build_app(args.config, with_worker=args.with_worker)
-    uvicorn.run(app, host=args.host, port=args.port, proxy_headers=True)
+    uvicorn.run(app, host=args.host, port=args.port, proxy_headers=False)
     return 0
 
 

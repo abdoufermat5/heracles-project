@@ -93,7 +93,12 @@ def _public_base(request: Request, state: AppState, config: SsoConfig) -> str:
     name = config.cas_service_name.strip()
     if name:
         return (name if "://" in name else f"https://{name}").rstrip("/")
-    return request_base(request, state.settings.allowed_hosts, setting="cas_service_name")
+    return request_base(
+        request,
+        state.settings.allowed_hosts,
+        setting="cas_service_name",
+        trusted_proxies=state.trusted_proxies,
+    )
 
 
 def _service_url(

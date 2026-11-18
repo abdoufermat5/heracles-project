@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import pytest
+from starlette.requests import Request
 
-from heracles.api.hosts import DEFAULT_ALLOWED_HOSTS, host_allowed
+from heracles.api.hosts import DEFAULT_ALLOWED_HOSTS, host_allowed, request_base
+from heracles.auth.login import parse_networks
 
 
 @pytest.mark.parametrize(
@@ -36,3 +38,31 @@ def test_wildcard_matches_subdomains_only() -> None:
     assert not host_allowed("badexample.org", allowed)
     assert host_allowed("Console.Corp.Test.", allowed)
     assert not host_allowed("localhost", allowed)
+
+
+@pytest.mark.parametrize(
+    ("peer", "expected"),
+    [
+        ("10.0.0.5", "https://app.example"),  # the TLS ingress is trusted
+        ("203.0.113.9", "http://app.example"),  # anyone else cannot choose the scheme
+    ],
+)
+def test_request_base_honours_forwarded_proto_only_from_trusted_proxies(
+    peer: str, expected: str
+) -> None:
+    request = Request(
+        {
+            "type": "http",
+            "scheme": "http",
+            "server": ("heracles", 8000),
+            "client": (peer, 1234),
+            "path": "/",
+            "root_path": "",
+            "query_string": b"",
+            "headers": [(b"host", b"app.example"), (b"x-forwarded-proto", b"https")],
+        }
+    )
+    base = request_base(
+        request, ["app.example"], setting="x", trusted_proxies=parse_networks(["10.0.0.0/8"])
+    )
+    assert base == expected

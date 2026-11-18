@@ -39,7 +39,10 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             raise not_found("Invitation not found")
         state = get_state(request)
         base_url = str(getattr(settings, "public_base_url", "") or "") or request_base(
-            request, state.settings.allowed_hosts, setting="the invitations public_base_url"
+            request,
+            state.settings.allowed_hosts,
+            setting="the invitations public_base_url",
+            trusted_proxies=state.trusted_proxies,
         )
         try:
             report = send_invitation(

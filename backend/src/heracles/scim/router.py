@@ -130,7 +130,15 @@ UserDep = Annotated[CurrentUser, Depends(scim_user)]
 
 def scim_base_url(request: Request, state: StateDep) -> str:
     """Absolute URL of ``/scim/v2`` (the ``Host`` must be an allowed host)."""
-    return request_base(request, state.settings.allowed_hosts, setting="cas_service_name") + PREFIX
+    return (
+        request_base(
+            request,
+            state.settings.allowed_hosts,
+            setting="cas_service_name",
+            trusted_proxies=state.trusted_proxies,
+        )
+        + PREFIX
+    )
 
 
 BaseUrlDep = Annotated[str, Depends(scim_base_url)]
