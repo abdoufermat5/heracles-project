@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw'
 import { api } from '@/api/endpoints'
 import { server } from '@/mocks/server'
 import { objectsApi } from '@/features/editor/api'
-import { renderApp, signIn, userPath } from '@/test/utils'
+import { must, renderApp, signIn, userPath } from '@/test/utils'
 
 async function openEditor(path = userPath(0)) {
   const url = path.includes('?') ? path : `${path}?view=generic`
@@ -262,5 +262,24 @@ describe('object editor', () => {
     await userEvent.click(screen.getByRole('button', { name: /Save/ }))
     await confirmReview()
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(1))
+  })
+  it('moves the entry from the DN the rename returned when the save renames and changes the department', async () => {
+    vi.restoreAllMocks() // earlier tests leave their spies on api
+    const real = api.patchObject
+    const renamedDn = 'uid=renamed,ou=people,dc=example,dc=org'
+    vi.spyOn(api, 'patchObject').mockImplementation(async (...a) => ({ ...(await real(...a)), dn: renamedDn }))
+    const move = vi.spyOn(api, 'moveObject').mockResolvedValue({ dn: 'uid=renamed,ou=Lyon,dc=example,dc=org' })
+    await openEditor()
+    await userEvent.click(screen.getByRole('button', { name: /Edit/ }))
+    // the mock directory never lets a login be edited: the server's answer carries the rename
+    const sn = await screen.findByLabelText(/^Last name/)
+    await waitFor(() => expect(sn).toBeEnabled())
+    await userEvent.type(sn, 'x')
+    await userEvent.click(must(document.getElementById('f-main-base')))
+    await userEvent.click(await screen.findByText('Lyon'))
+    await userEvent.click(screen.getByRole('button', { name: /Save/ }))
+    await confirmReview()
+    await waitFor(() => expect(move).toHaveBeenCalledTimes(1))
+    expect(move.mock.calls[0]?.[1]).toBe(renamedDn)
   })
 })

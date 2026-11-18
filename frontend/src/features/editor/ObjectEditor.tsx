@@ -454,11 +454,28 @@ function EditorInner({ desc, detail, source, initialTab, autoEdit }: InnerProps)
           result = await patch.mutateAsync({ tabs: changes })
           showTriggerOutput(result)
         }
-        let finalDn = result.dn
+        // The patch may already have renamed the entry (login or name changed): from here on the
+        // entry lives at `result.dn`, so the form must be rebased on it before anything else can fail.
+        const renamedDn = result.dn
+        if (result !== detail) {
+          baseline.current = { values: valuesFromDetail(desc, result), active: activeFromDetail(desc, result) }
+        }
+        let finalDn = renamedDn
         const newBase = values.main?.base
         if (baseChanged && typeof newBase === 'string') {
-          const moved = await api.moveObject(type, detail.dn, newBase)
-          finalDn = moved.dn
+          try {
+            const moved = await api.moveObject(type, renamedDn, newBase)
+            finalDn = moved.dn
+          } catch (e) {
+            if (renamedDn !== detail.dn) {
+              // the rename went through: the page must follow the entry, not stay on the old DN
+              bypassGuard.current = true
+              void navigate({ to: '/types/$type/$dn', params: { type, dn: renamedDn }, replace: true })
+            }
+            throw e
+          } finally {
+            void queryClient.invalidateQueries({ queryKey: qk.objects(type) })
+          }
         }
         await release()
         toastSaved(t('editor.saved'), undoId, () => void reloadAfterRestore())
