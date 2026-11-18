@@ -216,9 +216,7 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             gate.evaluator.delegable(base, ALL_OBJECTS).is_full
             and gate.evaluator.delegable(base, ALL_OBJECTS, below=True).is_full
         )
-        config_writer = unrestricted or (
-            gate.evaluator.permissions(base, "config/config").write
-        )
+        config_writer = unrestricted or (gate.evaluator.permissions(base, "config/config").write)
         results = importer.run_import(
             user.directory,
             entries,
