@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from heracles.core import config_store, formats
+from heracles.core.audit import AUDIT_RDN
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Entry, Modification
 from heracles.schema import names as schema
@@ -69,8 +70,9 @@ def configuration_entry(directory: DirectoryClient) -> Callable[[Entry], bool]:
     return check
 
 
-#: Attributes holding credentials, ACL assignments or role membership: a raw import may set
-#: them only for administrators (or holders of the configuration right).
+#: Attributes a raw import may set only for bootstrap administrators: credentials, ACL and role
+#: assignments, group membership (a self-add to a privileged group), SSH keys, sudo rules,
+#: numeric ids (``0`` is root), SMB identity and account flags, ownership and reset tokens.
 PRIVILEGED_ATTRIBUTES = frozenset(
     name.lower()
     for name in (
@@ -82,22 +84,85 @@ PRIVILEGED_ATTRIBUTES = frozenset(
         schema.ATTR.ACL_ENTRY,
         schema.ATTR.ACL_TEMPLATE,
         schema.STD_ATTR.ROLE_OCCUPANT,
+        schema.STD_ATTR.MEMBER,
+        "uniqueMember",
+        "memberUid",
+        "owner",
+        "sshPublicKey",
+        "sudoUser",
+        "sudoHost",
+        "sudoCommand",
+        "sudoRunAs",
+        "sudoRunAsUser",
+        "sudoRunAsGroup",
+        "sudoOption",
+        "sudoOrder",
+        "sudoNotBefore",
+        "sudoNotAfter",
+        "uidNumber",
+        "gidNumber",
+        "sambaSID",
+        "sambaPrimaryGroupSID",
+        "sambaAcctFlags",
+        "sambaGroupType",
+        "sambaSIDList",
+        schema.ATTR.TOKEN,
+        schema.ATTR.TOKEN_USER_DN,
+        schema.ATTR.TOKEN_TYPE,
+        schema.ATTR.TOKEN_TIMESTAMP,
     )
 )
-_PRIVILEGED_CLASSES = frozenset(c.lower() for c in (schema.OC.ACL_ROLE, schema.OC.ACL_ASSIGNMENT))
+_PRIVILEGED_CLASSES = frozenset(
+    c.lower()
+    for c in (
+        schema.OC.ACL_ROLE,
+        schema.OC.ACL_ASSIGNMENT,
+        schema.OC.TOKEN,
+        schema.STD_OC.SUDO_ROLE,
+    )
+)
 
 
 def privileged_content(entry: Entry) -> str | None:
     """Why a record may only be imported by an administrator (``None``: it may)."""
     for name in entry.attrs:
         if _base_name(name) in PRIVILEGED_ATTRIBUTES:
-            return f"Setting {name} (password hash, ACL or role membership) needs an administrator"
+            return f"Setting {name} (credential, ACL, membership, key or id) needs an administrator"
     for name, values in entry.attrs.items():
         if _base_name(name) == "objectclass" and any(
             v.decode("utf-8", "replace").lower() in _PRIVILEGED_CLASSES for v in values
         ):
-            return "ACL and role entries can only be imported by an administrator"
+            return "ACL, role, token and sudo entries can only be imported by an administrator"
     return None
+
+
+def never_importable(
+    directory: DirectoryClient, admin_dns: frozenset[str]
+) -> Callable[[str], str | None]:
+    """Reason a DN is closed to every raw import, whoever runs it (``None``: it may be written).
+
+    The audit trail (an import could rewrite events and their hash chain), the reset tokens
+    (an import could plant a known token) and the bootstrap administrators' own entries (an
+    import could change the mail or login that recovery and SSO trust).
+    """
+    closed = {
+        dnlib.join(rdn, directory.base_dn): why
+        for rdn, why in (
+            (AUDIT_RDN, "The audit trail cannot be imported"),
+            (schema.RDN.TOKENS, "Tokens cannot be imported"),
+        )
+    }
+    admins = {dnlib.normalize(d) for d in admin_dns}
+
+    def check(dn: str) -> str | None:
+        for container, why in closed.items():
+            if dnlib.is_descendant(dn, container):
+                return why
+        if dnlib.normalize(dn) in admins:
+            return "Administrator entries cannot be changed by an import"
+        return None
+
+    return check
 
 
 def _by_name(entry: Entry) -> dict[str, tuple[str, list[bytes]]]:
@@ -131,14 +196,16 @@ def run_import(
     *,
     allowed: Callable[[str], bool],
     apply: bool,
+    never: Callable[[str], str | None] | None = None,
     protected: Callable[[Entry], bool] | None = None,
     restricted: Callable[[Entry], str | None] | None = None,
 ) -> list[EntryResult]:
     """Process ``entries`` in order; with ``apply`` false nothing is written (dry run).
 
     A record whose parent is neither in the directory nor an earlier record is an error.
-    Failures never stop the run: every record gets a result. ``protected`` marks the
-    entries a raw import must never write (the new record, or the entry it would change);
+    Failures never stop the run: every record gets a result. ``never`` gives the reason a DN is
+    closed to everyone; ``protected`` marks the entries only a configuration writer may write
+    (the new record, or the entry it would change);
     ``restricted`` returns the reason a record carries content the caller may not set.
     """
     results: list[EntryResult] = []
@@ -149,6 +216,9 @@ def run_import(
         key = dnlib.normalize(entry.dn)
         if not entry.dn.strip() or formats.check("dn", entry.dn) is not None:
             result.error = "Invalid DN"
+            continue
+        if never is not None and (reason := never(entry.dn)):
+            result.error = reason
             continue
         if not allowed(entry.dn):
             result.error = "You are not allowed to import entries here"

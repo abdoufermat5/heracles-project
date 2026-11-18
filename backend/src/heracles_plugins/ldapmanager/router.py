@@ -206,8 +206,11 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         if not any(gate.can_import_ldif(e.dn) for e in entries):
             raise forbidden("You are not allowed to import LDIF")
         options = importer.ImportOptions(body.overwrite, body.remove_missing)
-        # Who may edit the configuration (hence the triggers) may also import it.
-        admin = domain.is_admin(user.dn) or (
+        # Who may edit the configuration (hence the triggers) may also import the configuration
+        # entry; that right does not lift the privileged-content check, which stays reserved
+        # to the bootstrap administrators.
+        bootstrap = domain.is_admin(user.dn)
+        config_writer = bootstrap or (
             gate.evaluator.permissions(user.directory.base_dn, "config/config").write
         )
         results = importer.run_import(
@@ -216,8 +219,9 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             options,
             allowed=gate.can_import_ldif,
             apply=not body.dry_run,
-            protected=None if admin else importer.configuration_entry(user.directory),
-            restricted=None if admin else importer.privileged_content,
+            never=importer.never_importable(user.directory, domain.admin_dns),
+            protected=None if config_writer else importer.configuration_entry(user.directory),
+            restricted=None if bootstrap else importer.privileged_content,
         )
         if not body.dry_run:
             summary = importer.summarize(results)

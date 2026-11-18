@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from heracles import demo
+from heracles.ldap import dn as dnlib
 from heracles.ldap.ldif import parse_ldif
 from heracles.ldap.memory import MemoryDirectory
 from heracles.server import build_demo_app
@@ -55,7 +56,10 @@ class Api:
 
 @pytest.fixture
 def app() -> Iterator[FastAPI]:
-    yield build_demo_app()
+    """Demo application where ``admin`` is a bootstrap administrator."""
+    app = build_demo_app()
+    app.state.domain.admin_dns = frozenset({dnlib.normalize(demo.ADMIN_DN)})
+    yield app
 
 
 @pytest.fixture
@@ -260,7 +264,7 @@ def test_import_requires_write_rights(app: FastAPI) -> None:
         assert r.status_code == 403
 
 
-def _grant_ldif_write(app: FastAPI, member_uid: str) -> None:
+def _grant_ldif_write(app: FastAPI, member_uid: str, rights: str = "ldif/ldifManager;rw") -> None:
     from heracles.acl import serialise_assignment, serialise_role_value
     from heracles.acl.model import AclAssignment, AclScope, RoleTemplateValue
     from heracles.acl.parser import parse_role_value
@@ -268,7 +272,7 @@ def _grant_ldif_write(app: FastAPI, member_uid: str) -> None:
     from heracles.schema.names import ATTR, OC
 
     api = Api(app).login("admin")
-    role = parse_role_value("0:ldif/ldifManager;rw")
+    role = parse_role_value(f"0:{rights}")
     assert isinstance(role, RoleTemplateValue)
     role_dn = f"cn=ldif-writer,ou=aclroles,{BASE}"
     api.directory.add(
@@ -313,6 +317,11 @@ def test_import_cannot_set_hashes_acls_or_roles_unless_administrator(app: FastAP
         "acl": f"dn: uid=h2,{BASE}\n{base}uid: h2\nobjectClass: hrcAcl\nhrcAclEntry: 0:x\n",
         "role": f"dn: cn=r,{BASE}\nobjectClass: organizationalRole\ncn: r\n"
         f"roleOccupant: uid=helpdesk,{BASE}\n",
+        "membership": f"dn: cn=g,{BASE}\nobjectClass: groupOfNames\ncn: g\n"
+        f"member: uid=helpdesk,{BASE}\n",
+        "ssh key": f"dn: uid=h4,{BASE}\n{base}uid: h4\nsshPublicKey: ssh-ed25519 AAAA\n",
+        "root id": f"dn: uid=h5,{BASE}\n{base}uid: h5\nuidNumber: 0\n",
+        "token": f"dn: cn=t,{BASE}\nobjectClass: hrcTokenEntry\ncn: t\nhrcToken: known\n",
     }
     helpdesk = Api(app).login("helpdesk")
     for text in texts.values():
@@ -320,6 +329,35 @@ def test_import_cannot_set_hashes_acls_or_roles_unless_administrator(app: FastAP
         assert body["summary"]["error"] == 1 and body["summary"]["add"] == 0, body
         assert "administrator" in body["results"][0]["error"]
     assert helpdesk.directory.get(f"uid=h1,{BASE}") is None
+
+
+def test_config_right_does_not_lift_the_privileged_content_check(app: FastAPI) -> None:
+    """Holding ``config/config`` write is not being a bootstrap administrator."""
+    _grant_ldif_write(app, "helpdesk", "ldif/ldifManager;rw,config/config;rw")
+    text = (
+        f"dn: uid=h6,{BASE}\nobjectClass: inetOrgPerson\ncn: x\nsn: x\nuid: h6\nuserPassword: x\n"
+    )
+    body = Api(app).login("helpdesk").post("/ldif/import", {"text": text}).json()
+    assert body["summary"]["add"] == 0, body
+    assert "administrator" in body["results"][0]["error"]
+
+
+def test_import_never_touches_audit_tokens_or_bootstrap_admins(admin: Api) -> None:
+    """Closed to everyone, bootstrap administrators included."""
+    event = f"cn=e1,ou=audit,{BASE}"
+    token = f"cn=t1,ou=recovery,ou=tokens,ou=heracles,{BASE}"
+    texts = [
+        f"dn: {event}\nobjectClass: hrcAuditEvent\ncn: e1\n",
+        f"dn: {token}\nobjectClass: hrcTokenEntry\ncn: t1\n",
+        f"dn: {demo.ADMIN_DN}\nobjectClass: inetOrgPerson\ncn: x\nsn: x\nuid: admin\n"
+        "mail: attacker@example.org\n",
+    ]
+    for text in texts:
+        body = admin.post("/ldif/import", {"text": text, "overwrite": True}).json()
+        assert body["summary"]["error"] == 1 and body["summary"]["add"] == 0, body
+        assert body["summary"]["modify"] == 0, body
+    assert admin.directory.get(event) is None and admin.directory.get(token) is None
+    assert admin.directory.get(demo.ADMIN_DN).text("mail") != "attacker@example.org"  # type: ignore[union-attr]
 
 
 def test_import_of_hashes_is_allowed_for_administrators(admin: Api) -> None:
