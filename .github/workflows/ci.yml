@@ -3,6 +3,8 @@ name: ci
 on:
   push:
   pull_request:
+  # called by release.yml: the publish jobs wait for these same jobs
+  workflow_call:
 
 # Read-only token: the jobs only check out the code and run tests.
 permissions:
@@ -22,6 +24,20 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # PostgreSQL is mandatory on Kubernetes: the PostgresDatabase tests (advisory locks, task
+    # leases, dump/restore) run against a real server instead of being skipped.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: heracles
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      HERACLES_TEST_POSTGRES_URL: postgresql://postgres:heracles@localhost:5432/postgres
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -33,11 +49,39 @@ jobs:
         with:
           enable-cache: true
       # --locked: fail when uv.lock is out of date instead of silently re-resolving
-      - run: uv sync --locked --extra ldap
+      - run: uv sync --locked --extra ldap --extra postgres
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pyright
-      - run: uv run pytest
+      - name: Tests (the PostgreSQL ones must run, not be skipped)
+        run: |
+          uv run pytest -rs | tee "$RUNNER_TEMP/pytest.log"
+          if grep -q 'HERACLES_TEST_POSTGRES_URL is not set' "$RUNNER_TEMP/pytest.log"; then
+            echo "::error::PostgreSQL tests were skipped"; exit 1
+          fi
+
+  # Known vulnerabilities in the locked runtime dependencies (backend: every extra the image
+  # installs; frontend: production dependencies, high severity and above).
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - name: pip-audit on uv.lock
+        working-directory: backend
+        run: |
+          uv export --locked --no-dev --all-extras --no-emit-project --format requirements-txt \
+            -o "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit==2.10.1 -r "$RUNNER_TEMP/requirements.txt" --require-hashes --disable-pip
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.22.0
+      - name: pnpm audit
+        working-directory: frontend
+        run: pnpm audit --prod --audit-level high
 
   frontend:
     runs-on: ubuntu-latest
@@ -184,6 +228,39 @@ jobs:
           kubectl describe pods -l app.kubernetes.io/name=heracles
           kubectl logs -l app.kubernetes.io/name=heracles --all-containers --tail=100 --prefix
           kubectl logs deployment/openldap --tail=60
+
+  # Two replicas behind a load balancer sharing PostgreSQL (make e2e-replicas): the browser
+  # tests of the multi-replica behaviour (sessions, locks, task leases across processes).
+  replicas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Third-party schemas
+        run: deploy/ldap/fetch-third-party.sh
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Browser dependencies
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+      - name: Multi-replica end-to-end tests
+        run: make e2e-replicas
+      - name: Diagnostics
+        if: failure()
+        run: |
+          docker ps -a
+          docker compose -p hrc-replicas -f deploy/docker-compose.yml --profile replicas \
+            logs --tail 80 || true
 
   # Scale benchmark (backend/bench/bench.py) on 2,000 users in the in-memory directory,
   # compared with the committed baseline (backend/bench/bench-baseline.json): fails when the
