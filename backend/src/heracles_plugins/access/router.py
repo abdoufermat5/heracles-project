@@ -137,8 +137,7 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         if not can_change_grants(user, domain, entry, kind):
             raise forbidden("You cannot change this access")
         until = parse_until(body.until)
-        if until is not None:
-            check_until(until)
+        check_until(until)
         try:
             grant = g.set_end_date(
                 user.directory,

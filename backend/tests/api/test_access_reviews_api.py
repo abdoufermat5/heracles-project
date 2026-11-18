@@ -216,3 +216,24 @@ def test_a_close_that_failed_resumes(
     )
     # one revoked; the other was then the last member of the group and stays
     assert outcomes == ["kept: last member", "revoked"]
+
+
+def test_a_read_token_of_a_configured_administrator_does_not_manage_reviews(
+    directory: MemoryDirectory,
+) -> None:
+    """The campaign manager view (every item, the report) is the cap-bound right on ACL
+    assignments, not the bare administrator list."""
+    settings = ApiSettings(
+        admin_dns=[ADMIN], directory_labels={"main": "Demo"}, plugins=PluginsSettings(enabled=["*"])
+    )
+    settings.session.cookie_secure = False
+    with TestClient(create_full_app(settings, {"main": directory})) as client:
+        a = Api(client)
+        a.login("admin")
+        r = a.post("/auth/tokens", {"name": "ro", "scope": "read", "expires_in_days": 7})
+        assert r.status_code == 201, r.text
+        headers = {"Authorization": f"Bearer {r.json()['secret']}"}
+        assert a.get("/access/reviews").json()["can_manage"] is True
+        client.cookies.clear()
+        listed = client.get("/api/v2/access/reviews", headers=headers)
+        assert listed.status_code == 200 and listed.json()["can_manage"] is False

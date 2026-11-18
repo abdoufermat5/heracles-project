@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from heracles.acl import LdapAclDirectory
 from heracles.acl.model import AclAssignment, AclScope
 from heracles.acl.parser import parse_assignment, serialise_assignment
 from heracles.ldap.memory import MemoryDirectory
@@ -199,6 +200,8 @@ def test_last_member_of_a_group_is_kept_and_reported(directory: MemoryDirectory)
     group = directory.get(GROUP)
     assert group is not None and group.texts("member") == [ANN]
     assert dates(directory, GROUP) != []  # kept, retried at the next pass
+    # it grants nothing meanwhile: the ACL resolution skips the expired membership
+    assert LdapAclDirectory(directory, lambda: NOW).groups_of_user(ANN) == []
 
 
 def test_one_refused_change_does_not_hold_back_the_others(directory: MemoryDirectory) -> None:

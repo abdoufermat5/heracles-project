@@ -19,6 +19,7 @@ import structlog
 
 from heracles.api.deps import CurrentUser
 from heracles.api.domain import Domain
+from heracles.api.v2.admin import ASSIGNMENT_KEY, rights_of
 from heracles.auth.mail import Mailer
 from heracles.core.access_config import AccessConfig
 from heracles.ldap import dn as dnlib
@@ -107,7 +108,8 @@ def approvers_of(directory: DirectoryClient, cfg: AccessConfig, target: Entry) -
 def can_approve(
     user: CurrentUser, domain: Domain, cfg: AccessConfig, target: Entry, request: AccessRequest
 ) -> bool:
-    if domain.is_admin(user.dn):
+    # through the token cap for an API token request (a read token never approves)
+    if domain.is_admin(user.dn) and rights_of(user, domain, ASSIGNMENT_KEY).write:
         return True
     if dnlib.normalize(user.dn) in {
         dnlib.normalize(request.requester_dn),

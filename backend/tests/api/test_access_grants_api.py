@@ -77,8 +77,8 @@ def test_dates_are_checked(client: TestClient) -> None:
     past = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     assert a.put("/access/grants", {**body, "until": past}).status_code == 422
     assert a.put("/access/grants", {**body, "until": soon(200)}).status_code == 422
-    cleared = a.put("/access/grants", {**body, "until": None})  # editors may make it permanent
-    assert cleared.status_code == 200 and cleared.json() == {"grant": None}
+    # a maximum applies: an editor cannot make a temporary access permanent
+    assert a.put("/access/grants", {**body, "until": None}).status_code == 422
     assert a.put("/access/grants", {**body, "member": ADMIN, "until": soon()}).status_code == 422
 
 

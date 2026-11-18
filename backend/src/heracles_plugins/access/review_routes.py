@@ -84,7 +84,7 @@ def review_store(request: Request, state: AppState) -> rv.ReviewStore:
 
 
 def can_manage(user: CurrentUser, domain: Domain) -> bool:
-    return domain.is_admin(user.dn) or rights_of(user, domain, ASSIGNMENT_KEY).write
+    return rights_of(user, domain, ASSIGNMENT_KEY).write
 
 
 def _deadline(text: str) -> float:

@@ -29,7 +29,7 @@ def holder_types(registry: TypeRegistry, entry: Entry, attr: str) -> list[tuple[
 
 
 def can_read_grants(user: CurrentUser, domain: Domain, entry: Entry, kind: str) -> bool:
-    if domain.is_admin(user.dn):
+    if domain.is_admin(user.dn) and SESSION_KEY not in user.session.cache:
         return True
     if kind == ACL_KIND:
         return rights_of(user, domain, ASSIGNMENT_KEY, entry.dn).read
