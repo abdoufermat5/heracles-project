@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from heracles.auth.mail import Mailer, MailSettings
 from heracles.core.access_config import configure_access
+from heracles.ldap import dn as dnlib
 from heracles.storage import Database
 from heracles.storage.database import MEMORY
 from heracles.tasks.scheduler import Scheduler, SchedulerThread, TaskStore
@@ -43,6 +44,7 @@ def attach_scheduler(
         store,
         mailer=mailer,
         base_url=state.settings.recovery.base_url,
+        admin_dns=domain.admin_dns,
     )
     app.state.scheduler = scheduler
     if start:
@@ -98,4 +100,5 @@ def build_worker(config_path: str | os.PathLike[str] | None = None) -> Scheduler
         TaskStore(database),
         mailer=MailSettings.model_validate(raw.get("mail") or {}).build(),
         base_url=api_settings.recovery.base_url,
+        admin_dns=frozenset(dnlib.normalize(d) for d in api_settings.admin_dns),
     )

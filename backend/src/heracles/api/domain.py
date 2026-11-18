@@ -57,6 +57,11 @@ class TypeAclPolicy:
         self._info = info
         self._registry = registry
 
+    @property
+    def user_dn(self) -> str:
+        """DN of the user the policy acts for."""
+        return self._ev.user_dn
+
     def for_type(self, type_name: str) -> TypeAclPolicy:
         """The same user's policy for another object type."""
         if self._registry is None:
@@ -172,14 +177,7 @@ class Domain:
 
     def category_tabs(self) -> Mapping[str, Sequence[str]]:
         """ACL category → tab keys, for category wildcards (``<cat>/0``)."""
-        out: dict[str, list[str]] = {}
-        for info in self.registry.list():
-            keys = out.setdefault(info.acl_category, [])
-            for tab in info.tabs:
-                key = info.acl_object(tab).split("/", 1)[1]
-                if key not in keys:
-                    keys.append(key)
-        return out
+        return category_tabs_of(self.registry)
 
     def evaluator(self, user: CurrentUser) -> AclEvaluator:
         """ACL evaluator of the connected user (resolution cached in the session).
@@ -292,6 +290,18 @@ class Domain:
         if isinstance(events, CompositeEvents):
             return events.collected()
         return [], []
+
+
+def category_tabs_of(registry: TypeRegistry) -> Mapping[str, Sequence[str]]:
+    """ACL category → tab keys of a registry, for category wildcards (``<cat>/0``)."""
+    out: dict[str, list[str]] = {}
+    for info in registry.list():
+        keys = out.setdefault(info.acl_category, [])
+        for tab in info.tabs:
+            key = info.acl_object(tab).split("/", 1)[1]
+            if key not in keys:
+                keys.append(key)
+    return out
 
 
 def session_roles(session: Session) -> list[str]:

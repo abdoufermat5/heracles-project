@@ -283,6 +283,7 @@ class Scheduler:
         *,
         mailer: Mailer | None = None,
         base_url: str = "",
+        admin_dns: frozenset[str] = frozenset(),
         lease_seconds: float = DEFAULT_LEASE_SECONDS,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
@@ -293,6 +294,7 @@ class Scheduler:
         self.store = store
         self.mailer = mailer
         self.base_url = base_url
+        self.admin_dns = admin_dns
         self._lease_seconds = lease_seconds
         self._now = now
         self._stopping = threading.Event()
@@ -387,6 +389,7 @@ class Scheduler:
             base_url=self.base_url,
             database=self.store.database,
             directory_id=dir_id,
+            admin_dns=self.admin_dns,
         )
         try:
             report = runner.run(ctx)

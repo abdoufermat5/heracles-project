@@ -358,6 +358,7 @@ ATTRIBUTE_TYPES: tuple[AttributeType, ...] = (
     AttributeType(378, "hrcAuditForwarded", S.INTEGER, single=True),
     AttributeType(379, "hrcAuditTasksRetentionCount", S.INTEGER, single=True),
     AttributeType(380, "hrcGrantExpiry", S.EXACT),
+    AttributeType(381, "hrcTasksAuthor", S.DN, single=True),
 )
 
 OBJECT_CLASSES: tuple[ObjectClass, ...] = (
@@ -975,6 +976,7 @@ OBJECT_CLASSES: tuple[ObjectClass, ...] = (
             "hrcTasksAutomaticGroupsRegexPattern",
             "hrcTasksAutomaticGroupsDynamicGroup",
             "hrcTasksAutomaticGroupsMembers",
+            "hrcTasksAuthor",
         ),
     ),
     ObjectClass(

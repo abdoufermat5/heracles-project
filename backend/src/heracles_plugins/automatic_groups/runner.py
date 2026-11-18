@@ -9,8 +9,11 @@ longer match are removed.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+
+import structlog
 
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, Entry, Modification
@@ -26,7 +29,12 @@ from heracles_plugins._tasks import (
     utc,
 )
 
+log = structlog.get_logger(__name__)
+
 TASK_CLASS = "hrcTasksAutomaticGroups"
+AUTHOR_ATTR = "hrcTasksAuthor"
+#: ``(author DN, group)`` -> whether the author may change the members of the group.
+GroupAuthorizer = Callable[[str, Entry], bool]
 TASK_FILTER = task_filter(TASK_CLASS)
 _RULE = re.compile(r"(?P<attr>[A-Za-z][A-Za-z0-9-]*):(?P<regex>.*)", re.DOTALL)
 
@@ -85,6 +93,13 @@ def _uses_dn(group: Entry) -> bool:
     return group.has_object_class("groupOfNames") or group.has_object_class(schema.OC.OBJECT_GROUP)
 
 
+def group_target(group: Entry) -> tuple[str, str]:
+    """``(object type, membership attribute)`` through which the group's members are edited."""
+    if _uses_dn(group):
+        return "group", "member"
+    return "posix_group", "memberUid"
+
+
 def _key(user: Entry, uses_dn: bool) -> str:
     """Identity of a user in the group: normalised DN (``member``) or login (``memberUid``)."""
     return dnlib.normalize(user.dn) if uses_dn else (user.text("uid") or "")
@@ -132,12 +147,17 @@ def run_automatic_groups(
     directory: DirectoryClient,
     now: datetime,
     settings: AutomaticGroupsSettings | None = None,
+    authorize: GroupAuthorizer | None = None,
 ) -> AutomaticGroupsReport:
     """Run every due automatic groups task once.
 
     The group (``hrcTasksAutomaticGroupsOfName``) is a ``groupOfNames`` or a POSIX group
     (``memberUid``). Users already in the group are left alone; a task whose group is
     missing or whose rule is invalid is reported and left to be retried.
+
+    The run has the server's rights, so with ``authorize`` a task only changes a group its
+    author (the person who last saved it) may change: a task without author, or whose author
+    lost the right, is reported and skipped.
     """
     settings = settings or AutomaticGroupsSettings()
     now = utc(now)
@@ -149,6 +169,12 @@ def run_automatic_groups(
         if group is None:
             report.errors.append(f"{task.dn}: group not found")
             return False
+        if authorize is not None:
+            author = task.text(AUTHOR_ATTR)
+            if not author or not authorize(author, group):
+                report.errors.append(f"{task.dn}: its author may not change {group.dn}")
+                log.warning("automatic_groups_task_refused", task=task.dn, group=group.dn)
+                return False
         try:
             attribute, regex = parse_rule(
                 task.text("hrcTasksAutomaticGroupsRegexPattern") or ".*",

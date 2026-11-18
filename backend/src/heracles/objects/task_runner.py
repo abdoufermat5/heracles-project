@@ -32,6 +32,8 @@ class TaskRunContext:
     database: Any = None
     #: Id of the directory being processed (``directories`` key of the configuration).
     directory_id: str = ""
+    #: Normalised DNs of the administrators (their rights are not read from the ACLs).
+    admin_dns: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)

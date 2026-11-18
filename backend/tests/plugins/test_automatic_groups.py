@@ -11,6 +11,7 @@ from heracles.ldap.client import Entry
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
+from heracles.objects.task_runner import TaskRunContext
 from heracles_plugins.automatic_groups.runner import ForbiddenAttributeError
 
 BASE = "dc=test"
@@ -63,6 +64,7 @@ def add_task(
     pattern: str | None,
     dynamic: bool = False,
     group: str = GROUP,
+    author: str | None = None,
 ) -> None:
     attrs: dict[str, list[bytes]] = {
         "objectClass": [b"hrcTasks", b"hrcTasksAutomaticGroups"],
@@ -74,6 +76,8 @@ def add_task(
         "hrcTasksAutomaticGroupsMembers": [m.encode() for m in members],
         "hrcTasksAutomaticGroupsDynamicGroup": [b"TRUE" if dynamic else b"FALSE"],
     }
+    if author is not None:
+        attrs["hrcTasksAuthor"] = [author.encode()]
     if pattern is not None:
         attrs["hrcTasksAutomaticGroupsRegexPattern"] = [pattern.encode()]
     d.add(TASK_DN, attrs)
@@ -245,3 +249,74 @@ def test_a_rule_cannot_test_secret_attributes(directory: MemoryDirectory) -> Non
     report = ag.run_automatic_groups(directory, NOW)
     assert report.tasks_run == 0 and "cannot test userPassword" in report.errors[0]
     assert members(directory) == [a]
+
+
+def _plugin_registry(directory: MemoryDirectory) -> TypeRegistry:
+    registry = TypeRegistry()
+    register_builtin_types(registry)
+    available = {c.lower() for c in directory.schema_object_classes()}
+    assert registry.register_plugin(ag.plugin(), available).enabled
+    return registry
+
+
+@pytest.mark.parametrize(
+    "author", [None, "uid=nobody,ou=people,dc=test"], ids=["none", "no-rights"]
+)
+def test_a_task_only_changes_a_group_its_author_may_change(
+    directory: MemoryDirectory, author: str | None
+) -> None:
+    """The run has the server's rights: a task saved by someone who cannot edit the group
+    (or that records no author) must not make people join it."""
+    a = add_user(directory, "a")
+    nobody = add_user(directory, "nobody")
+    add_group(directory, [nobody])
+    add_task(directory, [a], "^a", author=author)
+    ctx = TaskRunContext(
+        directory=directory,
+        now=NOW,
+        settings=None,
+        mailer=None,
+        registry=_plugin_registry(directory),
+    )
+    report = ag._run(ctx)  # pyright: ignore[reportPrivateUsage]
+    assert report.tasks_run == 0 and "author" in report.errors[0]
+    assert members(directory) == [nobody]
+
+
+class _Policy:
+    """Acts for someone who may edit the tasks but no group."""
+
+    user_dn = "uid=nobody,ou=people,dc=test"
+
+    def __init__(self, allow: bool = True) -> None:
+        self.allow = allow
+
+    def can_read(self, dn: str, tab: str, attr: str) -> bool:
+        return self.allow
+
+    can_write = can_read
+
+    def can_create(self, type_name: str, base: str) -> bool:
+        return self.allow
+
+    def can_delete(self, dn: str, type_name: str) -> bool:
+        return self.allow
+
+    def for_type(self, type_name: str) -> _Policy:
+        return _Policy(type_name not in ("group", "posix_group"))
+
+
+def test_a_task_cannot_target_a_group_its_author_may_not_change(
+    directory: MemoryDirectory,
+) -> None:
+    a = add_user(directory, "a")
+    add_group(directory, [a])
+    service = ObjectService(directory, _plugin_registry(directory), policy=_Policy())
+    values = {
+        "cn": "auto",
+        "hrcTasksAutomaticGroupsOfName": GROUP,
+        "hrcTasksAutomaticGroupsMembers": [a],
+    }
+    with pytest.raises(ObjectValidationError) as err:
+        service.create("automatic_groups_task", BASE, {"main": {"values": values}})
+    assert "main.hrcTasksAutomaticGroupsOfName" in err.value.fields
