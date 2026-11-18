@@ -159,8 +159,10 @@ def test_create_uniqueness(service: ObjectService, jdoe: str) -> None:
     with pytest.raises(ObjectValidationError) as exc:
         service.create("user", BASE, new_user(uid="JDOE"))
     assert exc.value.fields == {"main.uid": "Already in use."}
-    # uniqueness is scoped to the target department subtree
-    service.create("user", PARIS, new_user(uid="jdoe"))
+    # a login is unique in the whole directory, not only in the target department
+    with pytest.raises(ObjectValidationError) as exc:
+        service.create("user", PARIS, new_user(uid="jdoe"))
+    assert exc.value.fields == {"main.uid": "Already in use."}
 
 
 def test_create_refuses_readonly_values(service: ObjectService) -> None:
@@ -176,6 +178,25 @@ def test_create_refuses_readonly_values(service: ObjectService) -> None:
     with pytest.raises(ObjectValidationError) as exc:
         service.create("user", BASE, tabs)
     assert exc.value.fields == {"stamp.description": "This field is read-only."}
+
+
+def test_unique_attributes_are_enforced_directory_wide(
+    service: ObjectService, directory: FakeDirectory, jdoe: str
+) -> None:
+    class Phone(Tab):
+        name = "phone"
+        optional = True
+        object_classes = ("extensibleObject",)
+        unique_attributes = ("telephoneNumber",)
+        main = Section("Phone", StringAttr("telephoneNumber", "Phone"))
+
+    service.registry.attach_tab("user", Phone)
+    directory.entries[jdoe.lower()].attrs["telephoneNumber"] = [b"123"]
+    tabs = new_user(uid="paula")
+    tabs["phone"] = {"active": True, "values": {"telephoneNumber": "123"}}
+    with pytest.raises(ObjectValidationError) as exc:
+        service.create("user", PARIS, tabs)
+    assert exc.value.fields == {"phone.telephoneNumber": "Already in use."}
 
 
 def test_dn_outside_the_base_is_out_of_reach(

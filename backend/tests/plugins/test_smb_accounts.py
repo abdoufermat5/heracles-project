@@ -15,6 +15,7 @@ from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
 from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
 from heracles.objects.builtin import register_builtin_types
+from heracles.objects.policy import AllowAll
 from heracles.schema.names import PLUGIN_OBJECT_CLASSES
 from heracles_plugins import systems
 from heracles_plugins.smb_accounts.flags import (
@@ -453,6 +454,47 @@ def test_group_well_known_rid(service: ObjectService, directory: MemoryDirectory
     with pytest.raises(ObjectValidationError) as exc:
         new_group(service, "admins2", {"wellKnownRid": "512"})
     assert "smb.wellKnownRid" in exc.value.fields
+
+
+class _Delegate(AllowAll):
+    """Policy of a user who edits SMB groups but is not a bootstrap administrator."""
+
+    def bootstrap_admin(self) -> bool:
+        return False
+
+
+@pytest.mark.parametrize("rid", ["512", "519", "544"])
+def test_privileged_rid_is_reserved_to_bootstrap_administrators(
+    directory: MemoryDirectory, rid: str
+) -> None:
+    delegate = ObjectService(directory, build(directory).registry, policy=_Delegate())
+    with pytest.raises(ObjectValidationError) as exc:
+        new_group(delegate, "admins", {"wellKnownRid": rid})
+    assert "smb.wellKnownRid" in exc.value.fields
+    new_group(delegate, "users", {"wellKnownRid": "513"})  # unprivileged ones stay open
+
+
+@pytest.mark.parametrize(
+    ("tab", "values"),
+    [
+        ("user", {"sambaNTPassword": "0" * 32}),
+        ("user", {"sambaAcctFlags": "[X          ]"}),
+        ("workstation", {"uidNumber": "0"}),
+    ],
+)
+def test_internal_attributes_cannot_be_set_through_the_api(
+    service: ObjectService, tab: str, values: dict[str, Any]
+) -> None:
+    with pytest.raises(ObjectValidationError) as exc:
+        if tab == "user":
+            new_user(service, smb_values=values)
+        else:
+            service.create(
+                "workstation",
+                BASE,
+                {"main": {"values": {"cn": "pc01"}}, "smb": {"active": True, "values": values}},
+            )
+    assert f"smb.{next(iter(values))}" in exc.value.fields
 
 
 def test_group_alias_defaults_to_local_type(

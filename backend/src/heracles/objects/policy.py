@@ -61,8 +61,18 @@ class AssignmentPolicy(Protocol):
     ) -> Rights: ...
 
 
+@runtime_checkable
+class BootstrapPolicy(Protocol):
+    """A policy able to tell whether the acting user is a bootstrap administrator."""
+
+    def bootstrap_admin(self) -> bool: ...
+
+
 class AllowAll:
     """Default policy."""
+
+    def bootstrap_admin(self) -> bool:
+        return True
 
     def can_read(self, dn: str, tab: str, attr: str) -> bool:
         return True

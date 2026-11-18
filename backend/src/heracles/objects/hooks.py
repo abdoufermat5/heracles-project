@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from heracles.ldap.client import DirectoryClient
-from heracles.objects.policy import TypedPolicy
+from heracles.objects.policy import BootstrapPolicy, TypedPolicy
 
 if TYPE_CHECKING:
     from heracles.objects.policy import AccessPolicy
@@ -65,6 +65,16 @@ class TabContext:
         if isinstance(policy, TypedPolicy):
             policy = policy.for_type(type_name)
         return policy.can_read(dn, tab, attr)
+
+    def is_bootstrap_admin(self) -> bool:
+        """True for a bootstrap administrator (or when no policy applies).
+
+        A policy that cannot say (a public form, say) is not an administrator.
+        """
+        policy = self.policy
+        if policy is None:
+            return True
+        return isinstance(policy, BootstrapPolicy) and policy.bootstrap_admin()
 
     @property
     def settings(self) -> Mapping[str, Any]:

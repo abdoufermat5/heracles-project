@@ -54,6 +54,12 @@ WELL_KNOWN_GROUPS: tuple[tuple[str, str], ...] = (
     ("552", _("Replicators")),
 )
 WELL_KNOWN_RIDS = frozenset(int(rid) for rid, _label in WELL_KNOWN_GROUPS)
+#: Administrative RIDs below 1000: mapping a group onto one of them grants domain-wide
+#: control, so only a bootstrap administrator may do it (Administrator, krbtgt, Domain
+#: Admins, Domain Controllers, Certificate Publishers, Schema Admins, Enterprise Admins,
+#: Group Policy Creator Owners, Administrators, Account/Server/Print/Backup Operators,
+#: Replicators).
+PRIVILEGED_RIDS = frozenset({500, 502, 512, 516, 517, 518, 519, 520, 544, 548, 549, 550, 551, 552})
 DOMAIN_USERS_RID = 513
 DOMAIN_COMPUTERS_RID = 515
 
@@ -189,6 +195,7 @@ __all__ = [
     "ALL_HOURS",
     "FLAG_DISABLED",
     "KICKOFF_NEVER",
+    "PRIVILEGED_RIDS",
     "PWD_CANNOT_CHANGE",
     "WELL_KNOWN_GROUPS",
     "LogonHoursAttr",

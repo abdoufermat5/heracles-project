@@ -54,6 +54,7 @@ from heracles_plugins.smb_accounts.flags import (
     FLAG_NO_EXPIRE,
     FLAG_NORMAL,
     FLAG_WORKSTATION,
+    PRIVILEGED_RIDS,
     PWD_CANNOT_CHANGE,
     WELL_KNOWN_GROUPS,
     WELL_KNOWN_RIDS,
@@ -290,10 +291,12 @@ class SMBUserTab(Tab):
     )
     internal = Section(
         _("Internal"),
-        HiddenAttr("sambaAcctFlags", "sambaAcctFlags"),
-        HiddenAttr("sambaPwdLastSet", "sambaPwdLastSet"),
-        SecretAttr("sambaNTPassword", "sambaNTPassword"),
-        SecretAttr("sambaLMPassword", "sambaLMPassword"),
+        # computed by this tab (password hashing, flag letters): never set by a caller,
+        # which would bypass the password policy
+        HiddenAttr("sambaAcctFlags", "sambaAcctFlags", readonly=True),
+        HiddenAttr("sambaPwdLastSet", "sambaPwdLastSet", readonly=True),
+        SecretAttr("sambaNTPassword", "sambaNTPassword", readonly=True),
+        SecretAttr("sambaLMPassword", "sambaLMPassword", readonly=True),
     )
 
     # ------------------------------------------------------------- hooks
@@ -489,6 +492,12 @@ class SMBGroupTab(Tab):
             if isinstance(well_known, str) and well_known:
                 sid = sid_with_rid(domain.sid, int(well_known))
                 holders = _search(ctx.directory, f"(sambaSID={escape_filter_value(sid)})", [])
+                if int(well_known) in PRIVILEGED_RIDS and not ctx.is_bootstrap_admin():
+                    ctx.error(
+                        "wellKnownRid",
+                        _("Only a bootstrap administrator may use this administrative group."),
+                    )
+                    return
                 if any(dnlib.normalize(e.dn) != dnlib.normalize(ctx.dn or "") for e in holders):
                     ctx.error("wellKnownRid", _("This well-known group already exists."))
                     return
@@ -534,13 +543,15 @@ class SMBWorkstationTab(Tab):
             description=_("Name of a SMB domain; leave empty for the default domain"),
         ),
         SidAttr("sambaSID", _("SID"), readonly=True),
-        HiddenAttr("uid", "uid"),
-        HiddenAttr("uidNumber", "uidNumber"),
-        HiddenAttr("gidNumber", "gidNumber"),
-        HiddenAttr("homeDirectory", "homeDirectory"),
-        HiddenAttr("loginShell", "loginShell"),
-        HiddenAttr("sambaPrimaryGroupSID", "sambaPrimaryGroupSID"),
-        HiddenAttr("sambaAcctFlags", "sambaAcctFlags"),
+        # allocated and derived by prepare(): a caller choosing the unix id would skip
+        # the uniqueness and range checks
+        HiddenAttr("uid", "uid", readonly=True),
+        HiddenAttr("uidNumber", "uidNumber", readonly=True),
+        HiddenAttr("gidNumber", "gidNumber", readonly=True),
+        HiddenAttr("homeDirectory", "homeDirectory", readonly=True),
+        HiddenAttr("loginShell", "loginShell", readonly=True),
+        HiddenAttr("sambaPrimaryGroupSID", "sambaPrimaryGroupSID", readonly=True),
+        HiddenAttr("sambaAcctFlags", "sambaAcctFlags", readonly=True),
     )
 
     @classmethod

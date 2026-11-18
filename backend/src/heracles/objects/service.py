@@ -166,6 +166,9 @@ def _written_values(
 #: further away on the network (spec 16).
 LIGHT_LISTING_MIN = 10_000
 
+#: Main attributes that must be unique in the whole directory, not only in a department.
+GLOBAL_IDENTITY_ATTRIBUTES = frozenset({"uid"})
+
 
 class ObjectService:
     """CRUD on typed objects, enforcing validation, the access policy and hooks."""
@@ -578,6 +581,7 @@ class ObjectService:
         self._prepare(info, None, base, new, None, touched, errors, creating=True)
         self._compute(info, new)
         self._validate(info, new, None, errors, creating=True)
+        self._check_unique_attributes(info, new, None, None, errors)
 
         main_tab = info.main_tab
         main_value = new[main_tab.name].values.get(info.type.main_attr)
@@ -726,6 +730,7 @@ class ObjectService:
         self._prepare(info, dn, current_base, new, state.original, touched, errors, creating=False)
         self._compute(info, new)
         self._validate(info, new, state, errors, creating=False)
+        self._check_unique_attributes(info, new, state, dn, errors)
 
         main_name = info.type.main_attr
         old_main = state.original[info.main_tab.name].values.get(main_name)
@@ -1120,9 +1125,20 @@ class ObjectService:
         exclude_dn: str | None,
         errors: dict[str, str],
     ) -> None:
-        flt = filters.and_(info.type.filter, filters.equals(info.type.main_attr, value))
+        # A login identifies a person across the whole directory: a second ``uid=x`` in
+        # another department would make the authentication lookup ambiguous. Other main
+        # attributes only have to be free where the object will live.
+        everywhere = info.type.main_attr.lower() in GLOBAL_IDENTITY_ATTRIBUTES
+        flt = filters.equals(info.type.main_attr, value)
+        if not everywhere:
+            flt = filters.and_(info.type.filter, flt)
         try:
-            found = self.directory.search(base, flt, Scope.SUBTREE, [info.type.main_attr])
+            found = self.directory.search(
+                self.directory.base_dn if everywhere else base,
+                flt,
+                Scope.SUBTREE,
+                [info.type.main_attr],
+            )
             others = [
                 e
                 for e in found
@@ -1132,6 +1148,53 @@ class ObjectService:
             return
         if others:
             errors[f"{info.main_tab.name}.{info.type.main_attr}"] = _("Already in use.")
+
+    def _check_unique_attributes(
+        self,
+        info: TypeInfo,
+        tabs: Mapping[str, TabState],
+        old: ObjectState | None,
+        exclude_dn: str | None,
+        errors: dict[str, str],
+    ) -> None:
+        """Refuse a value of a ``Tab.unique_attributes`` attribute held by another entry.
+
+        The search covers the whole directory, not only the department. On an update only
+        a changed value is checked, so an object whose stored value is already shared stays
+        editable.
+        """
+        for tab in info.tabs:
+            state = tabs[tab.name]
+            if not state.active:
+                continue
+            for name in tab.unique_attributes:
+                attr = tab.attribute(name)
+                key = f"{tab.name}.{name}"
+                if attr is None or not attr.stored or key in errors:
+                    continue
+                value = state.values.get(name)
+                if (
+                    old is not None
+                    and tab.name in old.original
+                    and old.original[tab.name].values.get(name) == value
+                ):
+                    continue
+                for raw in attr.to_ldap(value) if value is not None else []:
+                    try:
+                        found = self.directory.search(
+                            self.directory.base_dn,
+                            filters.equals(name, _text(raw)),
+                            Scope.SUBTREE,
+                            ["1.1"],
+                        )
+                    except NoSuchObjectError:
+                        continue
+                    if any(
+                        exclude_dn is None or dnlib.normalize(e.dn) != dnlib.normalize(exclude_dn)
+                        for e in found
+                    ):
+                        errors[key] = _("Already in use.")
+                        break
 
     def _check_writes(self, dn: str, touched: Sequence[tuple[str, str]]) -> None:
         for tab, attr in touched:

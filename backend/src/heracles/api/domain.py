@@ -86,6 +86,10 @@ class TypeAclPolicy:
     def can_delete(self, dn: str, type_name: str) -> bool:
         return self._ev.permissions(dn, self._info.acl_object(self._info.main_tab)).delete
 
+    def bootstrap_admin(self) -> bool:
+        """True when the user's ACLs are ignored (a bootstrap administrator)."""
+        return self._ev.ignore_acl
+
     def can_move(self, dn: str) -> bool:
         return self._ev.permissions(dn, self._info.acl_object(self._info.main_tab)).move
 
