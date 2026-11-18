@@ -38,8 +38,10 @@ ARG HERACLES_BUILD_ID=
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libldap2 libsasl2-2 \
  && rm -rf /var/lib/apt/lists/* \
- && useradd --system --create-home heracles \
- && install -d -o heracles -g heracles -m 0700 /var/lib/heracles
+ && groupadd --gid 10001 heracles \
+ && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent \
+      --shell /usr/sbin/nologin heracles \
+ && install -d -o 10001 -g 10001 -m 0700 /var/lib/heracles
 WORKDIR /app
 COPY --from=build /app/backend/.venv /app/backend/.venv
 COPY --from=frontend /app/frontend/dist /app/static
@@ -47,7 +49,8 @@ ENV PATH="/app/backend/.venv/bin:$PATH" HERACLES_CONFIG=/etc/heracles/heracles.y
     HERACLES_DATA_DIR=/var/lib/heracles HERACLES_BUILD_ID=${HERACLES_BUILD_ID}
 # application database (second-factor registrations, ...): keep it on a volume
 VOLUME ["/var/lib/heracles"]
-USER heracles
+# numeric, fixed UID/GID: Kubernetes (runAsUser, fsGroup) and volume ownership rely on it
+USER 10001:10001
 EXPOSE 8420
 HEALTHCHECK --interval=5s --timeout=3s --retries=20 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8420/readyz')"

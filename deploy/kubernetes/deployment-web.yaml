@@ -27,13 +27,17 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
-        runAsUser: 999 # the image's `heracles` user
-        runAsGroup: 999
-        fsGroup: 999
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
-      # SIGTERM turns /readyz into 503, then uvicorn finishes the requests in flight.
-      terminationGracePeriodSeconds: 30
+      # Shutdown: preStop sleeps (a little more than the readiness period, 10s) so the endpoint
+      # is removed from the Service and the ingress before the process hears anything; SIGTERM
+      # then turns /readyz into 503 for HERACLES_DRAIN_SECONDS (5s by default) while the server
+      # still answers, and uvicorn finishes the requests in flight; the scheduler thread of an
+      # embedded worker gets up to 30s. 15 + 5 + 30 = 50s, so 60s leaves a margin.
+      terminationGracePeriodSeconds: 60
       containers:
         - name: heracles
           image: heracles:latest # set your registry and a release tag
@@ -66,6 +70,10 @@ spec:
             httpGet: {path: /healthz, port: http}
             periodSeconds: 2
             failureThreshold: 30
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "15"]
           resources:
             requests: {cpu: 100m, memory: 256Mi}
             limits: {memory: 512Mi}

@@ -5,7 +5,7 @@ Two equivalent ways to run Heracles on a cluster: this Helm chart, and the plain
 
 | Object | What it runs |
 | --- | --- |
-| `heracles-web` Deployment (2 replicas) | `heracles serve`, without the scheduler. Readiness `/readyz` (directory and database reachable), liveness `/healthz` (the process only), so a directory outage makes pods unready instead of restarting them. On SIGTERM `/readyz` turns 503 and in-flight requests finish. |
+| `heracles-web` Deployment (2 replicas) | `heracles serve`, without the scheduler. Readiness `/readyz` (directory and database reachable), liveness `/healthz` (the process only), so a directory outage makes pods unready instead of restarting them. A `preStop` sleep lets the endpoint leave the Service first; then, on SIGTERM, `/readyz` turns 503 for `HERACLES_DRAIN_SECONDS` (5 by default) while requests are still served, and in-flight requests finish. |
 | `heracles-worker` Deployment (1 replica) | `heracles worker`: reminders, expirations, audit purge, ... A lease in the database makes extra replicas harmless. |
 | `heracles` Service | port 8420 to the web pods. |
 | `heracles` ConfigMap | `heracles.yaml`, mounted at `/etc/heracles/heracles.yaml`. |
@@ -51,7 +51,7 @@ under `config.api.login.trusted_proxies` so client addresses and the secure cook
 For a trial over plain http through `kubectl port-forward`, set
 `config.api.session.cookie_secure: false`.
 
-Pods run as the image's unprivileged user (uid 999) with a read-only root file system, no
+Pods run as the image's unprivileged user (uid 10001) with a read-only root file system, no
 capabilities and the `RuntimeDefault` seccomp profile.
 
 ## Upgrade

@@ -34,8 +34,12 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      # SIGTERM turns /readyz into 503, then uvicorn finishes the requests in flight.
-      terminationGracePeriodSeconds: 30
+      # Shutdown: preStop sleeps (a little more than the readiness period, 10s) so the endpoint
+      # is removed from the Service and the ingress before the process hears anything; SIGTERM
+      # then turns /readyz into 503 for HERACLES_DRAIN_SECONDS (5s by default) while the server
+      # still answers, and uvicorn finishes the requests in flight; the scheduler thread of an
+      # embedded worker gets up to 30s. 15 + 5 + 30 = 50s, so 60s leaves a margin.
+      terminationGracePeriodSeconds: 60
       containers:
         - name: heracles
           image: {{ include "heracles.image" . }}
@@ -66,6 +70,10 @@ spec:
             httpGet: {path: /healthz, port: http}
             periodSeconds: 2
             failureThreshold: 30
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "15"]
           resources:
             {{- toYaml .Values.web.resources | nindent 12 }}
           securityContext:
