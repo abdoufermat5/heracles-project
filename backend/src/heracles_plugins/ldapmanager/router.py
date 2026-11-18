@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from heracles.acl.model import ALL_OBJECTS
 from heracles.api.deps import CurrentUserDep
 from heracles.api.domain import DomainDep
 from heracles.api.errors import ApiError, forbidden, not_found, validation
@@ -207,11 +208,16 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             raise forbidden("You are not allowed to import LDIF")
         options = importer.ImportOptions(body.overwrite, body.remove_missing)
         # Who may edit the configuration (hence the triggers) may also import the configuration
-        # entry; that right does not lift the privileged-content check, which stays reserved
-        # to the bootstrap administrators.
-        bootstrap = domain.is_admin(user.dn)
-        config_writer = bootstrap or (
-            gate.evaluator.permissions(user.directory.base_dn, "config/config").write
+        # entry. Privileged content (credentials, ACLs, membership, ids) stays reserved to who
+        # could write it anyway: a bootstrap administrator, or full rights on every object of
+        # the whole directory.
+        base = user.directory.base_dn
+        unrestricted = domain.is_admin(user.dn) or (
+            gate.evaluator.delegable(base, ALL_OBJECTS).is_full
+            and gate.evaluator.delegable(base, ALL_OBJECTS, below=True).is_full
+        )
+        config_writer = unrestricted or (
+            gate.evaluator.permissions(base, "config/config").write
         )
         results = importer.run_import(
             user.directory,
@@ -221,7 +227,7 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
             apply=not body.dry_run,
             never=importer.never_importable(user.directory, domain.admin_dns),
             protected=None if config_writer else importer.configuration_entry(user.directory),
-            restricted=None if bootstrap else importer.privileged_content,
+            restricted=None if unrestricted else importer.privileged_content,
         )
         if not body.dry_run:
             summary = importer.summarize(results)

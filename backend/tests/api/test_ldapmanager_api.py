@@ -342,6 +342,16 @@ def test_config_right_does_not_lift_the_privileged_content_check(app: FastAPI) -
     assert "administrator" in body["results"][0]["error"]
 
 
+def test_full_rights_on_the_whole_directory_lift_the_privileged_content_check(
+    app: FastAPI,
+) -> None:
+    """A role granting everything everywhere may import what it could write anyway."""
+    _grant_ldif_write(app, "helpdesk", "all;rwcdm")
+    text = f"dn: cn=g7,{BASE}\nobjectClass: groupOfNames\ncn: g7\nmember: {demo.ADMIN_DN}\n"
+    body = Api(app).login("helpdesk").post("/ldif/import", {"text": text}).json()
+    assert body["summary"]["add"] == 1, body
+
+
 def test_import_never_touches_audit_tokens_or_bootstrap_admins(admin: Api) -> None:
     """Closed to everyone, bootstrap administrators included."""
     event = f"cn=e1,ou=audit,{BASE}"
