@@ -2,6 +2,6 @@ apiVersion: v2
 name: heracles
 description: Heracles, the web console for LDAP directory management
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.1.0-rc.1
+appVersion: "0.1.0-rc.1"
 kubeVersion: ">=1.25.0-0"
