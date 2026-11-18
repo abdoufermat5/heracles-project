@@ -139,3 +139,21 @@ def test_weblink_tabs_skip_absent_target_types(directory: MemoryDirectory) -> No
     status = reg.register_plugin(weblink.plugin(), classes)
     assert status.enabled
     assert all(info.tab("weblink") is None for info in reg.list())
+
+
+@pytest.mark.parametrize(
+    ("value", "ok"),
+    [
+        ("javascript://x%0aalert(1)", False),
+        ("javascript:alert(1)", False),
+        ("data:text/html,x", False),
+        ("ftp://host/x", False),
+        ("https://host/x", True),
+        ("host.example.org:8080/x", True),
+        ("10.0.0.1", True),
+    ],
+)
+def test_link_url_scheme_allowlist(value: str, ok: bool) -> None:
+    attr = weblink.WebLinkTab.link.attributes[1] if hasattr(weblink.WebLinkTab.link, "attributes") else None
+    assert attr is not None
+    assert (attr.validate(value) == []) is ok

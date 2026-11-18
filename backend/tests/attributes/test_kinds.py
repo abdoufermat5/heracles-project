@@ -188,6 +188,19 @@ def test_email_phone_url() -> None:
     assert UrlAttr("a", "A").validate("not a url")
 
 
+@pytest.mark.parametrize(
+    "value",
+    ["javascript:alert(1)", "JavaScript:alert(1)", "data:text/html,<script>1</script>", "vbscript:x", "file:///etc/passwd"],
+)
+def test_url_refuses_active_schemes(value: str) -> None:
+    assert UrlAttr("a", "A").validate(value)
+
+
+@pytest.mark.parametrize("value", ["https://x.org", "mailto:a@x.org", "ldaps://ldap.x.org", "ipp://p.x.org/q"])
+def test_url_accepts_plain_schemes(value: str) -> None:
+    assert UrlAttr("a", "A").validate(value) == []
+
+
 def test_postal_address_escaping() -> None:
     attr = PostalAddressAttr("a", "A")
     value = "A$B\\C\nline 2"

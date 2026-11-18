@@ -33,6 +33,21 @@ def _compute_weblink(values: dict[str, Any]) -> str | None:
     return f"{protocol}{url.lstrip('/')}"
 
 
+class _LinkUrlAttr(StringAttr):
+    """Host, path or ``http(s)://`` URL: no other scheme is a web link."""
+
+    def _validate(self, value: str) -> list[str]:
+        errors = super()._validate(value)
+        text = value.strip()
+        scheme = text.partition(":")[0].lower()
+        if (
+            ("://" in text and scheme not in ("http", "https"))
+            or scheme in ("javascript", "data", "vbscript", "file", "blob")
+        ):
+            errors.append(_("Only http and https links are allowed."))
+        return errors
+
+
 class WebLinkTab(Tab):
     """Web link tab attached to systems."""
 
@@ -53,7 +68,7 @@ class WebLinkTab(Tab):
             ],
             default="https://",
         ),
-        StringAttr(
+        _LinkUrlAttr(
             "hrcWebLinkURL",
             _("Link URL"),
             description=_("Host, IP address, or URL path"),

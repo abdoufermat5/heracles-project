@@ -96,14 +96,29 @@ class PhoneAttr(_StrAttr):
         return errors
 
 
+#: Schemes a URL attribute may carry. Anything that a browser would run or
+#: render as active content (``javascript:``, ``data:``, ``vbscript:``,
+#: ``file:`` ...) is refused.
+URL_SCHEMES: frozenset[str] = frozenset(
+    {
+        "http", "https", "mailto", "tel", "ftp", "ftps", "sftp", "ssh",
+        "ldap", "ldaps", "ipp", "ipps", "imap", "imaps", "pop3", "pop3s",
+        "smtp", "smtps", "sip", "sips", "smb", "nfs", "rdp", "vnc", "irc",
+        "ircs", "xmpp", "webcal", "socket", "lpd", "dns",
+    }
+)  # fmt: skip
+
+
 class UrlAttr(_StrAttr):
-    """URL with a scheme."""
+    """URL with an allow-listed scheme (see :data:`URL_SCHEMES`)."""
 
     kind = "url"
 
     def _validate(self, value: str) -> list[str]:
         errors = self._check_text(value)
         if _URL_RE.fullmatch(value) is None or (
+            value.partition(":")[0].lower() not in URL_SCHEMES
+        ) or (
             value.lower().startswith(("http:", "https:")) and _WEB_URL_RE.fullmatch(value) is None
         ):
             errors.append(_("Invalid URL."))
