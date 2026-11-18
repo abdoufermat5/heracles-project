@@ -36,9 +36,9 @@ kubectl create secret generic heracles-secrets \
 ## Install
 
 ```sh
-docker build -f deploy/Dockerfile -t REGISTRY/heracles:0.1.0 . && docker push REGISTRY/heracles:0.1.0
+docker build -f deploy/Dockerfile -t REGISTRY/heracles:0.1.0-rc.1 . && docker push REGISTRY/heracles:0.1.0-rc.1
 helm install heracles deploy/helm/heracles \
-  --set image.repository=REGISTRY/heracles --set image.tag=0.1.0 \
+  --set image.repository=REGISTRY/heracles --set image.tag=0.1.0-rc.1 \
   --set secrets.existingSecret=heracles-secrets \
   -f my-values.yaml
 ```
