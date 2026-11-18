@@ -8,7 +8,11 @@ from typing import Any
 import pytest
 
 from heracles.ldap import pyldap
-from heracles.ldap.client import DirectoryUnavailableError, NoSuchObjectError
+from heracles.ldap.client import (
+    DirectoryUnavailableError,
+    NoSuchObjectError,
+    SizeLimitExceededError,
+)
 from heracles.ldap.config import DirectoryConfig, load_settings
 
 
@@ -40,6 +44,7 @@ def _make_stub(behaviour: dict[str, str]) -> tuple[ModuleType, list[tuple[str, s
         "ALREADY_EXISTS",
         "SIZELIMIT_EXCEEDED",
         "UNWILLING_TO_PERFORM",
+        "INAPPROPRIATE_AUTH",
     ):
         setattr(mod, name, type(name, (_LdapError,), {}))
     mod.LDAPError = _LdapError  # type: ignore[attr-defined]
@@ -60,6 +65,17 @@ def _make_stub(behaviour: dict[str, str]) -> tuple[ModuleType, list[tuple[str, s
             calls.append((self.uri, "bind"))
             if behaviour[self.uri] == "down":
                 raise SERVER_DOWN()
+            if behaviour[self.uri] == "no-password":
+                raise mod.INAPPROPRIATE_AUTH()  # type: ignore[attr-defined]
+            if behaviour[self.uri] == "unwilling":
+                raise mod.UNWILLING_TO_PERFORM()  # type: ignore[attr-defined]
+
+        def search_ext(self, *_a: Any, **_k: Any) -> int:
+            return 1
+
+        def result3(self, _msgid: int) -> tuple[int, list[Any], int, list[Any]]:
+            rows = [(f"cn=e{i},dc=x", {"cn": [b"x"]}) for i in range(5)]
+            return 100, rows, 1, []
 
         def unbind_s(self) -> None: ...
 
@@ -71,6 +87,17 @@ def _make_stub(behaviour: dict[str, str]) -> tuple[ModuleType, list[tuple[str, s
         def delete_s(self, *_a: Any) -> None:
             raise NO_SUCH_OBJECT()
 
+    controls = ModuleType("ldap.controls")
+
+    class SimplePagedResultsControl:
+        controlType = "1.2.840.113556.1.4.319"  # noqa: N815
+
+        def __init__(self, **kw: Any) -> None:
+            self.cookie = kw.get("cookie", "")
+
+    controls.SimplePagedResultsControl = SimplePagedResultsControl  # type: ignore[attr-defined]
+    mod.controls = controls  # type: ignore[attr-defined]
+    mod.SCOPE_BASE = mod.SCOPE_ONELEVEL = mod.SCOPE_SUBTREE = 0  # type: ignore[attr-defined]
     mod.initialize = Conn  # type: ignore[attr-defined]
     return mod, calls
 
@@ -164,6 +191,47 @@ def test_check_password_refuses_an_empty_dn_without_binding(
     assert calls == []  # no connection was even opened
     assert d.check_password("uid=a,dc=x", "pw") is True
     assert calls == [("ldap://a", "bind")]
+
+
+@pytest.mark.parametrize("behaviour", ["no-password", "unwilling"])
+def test_a_bind_refused_for_lack_of_a_usable_password_is_a_failed_check(
+    monkeypatch: pytest.MonkeyPatch, behaviour: str
+) -> None:
+    d, _calls = _directory(monkeypatch, {"ldap://a": behaviour}, Clock(), uri="ldap://a")
+    assert d.check_password("uid=a,dc=x", "pw") is False
+
+
+def test_a_full_pool_times_out_as_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    d, _calls = _directory(
+        monkeypatch, {"ldap://a": "ok"}, Clock(), uri="ldap://a", pool_size=1, pool_timeout=0.05
+    )
+    d._slots.acquire()  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(DirectoryUnavailableError):
+        d.add("cn=x,dc=x", {"cn": [b"x"]})
+
+
+def test_password_checks_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    d, calls = _directory(
+        monkeypatch,
+        {"ldap://a": "ok"},
+        Clock(),
+        uri="ldap://a",
+        bind_concurrency=1,
+        pool_timeout=0.05,
+    )
+    d._binds.acquire()  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(DirectoryUnavailableError):
+        d.check_password("uid=a,dc=x", "pw")
+    assert calls == []
+
+
+def test_a_search_without_a_limit_stops_at_the_configured_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    d, _calls = _directory(monkeypatch, {"ldap://a": "ok"}, Clock(), uri="ldap://a", search_limit=3)
+    with pytest.raises(SizeLimitExceededError):
+        list(d.search("dc=x"))
+    assert len(list(d.search("dc=x", size_limit=10))) == 5
 
 
 def test_close_unregisters_the_metrics_collector(monkeypatch: pytest.MonkeyPatch) -> None:

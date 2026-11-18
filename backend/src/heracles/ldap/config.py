@@ -11,6 +11,9 @@ Directories are declared in a YAML or TOML file whose path is given by the
         bind_password: secret
         base_dn: dc=example,dc=org
         pool_size: 8          # optional: service connections (parallel operations)
+        pool_timeout: 30      # optional: seconds to wait for a free connection
+        bind_concurrency: 8   # optional: password checks running at the same time
+        search_limit: 100000  # optional: entries a search without a limit may return (0 = any)
 
 High availability: ``uri`` may hold several space-separated URIs, or use ``uris: [..]``;
 they are tried in order (failover for reads and writes). ``read_uris`` lists read-only
@@ -55,6 +58,9 @@ _FIELDS = (
     "ca_file",
     "timeout",
     "pool_size",
+    "pool_timeout",
+    "bind_concurrency",
+    "search_limit",
 )
 
 
@@ -83,6 +89,14 @@ class DirectoryConfig(BaseModel):
     timeout: float = Field(default=10.0, gt=0)
     #: Service connections kept to the server: operations running at the same time.
     pool_size: int = Field(default=8, ge=1, le=64)
+    #: Seconds an operation waits for a free service connection before the directory is
+    #: reported unavailable.
+    pool_timeout: float = Field(default=30.0, gt=0)
+    #: Password checks (one extra connection each) that may run at the same time.
+    bind_concurrency: int = Field(default=8, ge=1, le=64)
+    #: Most entries one search returns when the caller gives no limit (0 = unlimited); a
+    #: larger result raises ``SizeLimitExceededError`` instead of filling the memory.
+    search_limit: int = Field(default=100_000, ge=0)
 
     @field_validator("uris", "read_uris", mode="before")
     @classmethod

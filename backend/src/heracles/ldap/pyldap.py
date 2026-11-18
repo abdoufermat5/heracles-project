@@ -110,6 +110,8 @@ class PyLdapDirectory:
         self._idle: list[tuple[str, Any]] = []
         self._in_use = 0
         self._slots = threading.BoundedSemaphore(config.pool_size)
+        #: Bounds the password checks, which open a connection of their own.
+        self._binds = threading.BoundedSemaphore(config.bind_concurrency)
         #: Guards ``_idle``, server states and connection set-up (TLS options are process-wide).
         self._lock = threading.RLock()
         self._object_classes: set[str] | None = None
@@ -322,7 +324,8 @@ class PyLdapDirectory:
 
     def _run(self, op: Callable[[Any], T], *, write: bool = False, name: str = "op") -> T:
         """Run ``op`` on a pooled connection, failing over to the next server."""
-        with self._slots:
+        self._acquire(self._slots, "no connection free")
+        try:
             with self._lock:
                 self._in_use += 1
             try:
@@ -342,6 +345,14 @@ class PyLdapDirectory:
             finally:
                 with self._lock:
                     self._in_use -= 1
+        finally:
+            self._slots.release()
+
+    def _acquire(self, semaphore: threading.BoundedSemaphore, what: str) -> None:
+        """Take a slot of ``semaphore`` or report the directory as unavailable after the timeout."""
+        timeout = self._config.pool_timeout
+        if not semaphore.acquire(timeout=timeout):
+            raise DirectoryUnavailableError(f"directory busy: {what} after {timeout:g}s")
 
     def _checkin(self, uri: str, conn: Any) -> None:
         if conn is not None:
@@ -381,6 +392,8 @@ class PyLdapDirectory:
             Scope.SUBTREE: ldap.SCOPE_SUBTREE,
         }[scope]
         attrlist = list(attrs) if attrs is not None else None
+        # a search without a limit still stops at the configured cap: the result is held in memory
+        limit = size_limit or self._config.search_limit
 
         def op(conn: Any) -> list[Entry]:
             results: list[Entry] = []
@@ -394,8 +407,8 @@ class PyLdapDirectory:
                     if dn is None:  # search continuation reference
                         continue
                     results.append(Entry(dn=dn, attrs=_to_attrs(raw)))
-                    if size_limit and len(results) > size_limit:
-                        raise SizeLimitExceededError(f"more than {size_limit} entries")
+                    if limit and len(results) > limit:
+                        raise SizeLimitExceededError(f"more than {limit} entries")
                 cookie = next(
                     (
                         c.cookie
@@ -473,22 +486,32 @@ class PyLdapDirectory:
             return False
         ldap = self._ldap
         last: BaseException | None = None
-        for uri in [*self._candidates(write=False)]:
-            try:
-                conn = self._new_connection(uri)
+        self._acquire(self._binds, "too many password checks running")
+        try:
+            for uri in [*self._candidates(write=False)]:
                 try:
-                    conn.simple_bind_s(dn, password)
-                finally:
-                    self._unbind(conn)
-            except ldap.INVALID_CREDENTIALS:
-                return False
-            except ldap.LDAPError as exc:
-                if self._is_down_error(exc):
-                    self._mark_down(uri)
-                    last = exc
-                    continue
-                raise DirectoryError(f"password check failed: {exc}") from exc
-            return True
+                    conn = self._new_connection(uri)
+                    try:
+                        conn.simple_bind_s(dn, password)
+                    finally:
+                        self._unbind(conn)
+                except (
+                    ldap.INVALID_CREDENTIALS,
+                    ldap.INAPPROPRIATE_AUTH,
+                    ldap.UNWILLING_TO_PERFORM,
+                ):
+                    # no usable password on this entry (none stored, or the server refuses
+                    # to bind with it): a failed check, not a server error
+                    return False
+                except ldap.LDAPError as exc:
+                    if self._is_down_error(exc):
+                        self._mark_down(uri)
+                        last = exc
+                        continue
+                    raise DirectoryError(f"password check failed: {exc}") from exc
+                return True
+        finally:
+            self._binds.release()
         raise DirectoryUnavailableError(f"cannot connect: {last or 'no server is reachable'}")
 
     def schema_object_classes(self) -> set[str]:
