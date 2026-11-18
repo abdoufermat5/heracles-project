@@ -46,6 +46,7 @@ def copy_object(
                 not attr.stored
                 or attr.write_only
                 or isinstance(attr, DisplayAttr | DepartmentAttr)
+                or attr.readonly  # set by the server: a copy never carries them over
                 or attr.name.lower() in skipped
                 or attr.name not in tab_state.values
             ):

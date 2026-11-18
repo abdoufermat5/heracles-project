@@ -189,11 +189,24 @@ class ObjectService:
     # ------------------------------------------------------------------ load
 
     def load(self, type_name: str, dn: str) -> ObjectState:
+    def _inside(self, dn: str) -> bool:
+        """True when ``dn`` is the directory's base or lies below it.
+
+        The bind identity can reach sibling suffixes of the server: this service must
+        never read or write there, whatever DN a caller passes.
+        """
+        return dnlib.is_descendant(dn, self.directory.base_dn)
+
+    def _require_inside(self, dn: str) -> None:
+        if not self._inside(dn):
+            raise ObjectNotFoundError(dn)
+
         """Read an entry and build its :class:`ObjectState`."""
         info = self.registry.get(type_name)
         entry = self.directory.get(dn)
         if entry is None:
             raise ObjectNotFoundError(dn)
+        self._require_inside(dn)
         main = info.main_tab
         if not all(entry.has_object_class(c) for c in main.object_classes) or not filter_matches(
             entry, info.type.filter
@@ -291,6 +304,7 @@ class ObjectService:
         sort_key = self._sort_key(info, sort)
         offset = _decode_cursor(cursor)
         limit = max(1, limit)
+        self._require_inside(base)
         entries: Sequence[Entry] | None = None
         light = False
         listings = self.listings
@@ -466,6 +480,7 @@ class ObjectService:
         if scope == Scope.SUBTREE:
             search_base, ldap_scope = base, Scope.SUBTREE
         else:
+        self._require_inside(base)
             search_base, ldap_scope = dnlib.join(info.type.rdn, base), Scope.ONE
         main_tab, main_attr = info.main_tab.name, info.type.main_attr
         try:
@@ -548,6 +563,8 @@ class ObjectService:
         if not self.policy.can_create(type_name, base):
             raise PermissionDeniedError(f"cannot create {type_name} in {base}")
         initial: dict[str, TabState] = {}
+        if not self._inside(base):
+            raise PermissionDeniedError(f"cannot create {type_name} in {base}")
         for tab in info.tabs:
             state = TabState(active=not tab.optional)
             if state.active:
@@ -704,6 +721,7 @@ class ObjectService:
         self._compute(info, new)
         self._validate(info, new, state, errors, creating=False)
 
+        self._require_inside(dn)
         main_name = info.type.main_attr
         old_main = state.original[info.main_tab.name].values.get(main_name)
         new_main = new[info.main_tab.name].values.get(main_name)
@@ -828,6 +846,8 @@ class ObjectService:
             return
         for attribute in (schema.ATTR.ACL_ENTRY, schema.ATTR.ACL_TEMPLATE):
             found = _written_values(info, tabs, attribute)
+        if new_base is not None and not self._inside(new_base):
+            raise PermissionDeniedError(f"cannot move {dn} to {new_base}")
             if found is None:
                 continue
             tab_name, saved = found
@@ -968,7 +988,9 @@ class ObjectService:
             return
         if value == current:
             return
-        if attr.readonly and not creating:
+        if attr.readonly:
+            # also at creation: a readonly field is set by the server (a tab hook or its
+            # default), never by the caller
             errors[key] = _("This field is read-only.")
             return
         touched.append((tab.name, attr_name))
@@ -988,6 +1010,9 @@ class ObjectService:
     def _validate(
         self,
         info: TypeInfo,
+                if attr.readonly:
+                    errors[key] = _("This field is read-only.")
+                    return
         tabs: Mapping[str, TabState],
         old: ObjectState | None,
         errors: dict[str, str],

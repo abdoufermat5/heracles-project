@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from heracles.attributes import set_default_password_hasher
+from heracles.attributes import StringAttr, set_default_password_hasher
 from heracles.auth.passwords import lock
 from heracles.ldap.client import Modification, Scope
 from heracles.objects import (
@@ -16,6 +16,8 @@ from heracles.objects import (
     ObjectService,
     ObjectValidationError,
     PermissionDeniedError,
+    Section,
+    Tab,
     TypeRegistry,
 )
 from tests.objects.conftest import BASE, JDOE, PARIS, PARIS_PEOPLE, PEOPLE
@@ -159,6 +161,41 @@ def test_create_uniqueness(service: ObjectService, jdoe: str) -> None:
     assert exc.value.fields == {"main.uid": "Already in use."}
     # uniqueness is scoped to the target department subtree
     service.create("user", PARIS, new_user(uid="jdoe"))
+
+
+def test_create_refuses_readonly_values(service: ObjectService) -> None:
+    class Stamp(Tab):
+        name = "stamp"
+        optional = True
+        object_classes = ("extensibleObject",)
+        main = Section("Stamp", StringAttr("description", "Stamp", readonly=True))
+
+    service.registry.attach_tab("user", Stamp)
+    tabs = new_user()
+    tabs["stamp"] = {"active": True, "values": {"description": "forged"}}
+    with pytest.raises(ObjectValidationError) as exc:
+        service.create("user", BASE, tabs)
+    assert exc.value.fields == {"stamp.description": "This field is read-only."}
+
+
+def test_dn_outside_the_base_is_out_of_reach(
+    service: ObjectService, directory: FakeDirectory
+) -> None:
+    other = "dc=other"
+    directory.put(other, objectClass=["dcObject", "organization"], dc="other", o="Other")
+    directory.put(f"ou=people,{other}", objectClass="organizationalUnit", ou="people")
+    victim = f"uid=v,ou=people,{other}"
+    directory.put(victim, objectClass=["inetOrgPerson", "organizationalPerson", "person"], uid="v")
+    with pytest.raises(ObjectNotFoundError):
+        service.load("user", victim)
+    with pytest.raises(ObjectNotFoundError):
+        service.update("user", victim, {"main": {"values": {"sn": "x"}}})
+    with pytest.raises(ObjectNotFoundError):
+        service.delete("user", victim)
+    with pytest.raises(PermissionDeniedError):
+        service.create("user", other, new_user())
+    with pytest.raises(ObjectNotFoundError):
+        service.list("user", other)
 
 
 def test_create_reference_must_exist(service: ObjectService) -> None:

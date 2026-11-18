@@ -410,7 +410,6 @@ def test_reminder_task_crud(service: ObjectService, directory: MemoryDirectory) 
                     "cn": "expiry",
                     "hrcTasksReminderFirstCall": 30,
                     "hrcTasksReminderSecondCall": 7,
-                    "hrcTasksReminderPosix": False,
                     "hrcTasksReminderMailTemplate": TEMPLATE_DN,
                     "hrcTasksReminderEmailSender": "noreply@example.com",
                     "hrcTasksReminderMembers": [f"uid=a,{PEOPLE}"],
