@@ -16,7 +16,7 @@
   ...) come from those projects and are not distributed here (git-ignored). Copy their
   `cn=config` LDIF files into this directory, or convert `.schema` files with `make third-party-schema SCHEMAS="/path/sudo.schema ..."`.
   Prefix them with a number so they load before `heracles.ldif`.
-  `../fetch-third-party.sh` fetches the sudo and SSH key schemas at pinned upstream commits
+  `../fetch-third-party.sh` fetches the sudo, SSH key and Kerberos schemas at pinned upstream commits
   (checked by SHA-256), as CI does.
 * 389 Directory Server: `heracles schema export --format ds` gives its schema file;
   `../ldif2ds.py` turns these `cn=config` files into an online update (`deploy/ds/setup.sh`).

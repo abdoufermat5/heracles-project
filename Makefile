@@ -19,7 +19,7 @@ BUILD_ID ?=
 VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(BACKEND)/pyproject.toml)
 
 .PHONY: bundle-check help install install-backend install-frontend \
-        dev dev-demo dev-down dev-mock dhcp-test backend frontend demo build docker-build serve dns-demo \
+        dev dev-demo dev-down dev-reset dev-mock dhcp-test kdc-test backend frontend demo build docker-build serve dns-demo \
         test test-backend test-frontend lint lint-backend lint-frontend \
         format typecheck check bench bench-ldap bench-check bench-baseline ldap-up ldap-down ldap-logs test-integration e2e e2e-replicas e2e-ui e2e-down e2e-ds e2e-ds-down schema changelog third-party-schema clean
 
@@ -47,6 +47,7 @@ dev: ## Whole stack: OpenLDAP + API + DNS + SMB/FTP/DHCP containers, Vite dev se
 	@echo "  DNS zones of the directory: dig @127.0.0.1 -p $(DNS_PORT) www.heracles.test"
 	@echo "  SMB 127.0.0.1:445 · FTP 127.0.0.1:2121 (passive 30000-30009) · DHCP on the isolated compose network (no host port)"
 	@echo "  OpenID Connect test provider http://idp.localhost:8180 · sign in with the test provider as alice / alice-at-the-idp"
+	@echo "  Kerberos KDC 127.0.0.1:88, realm HERACLES.TEST · principals alice, bob, carol (directory passwords) · \`make kdc-test\`"
 	@echo "  the containers stay up after this exits; stop them with \`make dev-down\`"
 	$(COMPOSE) --profile dev up -d --build --wait
 	@trap 'kill 0' INT TERM EXIT; \
@@ -68,6 +69,13 @@ dev-down: ## Stop the dev containers (the LDAP data volume is kept)
 
 dhcp-test: ## Ask the dev DHCP server for a lease (throwaway client on the isolated network)
 	$(COMPOSE) --profile dhcp-test run --rm dhcp-client
+
+kdc-test: ## Get a Kerberos ticket from the dev KDC as alice (USER_PRINCIPAL=bob PASSWORD=bob-secret ...)
+	$(COMPOSE) --profile dev exec -T kdc sh -c \
+	  'printf "%s\n" "$(or $(PASSWORD),alice-secret)" | kinit $(or $(USER_PRINCIPAL),alice) && klist'
+
+dev-reset: ## Stop the dev containers and drop their data (the next `make dev` seeds everything again)
+	$(COMPOSE) --profile dev down -v
 
 dev-mock: ## Frontend only, with the in-browser mock API (no backend)
 	cd $(FRONTEND) && VITE_API_MOCK=true pnpm exec vite --port $(UI_PORT)

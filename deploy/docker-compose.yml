@@ -177,6 +177,29 @@ services:
       timeout: 5s
       retries: 30
 
+  # Kerberos KDC whose realm and principals live in the dev directory (deploy/dev/kdc). Its
+  # first run creates the HERACLES.TEST realm and a principal per seeded user, linked to the
+  # user entry, with the same password (alice / alice-secret ...): `make kdc-test`.
+  kdc:
+    profiles: [dev]
+    build:
+      context: ./dev/kdc
+    hostname: kdc.heracles.test
+    ports:
+      - "127.0.0.1:88:88/tcp"
+      - "127.0.0.1:88:88/udp"
+      - "127.0.0.1:749:749/tcp"
+    volumes:
+      - kdc-data:/var/lib/krb5kdc
+    depends_on:
+      ldap:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x krb5kdc >/dev/null && timeout 3 bash -c '</dev/tcp/127.0.0.1/88'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   # One-shot client on the isolated network (fixed MAC -> fixed address from the
   # directory): docker compose ... --profile dhcp-test run --rm dhcp-client
   dhcp-client:
@@ -282,4 +305,5 @@ volumes:
   postgres-data:
   ldap-replicas-data:
   smb-data:
+  kdc-data:
   ftp-data:
