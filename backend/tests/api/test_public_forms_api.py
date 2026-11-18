@@ -549,6 +549,32 @@ def test_a_form_editor_holding_the_rights_can_save_the_form(full_client: TestCli
     assert r.status_code == 200, r.text
 
 
+def test_moving_a_form_checks_its_author_rights_at_the_new_department(
+    full_client: TestClient,
+) -> None:
+    form = Api(full_client).login("admin").create("public_form", _form_body("f"))
+    # may move forms anywhere, may create users below ou=people only
+    _delegate_forms(full_client, "publicForm/publicForm;rwcm,publicForm/publicFormAlteration;rw")
+    state = cast("Any", full_client.app).state.heracles
+    directory = cast("MemoryDirectory", state.directories["main"])
+    people = f"ou=people,{BASE}"
+    users = f"cn=people-users,ou=aclroles,{BASE}"
+    directory.add(
+        users,
+        {
+            "objectClass": [schema.OC.ACL_ROLE.encode()],
+            "cn": [b"people-users"],
+            schema.ATTR.ACL_TEMPLATE: [b"0:user/user;rwc"],
+        },
+    )
+    value = serialise_assignment(AclAssignment(4, AclScope.SUBTREE, users, (BMARTIN,))).encode()
+    directory.modify(people, [Modification("add", schema.ATTR.ACL_ENTRY, [value])])
+    editor = Api(full_client).login("bmartin")
+    r = editor.post(f"/objects/public_form/{form}/move", {"base": PARIS})
+    assert r.status_code == 422, r.text
+    assert "hrcPublicFormTemplateType" in r.text
+
+
 def test_a_form_cannot_show_what_its_author_cannot_read(full_client: TestClient) -> None:
     admin = Api(full_client).login("admin")
     template = admin.create(

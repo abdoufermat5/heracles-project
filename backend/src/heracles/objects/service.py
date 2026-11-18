@@ -777,12 +777,20 @@ class ObjectService:
         if dnlib.normalize(superior) == dnlib.normalize(dnlib.parent(dn) or ""):
             return state.dn
         self._check_move(dn, type_name, base)
+        errors: dict[str, str] = {}
         main_value = state.original[info.main_tab.name].values.get(info.type.main_attr)
         if isinstance(main_value, str) and main_value:
-            errors: dict[str, str] = {}
             self._check_unique(info, base, main_value, dn, errors)
-            if errors:
-                raise ObjectValidationError(errors)
+        dept = self._department_attr(info)
+        if dept is not None:
+            # the tabs judge a move like an edit of the department (a public form checks
+            # its author's rights at the new department, for instance)
+            tabs = copy.deepcopy(state.tabs)
+            tabs[dept[0].name].values[dept[1].name] = base
+            touched = [(dept[0].name, dept[1].name)]
+            self._prepare(info, dn, base, tabs, state.original, touched, errors, creating=False)
+        if errors:
+            raise ObjectValidationError(errors)
         ctx = EventContext(type_name, dn, state, state)
         self.events.pre_modify(ctx)
         new_dn = self._rename(dn, dnlib.rdn(dn), superior)
