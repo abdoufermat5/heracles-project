@@ -45,6 +45,7 @@ from heracles.objects.errors import (
 )
 from heracles.objects.masks import CounterState, MaskEnv
 from heracles.objects.model import Tab
+from heracles.objects.policy import TemplatePolicy
 from heracles.objects.registry import TypeInfo
 from heracles.objects.service import ObjectService, department_of
 from heracles.schema import names as schema
@@ -218,6 +219,16 @@ def _text_of(value: object) -> list[str]:
     raise ValueError("expected text")
 
 
+def _preset_visible(ctx: ObjectService, tpl_base: str, tab: type[Tab], attr: AnyAttribute) -> bool:
+    """False for a secret (write-only) preset the caller does not hold ``t`` on."""
+    if not attr.write_only:
+        return True
+    policy = ctx.policy
+    return not isinstance(policy, TemplatePolicy) or policy.can_template(
+        tpl_base, tab.name, attr.name
+    )
+
+
 def template_json(ctx: ObjectService, tpl: Template) -> dict[str, JSON]:
     """``GET .../templates/{dn}``: the template with the descriptors' tab layout."""
     info = ctx.registry.get(tpl.info.type_name)
@@ -232,7 +243,7 @@ def template_json(ctx: ObjectService, tpl: Template) -> dict[str, JSON]:
                 if owner is None or owner[0] is not tab:
                     continue
                 raw = tpl.values(attr.name)
-                if not raw:
+                if not raw or not _preset_visible(ctx, tpl.info.base, tab, attr):
                     continue
                 values[attr.name] = cast("JSON", list(raw)) if attr.multivalued else raw[0]
         tabs[tab.name] = {"active": active, "values": values}
@@ -599,6 +610,8 @@ def apply_template(
     for key, texts in resolved.items():
         owner = owners.get(key)
         if owner is None or owner[0].name not in result:
+            continue
+        if preview and not _preset_visible(ctx, tpl.info.base, owner[0], owner[1]):
             continue
         try:
             result[owner[0].name][owner[1].name] = _json_of(owner[1], texts)

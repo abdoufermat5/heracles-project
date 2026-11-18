@@ -16,6 +16,13 @@ class AccessPolicy(Protocol):
 
     def can_write(self, dn: str, tab: str, attr: str) -> bool: ...
 
+    def can_template(self, dn: str, tab: str, attr: str) -> bool:
+        """``t`` on the attribute: the user may read a template's preset of a secret value."""
+        key = self._tab_key(tab)
+        if key is None:
+            return False
+        return self._ev.ignore_acl or self._ev.permissions(dn, key, attr).template
+
     def can_create(self, type_name: str, base: str) -> bool: ...
 
     def can_delete(self, dn: str, type_name: str) -> bool: ...

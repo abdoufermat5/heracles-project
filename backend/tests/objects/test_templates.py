@@ -18,6 +18,7 @@ from heracles.objects import (
 )
 from heracles.objects.builtin import register_builtin_types
 from heracles.objects.errors import ObjectNotFoundError
+from heracles.objects.policy import AllowAll
 from heracles.objects.templates import (
     apply_template,
     create_template,
@@ -299,3 +300,29 @@ def test_template_management_needs_create_rights(
         delete_template(restricted, "user", STAFF)
     create_template(restricted, "user", PARIS, "ok", {})
     assert [t.name for t in list_templates(restricted, "user")] == ["ok"]
+
+
+class _PresetPolicy(AllowAll):
+    def __init__(self, may_template: bool) -> None:
+        self.may_template = may_template
+
+    def can_template(self, dn: str, tab: str, attr: str) -> bool:
+        return self.may_template
+
+
+@pytest.mark.parametrize("may_template", [False, True])
+def test_secret_preset_needs_the_template_right(
+    directory: MemoryDirectory, may_template: bool
+) -> None:
+    registry = TypeRegistry()
+    register_builtin_types(registry)
+    admin = ObjectService(directory, registry)
+    tabs = {"main": {"values": {"userPassword": "Initial-Pass-1", "description": "d"}}}
+    dn = create_template(admin, "user", BASE, "pw", tabs).info.dn
+    service = ObjectService(directory, registry, policy=_PresetPolicy(may_template))
+    body = template_json(service, get_template(service, "user", dn))
+    values = body["tabs"]["main"]["values"]  # type: ignore[index]
+    assert values["description"] == "d"
+    assert ("userPassword" in values) is may_template
+    preview = apply_template(service, "user", dn, {"main": {"cn": "x", "sn": "y"}}, preview=True)
+    assert ("userPassword" in preview["main"]) is may_template

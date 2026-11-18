@@ -36,6 +36,16 @@ class TypedPolicy(Protocol):
 
 
 @runtime_checkable
+class TemplatePolicy(Protocol):
+    """A policy that also decides on the ``t`` right (reading the secret presets of a template).
+
+    Optional, like :class:`MovePolicy`: a policy without ``can_template`` does not restrict.
+    """
+
+    def can_template(self, dn: str, tab: str, attr: str) -> bool: ...
+
+
+@runtime_checkable
 class MovePolicy(Protocol):
     """A policy that also decides on the ``m`` right (rename / change of DN).
 
