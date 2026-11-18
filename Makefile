@@ -49,6 +49,8 @@ dev: ## Whole stack: OpenLDAP + API + DNS + SMB/FTP/DHCP containers, Vite dev se
 	@echo "  OpenID Connect test provider http://idp.localhost:8180 · sign in with the test provider as alice / alice-at-the-idp"
 	@echo "  Kerberos KDC 127.0.0.1:88, realm HERACLES.TEST · principals alice, bob, carol (directory passwords) · \`make kdc-test\`"
 	@echo "  the containers stay up after this exits; stop them with \`make dev-down\`"
+	$(COMPOSE) up -d --wait ldap
+	deploy/ldap/load-missing-schemas.sh $(COMPOSE)
 	$(COMPOSE) --profile dev up -d --build --wait
 	@trap 'kill 0' INT TERM EXIT; \
 	  (cd $(FRONTEND) && VITE_API_MOCK=false HERACLES_API_URL=http://$(HOST):$(PORT) \

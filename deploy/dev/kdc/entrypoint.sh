@@ -98,7 +98,7 @@ ldap -s base -b "$BASE_DN" dn >/dev/null
 if ! ldap -o ldif-wrap=no -s base -b cn=Subschema objectClasses 2>/dev/null \
 	| grep -q "NAME 'krbContainer'"; then
 	echo "kdc: the directory has no Kerberos schema: run deploy/ldap/fetch-third-party.sh," >&2
-	echo "kdc: then recreate the LDAP data volume (make dev-reset)" >&2
+	echo "kdc: then start the stack again with make dev (it loads missing schemas)" >&2
 	exit 1
 fi
 
