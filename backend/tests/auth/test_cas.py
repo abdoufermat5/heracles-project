@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import httpx2
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
-from heracles import demo
+from heracles.api.state import AppState
 from heracles.auth.cas import CasClient, CasError, parse_validation
 from heracles.auth.sso import SsoConfig, SsoSettings, effective_sso
 from heracles.core import config_store
+from heracles.server import build_demo_app
 
 SERVICE = "https://heracles.example.org/api/v2/auth/cas/callback?directory=main"
 CONFIG = SsoConfig(login_method="cas", cas_enabled=True, cas_host="cas.example.org", cas_port=8443)
@@ -84,40 +89,34 @@ def test_parse_rejects_empty_user() -> None:
         parse_validation(body)
 
 
-def test_effective_sso_falls_back_to_yaml() -> None:
-    cfg = effective_sso(SsoSettings(login_method="cas", cas_host="x"), None)
+def test_effective_sso_is_the_yaml_configuration() -> None:
+    cfg = effective_sso(SsoSettings(login_method="cas", cas_host="x"))
     assert cfg.login_method == "cas" and cfg.cas_available
     assert not SsoConfig(cas_host="x").cas_available  # not activated
 
 
-def test_effective_sso_reads_the_stored_configuration() -> None:
-    directory = demo.build_demo_directory()
-    config_store.save_config(
-        directory,
-        {
-            "login_method": "cas",
-            "http_auth_enabled": True,
-            "http_header_name": "X-User",
-            "cas_host": "cas.stored",
-            "cas_port": 9443,
-            "cas_ca_cert_path": "/ca.pem",
-            "cas_service_name": "heracles.stored",
-        },
-    )
-    config_store.invalidate(directory)
-    settings = SsoSettings(login_method="form", cas_context="/cas")
-    cfg = effective_sso(settings, directory)
-    assert cfg.login_method == "cas" and cfg.http_auth_enabled is True
-    assert cfg.cas_host == "cas.stored" and cfg.cas_port == 9443
-    assert cfg.cas_context == "/cas"  # not stored: the YAML value stays
-    assert cfg.http_header_name == "X-User" and cfg.cas_ca_cert_path == "/ca.pem"
-
-
-def test_effective_sso_keeps_yaml_when_the_entry_stores_nothing() -> None:
-    directory = demo.build_demo_directory()
-    settings = SsoSettings(login_method="cas", cas_host="yaml.example.org")
-    cfg = effective_sso(settings, directory)
-    assert cfg.login_method == "cas" and cfg.cas_host == "yaml.example.org"
+def test_stored_login_configuration_is_never_used() -> None:
+    """Whoever may edit the configuration entry cannot redirect sign-in."""
+    with TestClient(build_demo_app(), base_url="http://testserver") as client:
+        state = cast("AppState", cast("FastAPI", client.app).state.heracles)
+        directory = state.directories["main"]
+        config_store.save_config(
+            directory,
+            {
+                "login_method": "cas",
+                "cas_enabled": True,
+                "cas_host": "cas.attacker.example",
+                "http_header_auth_enabled": True,
+                "http_header_name": "X-User",
+            },
+        )
+        config_store.invalidate(directory)
+        methods = client.get("/api/v2/auth/methods").json()
+        assert methods["login_method"] == "form"
+        assert [m["id"] for m in methods["methods"]] == ["form"]
+        assert client.get("/api/v2/auth/cas/login", follow_redirects=False).status_code == 404
+        # the stored values still round-trip for compatibility
+        assert config_store.effective_settings(directory).cas_host == "cas.attacker.example"
 
 
 def test_validation_refuses_entity_declarations() -> None:

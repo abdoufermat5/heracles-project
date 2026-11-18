@@ -67,8 +67,8 @@ def _directory(state: AppState, directory_id: str | None) -> tuple[str, Director
     return directory_id, directory
 
 
-def _config(state: AppState, directory: DirectoryClient) -> SsoConfig:
-    return effective_sso(state.settings.sso, directory)
+def _config(state: AppState) -> SsoConfig:
+    return effective_sso(state.settings.sso)
 
 
 def safe_next(value: str | None) -> str:
@@ -133,8 +133,8 @@ def login_methods(
     state: StateDep, directory: Annotated[str | None, Query()] = None
 ) -> MethodsResponse:
     """Which sign-in methods are enabled (public: the login page needs it)."""
-    _, client = _directory(state, directory)
-    return available_methods(state, _config(state, client))
+    _directory(state, directory)  # an unknown directory is refused
+    return available_methods(state, _config(state))
 
 
 def _open_session(
@@ -203,8 +203,8 @@ def _rate_limited(state: AppState, request: Request, login: str) -> str:
 
 
 # -- CAS ----------------------------------------------------------------------------------------
-def _cas_config(state: AppState, directory: DirectoryClient) -> SsoConfig:
-    config = _config(state, directory)
+def _cas_config(state: AppState) -> SsoConfig:
+    config = _config(state)
     if not config.cas_available:
         raise not_found("CAS login is not enabled")
     return config
@@ -218,8 +218,8 @@ def cas_login(
     next: Annotated[str | None, Query()] = None,
 ) -> RedirectResponse:
     """Send the browser to the CAS server."""
-    directory_id, client = _directory(state, directory)
-    config = _cas_config(state, client)
+    directory_id, _ = _directory(state, directory)
+    config = _cas_config(state)
     service = _service_url(request, state, config, directory_id, safe_next(next))
     return RedirectResponse(_cas_client(request, config).login_url(service), status_code=302)
 
@@ -234,7 +234,7 @@ def cas_callback(
 ) -> RedirectResponse:
     """Validate the ticket, map the CAS user to an account and open a session."""
     directory_id, client = _directory(state, directory)
-    config = _cas_config(state, client)
+    config = _cas_config(state)
     target = safe_next(next)
     failure = RedirectResponse("/login?sso_error=1", status_code=302)
     if not ticket:
@@ -281,8 +281,8 @@ def cas_logout(
                 log.exception("logout_hook_failed")
     destination = "/login"
     try:
-        _, client = _directory(state, directory)
-        config = _config(state, client)
+        _directory(state, directory)
+        config = _config(state)
         if config.cas_available:
             back = f"{_public_base(request, state, config)}/login"
             destination = _cas_client(request, config).logout_url(back)
@@ -345,7 +345,7 @@ def login_basic(
 ) -> RedirectResponse:
     """HTTP Basic login: challenge the browser, check the credentials by LDAP bind."""
     directory_id, client = _directory(state, directory)
-    if not _config(state, client).basic_available:
+    if not _config(state).basic_available:
         raise not_found("HTTP Basic login is not enabled")
     _require_same_origin(request)
     credentials = parse_basic(request.headers.get("authorization"))
