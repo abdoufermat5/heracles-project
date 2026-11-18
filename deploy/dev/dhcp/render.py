@@ -17,9 +17,11 @@ network).
 
 from __future__ import annotations
 
+import base64
 import ipaddress
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -62,7 +64,10 @@ def parse_ldif(text: str) -> list[Entry]:
     current: Entry | None = None
     for line in _unfold(text):
         if line.lower().startswith("dn:"):
-            current = Entry(dn=line.split(":", 1)[1].strip())
+            dn = line.split(":", 1)[1]
+            if dn.startswith(":"):
+                dn = base64.b64decode(dn[1:].strip()).decode("utf-8", "replace")
+            current = Entry(dn=dn.strip())
             entries.append(current)
             continue
         if current is None:
@@ -70,7 +75,14 @@ def parse_ldif(text: str) -> list[Entry]:
         if line.startswith("#"):
             continue
         name, _, rest = line.partition(":")
-        value = rest[1:] if rest.startswith(":") else rest
+        if rest.startswith(":"):  # "attr:: <base64>": the value is base64-encoded
+            try:
+                value = base64.b64decode(rest[1:].strip(), validate=True).decode("utf-8")
+            except ValueError:
+                print(f"warning: {current.dn}: undecodable {name} value skipped", file=sys.stderr)
+                continue
+        else:
+            value = rest
         current.attrs.setdefault(name.strip().lower(), []).append(value.strip())
     return entries
 
@@ -98,11 +110,36 @@ def _normalize(value: str) -> str:
     return " ".join(value.split())
 
 
+# Defence in depth: the daemon runs as root and reads this file, so a value that is not one
+# plain statement (``on commit { execute(...); }``, ``include "..."``, a closing brace) must
+# never reach it. The backend refuses such values when they are written (see
+# ``validate_dhcp_statement`` in ``heracles_plugins/dhcp/validation.py``); this is a coarser
+# check of the same rules for entries written by other means. Keep the two in step.
+_SAFE_VALUE = re.compile(r'(?:[A-Za-z0-9 _.:/,@+=-]|"[ !#-\[\]-~]*")*')
+_FORBIDDEN_WORDS = {"execute", "include", "on", "zone", "key", "lease", "class", "subclass"}
+
+
+def _safe(dn: str, name: str, value: str) -> bool:
+    text = value.strip()
+    first = text.split(None, 1)[0].lower() if text else ""
+    if first == "option":
+        parts = text.split(None, 2)
+        first = parts[1].lower() if len(parts) > 1 else ""
+    if _SAFE_VALUE.fullmatch(text) and first not in _FORBIDDEN_WORDS and ";" not in text:
+        return True
+    print(f"warning: {dn}: unsafe {name} value skipped: {value!r}", file=sys.stderr)
+    return False
+
+
 def statements(entry: Entry, indent: str) -> list[str]:
-    out = [f"{indent}{_normalize(s)};" for s in entry.values("dhcpStatements") if s.strip()]
+    out = [
+        f"{indent}{_normalize(s)};"
+        for s in entry.values("dhcpStatements")
+        if s.strip() and _safe(entry.dn, "dhcpStatements", s)
+    ]
     for option in entry.values("dhcpOption"):
         text = _normalize(option)
-        if not text:
+        if not text or not _safe(entry.dn, "dhcpOption", option):
             continue
         if not text.startswith("option "):
             text = f"option {text}"

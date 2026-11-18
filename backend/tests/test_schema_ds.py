@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import importlib.util
 import sys
 from pathlib import Path
@@ -74,3 +75,17 @@ def test_converter_expands_object_identifier_macros(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert "attributeTypes: ( 1.2.3.1.7 NAME 'xThing'" in module.convert([source], set())
+
+
+def test_converter_decodes_base64_values(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location(
+        "ldif2ds", ROOT / "deploy" / "ldap" / "ldif2ds.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    definition = "( 1.2.3.4 NAME 'xThing' DESC 'é' SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )"
+    encoded = base64.b64encode(definition.encode()).decode()
+    source = tmp_path / "x.ldif"
+    source.write_text(f"dn: cn=x,cn=schema,cn=config\nolcAttributeTypes:: {encoded}\n")
+    assert f"attributeTypes: {definition}" in module.convert([source], set())

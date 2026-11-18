@@ -15,6 +15,7 @@ classes, in file order.
 from __future__ import annotations
 
 import argparse
+import base64
 import re
 import sys
 from pathlib import Path
@@ -65,6 +66,8 @@ def convert(paths: list[Path], skip: set[str]) -> str:
         macros: dict[str, str] = {}
         for line in unfold(path.read_text(encoding="utf-8")):
             key, _, value = line.partition(":")
+            if value.startswith(":"):  # "attr:: <base64>": the value is base64-encoded
+                value = base64.b64decode(value[1:].strip()).decode("utf-8")
             value = _INDEX.sub("", value.strip())
             lowered = key.strip().lower()
             if lowered == "olcobjectidentifier":
