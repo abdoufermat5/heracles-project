@@ -57,6 +57,7 @@ class StandardClasses:
     GROUP_OF_NAMES: str = "groupOfNames"
     POSIX_GROUP: str = "posixGroup"
     ORGANIZATIONAL_ROLE: str = "organizationalRole"
+    SIMPLE_SECURITY_OBJECT: str = "simpleSecurityObject"
     ORGANIZATIONAL_UNIT: str = "organizationalUnit"
     ORGANIZATION: str = "organization"
     LOCALITY: str = "locality"

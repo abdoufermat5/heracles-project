@@ -39,6 +39,8 @@ _ATTRS = ["objectClass", "cn", "description", "owner", "member", "roleOccupant"]
 
 
 def kind_of(entry: Entry) -> str | None:
+    if entry.has_object_class("simpleSecurityObject"):
+        return None
     for oc in entry.texts("objectClass"):
         kind = KINDS.get(oc.lower())
         if kind:
@@ -50,7 +52,11 @@ def _filter(cfg: AccessConfig) -> str:
     extra = cfg.requestable.strip()
     if extra and not extra.startswith("("):
         extra = f"({extra})"
-    return f"(&(|(objectClass=groupOfNames)(objectClass=organizationalRole)){extra})"
+    return (
+        "(&(|(objectClass=groupOfNames)"
+        "(&(objectClass=organizationalRole)(!(objectClass=simpleSecurityObject))))"
+        f"{extra})"
+    )
 
 
 def requestable(directory: DirectoryClient, cfg: AccessConfig) -> list[Entry]:

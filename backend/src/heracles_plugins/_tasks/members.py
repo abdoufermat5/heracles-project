@@ -45,7 +45,9 @@ def expand_members(
             continue
         if entry is None:
             continue
-        if entry.has_object_class("organizationalRole"):
+        if entry.has_object_class("organizationalRole") and not entry.has_object_class(
+            "simpleSecurityObject"
+        ):
             pending.extend(entry.texts("roleOccupant"))
         elif entry.has_object_class("groupOfNames") or entry.has_object_class(
             schema.OC.OBJECT_GROUP

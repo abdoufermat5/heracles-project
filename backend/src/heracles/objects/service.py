@@ -195,7 +195,9 @@ class ObjectService:
         if entry is None:
             raise ObjectNotFoundError(dn)
         main = info.main_tab
-        if not all(entry.has_object_class(c) for c in main.object_classes):
+        if not all(entry.has_object_class(c) for c in main.object_classes) or not filter_matches(
+            entry, info.type.filter
+        ):
             raise ObjectNotFoundError(f"{dn} is not a {type_name}")
         tabs: dict[str, TabState] = {}
         for tab in info.tabs:

@@ -79,3 +79,30 @@ def test_adapter_lookups() -> None:
     for i in range(4):
         w.user(f"u{i}")
     assert len(d.search_targets(BASE, "(uid=*)", 3)) == 3
+
+
+def test_roles_of_user_and_resolver_ignore_dsa_service_accounts() -> None:
+    w = World()
+    alice = w.user("alice")
+    role = w.occupation("ops", [alice])
+    dsa_dn = f"cn=backup,ou=dsa,{BASE}"
+    w.ensure(f"ou=dsa,{BASE}")
+    w.client.put(
+        dsa_dn,
+        objectClass=["organizationalRole", "simpleSecurityObject"],
+        cn=["backup"],
+        roleOccupant=[alice],
+    )
+    dsa_upper_dn = f"cn=backup-upper,ou=dsa,{BASE}"
+    w.client.put(
+        dsa_upper_dn,
+        objectClass=["organizationalRole", "SIMPLESECURITYOBJECT"],
+        cn=["backup-upper"],
+        roleOccupant=[alice],
+    )
+    admin_role = w.acl_role("admin", "0:all;rwcdm")
+    w.assign(BASE, admin_role, [dsa_dn, dsa_upper_dn])
+
+    d = LdapAclDirectory(w.client)
+    assert d.roles_of_user(alice) == [role]
+    assert w.resolve(alice).rules == {}

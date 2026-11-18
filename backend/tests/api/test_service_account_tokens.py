@@ -169,3 +169,52 @@ def test_a_recreated_account_does_not_revive_old_tokens(
     assert bot.get("/api/v2/auth/me", headers=auth).status_code == 401
     assert create_account(admin) == account
     assert bot.get("/api/v2/auth/me", headers=auth).status_code == 401
+
+
+def test_role_editor_cannot_read_patch_move_or_delete_dsa_as_role(
+    app: FastAPI, directory: MemoryDirectory
+) -> None:
+    admin = Api(app).login("admin")
+    account = create_account(admin, "backup-agent")
+    grant_helpdesk(admin, account)
+
+    role_acl_dn = f"cn=role-editors,ou=aclroles,{BASE}"
+    directory.add(
+        role_acl_dn,
+        {
+            "objectClass": [b"hrcRole"],
+            "cn": [b"role-editors"],
+            "hrcAclTemplate": [b"0:role/roleGeneric;rwcdm", b"0:role;c"],
+        },
+    )
+    items = admin.call("GET", f"/admin/acl/assignments/{q(BASE)}").json()["assignments"]
+    items.append(
+        {"index": len(items), "scope": "subtree", "role": role_acl_dn, "members": [ASMITH]}
+    )
+    assert (
+        admin.call("PUT", f"/admin/acl/assignments/{q(BASE)}", {"assignments": items}).status_code
+        == 200
+    )
+
+    editor = Api(app).login("asmith")
+    listed = editor.call("GET", f"/objects/role?base={q(BASE)}&scope=sub")
+    assert listed.status_code == 200, listed.text
+    assert account not in {item["dn"] for item in listed.json()["items"]}
+
+    assert editor.call("GET", f"/objects/role/{q(account)}").status_code == 404
+    assert (
+        editor.call(
+            "PATCH",
+            f"/objects/role/{q(account)}",
+            {"tabs": {"main": {"active": True, "values": {"roleOccupant": [ASMITH]}}}},
+        ).status_code
+        == 404
+    )
+    assert (
+        editor.call("POST", f"/objects/role/{q(account)}/move", {"base": BASE}).status_code == 404
+    )
+    assert editor.call("DELETE", f"/objects/role/{q(account)}").status_code == 404
+
+    entry = directory.get(account)
+    assert entry is not None
+    assert entry.texts("roleOccupant") == []

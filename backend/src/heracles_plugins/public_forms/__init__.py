@@ -37,6 +37,7 @@ from heracles.attributes import (
 from heracles.core.containers import ensure_container
 from heracles.i18n import _
 from heracles.ldap import dn as dnlib
+from heracles.ldap.filter import matches as filter_matches
 from heracles.objects import ObjectType, Plugin, Section, Tab, TypeInfo, UnknownTypeError
 from heracles.objects.hooks import TabContext
 from heracles.objects.policy import TypedPolicy
@@ -186,8 +187,10 @@ class PublicForm(ObjectType):
                 template = values.get("hrcPublicFormTemplateDN")
                 if info is not None and isinstance(template, str) and template:
                     entry = ctx.directory.get(template, ["objectClass"])
-                    if entry is None or not all(
-                        entry.has_object_class(c) for c in info.main_tab.object_classes
+                    if (
+                        entry is None
+                        or not all(entry.has_object_class(c) for c in info.main_tab.object_classes)
+                        or not filter_matches(entry, info.type.filter)
                     ):
                         ctx.error(
                             "hrcPublicFormTemplateDN",

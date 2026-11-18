@@ -220,3 +220,29 @@ def test_one_refused_change_does_not_hold_back_the_others(directory: MemoryDirec
     # the refused one is still due and goes at the next pass; the last member stays then
     again = g.expire_grants(directory, NOW)
     assert again.expired == 0 and again.overdue == 1 and again.errors == []
+
+
+def test_approvals_and_reviews_exclude_dsa_service_accounts(directory: MemoryDirectory) -> None:
+    from heracles.core.access_config import AccessConfig
+    from heracles_plugins.access import approvals, reviews
+
+    dsa_ou = f"ou=dsa,{BASE}"
+    bot_dn = f"cn=bot,{dsa_ou}"
+    directory.add(dsa_ou, {"objectClass": [b"organizationalUnit"], "ou": [b"dsa"]})
+    directory.add(
+        bot_dn,
+        {
+            "objectClass": [b"organizationalRole", b"simpleSecurityObject"],
+            "cn": [b"bot"],
+            "owner": [ANN.encode()],
+            "roleOccupant": [ANN.encode()],
+        },
+    )
+
+    cfg = AccessConfig()
+    bot_entry = directory.get(bot_dn)
+    assert bot_entry is not None
+    assert approvals.kind_of(bot_entry) is None
+    assert approvals.requestable_entry(directory, cfg, bot_dn) is None
+    assert bot_dn not in {e.dn for e in approvals.requestable(directory, cfg)}
+    assert bot_dn not in {e.dn for e in reviews.select_holders(directory, [bot_dn], BASE)}

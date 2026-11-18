@@ -9,6 +9,7 @@ from heracles.acl._names import (
     OC_GROUP_OF_NAMES,
     OC_POSIX_GROUP,
     OC_ROLE,
+    OC_SIMPLE_SECURITY,
 )
 from heracles.acl.resolver import AssignmentEntry, escape_filter_value
 from heracles.ldap.client import DirectoryClient, DirectoryError, Scope
@@ -33,7 +34,9 @@ class LdapAclDirectory:
 
     def roles_of_user(self, user_dn: str) -> list[str]:
         v = escape_filter_value(user_dn)
-        return self._dns(f"(&(objectClass={OC_ROLE})(roleOccupant={v}))")
+        return self._dns(
+            f"(&(objectClass={OC_ROLE})(!(objectClass={OC_SIMPLE_SECURITY}))(roleOccupant={v}))"
+        )
 
     def assignment_entries(self) -> list[AssignmentEntry]:
         found = self._c.search(self._c.base_dn, f"(objectClass={OC_ACL})", attrs=[ATTR_ACL_ENTRY])

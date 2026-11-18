@@ -79,7 +79,7 @@ class Role(ObjectType):
     count_key = "role"
     icon = "briefcase"
     category = "directory"
-    filter = "(objectClass=organizationalRole)"
+    filter = "(&(objectClass=organizationalRole)(!(objectClass=simpleSecurityObject)))"
     main_attr = "cn"
     name_attr = "cn"
     rdn = "ou=roles"

@@ -326,7 +326,10 @@ _HOLDER_ATTRS = ["objectClass", "cn", "owner", "member", "roleOccupant"]
 def select_holders(directory: DirectoryClient, holders: Iterable[str], base: str) -> list[Entry]:
     """The groups and roles a campaign covers (listed DNs, and those below ``base``)."""
     found: dict[str, Entry] = {}
-    flt = "(|(objectClass=groupOfNames)(objectClass=organizationalRole))"
+    flt = (
+        "(|(objectClass=groupOfNames)"
+        "(&(objectClass=organizationalRole)(!(objectClass=simpleSecurityObject))))"
+    )
     for dn in holders:
         try:
             entry = next(iter(directory.search(dn, flt, Scope.BASE, _HOLDER_ATTRS)), None)

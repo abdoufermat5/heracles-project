@@ -9,8 +9,15 @@ import pytest
 import heracles_plugins.dsa as dsa
 from heracles.attributes import set_default_password_hasher
 from heracles.auth.passwords import PasswordPolicy
+from heracles.core.references import type_of
+from heracles.ldap.client import Scope
 from heracles.ldap.memory import MemoryDirectory
-from heracles.objects import ObjectService, ObjectValidationError, TypeRegistry
+from heracles.objects import (
+    ObjectNotFoundError,
+    ObjectService,
+    ObjectValidationError,
+    TypeRegistry,
+)
 from heracles.objects.builtin import register_builtin_types
 
 BASE = "dc=test"
@@ -104,3 +111,37 @@ def test_plugin_disabled_without_schema() -> None:
     status = registry.register_plugin(dsa.plugin(), {"organizationalrole"})
     assert not status.enabled
     assert status.missing_object_classes == ["simpleSecurityObject"]
+
+
+def test_dsa_is_never_treated_as_role(
+    service: ObjectService, directory: MemoryDirectory, registry: TypeRegistry
+) -> None:
+    dsa_dn = service.create("dsa", BASE, values(userPassword="s3cretpass1"))
+    role_dn = service.create("role", BASE, {"main": {"values": {"cn": "ops"}}})
+    user_dn = service.create(
+        "user",
+        BASE,
+        {"main": {"values": {"uid": "alice", "givenName": "Alice", "sn": "User"}}},
+    )
+
+    roles_page = service.list("role", BASE, scope=Scope.SUBTREE)
+    assert [item.dn for item in roles_page.items] == [role_dn]
+    assert service.count("role", BASE, scope=Scope.SUBTREE) == 1
+
+    dsa_entry = directory.get(dsa_dn)
+    assert dsa_entry is not None
+    assert type_of(registry, dsa_entry) is registry.get("dsa")
+
+    with pytest.raises(ObjectNotFoundError):
+        service.load("role", dsa_dn)
+    with pytest.raises(ObjectNotFoundError):
+        service.update("role", dsa_dn, {"main": {"values": {"roleOccupant": [user_dn]}}})
+    with pytest.raises(ObjectNotFoundError):
+        service.delete("role", dsa_dn)
+    with pytest.raises(ObjectNotFoundError):
+        service.move("role", dsa_dn, BASE)
+    assert directory.get(dsa_dn) is not None
+
+    with pytest.raises(ObjectValidationError) as exc:
+        service.update("user", user_dn, {"roles": {"values": {"roles": [dsa_dn]}}})
+    assert "roles.roles" in exc.value.fields

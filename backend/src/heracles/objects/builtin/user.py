@@ -56,6 +56,7 @@ def roles_of(ctx: TabContext, user_dn: str) -> list[str]:
     """DNs of the roles whose occupants include ``user_dn``."""
     flt = filters.and_(
         filters.equals("objectClass", schema.STD_OC.ORGANIZATIONAL_ROLE),
+        f"(!{filters.equals('objectClass', schema.STD_OC.SIMPLE_SECURITY_OBJECT)})",
         filters.equals(schema.STD_ATTR.ROLE_OCCUPANT, user_dn),
     )
     try:
@@ -176,7 +177,11 @@ class User(ObjectType):
                 if not changed:
                     continue
                 entry = ctx.directory.get(role_dn)
-                if entry is None or not entry.has_object_class(schema.STD_OC.ORGANIZATIONAL_ROLE):
+                if (
+                    entry is None
+                    or not entry.has_object_class(schema.STD_OC.ORGANIZATIONAL_ROLE)
+                    or entry.has_object_class(schema.STD_OC.SIMPLE_SECURITY_OBJECT)
+                ):
                     ctx.error("roles", _("Not a role: {dn}").format(dn=role_dn))
                 elif not ctx.can_write_object(
                     "role", role_dn, "main", schema.STD_ATTR.ROLE_OCCUPANT
