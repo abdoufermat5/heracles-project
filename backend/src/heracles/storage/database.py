@@ -187,7 +187,25 @@ class SqliteDatabase(Database):
         if self.path != MEMORY:
             conn.execute("PRAGMA journal_mode = WAL")
             conn.execute("PRAGMA synchronous = NORMAL")
+            self._restrict_files()
         return conn
+
+    def _restrict_files(self) -> None:
+        """Make the database and its write-ahead log and shared-memory files private (0600).
+
+        The sidecar files are created by SQLite with the permissions its library picks, so they
+        are tightened after the connection exists (and again on every connection, for a
+        database created by an older release).
+        """
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                os.chmod(self.path + suffix, 0o600)
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise DatabaseError(
+                    f"cannot restrict the permissions of {self.path + suffix}: {exc}"
+                ) from exc
 
     @contextmanager  # pyright: ignore[reportDeprecated]
     def connection(self) -> Iterator[sqlite3.Connection]:

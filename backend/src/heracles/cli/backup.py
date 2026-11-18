@@ -237,7 +237,7 @@ def run_backup(args: argparse.Namespace, factory: DirectoryFactory) -> int:
                 print(
                     "warning: the archive holds the secrets of the configuration file and the "
                     "password hashes, second-factor seeds and tokens of the database: keep it "
-                    "private (--exclude-secrets blanks the configuration secrets only)",
+                    "private (--exclude-secrets leaves them out)",
                     file=sys.stderr,
                 )
             (tmp / rel_config).write_text(text, encoding="utf-8")
@@ -245,7 +245,9 @@ def run_backup(args: argparse.Namespace, factory: DirectoryFactory) -> int:
 
             db = Database(target)
             try:
-                dump = dump_database(db, tmp / "database")
+                dump = dump_database(
+                    db, tmp / "database", exclude_secrets=bool(args.exclude_secrets)
+                )
             finally:
                 db.close()
             for table in dump.tables:
@@ -514,7 +516,10 @@ def register(sub: Any, factory: DirectoryFactory) -> None:
     backup.add_argument(
         "--exclude-secrets",
         action="store_true",
-        help="blank the passwords, secrets and tokens in the archived configuration file",
+        help=(
+            "blank the passwords and secrets of the archived configuration file and leave the "
+            "second-factor seeds and recovery codes out of the database dump"
+        ),
     )
 
     def do_backup(a: argparse.Namespace) -> int:

@@ -18,6 +18,7 @@ import pytest
 import yaml
 
 from heracles import __version__, demo
+from heracles.auth.second_factor_db import SqliteSecondFactorStore
 from heracles.cli.backup import blank_secrets
 from heracles.cli.main import main
 from heracles.ldap.client import DirectoryClient, Scope
@@ -326,6 +327,24 @@ def test_exclude_secrets_blanks_the_configuration_in_the_archive(
     assert json.loads(files["manifest.json"])["config"]["secrets_excluded"] is True
 
 
+def test_exclude_secrets_leaves_second_factor_seeds_out_of_the_dump(tmp_path: Path) -> None:
+    db = Database(tmp_path / "src.db")
+    store = SqliteSecondFactorStore(db)
+    store.set_totp_secret(f"uid=a,{BASE}", "JBSWY3DPEHPK3PXP")
+    store.set_recovery_hashes(f"uid=a,{BASE}", ["0123abcd"])
+    db.close()
+    config = write_config(tmp_path / "src.yaml", tmp_path / "src.db")
+    full = tmp_path / "full.tar.gz"
+    safe = tmp_path / "safe.tar.gz"
+    assert run("backup", "--config", str(config), "-o", str(full)) == 0
+    assert run("backup", "--config", str(config), "-o", str(safe), "--exclude-secrets") == 0
+    assert b"JBSWY3DPEHPK3PXP" in members(full)["database/second_factor_totp.jsonl"]
+    kept = members(safe)
+    assert b"JBSWY3DPEHPK3PXP" not in b"".join(kept.values())
+    assert b"0123abcd" not in b"".join(kept.values())
+    assert json.loads(kept["manifest.json"])["database"]["tables"]["second_factor_recovery"] == 0
+
+
 def test_blank_secrets_keeps_layout_and_other_values() -> None:
     text = (
         "# the service account\n"
@@ -436,7 +455,7 @@ def test_commands_run_as_a_subprocess(tmp_path: Path) -> None:
     env = {"PATH": "", "HOME": str(tmp_path)}
 
     done = subprocess.run(
-        [*cli, "backup", "--config", str(config), "-o", str(out), "--exclude-secrets"],
+        [*cli, "backup", "--config", str(config), "-o", str(out)],
         capture_output=True,
         text=True,
         env=env,

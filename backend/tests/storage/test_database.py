@@ -66,6 +66,20 @@ def test_file_is_private_and_survives_reopening(tmp_path: Path) -> None:
         assert conn.execute("SELECT name FROM things").fetchone()[0] == "kept"
 
 
+def test_sidecar_files_and_an_older_database_are_private(tmp_path: Path) -> None:
+    path = tmp_path / "h.db"
+    path.touch(mode=0o644)
+    path.chmod(0o644)  # a database created by an older release, whatever the umask said
+    db = Database(path)
+    db.migrate("demo", [V1])
+    with db.transaction() as conn:
+        conn.execute("INSERT INTO things (name) VALUES ('x')")
+    sidecars = [Path(str(path) + s) for s in ("", "-wal", "-shm")]
+    assert all(p.exists() for p in sidecars)
+    assert [stat.S_IMODE(p.stat().st_mode) for p in sidecars] == [0o600] * 3
+    db.close()
+
+
 def test_transaction_rolls_back_on_error(tmp_path: Path) -> None:
     db = Database(tmp_path / "h.db")
     db.migrate("demo", [V1])

@@ -30,6 +30,8 @@ from heracles.storage.database import Database, DatabaseError
 
 __all__ = [
     "EPHEMERAL_TABLES",
+    "SECRET_COLUMNS",
+    "SECRET_TABLES",
     "DatabaseDump",
     "LoadResult",
     "NewerSchemaError",
@@ -53,6 +55,13 @@ EPHEMERAL_TABLES = frozenset(
         "public_forms_events",
     }
 )
+
+#: Secret columns written as ``null`` when a dump excludes secrets (a TOTP seed cannot be hashed:
+#: the server needs it in clear to check a code, so it is never exported on request).
+SECRET_COLUMNS: Mapping[str, frozenset[str]] = {"second_factor_totp": frozenset({"secret"})}
+
+#: Tables written empty when a dump excludes secrets (digests of the recovery codes).
+SECRET_TABLES = frozenset({"second_factor_recovery"})
 
 SCHEMA_TABLE = "schema_migrations"
 BINARY_KEY = "$b64"
@@ -140,8 +149,12 @@ def _decode(value: Any) -> Any:
     return value
 
 
-def dump_database(db: Database, dest: Path) -> DatabaseDump:
-    """Write one ``<table>.jsonl`` per persistent table into the directory ``dest``."""
+def dump_database(db: Database, dest: Path, *, exclude_secrets: bool = False) -> DatabaseDump:
+    """Write one ``<table>.jsonl`` per persistent table into the directory ``dest``.
+
+    ``exclude_secrets``: second-factor seeds and recovery code digests are left out (the
+    users enrol again after a restore).
+    """
     dest.mkdir(parents=True, exist_ok=True)
     with db.transaction() as conn:
         result = DatabaseDump(db.dialect, _versions(db, conn))
@@ -150,9 +163,16 @@ def dump_database(db: Database, dest: Path) -> DatabaseDump:
                 continue
             count = 0
             with (dest / f"{table}.jsonl").open("w", encoding="utf-8", newline="\n") as out:
+                if exclude_secrets and table in SECRET_TABLES:
+                    result.tables[table] = 0
+                    continue
+                blanked = SECRET_COLUMNS.get(table, frozenset()) if exclude_secrets else frozenset()
                 for row in conn.execute(f"SELECT * FROM {_quote(table)} ORDER BY 1"):  # noqa: S608
                     names = row.keys()
-                    record = {name: _encode(row[i]) for i, name in enumerate(names)}
+                    record = {
+                        name: None if name in blanked else _encode(row[i])
+                        for i, name in enumerate(names)
+                    }
                     out.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")))
                     out.write("\n")
                     count += 1
