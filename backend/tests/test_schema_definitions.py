@@ -85,3 +85,22 @@ def test_shipped_files_are_up_to_date() -> None:
     hint = "run: uv run heracles schema export -o ../deploy/ldap/schema/heracles.ldif"
     assert (SHIPPED / "heracles.ldif").read_text(encoding="utf-8") == render_ldif(), hint
     assert (SHIPPED / "heracles.schema").read_text(encoding="utf-8") == render_schema(), hint
+
+
+def test_secret_attributes_are_declared_as_secrets() -> None:
+    from heracles.schema.model import Syntax
+
+    # one distinct member (it used to be a silent alias of BINARY), same LDAP definition
+    assert Syntax.SECRET is not Syntax.BINARY
+    assert (Syntax.SECRET.oid, Syntax.SECRET.equality) == (
+        Syntax.BINARY.oid,
+        Syntax.BINARY.equality,
+    )
+    for name in (
+        "hrcMailStorePassword",
+        "hrcImapPassword",
+        "hrcQuotaLdapServerUserPassword",
+        "hrcSievePassword",
+        "hrcPasswordRecoverySalt",
+    ):
+        assert ATTRS[name.lower()].syntax is Syntax.SECRET, name

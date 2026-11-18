@@ -145,8 +145,8 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.47 NAME
  'hrcMailStoreConnectURL' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrin
  gsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.48 NAME 
- 'hrcMailStorePassword' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrings
- Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcMailStorePassword' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.11
+ 5.121.1.40 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.49 NAME 
  'hrcMailStoreUseSlashes' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1.1466.115.
  121.1.7 SINGLE-VALUE )
@@ -211,8 +211,8 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.69 NAME
  'hrcImapConnectURL' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
  ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.70 NAME 
- 'hrcImapPassword' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatch
-  SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+ 'hrcImapPassword' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.115.121
+ .1.40 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.71 NAME 
  'hrcPkiCertDN' EQUALITY distinguishedNameMatch SYNTAX 1.3.6.1.4.1.1466.115.
  121.1.12 )
@@ -496,8 +496,8 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.164 NAME
   'hrcPasswordRecoveryMailSubject' EQUALITY caseIgnoreMatch SUBSTR caseIgnor
  eSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.165 NAME
-  'hrcPasswordRecoverySalt' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstr
- ingsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcPasswordRecoverySalt' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.146
+ 6.115.121.1.40 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.166 NAME
   'hrcPasswordRecoveryUseAlternate' EQUALITY booleanMatch SYNTAX 1.3.6.1.4.1
  .1466.115.121.1.7 SINGLE-VALUE )
@@ -619,8 +619,8 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.205 NAME
   'hrcQuotaLdapServerUserDn' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubst
  ringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.206 NAME
-  'hrcQuotaLdapServerUserPassword' EQUALITY caseIgnoreMatch SUBSTR caseIgnor
- eSubstringsMatch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcQuotaLdapServerUserPassword' EQUALITY octetStringMatch SYNTAX 1.3.6.1.
+ 4.1.1466.115.121.1.40 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.207 NAME
   'hrcQuotaMailCommand' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstrings
  Match SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
@@ -697,8 +697,8 @@ olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.231 NAME
   'hrcSieveConnectURL' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsM
  atch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.232 NAME
-  'hrcSievePassword' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMat
- ch SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
+  'hrcSievePassword' EQUALITY octetStringMatch SYNTAX 1.3.6.1.4.1.1466.115.1
+ 21.1.40 SINGLE-VALUE )
 olcAttributeTypes: ( 2.25.147659383274657253636041013514546701909.1.233 NAME
   'hrcSnapshotBase' EQUALITY caseIgnoreMatch SUBSTR caseIgnoreSubstringsMatc
  h SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 SINGLE-VALUE )
@@ -1232,11 +1232,12 @@ olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.52 NAME '
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.53 NAME '
  hrcTasks' SUP top STRUCTURAL MUST cn MAY ( description $ hrcTasksStatus $ h
  rcTasksCreationDate $ hrcTasksScheduleDate $ hrcTasksLastExec $ hrcTasksNex
- tExec $ hrcTasksRepeatable $ hrcTasksRepeatableSchedule ) )
+ tExec $ hrcTasksRepeatable $ hrcTasksRepeatableSchedule $ hrcTasksAuthor ) 
+ )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.54 NAME '
  hrcTasksAutomaticGroups' SUP top AUXILIARY MAY ( hrcTasksAutomaticGroupsOfN
  ame $ hrcTasksAutomaticGroupsRegexPattern $ hrcTasksAutomaticGroupsDynamicG
- roup $ hrcTasksAutomaticGroupsMembers $ hrcTasksAuthor ) )
+ roup $ hrcTasksAutomaticGroupsMembers ) )
 olcObjectClasses: ( 2.25.147659383274657253636041013514546701909.2.55 NAME '
  hrcTasksConf' SUP top AUXILIARY MAY ( hrcTasksRDN $ hrcTasksConfLastExecTim
  e $ hrcTasksConfMaxEmails $ hrcTasksConfIntervalEmails ) )

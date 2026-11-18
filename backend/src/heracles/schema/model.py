@@ -41,10 +41,15 @@ class Syntax(Enum):
     TIME = (_GENERALIZED_TIME, "generalizedTimeMatch", "generalizedTimeOrderingMatch", None)
     """GeneralizedTime (``YYYYMMDDHHMMSSZ``)."""
     DN = (_DN, "distinguishedNameMatch", None, None)
-    BINARY = (_OCTET_STRING, "octetStringMatch", None, None)
+    BINARY = (_OCTET_STRING, "octetStringMatch", None, None, "binary")
     """Raw bytes (images, compressed data)."""
-    SECRET = (_OCTET_STRING, "octetStringMatch", None, None)
-    """Passwords and other secrets (bytes, never searched by substring)."""
+    SECRET = (_OCTET_STRING, "octetStringMatch", None, None, "secret")
+    """Passwords and other secrets (bytes, never searched by substring).
+
+    The LDAP definition is the same as :attr:`BINARY`; the last member of the value only keeps
+    the two apart, because members with equal values would be one Python alias and
+    ``Syntax.SECRET is Syntax.BINARY`` would hold.
+    """
 
     @property
     def oid(self) -> str:
