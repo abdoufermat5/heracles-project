@@ -54,6 +54,8 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run pyright
       - name: Tests (the PostgreSQL ones must run, not be skipped)
+        # bash -e alone would take tee's status and hide failing tests
+        shell: bash -eo pipefail {0}
         run: |
           uv run pytest -rs | tee "$RUNNER_TEMP/pytest.log"
           if grep -q 'HERACLES_TEST_POSTGRES_URL is not set' "$RUNNER_TEMP/pytest.log"; then
