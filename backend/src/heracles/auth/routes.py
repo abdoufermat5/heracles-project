@@ -27,6 +27,7 @@ from heracles.auth.login import (
     authenticate_bind,
     find_user_dn,
 )
+from heracles.auth.owner import bind_owner
 from heracles.auth.sessions import CLIENT_KEY, client_info
 from heracles.auth.sso import SsoConfig, effective_sso
 from heracles.ldap.client import DirectoryClient
@@ -169,6 +170,7 @@ def _open_session(
     if sso:
         session.cache["sso"] = sso
     session.cache.update(cache or {})
+    bind_owner(session, state.directories[directory_id], state.clock())
     state.sessions.save(session)
     cfg = state.settings.session
     response.set_cookie(

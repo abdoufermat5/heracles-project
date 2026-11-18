@@ -199,7 +199,7 @@ def test_expired_token_is_refused(app: FastAPI, state: AppState) -> None:
     assert r.status_code == 401 and "expired" in r.json()["error"]["message"]
 
 
-def test_token_of_a_locked_owner_is_refused(app: FastAPI, state: AppState) -> None:
+def test_token_of_a_locked_owner_is_revoked(app: FastAPI, state: AppState) -> None:
     token = Api(app).login("helpdesk").token()
     admin = Api(app).login("admin")
     assert (
@@ -211,7 +211,8 @@ def test_token_of_a_locked_owner_is_refused(app: FastAPI, state: AppState) -> No
         admin.client.post(f"/api/v2/users/{q(HELPDESK)}/unlock", headers=admin.headers).status_code
         == 200
     )
-    assert Bearer(app, token).get("/api/v2/auth/me").status_code == 200
+    # locking revokes the tokens for good: unlocking does not bring them back
+    assert Bearer(app, token).get("/api/v2/auth/me").status_code == 401
 
 
 # -- scopes ---------------------------------------------------------------------------------------

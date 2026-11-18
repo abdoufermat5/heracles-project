@@ -107,13 +107,17 @@ def _kind(rdn: str) -> str:
 
 
 @router.post("/users/{dn:path}/lock")
-def lock_account(dn: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
-    return set_account_lock(user, domain, dn, True)
+def lock_account(
+    dn: str, user: CurrentUserDep, domain: DomainDep, state: StateDep
+) -> dict[str, JSON]:
+    return set_account_lock(user, domain, state, dn, True)
 
 
 @router.post("/users/{dn:path}/unlock")
-def unlock_account(dn: str, user: CurrentUserDep, domain: DomainDep) -> dict[str, JSON]:
-    return set_account_lock(user, domain, dn, False)
+def unlock_account(
+    dn: str, user: CurrentUserDep, domain: DomainDep, state: StateDep
+) -> dict[str, JSON]:
+    return set_account_lock(user, domain, state, dn, False)
 
 
 # ---------------------------------------------------------- second factors

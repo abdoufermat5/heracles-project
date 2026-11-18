@@ -13,6 +13,7 @@ from heracles.api.deps import StateDep, client_ip
 from heracles.api.errors import ApiError, unauthenticated, validation
 from heracles.api.v1.common import V1Route, V1UserDep, session_token
 from heracles.auth.login import InvalidLoginError, authenticate_bind
+from heracles.auth.owner import bind_owner
 
 router = APIRouter(route_class=V1Route, tags=["authentification"])
 
@@ -58,7 +59,10 @@ def login(body: LoginRequest, request: Request, state: StateDep) -> str:
         raise unauthenticated("Second factor accounts cannot use API v1")
     state.limiter.record_success(key)
     audit_login(state, request, directory, user_dn, "api v1")
-    return state.sessions.create(user_dn, directory_id).id
+    session = state.sessions.create(user_dn, directory_id)
+    bind_owner(session, directory, state.clock())
+    state.sessions.save(session)
+    return session.id
 
 
 @router.get(

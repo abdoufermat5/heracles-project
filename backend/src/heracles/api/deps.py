@@ -19,6 +19,7 @@ from heracles.api.middleware import SESSIONS_SCOPE_KEY, bearer_value
 from heracles.api.state import AppState
 from heracles.auth import csrf
 from heracles.auth.login import is_trusted_proxy
+from heracles.auth.owner import OWNER_CHECKED_KEY, owner_is_current
 from heracles.auth.sessions import Session
 from heracles.ldap.client import DirectoryClient
 
@@ -111,6 +112,21 @@ def current_session(request: Request, state: StateDep) -> Session:
     return session
 
 
+def ensure_session_owner(state: AppState, session: Session, directory: DirectoryClient) -> None:
+    """End the session (401) when the entry it was opened for is gone, replaced or locked.
+
+    The directory is consulted at most every few seconds per session (see
+    :mod:`heracles.auth.owner`); the result is saved here because API v1 sessions are not
+    saved by the middleware.
+    """
+    seen = session.cache.get(OWNER_CHECKED_KEY)
+    if not owner_is_current(session, directory, state.clock(), is_admin=state.is_admin):
+        state.sessions.delete(session.id)
+        raise unauthenticated("This session has ended")
+    if session.cache.get(OWNER_CHECKED_KEY) != seen:
+        state.sessions.save(session)
+
+
 def current_user(request: Request, state: StateDep) -> CurrentUser:
     """Require a fully authenticated session (second factor done) or a valid API token."""
     if bearer_value(request) is not None:
@@ -125,6 +141,7 @@ def current_user(request: Request, state: StateDep) -> CurrentUser:
     directory = state.directories.get(session.directory_id)
     if directory is None:
         raise ApiError(401, "unauthenticated", "Unknown directory")
+    ensure_session_owner(state, session, directory)
     return CurrentUser(session, session.directory_id, directory, client_ip(request, state))
 
 

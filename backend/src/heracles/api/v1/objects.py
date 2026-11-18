@@ -8,6 +8,7 @@ from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Body, Query, Request, Response, status
 
+from heracles.api.accounts import end_account_access
 from heracles.api.deps import CurrentUser, StateDep
 from heracles.api.domain import Domain, DomainDep, TypeAclPolicy
 from heracles.api.errors import ApiError, forbidden, not_found
@@ -90,6 +91,15 @@ def _changes_password(payload: dict[str, Any]) -> bool:
     return False
 
 
+def _sets_password(payload: dict[str, Any]) -> bool:
+    """True when the PATCH body gives ``userPassword`` a value on any tab."""
+    for tab in payload.values():
+        values = cast("dict[str, Any]", tab).get("values") if isinstance(tab, dict) else None
+        if isinstance(values, dict) and cast("dict[str, Any]", values).get("userPassword"):
+            return True
+    return False
+
+
 def _update(
     domain: Domain,
     user: CurrentUser,
@@ -99,13 +109,22 @@ def _update(
     state: AppState,
 ) -> ObjectState:
     _ensure_unlocked(domain, user, dn)
-    if dnlib.normalize(dn) == dnlib.normalize(user.dn) and _changes_password(payload):
+    own = dnlib.normalize(dn) == dnlib.normalize(user.dn)
+    if own and _changes_password(payload):
         # v1 authenticates once (POST /login returns a session token): a stolen token
         # alone must not be enough to change the account password.
         require_recent_auth(state, user.session)
     with object_errors():
         service, _policy = domain.service(user, info.name)
         updated = service.update(info.name, dn, payload)
+        if _sets_password(payload):
+            end_account_access(
+                state,
+                dn,
+                updated.dn,
+                keep_session=user.session.id if own else None,
+                revoke_tokens=False,
+            )
     if dnlib.normalize(updated.dn) != dnlib.normalize(dn):
         domain.locks(user.directory_id, user.directory).release(dn, user.dn)
     return updated
@@ -368,12 +387,15 @@ def list_object_tabs(type: str, dn: str, user: V1UserDep, domain: DomainDep) -> 
     summary="Delete the object",
     operation_id="deleteObject",
 )
-def delete_object(type: str, dn: str, user: V1UserDep, domain: DomainDep) -> Response:
+def delete_object(
+    type: str, dn: str, user: V1UserDep, domain: DomainDep, state: StateDep
+) -> Response:
     info = _info(domain, type)
     _ensure_unlocked(domain, user, dn)
     with object_errors():
         service, _policy = domain.service(user, info.name)
         service.delete(info.name, dn)
+    end_account_access(state, dn)
     domain.locks(user.directory_id, user.directory).release(dn, user.dn)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

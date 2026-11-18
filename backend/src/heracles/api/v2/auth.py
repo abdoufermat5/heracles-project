@@ -30,6 +30,7 @@ from heracles.auth.login import (
     authenticate_bind,
     authenticate_header,
 )
+from heracles.auth.owner import bind_owner
 from heracles.auth.passwords import PasswordPolicyError
 from heracles.auth.recovery import RecoveryError
 from heracles.auth.second_factor import WebAuthnCredential
@@ -228,6 +229,7 @@ def _start_session(
     session.cache[CLIENT_KEY] = client_info(
         client_ip(request, state), request.headers.get("user-agent")
     )
+    bind_owner(session, state.directories[directory_id], state.clock())
     state.sessions.save(session)
     _set_session_cookie(response, state, session)
     if methods:

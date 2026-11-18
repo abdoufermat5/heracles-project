@@ -147,7 +147,7 @@ BaseUrlDep = Annotated[str, Depends(scim_base_url)]
 def get_scim_service(
     user: UserDep, domain: DomainDep, state: StateDep, base_url: BaseUrlDep
 ) -> ScimService:
-    return ScimService(user, domain, state.settings.scim, base_url)
+    return ScimService(user, domain, state.settings.scim, base_url, state)
 
 
 ServiceDep = Annotated[ScimService, Depends(get_scim_service)]

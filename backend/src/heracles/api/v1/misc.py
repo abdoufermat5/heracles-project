@@ -9,6 +9,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Query, Response, status
 from pydantic import BaseModel, Field
 
+from heracles.api.accounts import end_account_access
 from heracles.api.deps import StateDep
 from heracles.api.domain import DomainDep
 from heracles.api.errors import ApiError, forbidden, not_found
@@ -51,12 +52,12 @@ def get_lock_state(dn: str, user: V1UserDep, domain: DomainDep) -> bool:
     operation_id="setLockState",
 )
 def set_lock_state(
-    dn: str, body: Annotated[bool, Body()], user: V1UserDep, domain: DomainDep
+    dn: str, body: Annotated[bool, Body()], user: V1UserDep, domain: DomainDep, state: StateDep
 ) -> Response:
     if body:
-        v2_directory.lock_account(dn, user, domain)
+        v2_directory.lock_account(dn, user, domain, state)
     else:
-        v2_directory.unlock_account(dn, user, domain)
+        v2_directory.unlock_account(dn, user, domain, state)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -68,7 +69,9 @@ def set_lock_state(
     summary="Archive an object (delete it)",
     operation_id="archiveObject",
 )
-def archive_object(type: str, dn: str, user: V1UserDep, domain: DomainDep) -> Response:
+def archive_object(
+    type: str, dn: str, user: V1UserDep, domain: DomainDep, state: StateDep
+) -> Response:
     if "archive" not in domain.registry.settings:
         raise ApiError(501, "not_implemented", "The archive plugin is not available")
     service_module = importlib.import_module("heracles_plugins.archive")
@@ -101,6 +104,7 @@ def archive_object(type: str, dn: str, user: V1UserDep, domain: DomainDep) -> Re
             raise bad_request(str(exc)) from exc
     with object_errors():
         service.delete(info.name, dn)
+    end_account_access(state, dn)
     domain.locks(user.directory_id, user.directory).release(dn, user.dn)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

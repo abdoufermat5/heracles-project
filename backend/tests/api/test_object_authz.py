@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any, cast
@@ -53,6 +54,9 @@ class Api:
 
     def patch(self, path: str, body: Any) -> Any:
         return self.client.patch(f"/api/v2{path}", json=body, headers=self.headers)
+
+    def delete(self, path: str) -> Any:
+        return self.client.delete(f"/api/v2{path}", headers=self.headers)
 
 
 @pytest.fixture
@@ -177,3 +181,37 @@ def test_snapshot_restore_cannot_write_what_the_caller_may_not(app: FastAPI) -> 
     assert r.status_code == 403, r.text
     now = directory.get(ASMITH)
     assert now is not None and now.text("userPassword") == "{SSHA}changed"
+
+
+@pytest.mark.parametrize("action", ["lock", "delete", "password"])
+def test_account_changes_end_its_open_sessions(app: FastAPI, action: str) -> None:
+    """Locking, deleting or resetting the password of an account signs its sessions out at once."""
+    victim = login(app, "bmartin")
+    assert victim.get("/auth/me").status_code == 200
+    target = f"uid=bmartin,ou=people,{PARIS}"
+    admin = login(app, "admin")
+    if action == "lock":
+        r = admin.post(f"/users/{q(target)}/lock")
+    elif action == "delete":
+        r = admin.delete(f"/objects/user/{q(target)}")
+    else:
+        body = {"tabs": {"main": {"values": {"userPassword": "N3w-passw0rd-long-enough"}}}}
+        r = admin.patch(f"/objects/user/{q(target)}", body)
+    assert r.status_code in (200, 204), r.text
+    assert victim.get("/types").status_code == 401
+
+
+@pytest.mark.parametrize("recreated", [False, True])
+def test_session_does_not_outlive_its_entry(app: FastAPI, recreated: bool) -> None:
+    """An entry removed behind the API's back (or replaced under the same DN) ends its sessions."""
+    victim = login(app, "bmartin")
+    assert victim.get("/auth/me").status_code == 200
+    directory = cast("MemoryDirectory", app.state.heracles.directories["main"])
+    dn = f"uid=bmartin,ou=people,{PARIS}"
+    old = directory.get(dn)
+    assert old is not None
+    directory.delete(dn)
+    if recreated:
+        directory.add(dn, {k: v for k, v in old.attrs.items() if k != "entryUUID"})
+    app.state.heracles.clock = lambda: time.time() + 3600  # past the periodic re-check
+    assert victim.get("/types").status_code == 401

@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from heracles.api.deps import CurrentUser, StateDep, client_ip
+from heracles.api.deps import CurrentUser, StateDep, client_ip, ensure_session_owner
 from heracles.api.errors import ApiError, unauthenticated
 from heracles.api.middleware import LEGACY_SESSION_HEADER, SESSION_HEADER, bearer_value
 from heracles.ldap.client import DirectoryError
@@ -73,6 +73,7 @@ def v1_user(request: Request, state: StateDep) -> CurrentUser:
     directory = state.directories.get(session.directory_id)
     if directory is None:
         raise unauthenticated("Unknown directory")
+    ensure_session_owner(state, session, directory)
     return CurrentUser(session, session.directory_id, directory, client_ip(request, state))
 
 

@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
-from heracles.api.accounts import USER_LOCK_ACL, set_account_lock
+from heracles.api.accounts import USER_LOCK_ACL, end_account_access, set_account_lock
 from heracles.api.errors import ApiError
 from heracles.api.filter_rules import filter_checks
 from heracles.auth.passwords import is_locked
@@ -64,6 +64,7 @@ from heracles.scim.settings import ScimSettings
 if TYPE_CHECKING:
     from heracles.api.deps import CurrentUser
     from heracles.api.domain import Domain
+    from heracles.api.state import AppState
 
 #: Ids resolved per directory search (one OR of equality filters).
 ID_CHUNK = 50
@@ -112,6 +113,8 @@ class _Shared:
     domain: Domain
     settings: ScimSettings
     base_url: str
+    #: Where sessions and API tokens live (``None``: nothing to revoke).
+    state: AppState | None = None
     #: id <-> DN lookups made by this request (lower-cased ids, normalised DNs).
     dn_by_id: dict[str, str] = field(default_factory=lambda: {})
     id_by_dn: dict[str, str] = field(default_factory=lambda: {})
@@ -432,6 +435,7 @@ class _Ops:
             self.service.load(self.type_name, dn)
             self.archive(dn)
             self.service.delete(self.type_name, dn)
+            end_account_access(self.s.state, dn)
 
 
 @dataclass(slots=True)
@@ -662,7 +666,7 @@ class _Users(_Ops):
             }
             dn = self.service.create(self.type_name, self.base(), {"main": {"values": values}})
             if want.active is False:
-                set_account_lock(self.s.user, self.s.domain, dn, True)
+                set_account_lock(self.s.user, self.s.domain, self.s.state, dn, True)
             return self.render(dn, None, full=True)
 
     def replace(self, resource_id: str, resource: dict[str, Any]) -> dict[str, Any]:
@@ -716,8 +720,10 @@ class _Users(_Ops):
         if values:
             dn = self.service.update(self.type_name, dn, {"main": {"values": values}}).dn
             self.s.remember(rid, dn)
+            if password is not None:
+                end_account_access(self.s.state, dn, revoke_tokens=False)
         if active is not None and active != current_active:
-            set_account_lock(self.s.user, self.s.domain, dn, not active)
+            set_account_lock(self.s.user, self.s.domain, self.s.state, dn, not active)
         return self.render(dn, None, full=True)
 
 
@@ -900,9 +906,14 @@ class _Groups(_Ops):
 
 class ScimService:
     def __init__(
-        self, user: CurrentUser, domain: Domain, settings: ScimSettings, base_url: str
+        self,
+        user: CurrentUser,
+        domain: Domain,
+        settings: ScimSettings,
+        base_url: str,
+        state: AppState | None = None,
     ) -> None:
-        shared = _Shared(user, domain, settings, base_url)
+        shared = _Shared(user, domain, settings, base_url, state)
         self._users = _Users(shared)
         self._groups = _Groups(shared)
 
