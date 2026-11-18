@@ -40,9 +40,12 @@ class _LinkUrlAttr(StringAttr):
         errors = super()._validate(value)
         text = value.strip()
         scheme = text.partition(":")[0].lower()
-        if (
-            ("://" in text and scheme not in ("http", "https"))
-            or scheme in ("javascript", "data", "vbscript", "file", "blob")
+        if ("://" in text and scheme not in ("http", "https")) or scheme in (
+            "javascript",
+            "data",
+            "vbscript",
+            "file",
+            "blob",
         ):
             errors.append(_("Only http and https links are allowed."))
         return errors

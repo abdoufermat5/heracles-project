@@ -154,6 +154,10 @@ def test_weblink_tabs_skip_absent_target_types(directory: MemoryDirectory) -> No
     ],
 )
 def test_link_url_scheme_allowlist(value: str, ok: bool) -> None:
-    attr = weblink.WebLinkTab.link.attributes[1] if hasattr(weblink.WebLinkTab.link, "attributes") else None
+    attr = (
+        weblink.WebLinkTab.link.attributes[1]
+        if hasattr(weblink.WebLinkTab.link, "attributes")
+        else None
+    )
     assert attr is not None
     assert (attr.validate(value) == []) is ok

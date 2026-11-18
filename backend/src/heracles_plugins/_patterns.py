@@ -3,13 +3,14 @@
 A directory-provided pattern is matched against values the server reads, possibly many
 times per run. An unbounded pattern (or an unbounded value) can therefore hold a worker
 for minutes: patterns are length-limited, a simple static check refuses nested
-quantifiers (the classic exponential form ``(a+)+``), and values are cut before they are
-tested.
+quantifiers and overlapping quantified alternations (``(a+)+``, ``(a|a)+``), and
+values are cut before they are tested.
 """
 
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from heracles.i18n import _
 
@@ -25,14 +26,27 @@ class PatternError(ValueError):
     """The expression cannot be used (invalid, too long or potentially exponential)."""
 
 
-def _nested_quantifier(pattern: str) -> bool:
-    """True when a quantified group contains another quantifier (``(a+)+``).
+_LITERAL_BRANCH = re.compile(r"[A-Za-z0-9_ .@-]+")
 
-    Conservative and syntactic: a group that contains a quantifier and is itself
-    quantified is refused, including a quantifier inherited from a nested group
-    (``((a+))+``). Character classes and escapes are skipped.
+
+def _disjoint_literals(branches: list[str]) -> bool:
+    """True when every branch is a plain literal and no two start with the same character."""
+    if any(_LITERAL_BRANCH.fullmatch(branch) is None for branch in branches):
+        return False
+    firsts = [branch[0] for branch in branches]
+    return len(set(firsts)) == len(firsts)
+
+
+def _nested_quantifier(pattern: str) -> bool:
+    """True when the pattern can take exponential time on a crafted value.
+
+    Conservative and syntactic. Refused: a quantified group that contains another
+    quantifier (``(a+)+``, ``((a+))+``) and a quantified group with alternation unless
+    its branches are plain literals starting with distinct characters (``(a|a)+``,
+    ``(a|ab)+``). Comments ``(?#...)``, character classes and escapes are skipped.
     """
-    inside = [False]
+    # Per open group: [contains a quantifier, index where the body starts, "|" positions].
+    stack: list[list[Any]] = [[False, 0, []]]
     index = 0
     length = len(pattern)
     while index < length:
@@ -42,6 +56,10 @@ def _nested_quantifier(pattern: str) -> bool:
             continue
         if char == "[":
             index += 1
+            if index < length and pattern[index] == "^":
+                index += 1
+            if index < length and pattern[index] == "]":
+                index += 1
             while index < length:
                 if pattern[index] == "\\":
                     index += 2
@@ -52,23 +70,34 @@ def _nested_quantifier(pattern: str) -> bool:
                 index += 1
             continue
         if char == "(":
-            inside.append(False)
             index += 1
+            if pattern.startswith("?#", index):
+                # A comment ends at the first ``)``, whatever it contains.
+                end = pattern.find(")", index)
+                index = length if end < 0 else end + 1
+                continue
             # ``(?:``, ``(?=``, ``(?P<name>``...: the ``?`` introduces the group, it is
             # not a quantifier of what precedes it.
             if index < length and pattern[index] == "?":
                 index += 1
                 if index < length and pattern[index] == "P":
                     index += 1
-                if index < length and pattern[index] == "<":
-                    while index < length and pattern[index] not in ">":
+                if pattern.startswith(("<=", "<!"), index):
+                    index += 2
+                elif index < length and pattern[index] == "<":
+                    while index < length and pattern[index] != ">":
                         index += 1
                     index += 1
                 elif index < length and pattern[index] in ":=!":
                     index += 1
+            stack.append([False, index, []])
             continue
         if char == ")":
-            inner = inside.pop() if len(inside) > 1 else False
+            if len(stack) == 1:
+                index += 1
+                continue
+            inner, start, bars = stack.pop()
+            body_end = index
             index += 1
             quantified = False
             if index < length and pattern[index] in "*+?":
@@ -79,16 +108,24 @@ def _nested_quantifier(pattern: str) -> bool:
                 if match is not None:
                     quantified = True
                     index = match.end()
-            if inner and quantified:
-                return True
-            inside[-1] = inside[-1] or inner or quantified
+            if quantified:
+                if inner:
+                    return True
+                if bars:
+                    cuts = [start - 1, *bars, body_end]
+                    branches = [pattern[cuts[i] + 1 : cuts[i + 1]] for i in range(len(cuts) - 1)]
+                    if not _disjoint_literals(branches):
+                        return True
+            stack[-1][0] = stack[-1][0] or inner or quantified
             continue
-        if char in "*+?":
-            inside[-1] = True
+        if char == "|":
+            stack[-1][2].append(index)
+        elif char in "*+?":
+            stack[-1][0] = True
         elif char == "{":
             match = _BRACE_QUANTIFIER.match(pattern, index)
             if match is not None:
-                inside[-1] = True
+                stack[-1][0] = True
                 index = match.end()
                 continue
         index += 1
@@ -100,9 +137,11 @@ def pattern_problem(expression: str) -> str | None:
     if len(expression) > MAX_PATTERN_LENGTH:
         return _("The pattern is too long (at most {n} characters).").format(n=MAX_PATTERN_LENGTH)
     try:
-        re.compile(expression)
+        compiled = re.compile(expression)
     except re.error as exc:
         return _("Invalid regular expression: {error}").format(error=str(exc))
+    if compiled.flags & re.VERBOSE:
+        return _("The verbose flag (?x) is not allowed.")
     if _nested_quantifier(expression):
         return _("The pattern nests quantifiers (such as (a+)+), which can take exponential time.")
     return None

@@ -98,6 +98,12 @@ def test_modifiers_chain_left_to_right() -> None:
     assert ev("%lt|a%", a=["Éric"]) == ["eric"]
 
 
+@pytest.mark.parametrize("regex", ["(a+)+$", "(a|a)+$", "a" * 300])
+def test_mask_regex_refuses_catastrophic_patterns(regex: str) -> None:
+    with pytest.raises(MaskError):
+        ev(f"%M[/{regex}/]|m%", m=["aaaa"])
+
+
 def test_array_modifiers() -> None:
     vals = {"m": ["a@x", "b@y", "c@z"]}
     assert ev("%F|m%", **vals) == ["a@x"]

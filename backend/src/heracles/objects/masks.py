@@ -330,10 +330,14 @@ def _int_arg(modifier: Modifier, index: int, default: int) -> int:
 
 
 def _regex(pattern: str) -> re.Pattern[str]:
-    try:
-        return re.compile(pattern)
-    except re.error as exc:
-        raise MaskError(f"invalid regular expression {pattern!r}: {exc}") from None
+    # Mask patterns come from type definitions an administrator can edit: apply the
+    # same length and catastrophic-backtracking bounds as the task runners.
+    from heracles_plugins._patterns import pattern_problem
+
+    problem = pattern_problem(pattern)
+    if problem is not None:
+        raise MaskError(f"unusable regular expression {pattern!r}: {problem}")
+    return re.compile(pattern)
 
 
 def _array_modifier(mod: Modifier, values: list[str]) -> list[str]:

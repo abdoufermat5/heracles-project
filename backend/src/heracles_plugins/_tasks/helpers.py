@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import calendar
+import re
 from datetime import UTC, date, datetime, timedelta
 
 from heracles.core.generalized_time import parse_generalized_time
@@ -15,20 +16,24 @@ STATUS_DEACTIVATED = "Deactivated"
 SCHEDULES = ("hourly", "daily", "weekly", "monthly", "yearly")
 
 
-class _SafeDict(dict[str, str]):
-    """Unknown placeholders are kept as they are."""
-
-    def __missing__(self, key: str) -> str:
-        return "{" + key + "}"
+_PLACEHOLDER = re.compile(r"\{\{|\}\}|\{(\w+)\}")
 
 
 def render_template(template: str, values: dict[str, str]) -> str:
-    """Fill ``{placeholders}``; unknown ones stay, malformed templates are kept verbatim."""
-    mapping = _SafeDict({k: str(v) for k, v in values.items()})
-    try:
-        return template.format_map(mapping)
-    except (ValueError, KeyError, IndexError, AttributeError, TypeError):
-        return template
+    """Fill plain ``{name}`` placeholders; unknown ones and anything else stay verbatim.
+
+    Format specs, attribute access and indexing (``{cn:999999999}``, ``{cn.x}``,
+    ``{cn[0]}``) are not interpreted: a template cannot make the server build a huge
+    string or reach into objects.
+    """
+
+    def fill(match: re.Match[str]) -> str:
+        name = match.group(1)
+        if name is None:  # ``{{`` and ``}}`` are literal braces
+            return match.group(0)[0]
+        return str(values[name]) if name in values else match.group(0)
+
+    return _PLACEHOLDER.sub(fill, template)
 
 
 def utc(value: datetime) -> datetime:

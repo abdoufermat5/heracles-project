@@ -23,12 +23,26 @@ def test_invalid_pattern_is_reported() -> None:
 
 @pytest.mark.parametrize(
     "expression",
-    ["(a+)+", "(a*)*", r"(\d+){2,}", "((a+))+", "(?:a+)+", "(a+)?"],
+    [
+        "(a+)+",
+        "(a*)*",
+        "(?#[)(a+)+",
+        "(a|a)+$",
+        "(a|ab)*",
+        "(?#x)(a|a)+",
+        "(a|b|a)+",
+        "(.|.)*",
+        "(?x)a",
+        r"(\d+){2,}",
+        "((a+))+",
+        "(?:a+)+",
+        "(a+)?",
+    ],
 )
 def test_nested_quantifiers_are_refused(expression: str) -> None:
     # ``(a+)?`` is refused too: conservative, an optional unbounded group is still quadratic.
     problem = patterns.pattern_problem(expression)
-    assert problem is not None and "quantifier" in problem
+    assert problem is not None
 
 
 @pytest.mark.parametrize(
@@ -39,7 +53,6 @@ def test_nested_quantifiers_are_refused(expression: str) -> None:
         "(?:ab)+",
         "(a|b)+",
         "a+?",
-        "(a|a)+?",
         r"\(a\+\)\+",
         "[a+]+",
         "^a{2,4}$",

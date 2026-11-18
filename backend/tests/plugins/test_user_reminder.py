@@ -202,6 +202,14 @@ def test_render_template_is_safe() -> None:
     assert ur.render_template("{uid.__class__}", {"uid": "a"}) != ""
 
 
+@pytest.mark.parametrize(
+    "field", ["{uid:999999999}", "{uid:>999999999}", "{uid[0]}", "{uid.upper}", "{uid!r}"]
+)
+def test_render_template_ignores_format_specs(field: str) -> None:
+    assert ur.render_template(field, {"uid": "a"}) == field
+    assert ur.render_template("{{x}} {uid}", {"uid": "a"}) == "{x} a"
+
+
 # -------------------------------------------------------------- recipients
 
 

@@ -116,10 +116,13 @@ class UrlAttr(_StrAttr):
 
     def _validate(self, value: str) -> list[str]:
         errors = self._check_text(value)
-        if _URL_RE.fullmatch(value) is None or (
-            value.partition(":")[0].lower() not in URL_SCHEMES
-        ) or (
-            value.lower().startswith(("http:", "https:")) and _WEB_URL_RE.fullmatch(value) is None
+        if (
+            _URL_RE.fullmatch(value) is None
+            or (value.partition(":")[0].lower() not in URL_SCHEMES)
+            or (
+                value.lower().startswith(("http:", "https:"))
+                and _WEB_URL_RE.fullmatch(value) is None
+            )
         ):
             errors.append(_("Invalid URL."))
         return errors
