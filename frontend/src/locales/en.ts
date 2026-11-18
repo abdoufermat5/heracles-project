@@ -29,6 +29,9 @@ const en = {
     create: 'Create',
     delete: 'Delete',
     edit: 'Edit',
+    close: 'Close',
+    more: 'More',
+    copied: 'Copied',
     yes: 'Yes',
     no: 'No',
   },
@@ -244,6 +247,7 @@ const en = {
     dragDropImage: 'Drag and drop an image or click to browse.',
   },
   editor: {
+    tabs: 'Tabs',
     lockedTitle: 'Object is locked',
     lockedBody: 'This object is being edited by {{user}} since {{since}}. Try again later.',
     newTitle: 'New {{type, lcfirst}}',

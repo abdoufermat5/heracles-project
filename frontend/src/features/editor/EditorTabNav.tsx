@@ -50,7 +50,7 @@ export function EditorTabNav({
     <nav aria-label="Object tabs" className="w-full lg:w-56 lg:shrink-0">
       <div
         role="tablist"
-        aria-label={t('editor.tabs', 'Tabs')}
+        aria-label={t('editor.tabs')}
         className="flex gap-1 overflow-x-auto border-b lg:flex-col lg:overflow-visible lg:border-b-0"
       >
         {shown.map((tb) => {

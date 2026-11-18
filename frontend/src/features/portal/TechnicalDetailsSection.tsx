@@ -64,7 +64,7 @@ export function TechnicalDetailsSection({ me }: { me: Me }) {
                   onClick={copyDn}
                   className="shrink-0 p-1 text-muted-foreground hover:text-foreground"
                   aria-label={t('me.copyDn')}
-                  title={copied ? t('me.copied') : t('me.copyDn')}
+                  title={copied ? t('common.copied') : t('me.copyDn')}
                 >
                   {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
                 </button>

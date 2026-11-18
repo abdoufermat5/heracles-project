@@ -31,6 +31,9 @@ const fr: Translation = {
     create: 'Créer',
     delete: 'Supprimer',
     edit: 'Modifier',
+    close: 'Fermer',
+    more: 'Plus',
+    copied: 'Copié',
     yes: 'Oui',
     no: 'Non',
   },
@@ -247,6 +250,7 @@ const fr: Translation = {
     dragDropImage: 'Glissez-déposez une image ou cliquez pour parcourir.',
   },
   editor: {
+    tabs: 'Onglets',
     lockedTitle: 'Objet verrouillé',
     lockedBody: 'Cet objet est en cours de modification par {{user}} depuis {{since}}. Réessayez plus tard.',
     newTitle: 'Nouveau : {{type, lcfirst}}',

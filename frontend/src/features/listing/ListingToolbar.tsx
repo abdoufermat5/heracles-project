@@ -137,9 +137,9 @@ export function ListingToolbar({
 
   // Options for employee type filter
   const employeeTypeOptions = [
-    { value: 'employee', label: 'Employee' },
-    { value: 'contractor', label: 'Contractor' },
-    { value: 'intern', label: 'Intern' },
+    { value: 'employee', label: t('peopleUI.text.employee') },
+    { value: 'contractor', label: t('peopleUI.text.contractor') },
+    { value: 'intern', label: t('peopleUI.text.intern') },
   ]
 
   // Options for status filter chip

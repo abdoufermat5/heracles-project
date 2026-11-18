@@ -427,7 +427,7 @@ export function ListingTable({
                     className="text-destructive focus:text-destructive"
                   >
                     <Trash2 className="size-4" />
-                    {t('listing.delete')}
+                    {t('common.delete')}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -626,7 +626,7 @@ export function ListingTable({
                           {onMoveTo && (
                             <DropdownMenuItem onClick={() => onMoveTo(item)}>
                               <FolderInput className="size-4" />
-                              {t('listing.moveTo')}
+                              {t('copy.moveTo')}
                             </DropdownMenuItem>
                           )}
                           {onDeleteSingle && (
@@ -635,7 +635,7 @@ export function ListingTable({
                               className="text-destructive focus:text-destructive"
                             >
                               <Trash2 className="size-4" />
-                              {t('listing.delete')}
+                              {t('common.delete')}
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
