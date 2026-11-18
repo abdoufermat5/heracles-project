@@ -80,6 +80,13 @@ class TypeAclPolicy:
         key = self._key(tab)
         return key is not None and self._ev.can_write_attr(dn, key, attr)
 
+    def can_template(self, dn: str, tab: str, attr: str) -> bool:
+        """``t`` on the attribute: the user may read a template's preset of a secret value."""
+        key = self._key(tab)
+        if key is None:
+            return False
+        return self._ev.ignore_acl or self._ev.permissions(dn, key, attr).template
+
     def can_create(self, type_name: str, base: str) -> bool:
         return self._ev.permissions(base, self._info.acl_object(self._info.main_tab)).create
 

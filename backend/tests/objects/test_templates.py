@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -321,8 +321,18 @@ def test_secret_preset_needs_the_template_right(
     dn = create_template(admin, "user", BASE, "pw", tabs).info.dn
     service = ObjectService(directory, registry, policy=_PresetPolicy(may_template))
     body = template_json(service, get_template(service, "user", dn))
-    values = body["tabs"]["main"]["values"]  # type: ignore[index]
+    values = cast("dict[str, Any]", body["tabs"])["main"]["values"]
     assert values["description"] == "d"
     assert ("userPassword" in values) is may_template
     preview = apply_template(service, "user", dn, {"main": {"cn": "x", "sn": "y"}}, preview=True)
     assert ("userPassword" in preview["main"]) is may_template
+
+
+def test_the_acl_policies_restrict_template_presets() -> None:
+    """The secret-preset rule only applies to policies with ``can_template``: the real ones."""
+    from heracles.acl.policy import AclAccessPolicy
+    from heracles.api.domain import TypeAclPolicy
+    from heracles.objects.policy import TemplatePolicy
+
+    for cls in (AclAccessPolicy, TypeAclPolicy):
+        assert issubclass(cls, TemplatePolicy), cls.__name__
