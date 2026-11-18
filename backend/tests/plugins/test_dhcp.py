@@ -706,3 +706,55 @@ def test_tree_builder_filters_unreadable_sections(
     tree = dhcp.build_dhcp_tree(directory, cfg_dn, can_read)
     assert [c["dn"] for c in tree[0]["children"]] == [open_dn]
     assert dhcp.build_dhcp_tree(directory, secret_dn, can_read) == []
+
+
+@pytest.mark.parametrize(
+    ("attr", "value"),
+    [
+        ("dhcpStatements", 'on commit { execute("/bin/sh", "-c", "id"); }'),
+        ("dhcpStatements", "on release"),
+        ("dhcpStatements", 'include "/etc/shadow"'),
+        ("dhcpStatements", "default-lease-time 600; } subnet 0.0.0.0 netmask 0.0.0.0 {"),
+        ("dhcpStatements", "default-lease-time 600\nmax-lease-time 7200"),
+        ("dhcpStatements", 'filename "a"b"'),
+        ("dhcpStatements", 'filename "a\\"; execute'),
+        ("dhcpStatements", "execute"),
+        ("dhcpOption", 'domain-name "x"; on commit'),
+        ("dhcpOption", "routers 10.0.0.1 } {"),
+        ("dhcpOption", "execute /bin/sh"),
+        ("dhcpOption", "routers 10.0.0.1 # rest"),
+    ],
+)
+def test_dhcp_directives_are_refused(service: ObjectService, attr: str, value: str) -> None:
+    errors = section_errors(
+        service, "dhcp_configuration", PARIS, {"cn": "evil-dhcp", attr: [value]}
+    )
+    assert any(key.startswith(f"main.{attr}") for key in errors)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "authoritative",
+        "default-lease-time 600",
+        'filename "pxelinux.0"',
+        "next-server 10.0.0.1",
+        "fixed-address 192.168.1.25",
+        "allow unknown-clients",
+    ],
+)
+def test_dhcp_regular_values_are_accepted(service: ObjectService, statement: str) -> None:
+    create_section(
+        service,
+        "dhcp_configuration",
+        PARIS,
+        {
+            "cn": "good-dhcp",
+            "dhcpStatements": [statement],
+            "dhcpOption": [
+                "routers 10.0.0.1",
+                'domain-name "example.org"',
+                "domain-name-servers 10.0.0.2, 10.0.0.3",
+            ],
+        },
+    )

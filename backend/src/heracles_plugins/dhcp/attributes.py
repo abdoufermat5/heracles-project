@@ -9,7 +9,11 @@ from typing import Any
 from heracles.attributes import CompositeAttr, ListAttr, SelectAttr, StringAttr, TextAttr
 from heracles.attributes.base import ValidationError
 from heracles.i18n import _
-from heracles_plugins.dhcp.validation import validate_mac
+from heracles_plugins.dhcp.validation import (
+    validate_dhcp_option,
+    validate_dhcp_statement,
+    validate_mac,
+)
 
 
 def virtual[A](attr: A) -> A:
@@ -30,6 +34,28 @@ class MacAddressAttr(StringAttr):
     def _validate(self, value: str) -> list[str]:
         errors = self._check_text(value)
         err = validate_mac(value)
+        if err is not None:
+            errors.append(err)
+        return errors
+
+
+class DhcpStatementAttr(StringAttr):
+    """One DHCP statement, limited to a whitelist (the server renders it into its config)."""
+
+    def _validate(self, value: str) -> list[str]:
+        errors = self._check_text(value)
+        err = validate_dhcp_statement(value)
+        if err is not None:
+            errors.append(err)
+        return errors
+
+
+class DhcpOptionAttr(StringAttr):
+    """One DHCP option, limited to a whitelist (the server renders it into its config)."""
+
+    def _validate(self, value: str) -> list[str]:
+        errors = self._check_text(value)
+        err = validate_dhcp_option(value)
         if err is not None:
             errors.append(err)
         return errors
@@ -121,7 +147,7 @@ def dhcp_options_attr() -> ListAttr[str]:
     return ListAttr[str](
         "dhcpOption",
         _("DHCP options"),
-        StringAttr("option", _("Option")),
+        DhcpOptionAttr("option", _("Option")),
     )
 
 
@@ -130,7 +156,7 @@ def dhcp_statements_attr() -> ListAttr[str]:
     return ListAttr[str](
         "dhcpStatements",
         _("DHCP statements"),
-        StringAttr("statement", _("Statement")),
+        DhcpStatementAttr("statement", _("Statement")),
     )
 
 
