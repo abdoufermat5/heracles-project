@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from typing import Any
 
+from heracles.attributes import JSON, ObjectRefAttr
 from heracles.ldap import dn as dnlib
 from heracles.ldap.client import DirectoryClient, DirectoryError, Entry
 from heracles.schema import names as schema
@@ -19,6 +21,19 @@ USER_ATTRS = (
     "member",
     "roleOccupant",
 )
+
+
+class MemberRefAttr(ObjectRefAttr):
+    """DN of a user, group or role: :func:`expand_members` resolves all of them to users."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("ref_type", "user")
+        super().__init__(*args, **kwargs)
+
+    def describe_extra(self, key: str = "") -> dict[str, JSON]:
+        out = super().describe_extra(key)
+        out["ref_types"] = ["user", "group", "posix_group", "role"]
+        return out
 
 
 def expand_members(

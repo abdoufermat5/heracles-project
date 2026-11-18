@@ -22,7 +22,7 @@ from heracles.objects.hooks import TabContext
 from heracles.objects.registry import TypeRegistry
 from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles_plugins._patterns import PatternError
-from heracles_plugins._tasks import TaskObjectType, TaskTab
+from heracles_plugins._tasks import MemberRefAttr, TaskObjectType, TaskTab
 from heracles_plugins._tasks.author import AuthorRights, author_section, stamp_author
 from heracles_plugins.automatic_groups.runner import (
     TASK_CLASS,
@@ -86,7 +86,7 @@ class AutomaticGroupsTask(TaskObjectType):
             ListAttr(
                 "hrcTasksAutomaticGroupsMembers",
                 _("Users, groups or roles"),
-                ObjectRefAttr("member", _("Member"), ref_type="user"),
+                MemberRefAttr("member", _("Member")),
                 required=True,
                 description=_("Users, or groups and roles that are expanded to their users"),
             ),

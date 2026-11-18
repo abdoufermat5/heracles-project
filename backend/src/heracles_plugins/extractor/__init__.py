@@ -12,13 +12,13 @@ are prefixed with a quote, and password attributes can never be exported.
 
 from __future__ import annotations
 
-from heracles.attributes import EmailAttr, ListAttr, MultiSelectAttr, ObjectRefAttr, SelectAttr
+from heracles.attributes import EmailAttr, ListAttr, MultiSelectAttr, SelectAttr
 from heracles.i18n import _
 from heracles.objects import Plugin, Section
 from heracles.objects.hooks import TabContext
 from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles_plugins._secrets import is_secret_name
-from heracles_plugins._tasks import TaskObjectType, TaskTab
+from heracles_plugins._tasks import MemberRefAttr, TaskObjectType, TaskTab
 from heracles_plugins._tasks.author import AuthorRights, author_section, stamp_author
 from heracles_plugins.extractor.runner import (
     TASK_CLASS,
@@ -66,7 +66,7 @@ class ExtractorTask(TaskObjectType):
             ListAttr(
                 "hrcExtractorTaskMembers",
                 _("Exported users, groups or roles"),
-                ObjectRefAttr("member", _("Member"), ref_type="user"),
+                MemberRefAttr("member", _("Member")),
                 required=True,
                 description=_("Users, or groups and roles that are expanded to their users"),
             ),
@@ -76,7 +76,7 @@ class ExtractorTask(TaskObjectType):
             ListAttr(
                 "hrcExtractorRecipientsMembers",
                 _("Mail recipients"),
-                ObjectRefAttr("recipient", _("Recipient"), ref_type="user"),
+                MemberRefAttr("recipient", _("Recipient")),
                 description=_("Users, groups or roles receiving the export by mail"),
             ),
             EmailAttr("hrcExtractorEmailSender", _("Sender address")),

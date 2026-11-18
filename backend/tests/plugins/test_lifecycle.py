@@ -239,6 +239,44 @@ def test_task_type_and_validation(directory: MemoryDirectory) -> None:
         service.create("lifecycle_task", BASE, {"main": {"values": {"cn": "nomembers"}}})
 
 
+def test_members_may_be_groups_and_roles(directory: MemoryDirectory) -> None:
+    registry = TypeRegistry()
+    register_builtin_types(registry)
+    registry.register_plugin(lc.plugin(), {c.lower() for c in directory.schema_object_classes()})
+    a = add_user(directory, "a", None)
+    group = f"cn=g,{GROUPS}"
+    role = f"cn=r,{GROUPS}"
+    directory.add(group, {"objectClass": [b"groupOfNames"], "cn": [b"g"], "member": [a.encode()]})
+    directory.add(
+        role,
+        {"objectClass": [b"organizationalRole"], "cn": [b"r"], "roleOccupant": [a.encode()]},
+    )
+    service = ObjectService(directory, registry)
+    dn = service.create(
+        "lifecycle_task",
+        BASE,
+        {"main": {"values": {"cn": "ends", "hrcTasksLifeCycleMembers": [a, group, role]}}},
+    )
+    assert entry(directory, dn).texts("hrcTasksLifeCycleMembers") == [a, group, role]
+
+
+def test_task_in_a_sub_department_is_run(directory: MemoryDirectory) -> None:
+    sub = f"ou=paris,{BASE}"
+    directory.add(sub, {"objectClass": [b"organizationalUnit"], "ou": [b"paris"]})
+    directory.add(f"ou=tasks,{sub}", {"objectClass": [b"organizationalUnit"], "ou": [b"tasks"]})
+    gone = add_user(directory, "gone", TODAY - timedelta(days=3))
+    directory.add(
+        f"cn=ends,ou=tasks,{sub}",
+        {
+            "objectClass": [b"hrcTasks", b"hrcTasksLifeCycle"],
+            "cn": [b"ends"],
+            "hrcTasksStatus": [b"Activated"],
+            "hrcTasksLifeCycleMembers": [gone.encode()],
+        },
+    )
+    assert [r.user_dn for r in lc.run_lifecycle(directory, NOW).accounts] == [gone]
+
+
 def test_plugin_disabled_without_schema() -> None:
     registry = TypeRegistry()
     assert not registry.register_plugin(lc.plugin(), {"hrctasks"}).enabled

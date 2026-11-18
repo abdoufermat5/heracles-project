@@ -19,7 +19,7 @@ from heracles_plugins._tasks.helpers import (
     time_of,
     utc,
 )
-from heracles_plugins._tasks.members import expand_members
+from heracles_plugins._tasks.members import MemberRefAttr, expand_members
 from heracles_plugins._tasks.runner import (
     TASKS_RDN,
     TaskReport,
@@ -39,6 +39,7 @@ __all__ = [
     "STATUS_ACTIVATED",
     "STATUS_DEACTIVATED",
     "TASKS_RDN",
+    "MemberRefAttr",
     "TaskObjectType",
     "TaskReport",
     "TaskTab",

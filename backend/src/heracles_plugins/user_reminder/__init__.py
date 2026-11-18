@@ -35,7 +35,7 @@ from heracles.objects import ObjectType, Plugin, Section, Tab
 from heracles.objects.hooks import TabContext
 from heracles.objects.registry import PluginRouterContext
 from heracles.objects.task_runner import TaskRunContext, TaskRunner
-from heracles_plugins._tasks import NAME_RE, TaskObjectType, TaskTab
+from heracles_plugins._tasks import NAME_RE, MemberRefAttr, TaskObjectType, TaskTab
 from heracles_plugins.user_reminder.prolong import (
     ProlongError,
     build_prolong_router,
@@ -127,14 +127,14 @@ class ReminderTask(TaskObjectType):
             ListAttr(
                 "hrcTasksReminderMembers",
                 _("Monitored users, groups or roles"),
-                ObjectRefAttr("member", _("Member"), ref_type="user"),
+                MemberRefAttr("member", _("Member")),
                 required=True,
                 description=_("Users, or groups and roles that are expanded to their users"),
             ),
             ListAttr(
                 "hrcTasksReminderRecipientsMembers",
                 _("Copy recipients"),
-                ObjectRefAttr("recipient", _("Recipient"), ref_type="user"),
+                MemberRefAttr("recipient", _("Recipient")),
                 description=_("Users, groups or roles receiving a copy of every reminder"),
             ),
         )

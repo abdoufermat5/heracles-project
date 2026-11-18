@@ -12,13 +12,13 @@ a grace period in days after the end date and whether to also lock the account.
 
 from __future__ import annotations
 
-from heracles.attributes import BooleanAttr, IntAttr, ListAttr, ObjectRefAttr, StringAttr
+from heracles.attributes import BooleanAttr, IntAttr, ListAttr, StringAttr
 from heracles.i18n import _
 from heracles.objects import Plugin, Section
 from heracles.objects.hooks import TabContext
 from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles_plugins._patterns import PatternError, compile_checked
-from heracles_plugins._tasks import TaskObjectType, TaskTab
+from heracles_plugins._tasks import MemberRefAttr, TaskObjectType, TaskTab
 from heracles_plugins.lifecycle.runner import (
     TASK_CLASS,
     TASK_FILTER,
@@ -72,7 +72,7 @@ class LifecycleTask(TaskObjectType):
             ListAttr(
                 "hrcTasksLifeCycleMembers",
                 _("Users, groups or roles"),
-                ObjectRefAttr("member", _("Member"), ref_type="user"),
+                MemberRefAttr("member", _("Member")),
                 required=True,
                 description=_("Users, or groups and roles that are expanded to their users"),
             ),

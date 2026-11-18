@@ -13,7 +13,6 @@ from datetime import datetime
 import structlog
 
 from heracles.core.generalized_time import format_generalized_time
-from heracles.ldap import dn as dnlib
 from heracles.ldap.client import (
     DirectoryClient,
     DirectoryError,
@@ -51,9 +50,9 @@ class TaskReport:
 
 
 def find_tasks(directory: DirectoryClient, flt: str) -> list[Entry]:
-    """Tasks matching ``flt`` below the root ``ou=tasks`` container."""
+    """Tasks matching ``flt`` in every ``ou=tasks`` container of the tree (departments too)."""
     try:
-        return list(directory.search(dnlib.join(TASKS_RDN, directory.base_dn), flt))
+        return list(directory.search(directory.base_dn, flt, Scope.SUBTREE))
     except NoSuchObjectError:
         return []
 

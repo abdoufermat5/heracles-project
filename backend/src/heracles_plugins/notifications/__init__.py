@@ -22,7 +22,7 @@ from heracles.objects import Plugin, Section
 from heracles.objects.hooks import TabContext
 from heracles.objects.task_runner import TaskRunContext, TaskRunner
 from heracles_plugins._secrets import is_secret_name
-from heracles_plugins._tasks import TaskObjectType, TaskTab
+from heracles_plugins._tasks import MemberRefAttr, TaskObjectType, TaskTab
 from heracles_plugins._tasks.author import AuthorRights, author_section, stamp_author
 from heracles_plugins.notifications.runner import (
     TASK_CLASS,
@@ -81,14 +81,14 @@ class NotificationsTask(TaskObjectType):
             ListAttr(
                 "hrcTasksNotificationsMonitoredMembers",
                 _("Monitored users, groups or roles"),
-                ObjectRefAttr("member", _("Member"), ref_type="user"),
+                MemberRefAttr("member", _("Member")),
                 required=True,
                 description=_("Users, or groups and roles that are expanded to their users"),
             ),
             ListAttr(
                 "hrcTasksNotificationsRecipientsMembers",
                 _("Recipients"),
-                ObjectRefAttr("recipient", _("Recipient"), ref_type="user"),
+                MemberRefAttr("recipient", _("Recipient")),
                 required=True,
                 description=_("Users, groups or roles receiving the notifications"),
             ),
