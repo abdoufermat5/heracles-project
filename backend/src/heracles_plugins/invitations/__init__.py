@@ -68,6 +68,9 @@ class InvitationsSettings:
     default_email_content: str = DEFAULT_CONTENT
     #: Days a personal link stays valid.
     token_valid_days: int = 7
+    #: Sends per hour and sender before the endpoint slows down (then 30 s, doubling, at most
+    #: 15 min). Counted per request, whatever the number of addresses.
+    send_free_attempts: int = 50
     #: Public address of the web console used in links (empty: the request address).
     public_base_url: str = ""
     #: Default containers (documentation; the types fix ``rdn`` today).

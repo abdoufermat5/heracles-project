@@ -13,6 +13,9 @@ from heracles.api.deps import CurrentUserDep, get_state
 from heracles.api.domain import DomainDep
 from heracles.api.errors import ApiError, forbidden, not_found, validation
 from heracles.api.hosts import request_base
+from heracles.api.state import AppState
+from heracles.auth.ratelimit import LoginLimiter, RateLimiter
+from heracles.auth.ratelimit_db import SqliteRateLimiter
 from heracles.objects.registry import PluginRouterContext
 from heracles_plugins.invitations.sending import InvitationError, send_invitation
 
@@ -22,6 +25,22 @@ ACL_OBJECT = "invitation/invitation"
 class SendRequest(BaseModel):
     invitation: str = Field(min_length=1, max_length=1024, description="DN of the invitation")
     emails: Annotated[list[str], Field(min_length=1, max_length=500)]
+
+
+def _send_limiter(request: Request, state: AppState, settings: Any) -> LoginLimiter:
+    """Own limiter of the send endpoint (not the login thresholds); shared like the login one."""
+    app_state = request.app.state
+    limiter: LoginLimiter | None = getattr(app_state, "invitations_send_limiter", None)
+    if limiter is None:
+        free = int(getattr(settings, "send_free_attempts", 50))
+        if state.database is not None:
+            limiter = SqliteRateLimiter(
+                state.database, free_attempts=free, base_delay=30.0, max_delay=900.0
+            )
+        else:
+            limiter = RateLimiter(free_attempts=free, base_delay=30.0, max_delay=900.0)
+        app_state.invitations_send_limiter = limiter
+    return limiter
 
 
 def build_router(ctx: PluginRouterContext) -> APIRouter:
@@ -44,7 +63,9 @@ def build_router(ctx: PluginRouterContext) -> APIRouter:
         if form_dn and not domain.service(user, "public_form")[1].can_read(form_dn, "main", "cn"):
             raise forbidden("You cannot use the form of this invitation")
         state = get_state(request)
-        wait = state.limiter.attempt(f"invitations-send|{user.dn.lower()}")
+        wait = _send_limiter(request, state, settings).attempt(
+            f"invitations-send|{user.dn.lower()}"
+        )
         if wait > 0:
             raise ApiError(
                 429,

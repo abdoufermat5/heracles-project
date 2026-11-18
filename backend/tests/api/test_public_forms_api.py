@@ -520,13 +520,16 @@ def test_an_invitation_needs_the_senders_rights_on_its_form(full_client: TestCli
 def test_sending_invitations_is_rate_limited(full_client: TestClient) -> None:
     admin = Api(full_client).login("admin")
     invitation = _private_form_and_invitation(admin)
+    settings = cast("Any", full_client.app).state.domain.registry.settings["invitations"]
+    assert settings.send_free_attempts == 50  # not the login thresholds (5)
+    settings.send_free_attempts = 3
     codes = [
         admin.post(
             "/invitations/send", {"invitation": invitation, "emails": ["a@b.co"]}
         ).status_code
-        for _ in range(8)
+        for _ in range(5)
     ]
-    assert codes[0] == 200 and codes[-1] == 429
+    assert codes[:3] == [200, 200, 200] and codes[-1] == 429
 
 
 def test_submission_window_table_is_bounded() -> None:
