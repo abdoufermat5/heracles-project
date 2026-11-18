@@ -35,6 +35,10 @@ log = structlog.get_logger(__name__)
 _TCP_TIMEOUT: Final = 5.0
 #: Maximum payload of one DNS character-string (its wire length octet is one byte).
 _TXT_CHUNK: Final = 255
+#: Largest UDP answer: the usual EDNS buffer size that avoids IP fragmentation.
+_MAX_UDP_SIZE: Final = 1232
+#: Concurrent TCP connections served; further ones are closed at once.
+_MAX_TCP_CONNECTIONS: Final = 128
 
 
 def _import_dns() -> ModuleType:
@@ -209,7 +213,22 @@ class _TcpServer(socketserver.ThreadingTCPServer):
 
     def __init__(self, address: tuple[str, int], dns_server: DnsServer) -> None:
         self.dns_server = dns_server
+        self._slots = threading.BoundedSemaphore(_MAX_TCP_CONNECTIONS)
         super().__init__(address, _TcpHandler)
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        # One thread per connection: without a cap, idle connections exhaust the host.
+        if not self._slots.acquire(blocking=False):
+            log.warning("dns_tcp_saturated", limit=_MAX_TCP_CONNECTIONS)
+            self.shutdown_request(request)
+            return
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
 
 
 class _UdpHandler(socketserver.BaseRequestHandler):
@@ -334,7 +353,7 @@ class DnsServer:
             request = dns.message.from_wire(wire)
         except Exception:
             return _failure(dns, _message_id(wire), dns.rcode.FORMERR)
-        size = (request.payload or 512) if udp else 0
+        size = min(max(request.payload, 512), _MAX_UDP_SIZE) if udp else 0
         if request.opcode() != dns.opcode.QUERY:
             response = dns.message.make_response(request)
             response.set_rcode(dns.rcode.NOTIMP)
@@ -344,7 +363,11 @@ class DnsServer:
         question = request.question[0]
         zones = self._snapshot()
         answer = resolve(zones, question.name.to_text(), dns.rdatatype.to_text(question.rdtype))
-        response = dns.message.make_response(request)
+        response = dns.message.make_response(request, our_payload=_MAX_UDP_SIZE)
+        if answer.zone is None and not answer.records:
+            # Not a name this server is authoritative for.
+            response.set_rcode(dns.rcode.REFUSED)
+            return response.to_wire(max_size=size, prefer_truncation=True)
         response.flags |= dns.flags.AA
         ttl = _ttl_of(zones, answer)
         if answer.records:

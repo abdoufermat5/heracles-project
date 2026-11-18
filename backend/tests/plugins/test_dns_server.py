@@ -88,7 +88,11 @@ def directory() -> MemoryDirectory:
     )
     d.add(
         f"relativeDomainName=huge,{FORWARD_DN}",
-        child_entry(FORWARD, "huge", tXTRecord="y" * 1200),
+        child_entry(FORWARD, "huge", tXTRecord="y" * 1000),
+    )
+    d.add(
+        f"relativeDomainName=enormous,{FORWARD_DN}",
+        child_entry(FORWARD, "enormous", tXTRecord="z" * 3000),
     )
     d.add(
         f"relativeDomainName=*,{FORWARD_DN}",
@@ -139,7 +143,7 @@ def test_udp_truncates_big_answers_and_sets_tc(server: DnsServer) -> None:
     assert complete.answer
     record = cast("dns.rdata.Rdata", complete.answer[0][0])
     assert isinstance(record, TXT)
-    assert b"".join(record.strings) == b"y" * 1200
+    assert b"".join(record.strings) == b"y" * 1000
 
 
 def test_udp_worker_pool_drops_datagrams_when_saturated(
@@ -302,3 +306,43 @@ def test_a_failing_reload_is_not_retried_on_every_query(
     for _ in range(5):
         dns.message.from_wire(instance.handle(wire))
     assert len(calls) == 1
+
+
+def test_udp_answer_is_capped_below_the_advertised_size(server: DnsServer) -> None:
+    query = dns.message.make_query("enormous.example.com", "TXT", use_edns=True, payload=65535)
+    response = dns.query.udp(query, HOST, port=server.bound_port, timeout=2)
+    assert response.flags & dns.flags.TC
+    assert len(response.to_wire()) <= 1232
+    # TCP is not capped.
+    full = tcp_query(server, "enormous.example.com", "TXT")
+    assert full.answer
+
+
+def test_out_of_zone_name_is_refused(server: DnsServer) -> None:
+    response = udp_query(server, "www.other.test", "A")
+    assert response.rcode() == dns.rcode.REFUSED
+    assert not (response.flags & dns.flags.AA)
+
+
+def test_tcp_connections_are_capped(
+    directory: MemoryDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import socket
+
+    monkeypatch.setattr("heracles_plugins.dns.server._MAX_TCP_CONNECTIONS", 1)
+    instance = DnsServer(directory, HOST, 0)
+    instance.start()
+    try:
+        first = socket.create_connection((HOST, instance.bound_port), timeout=2)
+        try:
+            second = socket.create_connection((HOST, instance.bound_port), timeout=2)
+            try:
+                second.settimeout(2)
+                # The server closes the surplus connection without serving it.
+                assert second.recv(1) == b""
+            finally:
+                second.close()
+        finally:
+            first.close()
+    finally:
+        instance.stop()
