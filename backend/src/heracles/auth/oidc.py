@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
+import json
 import secrets
 import threading
 import time
@@ -20,7 +22,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Protocol, cast
-from urllib.parse import quote_plus, urlencode
+from urllib.parse import quote_plus, urlencode, urlsplit
 
 import httpx2
 import jwt
@@ -53,6 +55,11 @@ REFETCH_SECONDS: Final = 30.0
 #: After the discovery document could not be read, sign-ins fail at once for this long
 #: (a hanging provider must not tie up a worker per click).
 FAILURE_SECONDS: Final = 30.0
+#: Most a provider's answer may weigh (discovery, keys, token response).
+MAX_RESPONSE_BYTES: Final = 1024 * 1024
+#: Most pending logins kept at once; past it the oldest are dropped (sign-in start is
+#: anonymous, so the table must not grow with what a client sends).
+MAX_PENDING: Final = 5000
 CLIENT_AUTH: Final = ("client_secret_basic", "client_secret_post", "none")
 
 
@@ -86,6 +93,9 @@ class OidcSettings(BaseModel):
     role_mapping: dict[str, list[str]] = Field(default_factory=lambda: {})
     #: Base URL of this application as the provider redirects to it (default: as for CAS).
     public_url: str = ""
+    #: Development only: accept an ``http://`` provider when it is on this machine
+    #: (localhost, ``*.localhost``, a loopback address). Any other provider needs https.
+    allow_insecure_http: bool = False
     #: CA bundle to verify the provider's certificate (empty: the system store).
     ca_cert_path: str = ""
 
@@ -114,8 +124,9 @@ class OidcSettings(BaseModel):
         if self.client_auth not in CLIENT_AUTH:
             raise ValueError(f"oidc.client_auth: one of {', '.join(CLIENT_AUTH)}")
         if self.enabled:
-            if not self.issuer.startswith(("https://", "http://")):
-                raise ValueError("oidc.issuer: an http(s) URL is required")
+            problem = url_problem(self.issuer, self.allow_insecure_http)
+            if problem:
+                raise ValueError(f"oidc.issuer: {problem}")
             if not self.client_id:
                 raise ValueError("oidc.client_id is required")
             if self.client_auth != "none" and not self.client_secret:
@@ -123,6 +134,34 @@ class OidcSettings(BaseModel):
             if "openid" not in self.scopes:
                 self.scopes = ["openid", *self.scopes]
         return self
+
+
+def url_problem(url: str, allow_insecure_http: bool) -> str:
+    """Why ``url`` may not be used for the provider ('' when it may): https only, except
+    http to this machine when the development setting allows it."""
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower()
+    except ValueError:
+        return "not a valid URL"
+    if not host:
+        return "an https URL is required"
+    if parts.scheme == "https":
+        return ""
+    if parts.scheme == "http":
+        if allow_insecure_http and _is_local(host):
+            return ""
+        return "an https URL is required (http only to this machine with allow_insecure_http)"
+    return "an https URL is required"
+
+
+def _is_local(host: str) -> bool:
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +220,8 @@ class MemoryPendingStore:
             now = pending.created_at
             for key in [k for k, p in self._items.items() if now - p.created_at > PENDING_SECONDS]:
                 del self._items[key]
+            while len(self._items) >= MAX_PENDING:
+                del self._items[min(self._items, key=lambda k: self._items[k].created_at)]
             self._items[pending.state] = pending
 
     def take(self, state: str, now: float) -> Pending | None:
@@ -221,6 +262,14 @@ class SqlPendingStore:
                 "DELETE FROM oidc_pending WHERE created_at < ?",
                 (pending.created_at - PENDING_SECONDS,),
             )
+            row = conn.execute("SELECT COUNT(*) AS n FROM oidc_pending").fetchone()
+            excess = int(row["n"]) - MAX_PENDING + 1 if row is not None else 0
+            if excess > 0:  # the oldest go first
+                conn.execute(
+                    "DELETE FROM oidc_pending WHERE state IN"
+                    " (SELECT state FROM oidc_pending ORDER BY created_at LIMIT ?)",
+                    (excess,),
+                )
             conn.execute(
                 "INSERT INTO oidc_pending (state, nonce, verifier, directory_id, next_path,"
                 " created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -281,15 +330,22 @@ class OidcClient:
         return httpx2.Client(transport=self._transport, timeout=10.0, verify=verify)
 
     def _get_json(self, url: str) -> dict[str, Any]:
+        problem = url_problem(url, self.settings.allow_insecure_http)
+        if problem:
+            raise OidcError(f"{url}: {problem}")
         try:
-            with self._http() as http:
-                answer = http.get(url, headers={"Accept": "application/json"})
+            with (
+                self._http() as http,
+                http.stream("GET", url, headers={"Accept": "application/json"}) as answer,
+            ):
+                status = answer.status_code
+                raw = _read_limited(answer) if status == 200 else b""
         except httpx2.HTTPError as exc:
             raise OidcError(f"provider unreachable: {type(exc).__name__}") from None
-        if answer.status_code != 200:
-            raise OidcError(f"{url}: HTTP {answer.status_code}")
+        if status != 200:
+            raise OidcError(f"{url}: HTTP {status}")
         try:
-            body: object = answer.json()
+            body: object = json.loads(raw)
         except ValueError:
             raise OidcError(f"{url}: not JSON") from None
         if not isinstance(body, dict):
@@ -328,6 +384,10 @@ class OidcClient:
             )
         except KeyError as exc:
             raise OidcError(f"the discovery document lacks {exc}") from None
+        for url in (found.authorization_endpoint, found.token_endpoint, found.jwks_uri):
+            problem = url_problem(url, self.settings.allow_insecure_http)
+            if problem:
+                raise OidcError(f"the discovery document names {url}: {problem}")
         with self._lock:
             self._provider = (now, found)
         return found
@@ -383,19 +443,20 @@ class OidcClient:
             form["client_id"] = self.settings.client_id
             if self.settings.client_auth == "client_secret_post":
                 form["client_secret"] = self.settings.client_secret
+        endpoint = self.provider().token_endpoint
         try:
-            with self._http() as http:
-                answer = http.post(
-                    self.provider().token_endpoint,
-                    data=form,
-                    headers=headers,
-                )
+            with (
+                self._http() as http,
+                http.stream("POST", endpoint, data=form, headers=headers) as answer,
+            ):
+                status = answer.status_code
+                raw = _read_limited(answer) if status == 200 else b""
         except httpx2.HTTPError as exc:
             raise OidcError(f"token endpoint unreachable: {type(exc).__name__}") from None
-        if answer.status_code != 200:
-            raise OidcError(f"token endpoint: HTTP {answer.status_code}")
+        if status != 200:
+            raise OidcError(f"token endpoint: HTTP {status}")
         try:
-            body: object = answer.json()
+            body: object = json.loads(raw)
         except ValueError:
             raise OidcError("token endpoint: not JSON") from None
         token = cast("dict[str, Any]", body).get("id_token") if isinstance(body, dict) else None
@@ -467,6 +528,19 @@ class OidcClient:
         if id_token:
             query["id_token_hint"] = id_token
         return f"{endpoint}{'&' if '?' in endpoint else '?'}{urlencode(query)}"
+
+
+def _read_limited(answer: httpx2.Response) -> bytes:
+    """The body of a streamed answer; an answer past :data:`MAX_RESPONSE_BYTES` is refused."""
+    declared = answer.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > MAX_RESPONSE_BYTES:
+        raise OidcError("provider answer too large")
+    out = bytearray()
+    for chunk in answer.iter_bytes():
+        out += chunk
+        if len(out) > MAX_RESPONSE_BYTES:
+            raise OidcError("provider answer too large")
+    return bytes(out)
 
 
 def _form_encode(value: str) -> str:

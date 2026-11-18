@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from heracles.auth.oidc import (
+    MAX_PENDING,
     PENDING_SECONDS,
     MemoryPendingStore,
     OidcSettings,
@@ -52,6 +53,55 @@ def test_expires(store: PendingStore) -> None:
     store.add(_pending("s3", 1000.0 + PENDING_SECONDS + 5))
     assert store.take("s2", 1000.0) is None
     assert store.take("s3", 1000.0 + PENDING_SECONDS + 6) is not None
+
+
+def test_pending_rows_are_capped_oldest_first(
+    store: PendingStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("heracles.auth.oidc.MAX_PENDING", 3)
+    assert MAX_PENDING > 3
+    for i in range(5):
+        store.add(_pending(f"s{i}", 1000.0 + i))
+    now = 1010.0
+    assert [store.take(f"s{i}", now) is not None for i in range(5)] == [
+        False,
+        False,
+        True,
+        True,
+        True,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("issuer", "insecure", "ok"),
+    [
+        ("https://idp.example.test", False, True),
+        ("http://idp.example.test", False, False),
+        ("http://idp.example.test", True, False),
+        ("http://localhost:8180/r", False, False),
+        ("http://localhost:8180/r", True, True),
+        ("http://idp.localhost:8180/r", True, True),
+        ("http://127.0.0.1:8180/r", True, True),
+        ("ftp://localhost/r", True, False),
+    ],
+)
+def test_issuer_must_be_https_unless_local_development(
+    issuer: str, insecure: bool, ok: bool
+) -> None:
+    def build() -> OidcSettings:
+        return OidcSettings(
+            enabled=True,
+            issuer=issuer,
+            client_id="x",
+            client_auth="none",
+            allow_insecure_http=insecure,
+        )
+
+    if ok:
+        build()
+    else:
+        with pytest.raises(ValueError, match="https"):
+            build()
 
 
 def test_pkce_challenge_is_rfc7636_s256() -> None:

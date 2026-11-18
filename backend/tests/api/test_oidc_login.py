@@ -24,6 +24,7 @@ from heracles import demo
 from heracles.api.settings import ApiSettings
 from heracles.auth.oidc import OidcSettings
 from heracles.auth.passwords import lock
+from heracles.auth.ratelimit import RateLimiter
 from heracles.ldap.client import Modification
 from heracles.ldap.memory import MemoryDirectory
 from heracles.server import create_full_app
@@ -373,3 +374,36 @@ def test_the_password_form_works_while_the_provider_is_down() -> None:
     directory = app.state.heracles.directories["main"]
     events = list(directory.search(f"ou=audit,{BASE}", "(hrcAuditAction=login)"))
     assert any("method: password" in " ".join(e.texts("hrcAuditAttributes")) for e in events)
+
+
+# -- bounds on the anonymous start and on the provider's answers ----------------------------------
+def test_starting_a_sign_in_is_rate_limited_per_address() -> None:
+    app, provider = make_app()
+    state = app.state.heracles
+    state.limiter = RateLimiter(free_attempts=5, ip_free_attempts=4, clock=state.clock)
+    with TestClient(app, follow_redirects=False) as client:
+        codes = [client.get("/api/v2/auth/oidc/login").status_code for _ in range(6)]
+    assert codes[:4] == [302] * 4
+    assert codes[4] == 429
+    assert provider is not None
+
+
+@pytest.mark.parametrize("what", ["huge", "plain-http-endpoint"])
+def test_a_hostile_discovery_document_is_refused(what: str) -> None:
+    app, provider = make_app()
+    real = provider.handler
+
+    def hostile(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path.endswith("openid-configuration"):
+            if what == "huge":
+                doc = real(request).json()
+                doc["padding"] = "x" * 2_000_000
+                return httpx2.Response(200, json=doc)
+            doc = real(request).json()
+            doc["token_endpoint"] = "http://idp.example.test/token"
+            return httpx2.Response(200, json=doc)
+        return real(request)
+
+    app.state.oidc_transport = httpx2.MockTransport(hostile)
+    with TestClient(app, follow_redirects=False) as client:
+        assert client.get("/api/v2/auth/oidc/login").headers["location"] == FAILURE

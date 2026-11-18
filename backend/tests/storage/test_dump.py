@@ -14,6 +14,7 @@ from urllib.parse import quote
 
 import pytest
 
+from heracles.auth.oidc import Pending, SqlPendingStore
 from heracles.objects.activation import PluginOverrideStore
 from heracles.storage import Database, DatabaseError
 from heracles.storage.copy import component_migrations
@@ -119,6 +120,25 @@ def test_target_with_data_is_refused_unless_forced(
         assert PluginOverrideStore(dst).load() == {"sudo": True, "leftover": True}  # untouched
         load_database(dst, tmp_path / "dump", dump.components, dump.tables, force=True)
         check(dst, session_id)  # the leftover is gone, the dump is in
+    finally:
+        dst.close()
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_pending_oidc_logins_do_not_block_a_restore(
+    backend: str, new_target: NewTarget, tmp_path: Path
+) -> None:
+    src = Database(new_target(backend))
+    session_id = seed(src)
+    dump = dump_database(src, tmp_path / "dump")
+    src.close()
+
+    dst = Database(new_target(backend))
+    try:
+        # a sign-in started on the target while it was being prepared
+        SqlPendingStore(dst).add(Pending("s1", "n", "v", "main", "/", 1.0))
+        load_database(dst, tmp_path / "dump", dump.components, dump.tables)
+        check(dst, session_id)
     finally:
         dst.close()
 

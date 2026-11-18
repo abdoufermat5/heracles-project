@@ -92,6 +92,7 @@ api:
   #   #                                  # "- " line: a [..] list splits a DN at its commas)
   #   public_url: https://heracles.example.org
   #   # ca_cert_path: /etc/ssl/certs/internal-ca.pem
+  #   # allow_insecure_http: false         # development only: http to localhost; else https is required
 
   # Built console to serve. The container image finds /app/static by itself.
   # static_dir: /app/static

@@ -53,6 +53,7 @@ EPHEMERAL_TABLES = frozenset(
         "posix_id_reservations",
         "public_forms_nonces",
         "public_forms_events",
+        "oidc_pending",
     }
 )
 

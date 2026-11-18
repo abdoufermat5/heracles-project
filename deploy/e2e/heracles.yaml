@@ -21,6 +21,7 @@ api:
   oidc:
     enabled: true
     issuer: http://idp.localhost:8180/realms/heracles
+    allow_insecure_http: true   # the test provider is plain http on this machine
     client_id: heracles
     client_secret: e2e-oidc-client-secret
     claim: preferred_username

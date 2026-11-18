@@ -123,6 +123,11 @@ def oidc_login(
 ) -> RedirectResponse:
     """Send the browser to the identity provider."""
     _enabled(state)
+    # Anonymous and it writes a row: count it per client address (the per-address aggregate
+    # of the shared limiter; the pair counter is cleared at once so that only the aggregate,
+    # far above ordinary use, ever blocks).
+    key = _rate_limited(state, request, "oidc:start")
+    state.limiter.record_success(key)
     directory_id, _ = _directory(state, directory)
     client = _client(request, state)
     pending = Pending(
