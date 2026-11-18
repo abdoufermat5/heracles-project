@@ -399,7 +399,7 @@ describe('access api paths', () => {
       }),
     )
     await accessApi.campaign('../../admin/config?x=1#')
-    await accessApi.decideItem('a/b', '../c', 'approve', '')
+    await accessApi.decideItem('a/b', '../c', 'keep', '')
     await accessApi.approve('x/../y', '')
     expect(seen.filter((p) => !p.endsWith('/auth/csrf'))).toEqual([
       '/api/v2/access/reviews/..%2F..%2Fadmin%2Fconfig%3Fx%3D1%23',

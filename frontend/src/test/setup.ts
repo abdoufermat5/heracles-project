@@ -26,6 +26,7 @@ window.matchMedia ??= ((q: string) => ({
   onchange: null,
 })) as unknown as typeof window.matchMedia
 Element.prototype.scrollIntoView ??= () => {}
+window.scrollTo = (() => {}) as typeof window.scrollTo
 Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.releasePointerCapture ??= () => {}
 
@@ -39,5 +40,6 @@ afterEach(() => {
   db.reset()
   resetCsrf()
   localStorage.clear()
+  sessionStorage.clear()
 })
 afterAll(() => server.close())
