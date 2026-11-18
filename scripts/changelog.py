@@ -116,19 +116,35 @@ def base() -> str:
 
 def releases(*, unreleased: bool = True) -> list[Release]:
     out: list[Release] = []
-    previous = base()
+    start = base()
+    seen: list[str] = []
     for name, date in tags():
-        if previous and _is_ancestor(name, previous):
+        if start and _is_ancestor(name, start):
             continue  # a tag at or before the baseline
+        previous = previous_tag(name, seen) or start
         span = f"{previous}..{name}" if previous else name
         out.append(Release(name, date, commits(span)))
-        previous = name
+        seen.append(name)
     if unreleased:
+        previous = seen[-1] if seen else start
         span = f"{previous}..HEAD" if previous else "HEAD"
         pending = commits(span)
         if pending:
             out.append(Release("Unreleased", "", pending))
     return list(reversed(out))
+
+
+def previous_tag(name: str, earlier: Sequence[str]) -> str:
+    """The tag a release is compared with, or ``""`` when it is the first.
+
+    A final release (``v1.2.0``) is compared with the previous final release, so that it lists
+    everything since then, pre-releases included; a pre-release is compared with the tag just
+    before it.
+    """
+    if "-" in name:
+        return earlier[-1] if earlier else ""
+    finals = [t for t in earlier if "-" not in t]
+    return finals[-1] if finals else ""
 
 
 def _is_ancestor(rev: str, of: str) -> bool:

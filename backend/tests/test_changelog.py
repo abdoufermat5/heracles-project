@@ -46,3 +46,11 @@ def test_render_puts_breaking_changes_first() -> None:
     assert text.startswith("## v1.0.0 — 2030-01-01")
     assert text.index("### Breaking changes") < text.index("### Features") < text.index("### Fixes")
     assert "- **acl:** new rights format (22222222)" in text
+
+
+def test_final_release_is_compared_with_the_previous_final_release() -> None:
+    cl = load()
+    assert cl.previous_tag("v0.1.0-rc.1", []) == ""
+    assert cl.previous_tag("v0.1.0", ["v0.1.0-rc.1"]) == ""
+    assert cl.previous_tag("v0.1.1-rc.1", ["v0.1.0-rc.1", "v0.1.0"]) == "v0.1.0"
+    assert cl.previous_tag("v0.1.1", ["v0.1.0-rc.1", "v0.1.0", "v0.1.1-rc.1"]) == "v0.1.0"
